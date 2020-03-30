@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Pointing Poker</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+    <style>
+      .lt-dark-red {
+        color: #AB0D1F;
+      }
+      .lt-red {
+        color: #EA212E;
+      }
+      .lt-dark-red-bg {
+        background-color: #AB0D1F;
+        color: #fff;
+      }
+      .lt-red-bg {
+        background-color: #EA212E;
+        color: #fff;
+      }
+      .estimation-card {
+        border-radius: 5px;
+        height: 100%;
+      }
+      .estimation-text {
+        font-size: 85px;
+      }
+      .estimation-button {
+        min-width: 4em;
+      }
+      .estimation-button-selected {
+        background-color: #AB0D1F;
+        color: #fff;
+      }
+      .feather {
+        width: 20px;
+        height: 20px;
+      }
+    </style>
+
+    <script src="https://unpkg.com/feather-icons"></script>
+  </head>
+  <body>
+
+    <div id="app" class="container">
+
+      <!-- Create/Join Room Content -->
+      <div class="row">
+        <div v-if="!inRoom" class="col-md-6 offset-md-3">
+          <div class="card text-center shadow-sm m-1">
+            <div class="card-header">
+              Pointing Poker
+
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item">
+                  <a class="nav-link" v-bind:class="{active: creating}" href="#" v-on:click="showCreate">Create</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" v-bind:class="{active: joining}" href="#" v-on:click="showJoin">Join</a>
+                </li>
+              </ul>
+            </div>
+            <div class="card-body" v-if="creating">
+              <h5 class="card-title">Create Room</h5>
+              <div class="form-group row">
+                <label class="col-sm-3 col-form-label">Name</label>
+                <div class="col-sm-9">
+                  <input type="text" class="form-control" v-model="user.name">
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-sm-3 offset-sm-9">
+                  <button type="button" class="btn btn-primary" v-on:click="doCreate">Create</button>
+                </div>
+              </div>
+            </div>
+
+
+            <div class="card-body" v-if="joining">
+              <h5 class="card-title">Join Room</h5>
+              <div class="form-group row">
+                <label for="join-roomId" class="col-sm-3 col-form-label">Room id</label>
+                <div class="col-sm-9">
+                  <input type="text" class="form-control" id="join-roomId" v-model="roomId">
+                </div>
+              </div>
+              <div class="form-group row">
+                <label class="col-sm-3 col-form-label">Name</label>
+                <div class="col-sm-9">
+                  <input type="text" class="form-control" v-model="user.name">
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-sm-3 offset-sm-9">
+                  <button type="button" class="btn btn-primary" v-on:click="doJoin">Join</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+      <!-- Create/Join Room Content End -->
+
+
+      <!-- Room Content -->
+      <div class="row">
+        <div v-if="inRoom" class="col-md-8 offset-md-2">
+          <div class="card text-center shadow-sm m-1">
+            <div class="card-header">
+              <div class="row align-items-center">
+                <div class="col">
+                  <h2>Pointing Poker</h2>
+                </div>
+
+                <div class="col">
+                  <div class="row">
+                    <div class="col">
+                      <h5 class="card-title">{{ roomId }}</h5>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col">
+                      <a class="nav-link" href="#" v-on:click="doLeave">Copy link (WIP)</a>
+                    </div>
+                    <div class="col">
+                      <a class="nav-link" href="#" v-on:click="doLeave">Leave</a>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+            <div class="card-body">
+
+              <div class="row">
+                <div class="col">
+                  <div class="lt-dark-red-bg estimation-card">
+                    <div class="row">
+                      <div class="col mt-2">
+                        <h6>Estimation</h6>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="col mt-2">
+                        <div class="estimation-text">{{ user.estimation }}</div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="form-group row">
+                    <div class="col">
+                      <div class="input-group" v-if="editing">
+                        <input type="text" placeholder="Current issue" class="form-control" v-model="currentIssue">
+                        <div class="input-group-append" v-on:click="doEdit">
+                          <button class="btn btn-outline-secondary" type="button">
+                            <i data-feather="check"></i>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="input-group" v-if="!editing">
+                        <input type="text" placeholder="Current issue" class="form-control" v-model="currentIssue" readonly>
+                        <div class="input-group-append" v-on:click="showEdit">
+                          <button class="btn btn-outline-secondary" type="button">
+                            <i data-feather="edit-2"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row mt-4">
+                    <div class="col" v-for="e in estimationValues">
+                      <button type="button" class="btn btn-outline-danger estimation-button estimation-button-selected m-1" v-if="e === user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn btn-outline-danger estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row mt-4">
+                <div class="col">
+                  <div class="row">
+                    <div class="col-auto mr-auto">
+                      <button type="button" class="btn btn-info" v-on:click="doShowVotes">Show votes</button>
+                    </div>
+                    <div class="col-auto">
+                      <button type="button" class="btn btn-secondary" v-on:click="doClearVotes">Clear votes</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="col">
+                  <table class="table table-hover table-bordered" v-if="votesRevealed">
+                    <thead>
+                    <tr>
+                      <th>Estimation</th>
+                      <th>Number of votes</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr v-for="estimation in votesSummary">
+                      <td>{{estimation[0]}}</td>
+                      <td>{{estimation[1]}}</td>
+                    </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="row mt-4">
+                <div class="col-md-12">
+                  <table class="table table-hover">
+                    <thead>
+                    <tr>
+                      <th>Voted</th>
+                      <th>Name</th>
+                      <th>Estimation</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr v-for="u in users">
+                      <td><i data-feather="check-circle" v-if="u.voted"></i></td>
+                      <td>{{ u.name }}</td>
+                      <td>
+                        <i data-feather="shield-off" v-if="showUserVoted(u)"></i>
+                        <div v-if="votesRevealed">{{ u.estimation }}</div>
+                      </td>
+                    </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Room Content End -->
+
+
+
+    </div>
+
+  </body>
+  <script>
+    feather.replace()
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+  <script>
+    var app = new Vue({
+      el: '#app',
+      data: {
+        roomId: localStorage.getItem("roomId"),
+        wsConnection: undefined,
+        estimationValues: ['0','0.5','1','2','3','5','8','13','21','34','100','?'],
+        creating: true,
+        joining: false,
+        editing: false,
+        inRoom: false,
+        votesRevealed: false,
+        currentIssue: "",
+        votesSummary: [],
+        users:[],
+        user: {
+          id: "",
+          name: localStorage.getItem("name"),
+          estimation: ""
+        }
+      },
+      methods: {
+        showCreate: function () {
+          this.creating = true;
+          this.joining = false;
+        },
+        showJoin: function () {
+          this.creating = false;
+          this.joining = true;
+        },
+        showEdit: function () {
+          this.editing = true;
+        },
+        doCreate: function () {
+          var ref = this;
+          axios.post('/create-room', {})
+          .then(function (response) {
+            ref.roomId = response.data;
+            ref.doJoin();
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
+        },
+        doJoin: function () {
+          var ref = this;
+          localStorage.setItem("roomId", this.roomId);
+          localStorage.setItem("name", this.user.name);
+          //TODO make it configurable
+          this.wsConnection = new WebSocket('wss://mypointingpoker.herokuapp.com/websocket/'+this.roomId+'/'+this.user.name);
+          //this.wsConnection = new WebSocket('ws://localhost:8080/websocket/'+this.roomId+'/'+this.user.name);
+          this.wsConnection.onmessage = function(event) {
+            ref.inRoom = true;
+            var message = JSON.parse(event.data);
+            if (message.messageType === 'init') {
+              ref.user.id = message.userId
+              ref.users.push({
+                id: message.userId,
+                name: message.extra,
+                voted: false,
+                estimation: ""
+              });
+            }
+            if (message.messageType === 'join') {
+              if (message.userId !== ref.user.id) {
+                ref.users.push({
+                  id: message.userId,
+                  name: message.extra,
+                  voted: false,
+                  estimation: ""
+                });
+              }
+              ref.updateSummary();
+              ref.allVoted();
+            }
+            if (message.messageType === 'vote') {
+              ref.users = ref.users.map(u => {
+                if (u.id === message.userId) {
+                  u.estimation = message.extra;
+                  u.voted = true;
+                }
+                return u;
+              });
+              if (ref.user.id === message.userId) {
+                ref.user.estimation = message.extra;
+              }
+              ref.updateSummary();
+              ref.allVoted();
+            }
+            if (message.messageType === 'show') {
+              ref.votesRevealed = true;
+            }
+            if (message.messageType === 'clear') {
+              ref.votesRevealed = false;
+              ref.users = ref.users.map(u => {
+                u.estimation = "";
+                u.voted = false;
+                return u;
+              });
+            }
+            if (message.messageType === 'leave') {
+              ref.users = ref.users.filter(u => {
+                return u.id !== message.userId;
+              });
+              ref.updateSummary();
+              ref.allVoted();
+            }
+            if (message.messageType === 'edit_issue') {
+              ref.currentIssue = message.extra;
+            }
+          };
+          this.wsConnection.onerror = function(event) {
+            // TODO improve error handling
+            console.error("WebSocket error observed:", event);
+          };
+        },
+        doShowVotes: function () {
+          var message = {
+            messageType: "show",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: ""
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
+        doClearVotes: function () {
+          var message = {
+            messageType: "clear",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: ""
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
+        doLeave: function () {
+          localStorage.clear();
+          this.inRoom = false;
+          this.votesSummary = [],
+          this.user.estimation = "";
+          this.users = [],
+          this.wsConnection.close();
+        },
+        doEdit: function () {
+          this.editing = false;
+          var message = {
+            messageType: "edit_issue",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: this.currentIssue
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
+        vote: function (voteValue) {
+          var message = {
+            messageType: "vote",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: voteValue
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
+        updateSummary: function() {
+          var updatedSummary = {};
+          this.users.forEach(u => {
+            updatedSummary[u.estimation] = updatedSummary[u.estimation] ? updatedSummary[u.estimation] + 1 : 1;
+          });
+          this.votesSummary = Object.entries(updatedSummary).sort(function(a, b) { return b[1] - a[1]; });
+        },
+        allVoted: function() {
+          this.votesRevealed = this.users.map(u => { return u.voted; }).reduce(function(acc, current) { return acc && current; },true);
+        },
+        showUserVoted: function(u) {
+          return (u.id !== this.user.id) && u.voted && !this.votesRevealed;
+        }
+      },
+      created() {
+        // TODO handle possible failure from not valid roomId (not UUID)
+        var possibleRoomId = window.location.pathname.split('/')[1]
+        if(possibleRoomId !== "") {
+          this.roomId = possibleRoomId;
+          this.creating = false;
+          this.joining = true;
+        }
+        if(this.user.name === null) {
+          this.user.name = "";
+        }
+        if(this.roomId && this.user.name) {
+          this.doJoin();
+        }
+      }
+    })
+  </script>
+
+</html>
