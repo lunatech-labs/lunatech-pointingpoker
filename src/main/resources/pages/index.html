@@ -18,6 +18,24 @@
         background-color: #EA212E;
         color: #fff;
       }
+      .show-bt {
+        background-color: #600002;
+        color: #fff;
+      }
+      .clear-bt {
+        background-color: #E2545D;
+        color: #fff;
+      }
+      .show-bt:hover {
+        background-color: #fff;
+        color: #600002;
+        border: 1px solid #600002;
+      }
+      .clear-bt:hover {
+        background-color: #fff;
+        color: #E2545D;
+        border: 1px solid #E2545D;
+      }
       .estimation-card {
         border-radius: 5px;
         height: 100%;
@@ -43,10 +61,20 @@
   <body>
 
     <div id="app" class="container">
+      <div class="row">
+        <div class="col-md-8 offset-md-2">
+          <div class="alert alert-danger m-1" role="alert" v-if="errorMessage">
+            {{ errorMessage }}
+          </div>
+          <div class="alert alert-info m-1" role="alert" v-if="showClipboardHint">
+            Link copied to clipboard
+          </div>
+        </div>
+      </div>
 
       <!-- Create/Join Room Content -->
       <div class="row">
-        <div v-if="!inRoom" class="col-md-6 offset-md-3">
+        <div v-if="!inRoom" class="col-md-8 offset-md-2">
           <div class="card text-center shadow-sm m-1">
             <div class="card-header">
               Pointing Poker
@@ -63,7 +91,7 @@
             <div class="card-body" v-if="creating">
               <h5 class="card-title">Create Room</h5>
               <div class="form-group row">
-                <label class="col-sm-3 col-form-label">Name</label>
+                <label class="col-sm-3 col-form-label">User name</label>
                 <div class="col-sm-9">
                   <input type="text" class="form-control" v-model="user.name">
                 </div>
@@ -85,7 +113,7 @@
                 </div>
               </div>
               <div class="form-group row">
-                <label class="col-sm-3 col-form-label">Name</label>
+                <label class="col-sm-3 col-form-label">User name</label>
                 <div class="col-sm-9">
                   <input type="text" class="form-control" v-model="user.name">
                 </div>
@@ -121,7 +149,7 @@
                   </div>
                   <div class="row">
                     <div class="col">
-                      <a class="nav-link" href="#" v-on:click="doLeave">Copy link (WIP)</a>
+                      <a class="nav-link" href="#" v-on:click="doCopy">Copy link</a>
                     </div>
                     <div class="col">
                       <a class="nav-link" href="#" v-on:click="doLeave">Leave</a>
@@ -185,10 +213,10 @@
                 <div class="col">
                   <div class="row">
                     <div class="col-auto mr-auto">
-                      <button type="button" class="btn btn-info" v-on:click="doShowVotes">Show votes</button>
+                      <button type="button" class="btn show-bt" v-on:click="doShowVotes">Show votes</button>
                     </div>
                     <div class="col-auto">
-                      <button type="button" class="btn btn-secondary" v-on:click="doClearVotes">Clear votes</button>
+                      <button type="button" class="btn clear-bt" v-on:click="doClearVotes">Clear votes</button>
                     </div>
                   </div>
                 </div>
@@ -264,6 +292,9 @@
         votesRevealed: false,
         currentIssue: "",
         votesSummary: [],
+        showClipboardHint: false,
+        showError: false,
+        errorMessage: "",
         users:[],
         user: {
           id: "",
@@ -298,9 +329,11 @@
           var ref = this;
           localStorage.setItem("roomId", this.roomId);
           localStorage.setItem("name", this.user.name);
-          //TODO make it configurable
-          this.wsConnection = new WebSocket('wss://mypointingpoker.herokuapp.com/websocket/'+this.roomId+'/'+this.user.name);
-          //this.wsConnection = new WebSocket('ws://localhost:8080/websocket/'+this.roomId+'/'+this.user.name);
+          var protocol = "ws";
+          if (window.location.protocol.includes('s')) {
+            protocol = "wss";
+          }
+          this.wsConnection = new WebSocket(protocol+'://'+window.location.host+'/websocket/'+this.roomId+'/'+this.user.name);
           this.wsConnection.onmessage = function(event) {
             ref.inRoom = true;
             var message = JSON.parse(event.data);
@@ -344,6 +377,8 @@
             }
             if (message.messageType === 'clear') {
               ref.votesRevealed = false;
+              ref.votesSummary = [];
+              ref.user.estimation = "";
               ref.users = ref.users.map(u => {
                 u.estimation = "";
                 u.voted = false;
@@ -362,9 +397,15 @@
             }
           };
           this.wsConnection.onerror = function(event) {
-            // TODO improve error handling
+            ref.showError = true;
+            ref.errorMessage = event;
             console.error("WebSocket error observed:", event);
           };
+          this.wsConnection.onclose = function() {
+            ref.showError = true;
+            ref.errorMessage = "Web socket connection lost";
+          };
+
         },
         doShowVotes: function () {
           var message = {
@@ -401,6 +442,19 @@
             extra: this.currentIssue
           };
           this.wsConnection.send(JSON.stringify(message));
+        },
+        doCopy: function () {
+          const el = document.createElement('textarea');
+          el.value = window.location.origin + '/' + this.roomId;
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand('copy');
+          document.body.removeChild(el);
+          this.showClipboardHint = true;
+          var ref = this;
+          window.setTimeout(function () {
+            ref.showClipboardHint = false;
+          }, 2000);
         },
         vote: function (voteValue) {
           var message = {
