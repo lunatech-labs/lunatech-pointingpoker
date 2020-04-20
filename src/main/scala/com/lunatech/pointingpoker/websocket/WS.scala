@@ -17,27 +17,45 @@ object WS {
 
   def handler(roomId: UUID, name: String, roomManager: ActorRef): Flow[Message, Message, Any] = {
     val userId = UUID.randomUUID()
-    Flow.fromSinkAndSource[Message, Message](sink(roomManager, roomId, userId), source(roomManager, roomId, userId, name))
+    Flow.fromSinkAndSource[Message, Message](
+      sink(roomManager, roomId, userId),
+      source(roomManager, roomId, userId, name)
+    )
   }
 
-  private def sink(roomManager: ActorRef, roomId: UUID, userId: UUID): Sink[Message, NotUsed] = Sink.actorRef(
-    roomManager,
-    RoomManager.WSCompleted(roomId, userId),
-    failure => RoomManager.WSFailure(failure)
-  ).contramap {
-    case TextMessage.Strict(body) => RoomManager.IncomeWSMessage(Json.parse(body).as[WSMessage])
-    case _ => RoomManager.UnsupportedWSMessage
-  }
+  private def sink(roomManager: ActorRef, roomId: UUID, userId: UUID): Sink[Message, NotUsed] =
+    Sink
+      .actorRef(
+        roomManager,
+        RoomManager.WSCompleted(roomId, userId),
+        failure => RoomManager.WSFailure(failure)
+      )
+      .contramap {
+        case TextMessage.Strict(body) => RoomManager.IncomeWSMessage(Json.parse(body).as[WSMessage])
+        case _                        => RoomManager.UnsupportedWSMessage
+      }
 
-  private def source(roomManager: ActorRef, roomId: UUID, userId: UUID, name: String): Source[Message, ActorRef] = Source.actorRef[WSMessage](
-    completionMatcher,
-    failureMatcher,
-    disabledBufferSize,
-    OverflowStrategy.dropTail
-  ).mapMaterializedValue { user =>
-    roomManager ! RoomManager.ConnectToRoom(WSMessage(MessageType.Join, roomId, userId, name), user)
-    user
-  }.map(message => TextMessage(Json.toJson(message).toString()))
+  private def source(
+      roomManager: ActorRef,
+      roomId: UUID,
+      userId: UUID,
+      name: String
+  ): Source[Message, ActorRef] =
+    Source
+      .actorRef[WSMessage](
+        completionMatcher,
+        failureMatcher,
+        disabledBufferSize,
+        OverflowStrategy.dropTail
+      )
+      .mapMaterializedValue { user =>
+        roomManager ! RoomManager.ConnectToRoom(
+          WSMessage(MessageType.Join, roomId, userId, name),
+          user
+        )
+        user
+      }
+      .map(message => TextMessage(Json.toJson(message).toString()))
 
   private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
     case RoomManager.CompleteWS => CompletionStrategy.immediately

@@ -21,7 +21,7 @@ import scala.util.{Failure, Success}
 class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: ActorSystem) {
 
   private implicit val timeout: Timeout = Timeout(apiConfig.timeout)
-  private val log: Logger = LoggerFactory.getLogger(this.getClass)
+  private val log: Logger               = LoggerFactory.getLogger(this.getClass)
   import actorSystem.dispatcher
 
   val route: Route =
@@ -51,7 +51,13 @@ class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: Act
       },
       path("websocket" / JavaUUID / Remaining) { (roomId, encodedName) =>
         log.debug("Websocket call: {} {}", roomId, encodedName)
-        handleWebSocketMessages(WS.handler(roomId, URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name()), roomManager))
+        handleWebSocketMessages(
+          WS.handler(
+            roomId,
+            URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name()),
+            roomManager
+          )
+        )
       }
     )
 
@@ -62,5 +68,6 @@ class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: Act
 }
 
 object API {
-  def apply(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: ActorSystem): API = new API(roomManager, apiConfig)
+  def apply(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: ActorSystem): API =
+    new API(roomManager, apiConfig)
 }

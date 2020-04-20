@@ -13,7 +13,10 @@ object ApiConfig {
     ApiConfig(
       host = config.getString("pointing-poker.service.host"),
       port = config.getInt("pointing-poker.service.port"),
-      timeout = FiniteDuration(config.getDuration("pointing-poker.service.timeout").toMillis, TimeUnit.MILLISECONDS),
+      timeout = FiniteDuration(
+        config.getDuration("pointing-poker.service.timeout").toMillis,
+        TimeUnit.MILLISECONDS
+      ),
       indexPath = config.getString("pointing-poker.service.index-path")
     )
   }

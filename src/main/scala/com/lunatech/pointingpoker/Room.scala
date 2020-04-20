@@ -10,8 +10,8 @@ class Room(roomId: UUID) extends Actor with ActorLogging {
 
   import Room._
 
-  var users: List[User] = List.empty
-  var currentIssue: String = ""
+  var users: List[User]             = List.empty
+  var currentIssue: String          = ""
   var issueLastEditBy: Option[UUID] = Option.empty
 
   override def receive: Receive = {
@@ -28,7 +28,8 @@ class Room(roomId: UUID) extends Actor with ActorLogging {
     case ClearVotes(userId) =>
       users = users.map(_.copy(voted = false))
       broadcast(WSMessage(MessageType.Clear, roomId, userId, WSMessage.NoExtra))
-    case ShowVotes(userId) => broadcast(WSMessage(MessageType.Show, roomId, userId, WSMessage.NoExtra))
+    case ShowVotes(userId) =>
+      broadcast(WSMessage(MessageType.Show, roomId, userId, WSMessage.NoExtra))
     case Leave(userId) =>
       users = users.filter(_.id != userId)
       broadcast(WSMessage(MessageType.Leave, roomId, userId, WSMessage.NoExtra))
@@ -43,7 +44,9 @@ class Room(roomId: UUID) extends Actor with ActorLogging {
 
   private def setupNewUser(user: User): Unit = {
     user.ref ! WSMessage(MessageType.Init, roomId, user.id, user.name)
-    issueLastEditBy.foreach( lastEditUser => user.ref ! WSMessage(MessageType.EditIssue, roomId, lastEditUser, currentIssue))
+    issueLastEditBy.foreach(lastEditUser =>
+      user.ref ! WSMessage(MessageType.EditIssue, roomId, lastEditUser, currentIssue)
+    )
     users.foreach { u =>
       user.ref ! WSMessage(MessageType.Join, roomId, u.id, u.name)
       if (u.voted) {

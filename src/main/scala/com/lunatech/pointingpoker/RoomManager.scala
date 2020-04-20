@@ -10,25 +10,31 @@ class RoomManager extends Actor with ActorLogging {
 
   import RoomManager._
 
-  val InitialVoteState = false
+  val InitialVoteState  = false
   val InitialEstimation = ""
 
   var rooms: Map[UUID, ActorRef] = Map.empty
 
   override def receive: Receive = {
     case CreateRoom =>
-      val roomId = UUID.randomUUID()
+      val roomId    = UUID.randomUUID()
       val roomActor = context.watch(createRoom(roomId))
       rooms = rooms + (roomId -> roomActor)
       sender() ! RoomId(roomId.toString)
     case ConnectToRoom(message, user) =>
-      rooms.get(message.roomId).fold {
-        val roomActor = context.watch(createRoom(message.roomId))
-        rooms = rooms + (message.roomId -> roomActor)
-        roomActor ! Room.Join(Room.User(message.userId, message.extra, InitialVoteState, InitialEstimation, user))
-      }{ room =>
-        room ! Room.Join(Room.User(message.userId, message.extra, InitialVoteState, InitialEstimation, user))
-      }
+      rooms
+        .get(message.roomId)
+        .fold {
+          val roomActor = context.watch(createRoom(message.roomId))
+          rooms = rooms + (message.roomId -> roomActor)
+          roomActor ! Room.Join(
+            Room.User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
+          )
+        } { room =>
+          room ! Room.Join(
+            Room.User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
+          )
+        }
     case IncomeWSMessage(message) =>
       rooms.get(message.roomId).foreach(handleIncomeMessage(_, message))
     case UnsupportedWSMessage =>
@@ -47,15 +53,16 @@ class RoomManager extends Actor with ActorLogging {
     context.actorOf(Room.props(roomId), roomId.toString)
   }
 
-  private def handleIncomeMessage(room: ActorRef, message: WSMessage): Unit = message.messageType match {
-    case MessageType.Init => // Should never arrive here
-    case MessageType.Join => // Should be handle by ConnectToRoom
-    case MessageType.Leave => // Should never arrive here
-    case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
-    case MessageType.Vote => room ! Room.Vote(message.userId, message.extra)
-    case MessageType.Show => room ! Room.ShowVotes(message.userId)
-    case MessageType.Clear => room ! Room.ClearVotes(message.userId)
-  }
+  private def handleIncomeMessage(room: ActorRef, message: WSMessage): Unit =
+    message.messageType match {
+      case MessageType.Init      => // Should never arrive here
+      case MessageType.Join      => // Should be handle by ConnectToRoom
+      case MessageType.Leave     => // Should never arrive here
+      case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
+      case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
+      case MessageType.Show      => room ! Room.ShowVotes(message.userId)
+      case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
+    }
 }
 
 object RoomManager {
