@@ -1,31 +1,32 @@
 package com.lunatech.pointingpoker
 
-import java.io.File
 import java.util.UUID
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
-import akka.http.scaladsl.model.ws.BinaryMessage
-import akka.http.scaladsl.testkit.{ScalatestRouteTest, WSProbe}
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import akka.http.scaladsl.server._
-import akka.util.ByteString
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.matchers.must
+import org.scalatest.wordspec.AnyWordSpec
 
 import scala.io.Source
-import scala.concurrent.duration._
 
-class APISpec extends WordSpec with MustMatchers with ScalatestRouteTest with BeforeAndAfterAll {
+class APISpec
+    extends AnyWordSpec
+    with must.Matchers
+    with ScalatestRouteTest
+    with BeforeAndAfterAll {
 
   implicit val actorSystem: ActorSystem = ActorSystem()
-  val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
-  val roomId: String = UUID.randomUUID().toString
+  val apiConfig: ApiConfig              = ApiConfig.load(ConfigFactory.load())
+  val roomId: String                    = UUID.randomUUID().toString
   val roomManager: ActorRef = actorSystem.actorOf(Props(new Actor {
     override def receive: Receive = {
       case RoomManager.CreateRoom => sender() ! RoomManager.RoomId(roomId)
     }
   }))
-
 
   val apiRoute: Route = API(roomManager, apiConfig).route
 
@@ -46,17 +47,6 @@ class APISpec extends WordSpec with MustMatchers with ScalatestRouteTest with Be
       Post("/create-room") ~> apiRoute ~> check {
         responseAs[String] mustBe roomId
       }
-    }
-    "open websocket" in {
-      val wsClient = WSProbe()
-
-      // WS creates a WebSocket request for testing
-      WS(s"/websocket/$roomId/John%20Doe", wsClient.flow) ~> apiRoute ~>
-        check {
-          isWebSocketUpgrade mustBe true
-
-          // TODO send valid messages
-        }
     }
 
   }

@@ -6,7 +6,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 
-class Room(roomId: UUID) extends Actor with ActorLogging {
+class Room(val roomId: UUID) extends Actor with ActorLogging {
 
   import Room._
 
@@ -26,7 +26,7 @@ class Room(roomId: UUID) extends Actor with ActorLogging {
       }
       broadcast(WSMessage(MessageType.Vote, roomId, userId, estimation))
     case ClearVotes(userId) =>
-      users = users.map(_.copy(voted = false))
+      users = users.map(_.copy(voted = false, estimation = ""))
       broadcast(WSMessage(MessageType.Clear, roomId, userId, WSMessage.NoExtra))
     case ShowVotes(userId) =>
       broadcast(WSMessage(MessageType.Show, roomId, userId, WSMessage.NoExtra))

@@ -49,15 +49,18 @@ class RoomManager extends Actor with ActorLogging {
       }
   }
 
-  private def createRoom(roomId: UUID): ActorRef = {
+  def createRoom(roomId: UUID): ActorRef = {
     context.actorOf(Room.props(roomId), roomId.toString)
   }
 
-  private def handleIncomeMessage(room: ActorRef, message: WSMessage): Unit =
+  def handleIncomeMessage(room: ActorRef, message: WSMessage): Unit =
     message.messageType match {
-      case MessageType.Init      => // Should never arrive here
-      case MessageType.Join      => // Should be handle by ConnectToRoom
-      case MessageType.Leave     => // Should never arrive here
+      case MessageType.Init => // Should never arrive here
+        log.error("Received Init MessageType []", message)
+      case MessageType.Join => // Should be handle by ConnectToRoom
+        log.error("Received Join MessageType []", message)
+      case MessageType.Leave => // Should never arrive here
+        log.error("Received Leave MessageType []", message)
       case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
       case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
       case MessageType.Show      => room ! Room.ShowVotes(message.userId)

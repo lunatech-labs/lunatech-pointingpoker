@@ -22,13 +22,12 @@ class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: Act
 
   private implicit val timeout: Timeout = Timeout(apiConfig.timeout)
   private val log: Logger               = LoggerFactory.getLogger(this.getClass)
-  import actorSystem.dispatcher
 
   val route: Route =
     concat(
       pathEndOrSingleSlash {
         get {
-          log.debug("Index call")
+          log.debug("Index call [{}]", apiConfig.indexPath)
           getFromFile(apiConfig.indexPath)
         }
       },
