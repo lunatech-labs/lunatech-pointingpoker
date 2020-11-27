@@ -2,11 +2,14 @@ package com.lunatech.pointingpoker
 
 import java.util.UUID
 
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.testkit.typed.scaladsl.ActorTestKit
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
 import akka.http.scaladsl.server._
+import com.lunatech.pointingpoker.actors.RoomManager
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -19,20 +22,25 @@ class APISpec
     with ScalatestRouteTest
     with BeforeAndAfterAll {
 
-  implicit val actorSystem: ActorSystem = ActorSystem()
-  val apiConfig: ApiConfig              = ApiConfig.load(ConfigFactory.load())
-  val roomId: String                    = UUID.randomUUID().toString
-  val roomManager: ActorRef = actorSystem.actorOf(Props(new Actor {
-    override def receive: Receive = {
-      case RoomManager.CreateRoom => sender() ! RoomManager.RoomId(roomId)
-    }
-  }))
+  val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
+  val roomId: String       = UUID.randomUUID().toString
+
+  val testKit: ActorTestKit = ActorTestKit()
+  val roomManager: ActorRef[RoomManager.Command] =
+    testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
+      case RoomManager.CreateRoom(replyTo) =>
+        replyTo ! RoomManager.RoomId(roomId)
+        Behaviors.same
+    })
+  implicit val typedSystem: ActorSystem[SpawnProtocol.Command] =
+    ActorSystem(Behaviors.setup[SpawnProtocol.Command](_ => SpawnProtocol()), "pointing-poker")
 
   val apiRoute: Route = API(roomManager, apiConfig).route
 
   override def afterAll(): Unit = {
     super.afterAll()
-    actorSystem.terminate()
+    testKit.shutdownTestKit()
+    typedSystem.terminate()
   }
 
   "API" should {

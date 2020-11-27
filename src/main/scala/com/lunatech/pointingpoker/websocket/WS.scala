@@ -7,7 +7,7 @@ import akka.actor.ActorRef
 import akka.http.scaladsl.model.ws.{Message, TextMessage}
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.stream.{CompletionStrategy, OverflowStrategy}
-import com.lunatech.pointingpoker.RoomManager
+import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 import play.api.libs.json.Json
 

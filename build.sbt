@@ -8,14 +8,15 @@ ThisBuild / organizationName := "lunatech"
 lazy val root = (project in file("."))
   .settings(
     name := "pointingpoker",
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"    % "2.6.10",
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream"         % "2.6.10",
-    libraryDependencies += "ch.qos.logback"     % "logback-classic"     % "1.2.3",
-    libraryDependencies += "com.typesafe.akka" %% "akka-http"           % "10.2.1",
-    libraryDependencies += "com.typesafe.play" %% "play-json"           % "2.9.1",
-    libraryDependencies += "org.scalatest"     %% "scalatest"           % "3.2.2"   % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit" % "2.6.10"   % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit"   % "10.2.1" % Test
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"         % "2.6.12",
+    libraryDependencies += "com.typesafe.akka" %% "akka-stream"              % "2.6.12",
+    libraryDependencies += "ch.qos.logback"     % "logback-classic"          % "1.2.3",
+    libraryDependencies += "com.typesafe.akka" %% "akka-http"                % "10.2.3",
+    libraryDependencies += "com.typesafe.play" %% "play-json"                % "2.9.1",
+    libraryDependencies += "org.scalatest"     %% "scalatest"                % "3.2.2"  % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % "2.6.12" % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit"      % "2.6.12" % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit"        % "10.2.3" % Test
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)
