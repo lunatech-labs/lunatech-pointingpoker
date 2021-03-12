@@ -3,22 +3,26 @@ package com.lunatech.pointingpoker
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
 import akka.http.scaladsl.server.Route
-import com.lunatech.pointingpoker.websocket.WS
-import akka.pattern.ask
+import akka.actor.typed.scaladsl.AskPattern._
+import akka.actor.typed.scaladsl.adapter._
 import akka.util.Timeout
+import com.lunatech.pointingpoker.actors.RoomManager
+import com.lunatech.pointingpoker.websocket.WS
 import com.lunatech.pointingpoker.config.ApiConfig
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: ActorSystem) {
+class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
+    actorSystem: ActorSystem[SpawnProtocol.Command]
+) {
 
   private implicit val timeout: Timeout = Timeout(apiConfig.timeout)
   private val log: Logger               = LoggerFactory.getLogger(this.getClass)
@@ -54,19 +58,21 @@ class API(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: Act
           WS.handler(
             roomId,
             URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name()),
-            roomManager
+            roomManager.toClassic
           )
         )
       }
     )
 
   def run(): Future[Http.ServerBinding] = {
-    log.info("Starting API")
-    Http().bindAndHandle(route, apiConfig.host, apiConfig.port)
+    log.info("Starting API on host port {}:{}", apiConfig.host, apiConfig.port)
+    Http().newServerAt(apiConfig.host, apiConfig.port).bind(route)
   }
 }
 
 object API {
-  def apply(roomManager: ActorRef, apiConfig: ApiConfig)(implicit actorSystem: ActorSystem): API =
+  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
+      actorSystem: ActorSystem[SpawnProtocol.Command]
+  ): API =
     new API(roomManager, apiConfig)
 }
