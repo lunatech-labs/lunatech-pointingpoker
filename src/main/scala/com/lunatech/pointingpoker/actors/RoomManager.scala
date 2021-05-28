@@ -104,10 +104,9 @@ object RoomManager {
             Behaviors.same
         }
       }
-      .receiveSignal {
-        case (_, Terminated(ref)) =>
-          val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
-          receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper)
+      .receiveSignal { case (_, Terminated(ref)) =>
+        val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
+        receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper)
       }
 
   private[actors] def createRoom(
