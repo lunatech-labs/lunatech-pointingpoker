@@ -27,7 +27,7 @@ object WSMessage {
         case Show.stringRep      => Show
         case Clear.stringRep     => Clear
         case EditIssue.stringRep => EditIssue
-        case _                   => throw new IllegalArgumentException(s"$messageType is not a valid MessageType")
+        case _ => throw new IllegalArgumentException(s"$messageType is not a valid MessageType")
       }
 
     def unapply(messageType: MessageType): Option[String] =

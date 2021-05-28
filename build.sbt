@@ -1,22 +1,27 @@
 import NativePackagerHelper._
 
-ThisBuild / scalaVersion := "2.13.3"
+ThisBuild / scalaVersion := "2.13.6"
 ThisBuild / version := "0.1.0-SNAPSHOT"
 ThisBuild / organization := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
+lazy val V = new {
+  val akka     = "2.6.14"
+  val akkaHttp = "10.2.4"
+}
+
 lazy val root = (project in file("."))
   .settings(
     name := "pointingpoker",
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"         % "2.6.12",
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream"              % "2.6.12",
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"         % V.akka,
+    libraryDependencies += "com.typesafe.akka" %% "akka-stream"              % V.akka,
     libraryDependencies += "ch.qos.logback"     % "logback-classic"          % "1.2.3",
-    libraryDependencies += "com.typesafe.akka" %% "akka-http"                % "10.2.3",
-    libraryDependencies += "com.typesafe.play" %% "play-json"                % "2.9.1",
-    libraryDependencies += "org.scalatest"     %% "scalatest"                % "3.2.2"  % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % "2.6.12" % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit"      % "2.6.12" % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit"        % "10.2.3" % Test
+    libraryDependencies += "com.typesafe.akka" %% "akka-http"                % V.akkaHttp,
+    libraryDependencies += "com.typesafe.play" %% "play-json"                % "2.9.2",
+    libraryDependencies += "org.scalatest"     %% "scalatest"                % "3.2.9"    % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % V.akka     % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit"      % V.akka     % Test,
+    libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit"        % V.akkaHttp % Test
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)
@@ -33,6 +38,11 @@ scalacOptions ++= Seq(
 addCommandAlias(
   "qa",
   "; clean; coverage ; test; coverageReport"
+)
+
+addCommandAlias(
+  "styleCheck",
+  "; scalafmtCheckAll ; scalafmtSbtCheck"
 )
 
 mappings in Universal ++= directory("src/main/resources/pages")
