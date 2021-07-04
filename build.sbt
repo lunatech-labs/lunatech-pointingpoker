@@ -1,8 +1,8 @@
 import NativePackagerHelper._
 
-ThisBuild / scalaVersion := "2.13.6"
-ThisBuild / version := "0.1.0-SNAPSHOT"
-ThisBuild / organization := "com.lunatech"
+ThisBuild / scalaVersion     := "2.13.6"
+ThisBuild / version          := "0.1.0-SNAPSHOT"
+ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
@@ -12,7 +12,7 @@ lazy val V = new {
 
 lazy val root = (project in file("."))
   .settings(
-    name := "pointingpoker",
+    name                                       := "pointingpoker",
     libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"         % V.akka,
     libraryDependencies += "com.typesafe.akka" %% "akka-stream"              % V.akka,
     libraryDependencies += "ch.qos.logback"     % "logback-classic"          % "1.2.3",
