@@ -7,7 +7,7 @@ ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val akka     = "2.6.15"
-  val akkaHttp = "10.2.4"
+  val akkaHttp = "10.2.5"
 }
 
 lazy val root = (project in file("."))
