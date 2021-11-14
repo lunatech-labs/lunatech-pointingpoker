@@ -45,5 +45,5 @@ addCommandAlias(
   "; scalafmtCheckAll ; scalafmtSbtCheck"
 )
 
-mappings in Universal ++= directory("src/main/resources/pages")
+Universal / mappings ++= directory("src/main/resources/pages")
 dockerEnvVars := Map("PORT" -> "$PORT", "HOST" -> "$HOST", "INDEX_PATH" -> "$INDEX_PATH")
