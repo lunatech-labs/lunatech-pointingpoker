@@ -1,6 +1,6 @@
 import NativePackagerHelper._
 
-ThisBuild / scalaVersion     := "2.13.6"
+ThisBuild / scalaVersion     := "2.13.7"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
@@ -45,5 +45,5 @@ addCommandAlias(
   "; scalafmtCheckAll ; scalafmtSbtCheck"
 )
 
-mappings in Universal ++= directory("src/main/resources/pages")
+Universal / mappings ++= directory("src/main/resources/pages")
 dockerEnvVars := Map("PORT" -> "$PORT", "HOST" -> "$HOST", "INDEX_PATH" -> "$INDEX_PATH")
