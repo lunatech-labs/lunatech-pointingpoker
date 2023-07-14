@@ -28,7 +28,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         replyTo ! RoomManager.RoomId(roomId)
         Behaviors.same
     })
-  implicit val typedSystem: ActorSystem[SpawnProtocol.Command] =
+  given typedSystem: ActorSystem[SpawnProtocol.Command] =
     ActorSystem(Behaviors.setup[SpawnProtocol.Command](_ => SpawnProtocol()), "pointing-poker")
 
   val apiRoute: Route = API(roomManager, apiConfig).route

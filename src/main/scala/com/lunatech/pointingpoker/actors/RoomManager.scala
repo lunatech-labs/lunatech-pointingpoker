@@ -12,17 +12,17 @@ import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 object RoomManager:
 
   sealed trait Command
-  final case class CreateRoom(replyTo: ActorRef[Response])             extends Command
-  final case class IncomeWSMessage(message: WSMessage)                 extends Command
-  final case object UnsupportedWSMessage                               extends Command
-  final case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
-  final case class WSFailure(t: Throwable)                             extends Command
-  final case class CompleteWS()                                        extends Command
-  final case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
-  final case class RoomResponseWrapper(response: Room.Response)        extends Command
+  case class CreateRoom(replyTo: ActorRef[Response])             extends Command
+  case class IncomeWSMessage(message: WSMessage)                 extends Command
+  case object UnsupportedWSMessage                               extends Command
+  case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
+  case class WSFailure(t: Throwable)                             extends Command
+  case class CompleteWS()                                        extends Command
+  case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
+  case class RoomResponseWrapper(response: Room.Response)        extends Command
 
   sealed trait Response
-  final case class RoomId(value: String) extends Response
+  case class RoomId(value: String) extends Response
 
   val InitialVoteState  = false
   val InitialEstimation = ""

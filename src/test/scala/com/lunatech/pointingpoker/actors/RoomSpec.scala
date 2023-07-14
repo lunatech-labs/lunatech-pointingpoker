@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
   import RoomSpec.*
 
-  implicit val testKit: ActorTestKit = ActorTestKit()
+  given testKit: ActorTestKit = ActorTestKit()
 
   override def afterAll(): Unit =
     testKit.shutdownTestKit()
@@ -235,14 +235,14 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 end RoomSpec
 
 object RoomSpec:
-  def createUser(uuid: UUID, name: String, voted: Boolean, estimation: String)(implicit
+  def createUser(uuid: UUID, name: String, voted: Boolean, estimation: String)(using
       testKit: ActorTestKit
   ): (Room.User, TestProbe) =
     val probe = TestProbe()(testKit.system.classicSystem)
     val user  = Room.User(uuid, name, voted, estimation, probe.ref)
     (user, probe)
 
-  def createRoom(roomId: UUID, data: RoomData)(implicit
+  def createRoom(roomId: UUID, data: RoomData)(using
       testKit: ActorTestKit
   ): (UUID, ActorRef[Room.Command]) =
     val roomRef = testKit.spawn[Room.Command](Room.receiveBehaviour(roomId, data))

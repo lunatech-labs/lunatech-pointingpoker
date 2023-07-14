@@ -20,12 +20,12 @@ import org.slf4j.{Logger, LoggerFactory}
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
+class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
     actorSystem: ActorSystem[SpawnProtocol.Command]
 ):
 
-  implicit private val timeout: Timeout = Timeout(apiConfig.timeout)
-  private val log: Logger               = LoggerFactory.getLogger(this.getClass)
+  private given timeout: Timeout = Timeout(apiConfig.timeout)
+  private val log: Logger        = LoggerFactory.getLogger(this.getClass)
 
   val route: Route =
     concat(
@@ -44,7 +44,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(impl
       path("create-room") {
         post {
           log.debug("Create room call")
-          onComplete((roomManager ? RoomManager.CreateRoom).mapTo[RoomManager.RoomId]) {
+          onComplete((roomManager ? RoomManager.CreateRoom.apply).mapTo[RoomManager.RoomId]) {
             case Success(result) => complete(result.value)
             case Failure(reason) =>
               log.error("Error while creating room: {}", reason)
@@ -70,7 +70,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(impl
 end API
 
 object API:
-  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
+  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
       actorSystem: ActorSystem[SpawnProtocol.Command]
   ): API =
     new API(roomManager, apiConfig)

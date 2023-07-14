@@ -15,17 +15,17 @@ import scala.util.{Failure, Success}
 object Main extends App:
 
   val log = LoggerFactory.getLogger("com.lunatech.pointingpoker.Main")
-  implicit val system: ActorSystem[SpawnProtocol.Command] =
+  given system: ActorSystem[SpawnProtocol.Command] =
     ActorSystem(Behaviors.setup[SpawnProtocol.Command](_ => SpawnProtocol()), "pointing-poker")
 
   val apiConfig: ApiConfig = ApiConfig.load(system.settings.config)
 
-  implicit val timeout: Timeout = 3.seconds
+  given timeout: Timeout = 3.seconds
 
   val roomManagerFuture: Future[ActorRef[RoomManager.Command]] = system.ask { ref =>
     SpawnProtocol.Spawn(RoomManager(), "room-manager", Props.empty, ref)
   }
-  implicit val ec: ExecutionContextExecutor = system.executionContext
+  given ec: ExecutionContextExecutor = system.executionContext
 
   roomManagerFuture.onComplete {
     case Success(roomManager) =>

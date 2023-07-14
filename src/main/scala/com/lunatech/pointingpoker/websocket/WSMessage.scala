@@ -4,6 +4,8 @@ import java.util.UUID
 
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 import io.circe.*
+import io.circe.generic.semiauto.*
+import scala.util.Try
 
 case class WSMessage(
     messageType: MessageType,
@@ -17,12 +19,12 @@ object WSMessage:
   val NoExtra = ""
 
   enum MessageType(val stringRep: String):
-    case Init extends MessageType("init")
-    case Join extends MessageType("join")
-    case Leave extends MessageType("leave")
-    case Vote extends MessageType("vote")
-    case Show extends MessageType("show")
-    case Clear extends MessageType("clear")
+    case Init      extends MessageType("init")
+    case Join      extends MessageType("join")
+    case Leave     extends MessageType("leave")
+    case Vote      extends MessageType("vote")
+    case Show      extends MessageType("show")
+    case Clear     extends MessageType("clear")
     case EditIssue extends MessageType("edit_issue")
 
   object MessageType:
@@ -49,6 +51,14 @@ object WSMessage:
         case EditIssue => Option(EditIssue.stringRep)
   end MessageType
 
-  given wsMessageDecoder: Decoder[WSMessage] = new Decoder[WSMessage]:
-    def apply(c: HCursor): Decoder.Result[WSMessage] = ???
+  given messageTypeDecoder: Decoder[MessageType] =
+    Decoder.decodeString.emapTry(str => Try(MessageType(str)))
+
+  given messageTypeEncoder: Encoder[MessageType] =
+    Encoder.encodeString.contramap(m => m.stringRep)
+
+  given wsMessageDecoder: Decoder[WSMessage] = deriveDecoder[WSMessage]
+
+  given wsMessageEncoder: Encoder[WSMessage] = deriveEncoder[WSMessage]
+
 end WSMessage

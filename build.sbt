@@ -19,6 +19,7 @@ lazy val root = (project in file("."))
     libraryDependencies += "ch.qos.logback"    % "logback-classic"           % "1.4.8",
     libraryDependencies += "org.apache.pekko" %% "pekko-http"                % V.pekkoHttp,
     libraryDependencies += "io.circe"         %% "circe-core"                % V.circe,
+    libraryDependencies += "io.circe"         %% "circe-parser"              % V.circe,
     libraryDependencies += "io.circe"         %% "circe-generic"             % V.circe,
     libraryDependencies += "org.scalatest"    %% "scalatest"                 % "3.2.16"    % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
