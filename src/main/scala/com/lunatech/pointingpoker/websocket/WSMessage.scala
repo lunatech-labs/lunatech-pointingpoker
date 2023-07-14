@@ -3,23 +3,34 @@ package com.lunatech.pointingpoker.websocket
 import java.util.UUID
 
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
-import play.api.libs.json._
+import io.circe.*
+import io.circe.generic.semiauto.*
+import scala.util.Try
 
-import scala.util.{Failure, Success, Try}
+case class WSMessage(
+    messageType: MessageType,
+    roomId: UUID,
+    userId: UUID,
+    extra: String
+)
 
-final case class WSMessage(messageType: MessageType, roomId: UUID, userId: UUID, extra: String)
-
-object WSMessage {
+object WSMessage:
 
   val NoExtra = ""
 
-  sealed trait MessageType {
-    val stringRep: String
-  }
+  enum MessageType(val stringRep: String):
+    case Init      extends MessageType("init")
+    case Join      extends MessageType("join")
+    case Leave     extends MessageType("leave")
+    case Vote      extends MessageType("vote")
+    case Show      extends MessageType("show")
+    case Clear     extends MessageType("clear")
+    case EditIssue extends MessageType("edit_issue")
 
-  object MessageType {
+  object MessageType:
+    import MessageType.*
     def apply(messageType: String): MessageType =
-      messageType match {
+      messageType match
         case Init.stringRep      => Init
         case Join.stringRep      => Join
         case Leave.stringRep     => Leave
@@ -28,10 +39,9 @@ object WSMessage {
         case Clear.stringRep     => Clear
         case EditIssue.stringRep => EditIssue
         case _ => throw new IllegalArgumentException(s"$messageType is not a valid MessageType")
-      }
 
     def unapply(messageType: MessageType): Option[String] =
-      messageType match {
+      messageType match
         case Init      => Option(Init.stringRep)
         case Join      => Option(Join.stringRep)
         case Leave     => Option(Leave.stringRep)
@@ -39,50 +49,16 @@ object WSMessage {
         case Show      => Option(Show.stringRep)
         case Clear     => Option(Clear.stringRep)
         case EditIssue => Option(EditIssue.stringRep)
-      }
+  end MessageType
 
-    final case object Init extends MessageType {
-      override val stringRep: String = "init"
-    }
+  given messageTypeDecoder: Decoder[MessageType] =
+    Decoder.decodeString.emapTry(str => Try(MessageType(str)))
 
-    final case object Join extends MessageType {
-      override val stringRep: String = "join"
-    }
+  given messageTypeEncoder: Encoder[MessageType] =
+    Encoder.encodeString.contramap(m => m.stringRep)
 
-    final case object Leave extends MessageType {
-      override val stringRep: String = "leave"
-    }
+  given wsMessageDecoder: Decoder[WSMessage] = deriveDecoder[WSMessage]
 
-    final case object Vote extends MessageType {
-      override val stringRep: String = "vote"
-    }
+  given wsMessageEncoder: Encoder[WSMessage] = deriveEncoder[WSMessage]
 
-    final case object Show extends MessageType {
-      override val stringRep: String = "show"
-    }
-
-    final case object Clear extends MessageType {
-      override val stringRep: String = "clear"
-    }
-
-    final case object EditIssue extends MessageType {
-      override val stringRep: String = "edit_issue"
-    }
-
-    implicit val messageTypeFormat: Format[MessageType] = Format[MessageType](
-      Reads[MessageType] {
-        case JsString(value) =>
-          Try(MessageType(value)) match {
-            case Success(messageType) => JsSuccess(messageType)
-            case Failure(exception)   => JsError(exception.toString)
-          }
-        case _ => JsError("Unexpected type")
-      },
-      Writes[MessageType] { messageType =>
-        JsString(messageType.stringRep)
-      }
-    )
-  }
-
-  implicit val wsMessageFormat: Format[WSMessage] = Json.format[WSMessage]
-}
+end WSMessage

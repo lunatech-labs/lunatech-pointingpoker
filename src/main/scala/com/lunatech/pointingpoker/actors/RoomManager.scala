@@ -4,40 +4,36 @@ import java.util.UUID
 
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
-import org.apache.pekko.actor.{ActorRef => UntypedRef}
+import org.apache.pekko.actor.ActorRef as UntypedRef
 import com.lunatech.pointingpoker.actors
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 
-object RoomManager {
+object RoomManager:
 
   sealed trait Command
-  final case class CreateRoom(replyTo: ActorRef[Response])             extends Command
-  final case class IncomeWSMessage(message: WSMessage)                 extends Command
-  final case object UnsupportedWSMessage                               extends Command
-  final case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
-  final case class WSFailure(t: Throwable)                             extends Command
-  final case class CompleteWS()                                        extends Command
-  final case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
-  final case class RoomResponseWrapper(response: Room.Response)        extends Command
+  case class CreateRoom(replyTo: ActorRef[Response])             extends Command
+  case class IncomeWSMessage(message: WSMessage)                 extends Command
+  case object UnsupportedWSMessage                               extends Command
+  case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
+  case class WSFailure(t: Throwable)                             extends Command
+  case class CompleteWS()                                        extends Command
+  case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
+  case class RoomResponseWrapper(response: Room.Response)        extends Command
 
   sealed trait Response
-  final case class RoomId(value: String) extends Response
+  case class RoomId(value: String) extends Response
 
   val InitialVoteState  = false
   val InitialEstimation = ""
 
-  final case class RoomManagerData(rooms: Map[UUID, ActorRef[Room.Command]]) {
-    def addRoom(roomId: UUID, roomActor: ActorRef[Room.Command]): RoomManagerData = {
+  final case class RoomManagerData(rooms: Map[UUID, ActorRef[Room.Command]]):
+    def addRoom(roomId: UUID, roomActor: ActorRef[Room.Command]): RoomManagerData =
       this.copy(rooms = this.rooms + (roomId -> roomActor))
-    }
-    def removeRoom(roomId: UUID): RoomManagerData = {
+    def removeRoom(roomId: UUID): RoomManagerData =
       this.copy(rooms = this.rooms - roomId)
-    }
-  }
-  object RoomManagerData {
+  object RoomManagerData:
     val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[UUID, ActorRef[Room.Command]])
-  }
 
   def apply(): Behavior[Command] =
     Behaviors.setup[Command] { context =>
@@ -52,7 +48,7 @@ object RoomManager {
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
-        message match {
+        message match
           case CreateRoom(replyTo) =>
             val roomId    = UUID.randomUUID()
             val roomActor = createRoom(roomId, context)
@@ -81,12 +77,11 @@ object RoomManager {
                 Behaviors.same
               }
           case RoomResponseWrapper(response) =>
-            response match {
+            response match
               case Room.Running(_) => Behaviors.same
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
                 receiveBehaviour(newData, roomResponseWrapper)
-            }
           case IncomeWSMessage(message) =>
             data.rooms.get(message.roomId).foreach(handleIncomeMessage(_, message, context))
             Behaviors.same
@@ -102,7 +97,6 @@ object RoomManager {
           case CompleteWS() =>
             context.log.error("CompleteWS: should never be received")
             Behaviors.same
-        }
       }
       .receiveSignal { case (_, Terminated(ref)) =>
         val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
@@ -112,16 +106,15 @@ object RoomManager {
   private[actors] def createRoom(
       roomId: UUID,
       context: ActorContext[Command]
-  ): ActorRef[Room.Command] = {
+  ): ActorRef[Room.Command] =
     context.spawn(actors.Room(roomId), name = roomId.toString)
-  }
 
   private[actors] def handleIncomeMessage(
       room: ActorRef[Room.Command],
       message: WSMessage,
       context: ActorContext[Command]
   ): Unit =
-    message.messageType match {
+    message.messageType match
       case MessageType.Init => // Should never arrive here
         context.log.error("Received Init MessageType []", message)
       case MessageType.Join => // Should be handle by ConnectToRoom
@@ -132,5 +125,4 @@ object RoomManager {
       case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
       case MessageType.Show      => room ! Room.ShowVotes(message.userId)
       case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
-    }
-}
+end RoomManager

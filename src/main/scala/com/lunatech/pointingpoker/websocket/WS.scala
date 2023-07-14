@@ -2,6 +2,8 @@ package com.lunatech.pointingpoker.websocket
 
 import java.util.UUID
 
+import io.circe.syntax.*
+import io.circe.parser.decode
 import org.apache.pekko.NotUsed
 import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
@@ -9,19 +11,18 @@ import org.apache.pekko.stream.scaladsl.{Flow, Sink, Source}
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
-import play.api.libs.json.Json
+import com.lunatech.pointingpoker.websocket.WSMessage.given
 
-object WS {
+object WS:
 
   val disabledBufferSize = 0
 
-  def handler(roomId: UUID, name: String, roomManager: ActorRef): Flow[Message, Message, Any] = {
+  def handler(roomId: UUID, name: String, roomManager: ActorRef): Flow[Message, Message, Any] =
     val userId = UUID.randomUUID()
     Flow.fromSinkAndSource[Message, Message](
       sink(roomManager, roomId, userId),
       source(roomManager, roomId, userId, name)
     )
-  }
 
   private def sink(roomManager: ActorRef, roomId: UUID, userId: UUID): Sink[Message, NotUsed] =
     Sink
@@ -31,8 +32,11 @@ object WS {
         failure => RoomManager.WSFailure(failure)
       )
       .contramap {
-        case TextMessage.Strict(body) => RoomManager.IncomeWSMessage(Json.parse(body).as[WSMessage])
-        case _                        => RoomManager.UnsupportedWSMessage
+        case TextMessage.Strict(body) =>
+          decode[WSMessage](body) match
+            case Right(msg) => RoomManager.IncomeWSMessage(msg)
+            case _          => RoomManager.UnsupportedWSMessage
+        case _ => RoomManager.UnsupportedWSMessage
       }
 
   private def source(
@@ -55,12 +59,11 @@ object WS {
         )
         user
       }
-      .map(message => TextMessage(Json.toJson(message).toString()))
+      .map(message => TextMessage(message.asJson.noSpaces))
 
   private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
     case RoomManager.CompleteWS => CompletionStrategy.immediately
   }
 
   private val failureMatcher: PartialFunction[Any, Throwable] = PartialFunction.empty
-
-}
+end WS

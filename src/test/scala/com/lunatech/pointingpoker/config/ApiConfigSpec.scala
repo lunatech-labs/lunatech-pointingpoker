@@ -4,9 +4,9 @@ import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 
-class ApiConfigSpec extends AnyWordSpec with must.Matchers {
+class ApiConfigSpec extends AnyWordSpec with must.Matchers:
 
   "ApiConfig" should {
     "load config correctly" in {
@@ -19,4 +19,4 @@ class ApiConfigSpec extends AnyWordSpec with must.Matchers {
       apiConfig.indexPath mustBe "src/main/resources/pages/index.html"
     }
   }
-}
+end ApiConfigSpec

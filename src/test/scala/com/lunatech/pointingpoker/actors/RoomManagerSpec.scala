@@ -3,7 +3,7 @@ package com.lunatech.pointingpoker.actors
 import java.util.UUID
 
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
-import org.apache.pekko.testkit._
+import org.apache.pekko.testkit.*
 import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
@@ -11,16 +11,15 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
-class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll {
+class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   val testKit: ActorTestKit = ActorTestKit()
 
   val user1Name = "user 1"
   val user2Name = "user 2"
 
-  override def afterAll(): Unit = {
+  override def afterAll(): Unit =
     testKit.shutdownTestKit()
-  }
 
   "RoomManager Actor" should {
     "create room" in {
@@ -114,4 +113,4 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
     }
   }
-}
+end RoomManagerSpec
