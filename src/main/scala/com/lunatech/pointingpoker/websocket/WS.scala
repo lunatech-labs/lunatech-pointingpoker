@@ -2,11 +2,11 @@ package com.lunatech.pointingpoker.websocket
 
 import java.util.UUID
 
-import akka.NotUsed
-import akka.actor.ActorRef
-import akka.http.scaladsl.model.ws.{Message, TextMessage}
-import akka.stream.scaladsl.{Flow, Sink, Source}
-import akka.stream.{CompletionStrategy, OverflowStrategy}
+import org.apache.pekko.NotUsed
+import org.apache.pekko.actor.ActorRef
+import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
+import org.apache.pekko.stream.scaladsl.{Flow, Sink, Source}
+import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 import play.api.libs.json.Json

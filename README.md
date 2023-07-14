@@ -42,7 +42,7 @@ Available endpoints:
 
 This project uses:
   * Vue.js
-  * Akka/Akka-http
+  * pekko/pekko-http
 
 ### Deployment
 

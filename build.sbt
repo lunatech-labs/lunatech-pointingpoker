@@ -6,26 +6,28 @@ ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
-  val akka     = "2.6.20"
-  val akkaHttp = "10.2.10"
+  val pekko     = "1.0.0"
+  val pekkoHttp = "0.0.0+4468-963bd592-SNAPSHOT"
 }
 
 lazy val root = (project in file("."))
   .settings(
     name                                       := "pointingpoker",
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor-typed"         % V.akka,
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream"              % V.akka,
-    libraryDependencies += "ch.qos.logback"     % "logback-classic"          % "1.4.8",
-    libraryDependencies += "com.typesafe.akka" %% "akka-http"                % V.akkaHttp,
-    libraryDependencies += "com.typesafe.play" %% "play-json"                % "2.9.4",
-    libraryDependencies += "org.scalatest"     %% "scalatest"                % "3.2.16"   % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-actor-testkit-typed" % V.akka     % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit"      % V.akka     % Test,
-    libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit"        % V.akkaHttp % Test
+    libraryDependencies += "org.apache.pekko"  %% "pekko-actor-typed"         % V.pekko,
+    libraryDependencies += "org.apache.pekko"  %% "pekko-stream"              % V.pekko,
+    libraryDependencies += "ch.qos.logback"     % "logback-classic"           % "1.4.8",
+    libraryDependencies += "org.apache.pekko"  %% "pekko-http"                % V.pekkoHttp,
+    libraryDependencies += "com.typesafe.play" %% "play-json"                 % "2.9.4",
+    libraryDependencies += "org.scalatest"     %% "scalatest"                 % "3.2.16"    % Test,
+    libraryDependencies += "org.apache.pekko"  %% "pekko-actor-testkit-typed" % V.pekko     % Test,
+    libraryDependencies += "org.apache.pekko"  %% "pekko-stream-testkit"      % V.pekko     % Test,
+    libraryDependencies += "org.apache.pekko"  %% "pekko-http-testkit"        % V.pekkoHttp % Test
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)
   .enablePlugins(DockerPlugin)
+
+resolvers += "Apache Snapshots" at " https://repository.apache.org/content/repositories/snapshots"
 
 scalacOptions ++= Seq(
   "-Ywarn-unused:imports",
@@ -46,4 +48,5 @@ addCommandAlias(
 )
 
 Universal / mappings ++= directory("src/main/resources/pages")
-dockerEnvVars := Map("PORT" -> "$PORT", "HOST" -> "$HOST", "INDEX_PATH" -> "$INDEX_PATH")
+dockerEnvVars   := Map("PORT" -> "$PORT", "HOST" -> "$HOST", "INDEX_PATH" -> "$INDEX_PATH")
+dockerBaseImage := "openjdk:17"
