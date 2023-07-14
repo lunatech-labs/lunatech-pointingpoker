@@ -8,8 +8,8 @@ import scala.concurrent.duration.FiniteDuration
 
 final case class ApiConfig(host: String, port: Int, timeout: FiniteDuration, indexPath: String)
 
-object ApiConfig {
-  def load(config: Config): ApiConfig = {
+object ApiConfig:
+  def load(config: Config): ApiConfig =
     ApiConfig(
       host = config.getString("pointing-poker.service.host"),
       port = config.getInt("pointing-poker.service.port"),
@@ -19,5 +19,4 @@ object ApiConfig {
       ),
       indexPath = config.getString("pointing-poker.service.index-path")
     )
-  }
-}
+end ApiConfig

@@ -8,7 +8,7 @@ import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
-import org.apache.pekko.http.scaladsl.server._
+import org.apache.pekko.http.scaladsl.server.*
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
@@ -16,11 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 import scala.io.Source
 
-class APISpec
-    extends AnyWordSpec
-    with must.Matchers
-    with ScalatestRouteTest
-    with BeforeAndAfterAll {
+class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
 
   val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
   val roomId: String       = UUID.randomUUID().toString
@@ -37,11 +33,10 @@ class APISpec
 
   val apiRoute: Route = API(roomManager, apiConfig).route
 
-  override def afterAll(): Unit = {
+  override def afterAll(): Unit =
     super.afterAll()
     testKit.shutdownTestKit()
     typedSystem.terminate()
-  }
 
   "API" should {
     "return index.html" in {
@@ -58,5 +53,4 @@ class APISpec
     }
 
   }
-
-}
+end APISpec

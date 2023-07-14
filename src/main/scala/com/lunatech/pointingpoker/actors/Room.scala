@@ -4,11 +4,11 @@ import java.util.UUID
 
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
-import org.apache.pekko.actor.{ActorRef => UntypedRef}
+import org.apache.pekko.actor.ActorRef as UntypedRef
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 
-object Room {
+object Room:
 
   sealed trait Command
   final case class Join(user: User)                                       extends Command
@@ -17,7 +17,7 @@ object Room {
   final case class ClearVotes(userId: UUID)                               extends Command
   final case class ShowVotes(userId: UUID)                                extends Command
   final case class EditIssue(userId: UUID, issue: String)                 extends Command
-  private[actors] final case class GetData(replyTo: ActorRef[DataStatus]) extends Command
+  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
 
   final case class DataStatus(data: RoomData)
 
@@ -31,34 +31,28 @@ object Room {
       users: List[User],
       currentIssue: String,
       issueLastEditBy: Option[UUID]
-  ) {
-    def joinUser(user: User): RoomData = {
+  ):
+    def joinUser(user: User): RoomData =
       this.copy(users = user :: this.users)
-    }
 
-    def vote(userId: UUID, estimation: String): RoomData = {
+    def vote(userId: UUID, estimation: String): RoomData =
       this.copy(users = this.users.map { u =>
-        if (userId == u.id) u.copy(voted = true, estimation = estimation)
+        if userId == u.id then u.copy(voted = true, estimation = estimation)
         else u
       })
-    }
 
-    def clear(): RoomData = {
+    def clear(): RoomData =
       this.copy(users = this.users.map(_.copy(voted = false, estimation = "")))
-    }
 
-    def leave(userId: UUID): RoomData = {
+    def leave(userId: UUID): RoomData =
       this.copy(users = this.users.filterNot(_.id == userId))
-    }
 
-    def editIssue(issue: String, userId: UUID): RoomData = {
+    def editIssue(issue: String, userId: UUID): RoomData =
       this.copy(currentIssue = issue, issueLastEditBy = Option(userId))
-    }
-  }
+  end RoomData
 
-  object RoomData {
+  object RoomData:
     val empty: RoomData = RoomData(List.empty[User], "", Option.empty[UUID])
-  }
 
   def apply(roomId: UUID): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
@@ -67,7 +61,7 @@ object Room {
 
   private[actors] def receiveBehaviour(roomId: UUID, data: RoomData): Behavior[Command] =
     Behaviors.receive[Command] { (context, message) =>
-      message match {
+      message match
         case Join(user) =>
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
@@ -99,13 +93,12 @@ object Room {
             newData.users,
             context
           )
-          if (newData.users.isEmpty) {
+          if newData.users.isEmpty then
             replyTo ! Stopped(roomId)
             Behaviors.stopped
-          } else {
+          else
             replyTo ! Running(roomId)
             receiveBehaviour(roomId, newData)
-          }
         case EditIssue(userId, issue) =>
           broadcast(WSMessage(MessageType.EditIssue, roomId, userId, issue), data.users, context)
           receiveBehaviour(
@@ -115,7 +108,6 @@ object Room {
         case GetData(replyTo) =>
           replyTo ! Room.DataStatus(data)
           Behaviors.same
-      }
 
     }
 
@@ -123,24 +115,21 @@ object Room {
       message: WSMessage,
       users: List[User],
       context: ActorContext[Command]
-  ): Unit = {
+  ): Unit =
     context.log.debug("Broadcasting: {} ", message)
     users.foreach { user =>
       user.ref ! message
     }
-  }
+  end broadcast
 
-  private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit = {
+  private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit =
     user.ref ! WSMessage(MessageType.Init, roomId, user.id, user.name)
     data.issueLastEditBy.foreach(lastEditUser =>
       user.ref ! WSMessage(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
     )
     data.users.foreach { u =>
       user.ref ! WSMessage(MessageType.Join, roomId, u.id, u.name)
-      if (u.voted) {
-        user.ref ! WSMessage(MessageType.Vote, roomId, u.id, u.estimation)
-      }
+      if u.voted then user.ref ! WSMessage(MessageType.Vote, roomId, u.id, u.estimation)
     }
-  }
-
-}
+  end setupNewUser
+end Room

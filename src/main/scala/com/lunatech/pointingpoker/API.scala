@@ -5,12 +5,12 @@ import java.nio.charset.StandardCharsets
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model._
-import org.apache.pekko.http.scaladsl.server.Directives._
+import org.apache.pekko.http.scaladsl.model.*
+import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
 import org.apache.pekko.http.scaladsl.server.Route
-import org.apache.pekko.actor.typed.scaladsl.AskPattern._
-import org.apache.pekko.actor.typed.scaladsl.adapter._
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WS
@@ -22,9 +22,9 @@ import scala.util.{Failure, Success}
 
 class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
     actorSystem: ActorSystem[SpawnProtocol.Command]
-) {
+):
 
-  private implicit val timeout: Timeout = Timeout(apiConfig.timeout)
+  implicit private val timeout: Timeout = Timeout(apiConfig.timeout)
   private val log: Logger               = LoggerFactory.getLogger(this.getClass)
 
   val route: Route =
@@ -64,15 +64,13 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(impl
       }
     )
 
-  def run(): Future[Http.ServerBinding] = {
+  def run(): Future[Http.ServerBinding] =
     log.info("Starting API on host port {}:{}", apiConfig.host, apiConfig.port)
     Http().newServerAt(apiConfig.host, apiConfig.port).bind(route)
-  }
-}
+end API
 
-object API {
+object API:
   def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(implicit
       actorSystem: ActorSystem[SpawnProtocol.Command]
   ): API =
     new API(roomManager, apiConfig)
-}

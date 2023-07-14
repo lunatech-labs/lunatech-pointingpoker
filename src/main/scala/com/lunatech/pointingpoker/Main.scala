@@ -3,16 +3,16 @@ package com.lunatech.pointingpoker
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Props, SpawnProtocol}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import com.lunatech.pointingpoker.config.ApiConfig
-import org.apache.pekko.actor.typed.scaladsl.AskPattern._
+import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
-import scala.concurrent.duration._
+import scala.concurrent.duration.*
 import scala.util.{Failure, Success}
 
-object Main extends App {
+object Main extends App:
 
   val log = LoggerFactory.getLogger("com.lunatech.pointingpoker.Main")
   implicit val system: ActorSystem[SpawnProtocol.Command] =
@@ -34,5 +34,4 @@ object Main extends App {
     case Failure(exception) =>
       log.error("Error creating room manager {}", exception)
   }
-
-}
+end Main

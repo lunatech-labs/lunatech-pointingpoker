@@ -9,19 +9,17 @@ import org.apache.pekko.stream.scaladsl.{Flow, Sink, Source}
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
-import play.api.libs.json.Json
 
-object WS {
+object WS:
 
   val disabledBufferSize = 0
 
-  def handler(roomId: UUID, name: String, roomManager: ActorRef): Flow[Message, Message, Any] = {
+  def handler(roomId: UUID, name: String, roomManager: ActorRef): Flow[Message, Message, Any] =
     val userId = UUID.randomUUID()
     Flow.fromSinkAndSource[Message, Message](
       sink(roomManager, roomId, userId),
       source(roomManager, roomId, userId, name)
     )
-  }
 
   private def sink(roomManager: ActorRef, roomId: UUID, userId: UUID): Sink[Message, NotUsed] =
     Sink
@@ -62,5 +60,4 @@ object WS {
   }
 
   private val failureMatcher: PartialFunction[Any, Throwable] = PartialFunction.empty
-
-}
+end WS
