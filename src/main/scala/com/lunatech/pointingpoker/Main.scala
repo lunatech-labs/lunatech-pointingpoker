@@ -1,10 +1,10 @@
 package com.lunatech.pointingpoker
 
-import akka.actor.typed.{ActorRef, ActorSystem, Props, SpawnProtocol}
-import akka.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Props, SpawnProtocol}
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import com.lunatech.pointingpoker.config.ApiConfig
-import akka.actor.typed.scaladsl.AskPattern._
-import akka.util.Timeout
+import org.apache.pekko.actor.typed.scaladsl.AskPattern._
+import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.slf4j.LoggerFactory
 

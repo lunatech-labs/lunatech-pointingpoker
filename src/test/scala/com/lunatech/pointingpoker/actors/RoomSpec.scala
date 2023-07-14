@@ -2,9 +2,9 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
-import akka.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
-import akka.actor.typed.ActorRef
-import akka.testkit.TestProbe
+import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
+import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType

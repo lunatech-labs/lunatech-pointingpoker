@@ -3,15 +3,15 @@ package com.lunatech.pointingpoker
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
-import akka.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.directives.ContentTypeResolver.Default
-import akka.http.scaladsl.server.Route
-import akka.actor.typed.scaladsl.AskPattern._
-import akka.actor.typed.scaladsl.adapter._
-import akka.util.Timeout
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
+import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.model._
+import org.apache.pekko.http.scaladsl.server.Directives._
+import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
+import org.apache.pekko.http.scaladsl.server.Route
+import org.apache.pekko.actor.typed.scaladsl.AskPattern._
+import org.apache.pekko.actor.typed.scaladsl.adapter._
+import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WS
 import com.lunatech.pointingpoker.config.ApiConfig

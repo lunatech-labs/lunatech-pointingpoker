@@ -2,13 +2,13 @@ package com.lunatech.pointingpoker
 
 import java.util.UUID
 
-import akka.actor.testkit.typed.scaladsl.ActorTestKit
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
-import akka.http.scaladsl.testkit.ScalatestRouteTest
+import org.apache.pekko.actor.testkit.typed.scaladsl.ActorTestKit
+import org.apache.pekko.actor.typed.scaladsl.Behaviors
+import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
+import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
-import akka.http.scaladsl.server._
+import org.apache.pekko.http.scaladsl.server._
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must

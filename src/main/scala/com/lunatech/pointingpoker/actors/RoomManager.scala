@@ -2,9 +2,9 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, Behavior, Terminated}
-import akka.actor.{ActorRef => UntypedRef}
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
+import org.apache.pekko.actor.{ActorRef => UntypedRef}
 import com.lunatech.pointingpoker.actors
 import com.lunatech.pointingpoker.websocket.WSMessage
 import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
