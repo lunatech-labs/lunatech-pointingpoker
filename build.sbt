@@ -8,7 +8,7 @@ ThisBuild / organizationName := "lunatech"
 lazy val V = new {
   val circe     = "0.14.5"
   val pekko     = "1.0.0"
-  val pekkoHttp = "0.0.0+4469-fb6a5426-SNAPSHOT"
+  val pekkoHttp = "0.0.0+4473-8ee9ed3c-SNAPSHOT"
 }
 
 lazy val root = (project in file("."))
