@@ -7,8 +7,10 @@ ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val circe     = "0.14.5"
+  val logback   = "1.4.8"
   val pekko     = "1.0.0"
-  val pekkoHttp = "0.0.0+4473-8ee9ed3c-SNAPSHOT"
+  val pekkoHttp = "1.0.0-RC1+22-e24dfe41-SNAPSHOT"
+  val scalatest = "3.2.16"
 }
 
 lazy val root = (project in file("."))
@@ -16,12 +18,12 @@ lazy val root = (project in file("."))
     name                                      := "pointingpoker",
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-typed"         % V.pekko,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream"              % V.pekko,
-    libraryDependencies += "ch.qos.logback"    % "logback-classic"           % "1.4.8",
+    libraryDependencies += "ch.qos.logback"    % "logback-classic"           % V.logback,
     libraryDependencies += "org.apache.pekko" %% "pekko-http"                % V.pekkoHttp,
     libraryDependencies += "io.circe"         %% "circe-core"                % V.circe,
     libraryDependencies += "io.circe"         %% "circe-parser"              % V.circe,
     libraryDependencies += "io.circe"         %% "circe-generic"             % V.circe,
-    libraryDependencies += "org.scalatest"    %% "scalatest"                 % "3.2.16"    % Test,
+    libraryDependencies += "org.scalatest"    %% "scalatest"                 % V.scalatest % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream-testkit"      % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test
