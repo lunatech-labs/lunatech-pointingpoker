@@ -10,20 +10,20 @@ import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 
 object Room:
 
-  sealed trait Command
-  final case class Join(user: User)                                       extends Command
-  final case class Leave(userId: UUID, replyTo: ActorRef[Response])       extends Command
-  final case class Vote(userId: UUID, estimation: String)                 extends Command
-  final case class ClearVotes(userId: UUID)                               extends Command
-  final case class ShowVotes(userId: UUID)                                extends Command
-  final case class EditIssue(userId: UUID, issue: String)                 extends Command
-  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
+  enum Command:
+    case Join(user: User)                                       
+    case Leave(userId: UUID, replyTo: ActorRef[Response])       
+    case Vote(userId: UUID, estimation: String)                 
+    case ClearVotes(userId: UUID)                               
+    case ShowVotes(userId: UUID)                                
+    case EditIssue(userId: UUID, issue: String)                 
+    private[actors] case GetData(replyTo: ActorRef[DataStatus]) 
 
   final case class DataStatus(data: RoomData)
 
-  sealed trait Response
-  final case class Running(roomId: UUID) extends Response
-  final case class Stopped(roomId: UUID) extends Response
+  enum Response(roomId: UUID):
+    case Running(roomId: UUID) extends Response(roomId)
+    case Stopped(roomId: UUID) extends Response(roomId)
 
   final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef)
 
@@ -60,6 +60,8 @@ object Room:
     }
 
   private[actors] def receiveBehaviour(roomId: UUID, data: RoomData): Behavior[Command] =
+    import Command.*
+    import Response.*
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>

@@ -50,8 +50,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
 
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
-      childInbox.expectMessage(Room.Join(user1))
-      childInbox.expectMessage(Room.Join(user2))
+      childInbox.expectMessage(Room.Command.Join(user1))
+      childInbox.expectMessage(Room.Command.Join(user2))
     }
 
     "handle an IncomeWSMessage that generates an outcome" in {
@@ -71,10 +71,10 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Show, roomId, userId, ""))
       managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Clear, roomId, userId, ""))
 
-      roomProbe.expectMessage(Room.Vote(userId, "5"))
-      roomProbe.expectMessage(Room.EditIssue(userId, "issue name"))
-      roomProbe.expectMessage(Room.ShowVotes(userId))
-      roomProbe.expectMessage(Room.ClearVotes(userId))
+      roomProbe.expectMessage(Room.Command.Vote(userId, "5"))
+      roomProbe.expectMessage(Room.Command.EditIssue(userId, "issue name"))
+      roomProbe.expectMessage(Room.Command.ShowVotes(userId))
+      roomProbe.expectMessage(Room.Command.ClearVotes(userId))
     }
 
     "handle IncomeWSMessage that don't generate outcome" in {
@@ -110,7 +110,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       managerRef ! RoomManager.WSCompleted(roomId, userId)
 
-      roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
+      roomProbe.expectMessage(Room.Command.Leave(userId, roomResponseProbe.ref))
     }
   }
 end RoomManagerSpec

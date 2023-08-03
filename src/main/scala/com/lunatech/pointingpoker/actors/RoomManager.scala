@@ -64,13 +64,13 @@ object RoomManager:
                 val roomActor = createRoom(message.roomId, context)
                 context.watch(roomActor)
                 val newData = data.addRoom(message.roomId, roomActor)
-                roomActor ! Room.Join(
+                roomActor ! Room.Command.Join(
                   Room
                     .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
                 )
                 receiveBehaviour(newData, roomResponseWrapper)
               } { room =>
-                room ! Room.Join(
+                room ! Room.Command.Join(
                   Room
                     .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
                 )
@@ -78,8 +78,8 @@ object RoomManager:
               }
           case RoomResponseWrapper(response) =>
             response match
-              case Room.Running(_) => Behaviors.same
-              case Room.Stopped(roomId) =>
+              case Room.Response.Running(_) => Behaviors.same
+              case Room.Response.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
                 receiveBehaviour(newData, roomResponseWrapper)
           case IncomeWSMessage(message) =>
@@ -89,7 +89,7 @@ object RoomManager:
             context.log.error("UnsupportedWSMessage received")
             Behaviors.same
           case WSCompleted(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
+            data.rooms.get(roomId).foreach(room => room ! Room.Command.Leave(userId, roomResponseWrapper))
             Behaviors.same
           case WSFailure(t) =>
             context.log.error("WSFailure: {}", t)
@@ -121,8 +121,8 @@ object RoomManager:
         context.log.error("Received Join MessageType []", message)
       case MessageType.Leave => // Should never arrive here
         context.log.error("Received Leave MessageType []", message)
-      case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
-      case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
-      case MessageType.Show      => room ! Room.ShowVotes(message.userId)
-      case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
+      case MessageType.EditIssue => room ! Room.Command.EditIssue(message.userId, message.extra)
+      case MessageType.Vote      => room ! Room.Command.Vote(message.userId, message.extra)
+      case MessageType.Show      => room ! Room.Command.ShowVotes(message.userId)
+      case MessageType.Clear     => room ! Room.Command.ClearVotes(message.userId)
 end RoomManager

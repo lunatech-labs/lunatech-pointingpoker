@@ -41,9 +41,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         )
       )
 
-      roomRef ! Room.EditIssue(actingUserId, issue)
+      roomRef ! Room.Command.EditIssue(actingUserId, issue)
 
-      roomRef ! Room.GetData(dataProbe.ref)
+      roomRef ! Room.Command.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
@@ -76,9 +76,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         )
       )
 
-      roomRef ! Room.ClearVotes(actingUserId)
+      roomRef ! Room.Command.ClearVotes(actingUserId)
 
-      roomRef ! Room.GetData(dataProbe.ref)
+      roomRef ! Room.Command.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
@@ -97,7 +97,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val expectedMessage =
         WSMessage(MessageType.Show, roomId, actingUserId, WSMessage.NoExtra)
 
-      roomRef ! Room.ShowVotes(actingUserId)
+      roomRef ! Room.Command.ShowVotes(actingUserId)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
@@ -118,9 +118,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         RoomData.empty.copy(users = List(user.copy(voted = true, estimation = estimation), user2))
       )
 
-      roomRef ! Room.Vote(actingUserId, estimation)
+      roomRef ! Room.Command.Vote(actingUserId, estimation)
 
-      roomRef ! Room.GetData(dataProbe.ref)
+      roomRef ! Room.Command.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
@@ -146,13 +146,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
       val expectedData = Room.DataStatus(data = RoomData.empty.copy(users = List(user2)))
 
-      roomRef ! Room.Leave(actingUserId, roomResponseProbe.ref)
+      roomRef ! Room.Command.Leave(actingUserId, roomResponseProbe.ref)
 
-      roomRef ! Room.GetData(dataProbe.ref)
+      roomRef ! Room.Command.GetData(dataProbe.ref)
 
       userProbe.expectNoMessage()
       user2Probe.expectMsg(expectedMessage)
-      roomResponseProbe.expectMessage(Room.Running(roomId))
+      roomResponseProbe.expectMessage(Room.Response.Running(roomId))
 
       dataProbe.expectMessage(expectedData)
     }
@@ -166,10 +166,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val roomId          = UUID.randomUUID()
       val behaviorTestKit = BehaviorTestKit(Room(roomId), roomId.toString)
 
-      behaviorTestKit.run(Room.Join(user))
-      behaviorTestKit.run(Room.Join(user2))
-      behaviorTestKit.run(Room.Leave(user.id, roomResponseProbe.ref))
-      behaviorTestKit.run(Room.Leave(user2.id, roomResponseProbe.ref))
+      behaviorTestKit.run(Room.Command.Join(user))
+      behaviorTestKit.run(Room.Command.Join(user2))
+      behaviorTestKit.run(Room.Command.Leave(user.id, roomResponseProbe.ref))
+      behaviorTestKit.run(Room.Command.Leave(user2.id, roomResponseProbe.ref))
       behaviorTestKit.isAlive mustBe false
     }
 
@@ -198,9 +198,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           )
         )
 
-      roomRef ! Room.Join(newUser)
+      roomRef ! Room.Command.Join(newUser)
 
-      roomRef ! Room.GetData(dataProbe.ref)
+      roomRef ! Room.Command.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
