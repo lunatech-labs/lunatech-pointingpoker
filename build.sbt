@@ -32,8 +32,6 @@ lazy val root = (project in file("."))
   .enablePlugins(UniversalPlugin)
   .enablePlugins(DockerPlugin)
 
-resolvers += "Apache Snapshots".at(" https://repository.apache.org/content/repositories/snapshots")
-
 addCommandAlias(
   "qa",
   "; clean; coverage ; test; coverageReport"
