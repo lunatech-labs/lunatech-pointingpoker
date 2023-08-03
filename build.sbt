@@ -9,7 +9,7 @@ lazy val V = new {
   val circe     = "0.14.5"
   val logback   = "1.4.8"
   val pekko     = "1.0.1"
-  val pekkoHttp = "1.0.0-RC1+22-e24dfe41-SNAPSHOT"
+  val pekkoHttp = "1.0.0"
   val scalatest = "3.2.16"
 }
 
