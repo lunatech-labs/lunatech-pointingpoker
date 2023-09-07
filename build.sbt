@@ -10,7 +10,7 @@ lazy val V = new {
   val logback   = "1.4.11"
   val pekko     = "1.0.1"
   val pekkoHttp = "1.0.0"
-  val scalatest = "3.2.16"
+  val scalatest = "3.2.17"
 }
 
 lazy val root = (project in file("."))
