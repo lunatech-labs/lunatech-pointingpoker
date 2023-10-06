@@ -6,6 +6,7 @@ on:
       - main
   pull_request:
 
+#TODO Fixme for quarkus.
 jobs:
   test:
     runs-on: ubuntu-latest

@@ -1,0 +1,21 @@
+<nav class="mx-2" style="margin-bottom: -1px">
+  <ul ngbNav #nav="ngbNav" [(activeId)]="activeTab" class="nav-tabs">
+    <li [ngbNavItem]="1">
+      <button ngbNavLink>
+        Create Room
+      </button>
+      <ng-template ngbNavContent>
+        <app-create-room />
+      </ng-template>
+    </li>
+    <li [ngbNavItem]="2">
+      <button ngbNavLink>
+        Join Room
+      </button>
+      <ng-template ngbNavContent>
+        <app-join-room roomId="{{roomId}}"/>
+      </ng-template>
+    </li>
+  </ul>
+</nav>
+<div [ngbNavOutlet]="nav" class="tab-content bg-white border rounded container-fluid p-4"></div>
