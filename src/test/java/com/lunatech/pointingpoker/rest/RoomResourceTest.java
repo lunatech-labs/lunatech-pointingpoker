@@ -93,7 +93,7 @@ public class RoomResourceTest {
         .contentType(APPLICATION_JSON)
         .accept(ContentType.JSON)
         .when()
-        .post("/")
+        .post()
         .then()
         .statusCode(OK.getStatusCode())
         .contentType(APPLICATION_JSON)
