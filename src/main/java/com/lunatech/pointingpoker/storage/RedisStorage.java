@@ -1,135 +1,114 @@
 package com.lunatech.pointingpoker.storage;
 
-import com.lunatech.pointingpoker.domain.RoomCommand;
-import com.lunatech.pointingpoker.domain.RoomEvent;
+import static com.lunatech.pointingpoker.storage.RedisStorage.RedisCollection.AUTHINFO;
+import static com.lunatech.pointingpoker.storage.RedisStorage.RedisCollection.USERNAMES;
+
 import com.lunatech.pointingpoker.domain.RoomState;
 import io.quarkus.redis.datasource.ReactiveRedisDataSource;
-import io.quarkus.redis.datasource.keys.KeyScanArgs;
-import io.quarkus.redis.datasource.keys.ReactiveKeyCommands;
-import io.quarkus.redis.datasource.stream.ReactiveStreamCommands;
-import io.quarkus.redis.datasource.stream.StreamMessage;
-import io.quarkus.redis.datasource.value.ReactiveValueCommands;
-import io.quarkus.redis.datasource.value.SetArgs;
-import io.smallrye.mutiny.Multi;
+import io.quarkus.redis.datasource.hash.ReactiveHashCommands;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.Collections;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RedisStorage {
 
-  private static final String MSG_KEY = "message";
-  private final ReactiveKeyCommands<String> keyCommands;
-  private final ReactiveValueCommands<String, RoomState> rsCommands;
+  private final ReactiveRedisDataSource noTxRedisDataSource;
 
-  private final TypedStreamOps<RoomCommand> commandOps;
-  private final TypedStreamOps<RoomEvent> eventOps;
-
-  public RedisStorage(ReactiveRedisDataSource rds) {
-    this.keyCommands = rds.key(String.class);
-    this.rsCommands = rds.value(String.class, RoomState.class);
-
-    this.eventOps = new TypedStreamOps<>(RoomEvent.class, "events", rds);
-    this.commandOps = new TypedStreamOps<>(RoomCommand.class, "commands", rds);
+  public RedisStorage(ReactiveRedisDataSource redisDataSource) {
+    this.noTxRedisDataSource = redisDataSource;
   }
 
-  private String makeStateKey(UUID id) {
-    return id.toString()+".state";
+  public Uni<Boolean> roomExists(UUID roomId) {
+    return noTxRedisDataSource.key().exists(RedisCollection.METADATA.getKey(roomId));
   }
 
-  public Uni<Boolean> stateExists(UUID roomId) {
-    return checkKey(makeStateKey(roomId));
+
+  public Uni<Void> insertRoomMetadata(RoomState roomState) {
+    var mappedData = RedisHashData.roomMetadataFromRoomState(roomState);
+    return roomMetadataCommands(noTxRedisDataSource).hset(mappedData.key, mappedData.fields)
+        .flatMap(res -> {
+          if (res == mappedData.fields.size()) {
+            return Uni.createFrom().voidItem();
+          } else {
+            return Uni.createFrom().failure(new StorageException(
+                "Failed to insert room metadata for room %s".formatted(roomState.roomId())));
+          }
+        });
   }
+
+  public Uni<Void> insertUser(UUID roomId, UUID userId, String userName, String userKey) {
+    var userMapCommands = userMapCommands(noTxRedisDataSource, String.class);
+    var storeUserName = userMapCommands.hset(USERNAMES.getKey(roomId), userId, userName);
+    var storeUserToken = userMapCommands.hset(AUTHINFO.getKey(roomId), userId, userKey);
+
+    return Uni.combine()
+        .all().unis(storeUserName, storeUserToken)
+        .with(Boolean::logicalAnd)
+        .flatMap(res -> {
+          if (res) {
+            return Uni.createFrom().voidItem();
+          } else {
+            return Uni.createFrom().failure(new StorageException("Error adding user to room"));
+          }
+        });
+  }
+
   public Uni<Optional<RoomState>> getRoomState(UUID roomId) {
-    return rsCommands.get(makeStateKey(roomId)).map(Optional::ofNullable);
+    var roomExists = roomExists(roomId);
+    var roomMetadata = roomMetadataCommands(noTxRedisDataSource).hgetall(
+        RedisCollection.METADATA.getKey(roomId));
+    var usersMap = userMapCommands(noTxRedisDataSource, String.class).hgetall(
+        USERNAMES.getKey(roomId));
+    return roomExists.flatMap(exists -> {
+      if (!exists) {
+        return Uni.createFrom().item(Optional.empty());
+      } else {
+        return Uni.combine().all().unis(roomMetadata, usersMap).with(
+            (metadata, users) -> Optional.of(new RoomState(roomId, metadata.get("lastMessageId"),
+                Instant.parse(metadata.get("openedAt")), users)));
+      }
+    });
   }
 
-  public Uni<Void> setRoomState(UUID roomId, RoomState value, Instant expireAt) {
-    var args = new SetArgs();
-    args.exAt(expireAt);
-    return rsCommands.set(makeStateKey(roomId), value, args);
+  //Datasource creation helpers
+  private ReactiveHashCommands<String, String, String> roomMetadataCommands(
+      ReactiveRedisDataSource redisDataSource) {
+    return redisDataSource.hash(String.class, String.class, String.class);
   }
 
-  private Uni<Boolean> checkKey(String key) {
-    return keyCommands.exists(key);
+  private <T> ReactiveHashCommands<String, UUID, T> userMapCommands(
+      ReactiveRedisDataSource redisDataSource, Class<T> valueClazz) {
+    return redisDataSource.hash(String.class, UUID.class, valueClazz);
   }
 
-  public Uni<Boolean> ensureTimeout(UUID roomId, Instant expireAt) {
-    var scanParams = new KeyScanArgs();
-    scanParams.match(roomId.toString()+".*");
-    return keyCommands
-        .scan(scanParams)
-        .toMulti()
-        .flatMap(k -> keyCommands.expireat(k, expireAt).toMulti())
-        .collect()
-        .with(Collectors.reducing((l,r) -> l && r))
-        .map(o -> o.orElse(false));
-  }
+  record RedisHashData<K, V>(String key, Map<K, V> fields) {
 
-  public Multi<Message<RoomCommand>> readAllCommands(UUID roomId) {
-    return readCommands(roomId, "0");
-  }
-  public Multi<Message<RoomCommand>> readCommands(UUID roomId, String lastSeenId){
-    return this.commandOps.readMessageStream(roomId, lastSeenId);
-  }
-
-  public <T extends RoomCommand> Uni<Void> writeCommand(UUID roomId, T cmd) {
-    return this.commandOps.writeValue(roomId, cmd);
-  }
-
-  public record Message<T>(String messageId, T message){}
-  private class TypedStreamOps<T> {
-
-    private final ReactiveStreamCommands<String, String, T> streamCommands;
-    private final String postfix;
-
-    TypedStreamOps(Class<T> clazz, String postfix, ReactiveRedisDataSource r) {
-      this.streamCommands = r.stream(clazz);
-      this.postfix = postfix;
-    }
-
-    public String makeKey(UUID id) {
-      return id.toString() + "." + postfix;
-    }
-
-    public <I extends T> Uni<Void> writeValue(UUID roomId, I in) {
-      String key = makeKey(roomId);
-      return checkKey(key).flatMap(exists ->
-        streamCommands
-            .xadd(key, Collections.singletonMap(MSG_KEY, in))
-            .replaceWith(Uni.createFrom().voidItem())
+    static RedisHashData<String, String> roomMetadataFromRoomState(RoomState roomState) {
+      return new RedisHashData<>(
+          RedisCollection.METADATA.getKey(roomState.roomId()),
+          Map.of(
+              "lastMessageId", roomState.lastMessageId(),
+              "openedAt", roomState.openedAt().toString()
+          )
       );
     }
+  }
 
-    public Multi<Message<T>> readMessageStream(UUID roomId, String lastSeenId) {
-      var key = makeKey(roomId);
-      return readNonEmptyStreamSlice(key, lastSeenId).toMulti().flatMap(items -> {
-        String newListSeenId = items.isEmpty() ? lastSeenId : items.getLast().id();
-        return Multi.createFrom().iterable(items)
-            .filter(item -> item.payload().containsKey(MSG_KEY))
-            .map(item -> new Message<>(item.id(), item.payload().get(MSG_KEY)))
-            .onCompletion()
-            .switchTo(() -> readMessageStream(roomId, newListSeenId));
-      });
-    }
+  enum RedisCollection {
+    USERNAMES, AUTHINFO, USERVOTES, METADATA, EVENTS;
 
-    private Uni<List<StreamMessage<String, String, T>>> readNonEmptyStreamSlice(String key,
-        String lastSeenId) {
-      return streamCommands.xread(key, lastSeenId).flatMap(res -> {
-        if (res == null || res.isEmpty()) {
-          // resort to polling when there are no new items.
-          return Uni.createFrom().voidItem().onItem().delayIt().by(Duration.ofMillis(50))
-              .replaceWith(readNonEmptyStreamSlice(key, lastSeenId));
-        } else {
-          return Uni.createFrom().item(res);
-        }
-      });
+    String getKey(UUID roomId) {
+      return switch (this) {
+        case USERNAMES -> roomId + ":users";
+        case USERVOTES -> roomId + ":votes";
+        case METADATA -> roomId + ":metadata";
+        case EVENTS -> roomId + ":events";
+        case AUTHINFO -> roomId + ":tokens";
+      };
     }
   }
 }

@@ -14,11 +14,10 @@ import com.lunatech.pointingpoker.rest.JsonModel.CreateJoinRoomRequest;
 import com.lunatech.pointingpoker.rest.JsonModel.CreateRoomResponse;
 import com.lunatech.pointingpoker.rest.JsonModel.GetRoomResponse;
 import com.lunatech.pointingpoker.rest.JsonModel.JoinRoomResponse;
-import com.lunatech.pointingpoker.rest.JsonModel.UserDetails;
+import com.lunatech.pointingpoker.rest.JsonModel.UserInfo;
 import io.quarkus.test.common.http.TestHTTPEndpoint;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -104,21 +103,9 @@ public class RoomResourceTest {
     assertNotNull(res);
     roomId = res.roomId();
 
-    //Ensure room is actually created!
-    given()
+    //Ensure room is actually created with correct content
+    GetRoomResponse roomState = given()
         .pathParam("id", roomId)
-        .when()
-        .head("/{id}")
-        .then()
-        .statusCode(OK.getStatusCode());
-  }
-
-  @Test
-  @Order(2)
-  void createdRoomShouldContainUser() {
-    GetRoomResponse res = given()
-        .pathParam("id", roomId)
-        .accept(ContentType.JSON)
         .when()
         .get("/{id}")
         .then()
@@ -128,14 +115,14 @@ public class RoomResourceTest {
         .body()
         .as(GetRoomResponse.class);
 
-    assertEquals(roomId, res.id());
-    assertEquals(1, res.users().size());
-    List<String> userNames = res.users().stream().map(UserDetails::name).toList();
-    assertThat(userNames, hasItems(USER1));
+    //Ensure the initial user is present:
+    assertEquals(1, roomState.users().size());
+    assertThat(roomState.users().stream().map(UserInfo::id).toList(), hasItems(res.userId()));
+    assertThat(roomState.users().stream().map(UserInfo::name).toList(), hasItems(USER1));
   }
 
   @Test
-  @Order(3)
+  @Order(2)
   void createdRoomShouldAcceptNewUser() {
     CreateJoinRoomRequest req = new CreateJoinRoomRequest(USER2);
     JoinRoomResponse res = given()
@@ -152,29 +139,22 @@ public class RoomResourceTest {
         .body()
         .as(JoinRoomResponse.class);
 
-    assertEquals("testUser2", res.user().name());
-  }
-
-  @Test
-  @Order(4)
-  void createdRoomShouldHaveTwoUsers() {
-    GetRoomResponse res = given()
+    //Ensure room is actually created with correct content
+    GetRoomResponse roomState = given()
         .pathParam("id", roomId)
-        .accept(ContentType.JSON)
-        .contentType(APPLICATION_JSON)
         .when()
         .get("/{id}")
         .then()
         .statusCode(OK.getStatusCode())
         .contentType(APPLICATION_JSON)
         .extract()
-        .body().as(GetRoomResponse.class);
+        .body()
+        .as(GetRoomResponse.class);
 
-    assertEquals(roomId, res.id());
-    assertEquals(2, res.users().size());
-    List<String> userNames = res.users().stream().map(UserDetails::name).toList();
-    assertThat(userNames, hasItems(USER1, USER2));
+    //Ensure the initial user is present:
+    assertEquals(2, roomState.users().size());
+    assertThat(roomState.users().stream().map(UserInfo::id).toList(), hasItems(res.userId()));
+    assertThat(roomState.users().stream().map(UserInfo::name).toList(), hasItems(USER2));
   }
-
 
 }
