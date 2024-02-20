@@ -13,7 +13,8 @@ lazy val V = new {
   val scalatest = "3.2.18"
 }
 
-lazy val root = (project in file("."))
+lazy val root = project
+  .in(file("."))
   .settings(
     name                                      := "pointingpoker",
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-typed"         % V.pekko,
