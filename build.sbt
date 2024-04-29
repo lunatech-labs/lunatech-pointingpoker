@@ -6,7 +6,7 @@ ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
-  val circe     = "0.14.6"
+  val circe     = "0.14.7"
   val logback   = "1.5.6"
   val pekko     = "1.0.2"
   val pekkoHttp = "1.0.1"
