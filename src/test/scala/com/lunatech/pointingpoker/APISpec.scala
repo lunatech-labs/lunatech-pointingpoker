@@ -46,11 +46,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe index
       }
     }
-    "create a room" in {
+    "create a room" in
       Post("/create-room") ~> apiRoute ~> check {
         responseAs[String] mustBe roomId
       }
-    }
 
   }
 end APISpec
