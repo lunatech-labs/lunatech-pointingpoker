@@ -1,6 +1,6 @@
 import NativePackagerHelper._
 
-ThisBuild / scalaVersion     := "3.7.2"
+ThisBuild / scalaVersion     := "3.7.3"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
