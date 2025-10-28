@@ -27,13 +27,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val actingUserId        = UUID.randomUUID()
-      val (roomId, roomRef) = createRoom(
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
 
       val expectedMessage = WSMessage(MessageType.EditIssue, roomId, actingUserId, issue)
-      val expectedData = Room.DataStatus(data =
+      val expectedData    = Room.DataStatus(data =
         RoomData(
           users = List(user, user2),
           currentIssue = issue,
@@ -56,7 +56,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val actingUserId        = UUID.randomUUID()
-      val (roomId, roomRef) = createRoom(
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
@@ -90,7 +90,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
       val actingUserId        = UUID.randomUUID()
-      val (roomId, roomRef) = createRoom(
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
@@ -109,12 +109,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val actingUserId        = user.id
-      val (roomId, roomRef) = createRoom(
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
       val expectedMessage = WSMessage(MessageType.Vote, roomId, actingUserId, estimation)
-      val expectedData = Room.DataStatus(data =
+      val expectedData    = Room.DataStatus(data =
         RoomData.empty.copy(users = List(user.copy(voted = true, estimation = estimation), user2))
       )
 
@@ -134,7 +134,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val actingUserId        = user.id
-      val (roomId, roomRef) = createRoom(
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
@@ -178,7 +178,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "5")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val internalData = RoomData(
+      val internalData        = RoomData(
         users = List(user, user2),
         currentIssue = issue,
         issueLastEditBy = Option(user.id)
@@ -189,7 +189,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val newUser      = Room.User(UUID.randomUUID(), "new user", false, "", newUserProbe.ref)
 
       val expectedMessage = WSMessage(MessageType.Join, roomId, newUser.id, newUser.name)
-      val expectedData =
+      val expectedData    =
         Room.DataStatus(data =
           RoomData(
             users = List(newUser, user, user2),

@@ -21,7 +21,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
   val roomId: String       = UUID.randomUUID().toString
 
-  val testKit: ActorTestKit = ActorTestKit()
+  val testKit: ActorTestKit                      = ActorTestKit()
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
