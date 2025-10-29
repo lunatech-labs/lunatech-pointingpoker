@@ -58,7 +58,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef = testKit.spawn(
+      val managerRef        = testKit.spawn(
         RoomManager
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )
@@ -81,7 +81,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef = testKit.spawn(
+      val managerRef        = testKit.spawn(
         RoomManager
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )
@@ -102,7 +102,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef = testKit.spawn(
+      val managerRef        = testKit.spawn(
         RoomManager
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )

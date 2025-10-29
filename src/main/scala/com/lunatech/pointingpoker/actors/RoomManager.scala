@@ -78,7 +78,7 @@ object RoomManager:
               }
           case RoomResponseWrapper(response) =>
             response match
-              case Room.Running(_) => Behaviors.same
+              case Room.Running(_)      => Behaviors.same
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
                 receiveBehaviour(newData, roomResponseWrapper)
