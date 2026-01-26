@@ -1,13 +1,13 @@
 import NativePackagerHelper._
 
-ThisBuild / scalaVersion     := "3.7.4"
+ThisBuild / scalaVersion     := "3.8.1"
 ThisBuild / version          := "0.1.0-SNAPSHOT"
 ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val circe     = "0.14.15"
-  val logback   = "1.5.24"
+  val logback   = "1.5.26"
   val pekko     = "1.3.0"
   val pekkoHttp = "1.3.0"
   val scalatest = "3.2.19"
