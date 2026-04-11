@@ -36,6 +36,15 @@
         color: #E2545D;
         border: 1px solid #E2545D;
       }
+      .revote-bt {
+        background-color: #28a745;
+        color: #fff;
+      }
+      .revote-bt:hover {
+        background-color: #fff;
+        color: #28a745;
+        border: 1px solid #28a745;
+      }
       .summary-card {
         border-radius: 5px;
         background-color: #E2545D;
@@ -227,10 +236,12 @@
                     <div class="col-auto mt-1">
                       <button type="button" class="btn clear-bt" v-on:click="doClearVotes">Clear votes</button>
                     </div>
+                    <div class="col-auto mt-1" v-if="votesRevealed">
+                      <button type="button" class="btn revote-bt" v-on:click="doReVote">Re-vote</button>
+                    </div>
                   </div>
                 </div>
                 <div class="col">
-
                 </div>
               </div>
 
@@ -416,6 +427,14 @@
                 return u;
               });
             }
+            if (message.messageType === 'revote') {
+              ref.votesRevealed = false;
+              ref.votesSummary = [];
+              ref.users = ref.users.map(u => {
+                u.voted = false;
+                return u;
+              });
+            }
             if (message.messageType === 'leave') {
               ref.users = ref.users.filter(u => {
                 return u.id !== message.userId;
@@ -450,6 +469,15 @@
         doClearVotes: function () {
           var message = {
             messageType: "clear",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: ""
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
+        doReVote: function () {
+          var message = {
+            messageType: "revote",
             roomId: this.roomId,
             userId: this.user.id,
             extra: ""
