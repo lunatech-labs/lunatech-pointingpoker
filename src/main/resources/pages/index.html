@@ -9,8 +9,9 @@
         --lt-light-red-color: #E2545D;
         --lt-deep-red-color: #600002;
         --lt-green-color: #28a745;
-        --lt-white-color: #fff;
-        --lt-medium-red-color: #dc3545;
+        --lt-white-color: #FFF;
+        --lt-medium-red-color: #DC3545;
+        --lt-pale-red-color: #F5C2C7;
       }
 
       .show-bt {
@@ -68,6 +69,11 @@
       .estimation-button-selected {
         background-color: var(--lt-dark-red-color);
         color: var(--lt-white-color);
+      }
+      .estimation-button-uncomfirmed {
+        background-color: var(--lt-pale-red-color);
+        color: var(--lt-dark-red-color);
+        border-color: var(--lt-dark-red-color);
       }
       .feather {
         width: 20px;
@@ -222,7 +228,8 @@
                 <div class="col">
                   <div class="row">
                     <div class="col" v-for="e in estimationValues">
-                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation && ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-uncomfirmed m-1" v-if="e === user.estimation && !ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
                       <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
                     </div>
                   </div>
@@ -334,6 +341,7 @@
          editing: false,
          inRoom: false,
           votesRevealed: false,
+          ownVoteConfirmed: true,
           currentIssue: "",
         votesSummary: [],
         showClipboardHint: false,
@@ -422,6 +430,7 @@
             }
             if (message.messageType === 'clear') {
               ref.votesRevealed = false;
+              ref.ownVoteConfirmed = true;
               ref.votesSummary = [];
               ref.user.estimation = "";
               ref.users = ref.users.map(u => {
@@ -432,6 +441,7 @@
             }
             if (message.messageType === 'revote') {
               ref.votesRevealed = false;
+              ref.ownVoteConfirmed = false;
               ref.updateSummary();
               ref.users = ref.users.map(u => {
                 u.voted = false;
@@ -525,6 +535,7 @@
             userId: this.user.id,
             extra: voteValue
           };
+          this.ownVoteConfirmed = true;
           this.wsConnection.send(JSON.stringify(message));
         },
         updateSummary: function() {
