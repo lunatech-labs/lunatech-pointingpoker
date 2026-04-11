@@ -238,15 +238,15 @@
 
               <div class="row mt-4">
                 <div class="col">
-                  <div class="row">
-                    <div class="col-auto mr-auto mt-1">
+                  <div class="d-flex flex-row align-items-start">
+                    <div class="mr-auto">
                       <button type="button" class="btn show-bt" v-on:click="doShowVotes">Show votes</button>
                     </div>
-                    <div class="col-auto mt-1">
-                      <button type="button" class="btn clear-bt" v-on:click="doClearVotes">Clear votes</button>
-                    </div>
-                    <div class="col-auto mt-1" v-if="votesRevealed">
+                    <div class="mx-2" v-if="votesRevealed">
                       <button type="button" class="btn revote-bt" v-on:click="doReVote">Re-vote</button>
+                    </div>
+                    <div class="ml-auto">
+                      <button type="button" class="btn clear-bt" v-on:click="doClearVotes">Clear votes</button>
                     </div>
                   </div>
                 </div>
