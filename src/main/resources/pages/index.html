@@ -4,58 +4,51 @@
     <title>Pointing Poker</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
     <style>
-      .lt-dark-red {
-        color: #AB0D1F;
+      :root {
+        --lt-dark-red-color: #AB0D1F;
+        --lt-light-red-color: #E2545D;
+        --lt-deep-red-color: #600002;
+        --lt-green-color: #28a745;
+        --lt-white-color: #fff;
       }
-      .lt-red {
-        color: #EA212E;
-      }
-      .lt-dark-red-bg {
-        background-color: #AB0D1F;
-        color: #fff;
-      }
-      .lt-red-bg {
-        background-color: #EA212E;
-        color: #fff;
-      }
+
       .show-bt {
-        background-color: #600002;
-        color: #fff;
-      }
-      .clear-bt {
-        background-color: #E2545D;
-        color: #fff;
+        background-color: var(--lt-deep-red-color);
+        color: var(--lt-white-color);
       }
       .show-bt:hover {
-        background-color: #fff;
-        color: #600002;
-        border: 1px solid #600002;
+        background-color: var(--lt-white-color);
+        color: var(--lt-deep-red-color);
+        border: 1px solid var(--lt-deep-red-color);
+      }
+      .clear-bt {
+        background-color: var(--lt-light-red-color);
+        color: var(--lt-white-color);
       }
       .clear-bt:hover {
-        background-color: #fff;
-        color: #E2545D;
-        border: 1px solid #E2545D;
+        background-color: var(--lt-white-color);
+        color: var(--lt-light-red-color);
+        border: 1px solid var(--lt-light-red-color);
       }
       .revote-bt {
-        background-color: #28a745;
-        color: #fff;
+        background-color: var(--lt-green-color);
+        color: var(--lt-white-color);
       }
       .revote-bt:hover {
-        background-color: #fff;
-        color: #28a745;
-        border: 1px solid #28a745;
+        background-color: var(--lt-white-color);
+        color: var(--lt-green-color);
+        border: 1px solid var(--lt-green-color);
       }
       .summary-card {
         border-radius: 5px;
-        background-color: #E2545D;
-        color: #fff;
-      }
-      .color-white {
-        color: #fff;
+        background-color: var(--lt-light-red-color);
+        color: var(--lt-white-color);
       }
       .estimation-card {
         border-radius: 5px;
         height: 100%;
+        background-color: var(--lt-dark-red-color);
+        color: var(--lt-white-color);
       }
       .estimation-text {
         font-size: 85px;
@@ -64,8 +57,8 @@
         min-width: 4em;
       }
       .estimation-button-selected {
-        background-color: #AB0D1F;
-        color: #fff;
+        background-color: var(--lt-dark-red-color);
+        color: var(--lt-white-color);
       }
       .feather {
         width: 20px;
