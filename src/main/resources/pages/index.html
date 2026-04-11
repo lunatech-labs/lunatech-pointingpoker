@@ -416,6 +416,7 @@
             }
             if (message.messageType === 'show') {
               ref.votesRevealed = true;
+              ref.updateSummary();
             }
             if (message.messageType === 'clear') {
               ref.votesRevealed = false;
@@ -429,7 +430,7 @@
             }
             if (message.messageType === 'revote') {
               ref.votesRevealed = false;
-              ref.votesSummary = [];
+              ref.updateSummary();
               ref.users = ref.users.map(u => {
                 u.voted = false;
                 return u;
