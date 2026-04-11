@@ -295,7 +295,7 @@
                       <td><i data-feather="check-circle" v-if="u.voted"></i></td>
                       <td>{{ u.name }}</td>
                       <td>
-                        <i data-feather="shield-off" v-if="showUserVoted(u)"></i>
+                        <i data-feather="shield-off" v-if="showUserEstimation(u)"></i>
                         <div v-if="votesRevealed">{{ u.estimation }}</div>
                       </td>
                     </tr>
@@ -327,12 +327,12 @@
         roomId: localStorage.getItem("roomId"),
         wsConnection: undefined,
         estimationValues: ['0','0.5','1','2','3','5','8','13','21','34','55','89','?'],
-        creating: true,
-        joining: false,
-        editing: false,
-        inRoom: false,
-        votesRevealed: false,
-        currentIssue: "",
+         creating: true,
+         joining: false,
+         editing: false,
+         inRoom: false,
+          votesRevealed: false,
+          currentIssue: "",
         votesSummary: [],
         showClipboardHint: false,
         showError: false,
@@ -535,8 +535,8 @@
         allVoted: function() {
           this.votesRevealed = this.users.map(u => { return u.voted; }).reduce(function(acc, current) { return acc && current; },true);
         },
-        showUserVoted: function(u) {
-          return (u.id !== this.user.id) && u.voted && !this.votesRevealed;
+        showUserEstimation: function(u) {
+          return u.estimation && u.estimation !== "" && !this.votesRevealed;
         }
       },
       created() {
