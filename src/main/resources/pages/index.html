@@ -10,6 +10,7 @@
         --lt-deep-red-color: #600002;
         --lt-green-color: #28a745;
         --lt-white-color: #fff;
+        --lt-medium-red-color: #dc3545;
       }
 
       .show-bt {
@@ -54,7 +55,15 @@
         font-size: 85px;
       }
       .estimation-button {
+        background-color: var(--lt-white-color);
+        color: var(--lt-medium-red-color);
+        border-color: var(--lt-medium-red-color);
         min-width: 4em;
+      }
+      .estimation-button:hover {
+        background-color: var(--lt-medium-red-color);
+        color: var(--lt-white-color);
+        border-color: var(--lt-medium-red-color);
       }
       .estimation-button-selected {
         background-color: var(--lt-dark-red-color);
@@ -213,8 +222,8 @@
                 <div class="col">
                   <div class="row">
                     <div class="col" v-for="e in estimationValues">
-                      <button type="button" class="btn btn-outline-danger estimation-button estimation-button-selected m-1" v-if="e === user.estimation" v-on:click="vote(e)">{{ e }}</button>
-                      <button type="button" class="btn btn-outline-danger estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
                     </div>
                   </div>
                 </div>
