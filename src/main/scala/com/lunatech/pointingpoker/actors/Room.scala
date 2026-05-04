@@ -15,6 +15,7 @@ object Room:
   final case class Leave(userId: UUID, replyTo: ActorRef[Response])       extends Command
   final case class Vote(userId: UUID, estimation: String)                 extends Command
   final case class ClearVotes(userId: UUID)                               extends Command
+  final case class ReVote(userId: UUID)                                   extends Command
   final case class ShowVotes(userId: UUID)                                extends Command
   final case class EditIssue(userId: UUID, issue: String)                 extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
@@ -43,6 +44,9 @@ object Room:
 
     def clear(): RoomData =
       this.copy(users = this.users.map(_.copy(voted = false, estimation = "")))
+
+    def reVote(): RoomData =
+      this.copy(users = this.users.map(u => u.copy(voted = false)))
 
     def leave(userId: UUID): RoomData =
       this.copy(users = this.users.filterNot(_.id == userId))
@@ -75,6 +79,14 @@ object Room:
           val newData = data.clear()
           broadcast(
             WSMessage(MessageType.Clear, roomId, userId, WSMessage.NoExtra),
+            newData.users,
+            context
+          )
+          receiveBehaviour(roomId, newData)
+        case ReVote(userId) =>
+          val newData = data.reVote()
+          broadcast(
+            WSMessage(MessageType.Revote, roomId, userId, WSMessage.NoExtra),
             newData.users,
             context
           )

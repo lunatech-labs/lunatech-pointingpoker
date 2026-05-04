@@ -4,59 +4,76 @@
     <title>Pointing Poker</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
     <style>
-      .lt-dark-red {
-        color: #AB0D1F;
+      :root {
+        --lt-dark-red-color: #AB0D1F;
+        --lt-light-red-color: #E2545D;
+        --lt-deep-red-color: #600002;
+        --lt-green-color: #28a745;
+        --lt-white-color: #FFF;
+        --lt-medium-red-color: #DC3545;
+        --lt-pale-red-color: #F5C2C7;
       }
-      .lt-red {
-        color: #EA212E;
-      }
-      .lt-dark-red-bg {
-        background-color: #AB0D1F;
-        color: #fff;
-      }
-      .lt-red-bg {
-        background-color: #EA212E;
-        color: #fff;
-      }
+
       .show-bt {
-        background-color: #600002;
-        color: #fff;
-      }
-      .clear-bt {
-        background-color: #E2545D;
-        color: #fff;
+        background-color: var(--lt-deep-red-color);
+        color: var(--lt-white-color);
       }
       .show-bt:hover {
-        background-color: #fff;
-        color: #600002;
-        border: 1px solid #600002;
+        background-color: var(--lt-white-color);
+        color: var(--lt-deep-red-color);
+        border: 1px solid var(--lt-deep-red-color);
+      }
+      .revote-bt {
+        background-color: var(--lt-light-red-color);
+        color: var(--lt-white-color);
+      }
+      .revote-bt:hover {
+        background-color: var(--lt-white-color);
+        color: var(--lt-light-red-color);
+        border: 1px solid var(--lt-light-red-color);
+      }
+      .clear-bt {
+        background-color: var(--lt-white-color);
+        color: var(--lt-medium-red-color);
+        border: 1px solid var(--lt-medium-red-color);
       }
       .clear-bt:hover {
-        background-color: #fff;
-        color: #E2545D;
-        border: 1px solid #E2545D;
+        background-color: var(--lt-medium-red-color);
+        color: var(--lt-white-color);
       }
       .summary-card {
         border-radius: 5px;
-        background-color: #E2545D;
-        color: #fff;
-      }
-      .color-white {
-        color: #fff;
+        background-color: var(--lt-light-red-color);
+        color: var(--lt-white-color);
       }
       .estimation-card {
         border-radius: 5px;
         height: 100%;
+        background-color: var(--lt-dark-red-color);
+        color: var(--lt-white-color);
       }
       .estimation-text {
         font-size: 85px;
       }
       .estimation-button {
+        background-color: var(--lt-white-color);
+        color: var(--lt-medium-red-color);
+        border-color: var(--lt-medium-red-color);
         min-width: 4em;
       }
+      .estimation-button:hover {
+        background-color: var(--lt-medium-red-color);
+        color: var(--lt-white-color);
+        border-color: var(--lt-medium-red-color);
+      }
       .estimation-button-selected {
-        background-color: #AB0D1F;
-        color: #fff;
+        background-color: var(--lt-dark-red-color);
+        color: var(--lt-white-color);
+      }
+      .estimation-button-uncomfirmed {
+        background-color: var(--lt-pale-red-color);
+        color: var(--lt-dark-red-color);
+        border-color: var(--lt-dark-red-color);
       }
       .feather {
         width: 20px;
@@ -211,8 +228,9 @@
                 <div class="col">
                   <div class="row">
                     <div class="col" v-for="e in estimationValues">
-                      <button type="button" class="btn btn-outline-danger estimation-button estimation-button-selected m-1" v-if="e === user.estimation" v-on:click="vote(e)">{{ e }}</button>
-                      <button type="button" class="btn btn-outline-danger estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation && ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-uncomfirmed m-1" v-if="e === user.estimation && !ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
                     </div>
                   </div>
                 </div>
@@ -220,17 +238,19 @@
 
               <div class="row mt-4">
                 <div class="col">
-                  <div class="row">
-                    <div class="col-auto mr-auto mt-1">
+                  <div class="d-flex flex-row align-items-start">
+                    <div class="mr-auto">
                       <button type="button" class="btn show-bt" v-on:click="doShowVotes">Show votes</button>
                     </div>
-                    <div class="col-auto mt-1">
+                    <div class="mx-2" v-if="votesRevealed">
+                      <button type="button" class="btn revote-bt" v-on:click="doReVote">Re-vote</button>
+                    </div>
+                    <div class="ml-auto">
                       <button type="button" class="btn clear-bt" v-on:click="doClearVotes">Clear votes</button>
                     </div>
                   </div>
                 </div>
                 <div class="col">
-
                 </div>
               </div>
 
@@ -284,7 +304,7 @@
                       <td><i data-feather="check-circle" v-if="u.voted"></i></td>
                       <td>{{ u.name }}</td>
                       <td>
-                        <i data-feather="shield-off" v-if="showUserVoted(u)"></i>
+                        <i data-feather="shield-off" v-if="showUserEstimation(u)"></i>
                         <div v-if="votesRevealed">{{ u.estimation }}</div>
                       </td>
                     </tr>
@@ -321,6 +341,7 @@
         editing: false,
         inRoom: false,
         votesRevealed: false,
+        ownVoteConfirmed: true,
         currentIssue: "",
         votesSummary: [],
         showClipboardHint: false,
@@ -405,13 +426,24 @@
             }
             if (message.messageType === 'show') {
               ref.votesRevealed = true;
+              ref.updateSummary();
             }
             if (message.messageType === 'clear') {
               ref.votesRevealed = false;
+              ref.ownVoteConfirmed = true;
               ref.votesSummary = [];
               ref.user.estimation = "";
               ref.users = ref.users.map(u => {
                 u.estimation = "";
+                u.voted = false;
+                return u;
+              });
+            }
+            if (message.messageType === 'revote') {
+              ref.votesRevealed = false;
+              ref.ownVoteConfirmed = false;
+              ref.updateSummary();
+              ref.users = ref.users.map(u => {
                 u.voted = false;
                 return u;
               });
@@ -456,6 +488,15 @@
           };
           this.wsConnection.send(JSON.stringify(message));
         },
+        doReVote: function () {
+          var message = {
+            messageType: "revote",
+            roomId: this.roomId,
+            userId: this.user.id,
+            extra: ""
+          };
+          this.wsConnection.send(JSON.stringify(message));
+        },
         doLeave: function () {
           localStorage.clear();
           this.inRoom = false;
@@ -494,6 +535,7 @@
             userId: this.user.id,
             extra: voteValue
           };
+          this.ownVoteConfirmed = true;
           this.wsConnection.send(JSON.stringify(message));
         },
         updateSummary: function() {
@@ -506,8 +548,8 @@
         allVoted: function() {
           this.votesRevealed = this.users.map(u => { return u.voted; }).reduce(function(acc, current) { return acc && current; },true);
         },
-        showUserVoted: function(u) {
-          return (u.id !== this.user.id) && u.voted && !this.votesRevealed;
+        showUserEstimation: function(u) {
+          return u.estimation && u.estimation !== "" && !this.votesRevealed;
         }
       },
       created() {

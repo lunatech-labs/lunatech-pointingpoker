@@ -26,6 +26,7 @@ object WSMessage:
     case Show      extends MessageType("show")
     case Clear     extends MessageType("clear")
     case EditIssue extends MessageType("edit_issue")
+    case Revote    extends MessageType("revote")
 
   object MessageType:
     import MessageType.*
@@ -38,6 +39,7 @@ object WSMessage:
         case Show.stringRep      => Show
         case Clear.stringRep     => Clear
         case EditIssue.stringRep => EditIssue
+        case Revote.stringRep    => Revote
         case _ => throw new IllegalArgumentException(s"$messageType is not a valid MessageType")
 
     def unapply(messageType: MessageType): Option[String] =
@@ -49,6 +51,7 @@ object WSMessage:
         case Show      => Option(Show.stringRep)
         case Clear     => Option(Clear.stringRep)
         case EditIssue => Option(EditIssue.stringRep)
+        case Revote    => Option(Revote.stringRep)
   end MessageType
 
   given messageTypeDecoder: Decoder[MessageType] =
