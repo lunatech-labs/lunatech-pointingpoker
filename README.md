@@ -21,6 +21,7 @@ Possible values for messageType:
 * "join"
 * "vote"
 * "show"
+* "revote"
 * "clear"
 * "leave"
 

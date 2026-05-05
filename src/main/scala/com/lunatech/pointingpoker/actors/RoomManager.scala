@@ -125,4 +125,6 @@ object RoomManager:
       case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
       case MessageType.Show      => room ! Room.ShowVotes(message.userId)
       case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
+      case MessageType.Revote    => room ! Room.ReVote(message.userId)
+  end handleIncomeMessage
 end RoomManager
