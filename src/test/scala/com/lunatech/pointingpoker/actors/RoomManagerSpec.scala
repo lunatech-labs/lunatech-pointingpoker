@@ -136,13 +136,18 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "no-op typed per-command messages for an unknown room" in {
+      val knownRoomId       = UUID.randomUUID()
+      val unknownRoomId     = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
       val managerRef        = testKit.spawn(
-        RoomManager.receiveBehaviour(RoomManagerData.empty, roomResponseProbe.ref)
+        RoomManager.receiveBehaviour(
+          RoomManagerData(Map(knownRoomId -> roomProbe.ref)),
+          roomResponseProbe.ref
+        )
       )
 
-      managerRef ! RoomManager.Vote(UUID.randomUUID(), UUID.randomUUID(), "5")
+      managerRef ! RoomManager.Vote(unknownRoomId, UUID.randomUUID(), "5")
 
       roomProbe.expectNoMessage()
     }
