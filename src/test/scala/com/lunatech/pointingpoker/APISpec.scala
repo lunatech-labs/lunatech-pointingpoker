@@ -16,6 +16,7 @@ import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
 import com.lunatech.pointingpoker.JoinResponse
+import com.lunatech.pointingpoker.{CirceSupport, EditIssueRequest, VoteRequest}
 import io.circe.parser.decode
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
@@ -28,11 +29,18 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
   val roomId: String       = UUID.randomUUID().toString
 
-  val testKit: ActorTestKit                      = ActorTestKit()
+  val testKit: ActorTestKit = ActorTestKit()
+
+  val commandProbe: org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe[RoomManager.Command] =
+    testKit.createTestProbe[RoomManager.Command]()
+
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! RoomManager.RoomId(roomId)
+        Behaviors.same
+      case other =>
+        commandProbe.ref ! other
         Behaviors.same
     })
   given typedSystem: ActorSystem[SpawnProtocol.Command] =
@@ -79,5 +87,60 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         response.status mustBe StatusCodes.BadRequest
       }
 
+    "dispatch a vote command" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      val userId = UUID.randomUUID()
+      Post(s"/rooms/$roomId/vote?userId=$userId", VoteRequest("5")) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+      }
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), userId, "5"))
+    }
+
+    "dispatch a show command" in {
+      val userId = UUID.randomUUID()
+      Post(s"/rooms/$roomId/show?userId=$userId") ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+      }
+      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), userId))
+    }
+
+    "dispatch a clear command" in {
+      val userId = UUID.randomUUID()
+      Post(s"/rooms/$roomId/clear?userId=$userId") ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+      }
+      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), userId))
+    }
+
+    "dispatch a revote command" in {
+      val userId = UUID.randomUUID()
+      Post(s"/rooms/$roomId/revote?userId=$userId") ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+      }
+      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), userId))
+    }
+
+    "dispatch an edit-issue command" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      val userId = UUID.randomUUID()
+      Post(
+        s"/rooms/$roomId/edit-issue?userId=$userId",
+        EditIssueRequest("new issue")
+      ) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+      }
+      commandProbe.expectMessage(
+        RoomManager.EditIssue(UUID.fromString(roomId), userId, "new issue")
+      )
+    }
+
+    "reject a malformed vote body with 400" in {
+      val userId        = UUID.randomUUID()
+      val malformedBody =
+        HttpEntity(ContentTypes.`application/json`, """{"not-estimation": 5}""")
+      Post(s"/rooms/$roomId/vote?userId=$userId", malformedBody) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+    }
   }
 end APISpec

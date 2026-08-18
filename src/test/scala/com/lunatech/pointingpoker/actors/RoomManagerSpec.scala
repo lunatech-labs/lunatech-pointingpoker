@@ -111,5 +111,40 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
     }
+
+    "handle typed per-command messages" in {
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
+      val userId = UUID.randomUUID()
+
+      managerRef ! RoomManager.Vote(roomId, userId, "5")
+      managerRef ! RoomManager.Show(roomId, userId)
+      managerRef ! RoomManager.Clear(roomId, userId)
+      managerRef ! RoomManager.Revote(roomId, userId)
+      managerRef ! RoomManager.EditIssue(roomId, userId, "issue name")
+
+      roomProbe.expectMessage(Room.Vote(userId, "5"))
+      roomProbe.expectMessage(Room.ShowVotes(userId))
+      roomProbe.expectMessage(Room.ClearVotes(userId))
+      roomProbe.expectMessage(Room.ReVote(userId))
+      roomProbe.expectMessage(Room.EditIssue(userId, "issue name"))
+    }
+
+    "no-op typed per-command messages for an unknown room" in {
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager.receiveBehaviour(RoomManagerData.empty, roomResponseProbe.ref)
+      )
+
+      managerRef ! RoomManager.Vote(UUID.randomUUID(), UUID.randomUUID(), "5")
+
+      roomProbe.expectNoMessage()
+    }
   }
 end RoomManagerSpec

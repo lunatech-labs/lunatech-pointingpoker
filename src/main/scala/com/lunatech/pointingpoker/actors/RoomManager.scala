@@ -11,14 +11,19 @@ import RoomEvent.MessageType
 object RoomManager:
 
   sealed trait Command
-  case class CreateRoom(replyTo: ActorRef[Response])             extends Command
-  case class IncomeWSMessage(message: RoomEvent)                 extends Command
-  case object UnsupportedWSMessage                               extends Command
-  case class ConnectionCompleted(roomId: UUID, userId: UUID)     extends Command
-  case class ConnectionFailure(t: Throwable)                     extends Command
-  case class CompleteStream()                                    extends Command
-  case class ConnectToRoom(message: RoomEvent, user: UntypedRef) extends Command
-  case class RoomResponseWrapper(response: Room.Response)        extends Command
+  case class CreateRoom(replyTo: ActorRef[Response])              extends Command
+  case class IncomeWSMessage(message: RoomEvent)                  extends Command
+  case object UnsupportedWSMessage                                extends Command
+  case class ConnectionCompleted(roomId: UUID, userId: UUID)      extends Command
+  case class ConnectionFailure(t: Throwable)                      extends Command
+  case class CompleteStream()                                     extends Command
+  case class ConnectToRoom(message: RoomEvent, user: UntypedRef)  extends Command
+  case class RoomResponseWrapper(response: Room.Response)         extends Command
+  case class Vote(roomId: UUID, userId: UUID, estimation: String) extends Command
+  case class Show(roomId: UUID, userId: UUID)                     extends Command
+  case class Clear(roomId: UUID, userId: UUID)                    extends Command
+  case class Revote(roomId: UUID, userId: UUID)                   extends Command
+  case class EditIssue(roomId: UUID, userId: UUID, issue: String) extends Command
 
   sealed trait Response
   case class RoomId(value: String) extends Response
@@ -81,6 +86,21 @@ object RoomManager:
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
                 receiveBehaviour(newData, roomResponseWrapper)
+          case Vote(roomId, userId, estimation) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.Vote(userId, estimation))
+            Behaviors.same
+          case Show(roomId, userId) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ShowVotes(userId))
+            Behaviors.same
+          case Clear(roomId, userId) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ClearVotes(userId))
+            Behaviors.same
+          case Revote(roomId, userId) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ReVote(userId))
+            Behaviors.same
+          case EditIssue(roomId, userId, issue) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(userId, issue))
+            Behaviors.same
           case IncomeWSMessage(message) =>
             data.rooms.get(message.roomId).foreach(handleIncomeMessage(_, message, context))
             Behaviors.same

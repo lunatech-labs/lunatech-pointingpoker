@@ -14,3 +14,13 @@ case class JoinResponse(userId: UUID)
 object JoinResponse:
   given Encoder[JoinResponse] = deriveEncoder[JoinResponse]
   given Decoder[JoinResponse] = deriveDecoder[JoinResponse]
+
+case class VoteRequest(estimation: String)
+object VoteRequest:
+  given Decoder[VoteRequest] = deriveDecoder[VoteRequest]
+  given Encoder[VoteRequest] = deriveEncoder[VoteRequest]
+
+case class EditIssueRequest(issue: String)
+object EditIssueRequest:
+  given Decoder[EditIssueRequest] = deriveDecoder[EditIssueRequest]
+  given Encoder[EditIssueRequest] = deriveEncoder[EditIssueRequest]

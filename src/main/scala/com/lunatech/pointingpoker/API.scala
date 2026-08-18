@@ -61,6 +61,54 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           }
         }
       },
+      pathPrefix("rooms" / JavaUUID) { roomId =>
+        concat(
+          path("vote") {
+            post {
+              parameter("userId") { userIdStr =>
+                entity(as[VoteRequest]) { req =>
+                  roomManager ! RoomManager.Vote(roomId, UUID.fromString(userIdStr), req.estimation)
+                  complete(StatusCodes.NoContent)
+                }
+              }
+            }
+          },
+          path("show") {
+            post {
+              parameter("userId") { userIdStr =>
+                roomManager ! RoomManager.Show(roomId, UUID.fromString(userIdStr))
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("clear") {
+            post {
+              parameter("userId") { userIdStr =>
+                roomManager ! RoomManager.Clear(roomId, UUID.fromString(userIdStr))
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("revote") {
+            post {
+              parameter("userId") { userIdStr =>
+                roomManager ! RoomManager.Revote(roomId, UUID.fromString(userIdStr))
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("edit-issue") {
+            post {
+              parameter("userId") { userIdStr =>
+                entity(as[EditIssueRequest]) { req =>
+                  roomManager ! RoomManager.EditIssue(roomId, UUID.fromString(userIdStr), req.issue)
+                  complete(StatusCodes.NoContent)
+                }
+              }
+            }
+          }
+        )
+      },
       path("websocket" / JavaUUID / Remaining) { (roomId, encodedName) =>
         log.debug("Websocket call: {} {}", roomId, encodedName)
         handleWebSocketMessages(
