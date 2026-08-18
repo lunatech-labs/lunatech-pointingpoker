@@ -15,7 +15,6 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
 import com.lunatech.pointingpoker.config.ApiConfig
-import com.lunatech.pointingpoker.CirceSupport.given
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.Future
@@ -56,6 +55,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       },
       path("rooms" / JavaUUID / "join") { _ =>
         post {
+          // Scoped locally so the generic circe marshaller cannot hijack routes that
+          // complete with a plain String (e.g. create-room, which stays text/plain).
+          import com.lunatech.pointingpoker.CirceSupport.given
           entity(as[JoinRequest]) { _ =>
             complete(JoinResponse(UUID.randomUUID()))
           }
@@ -72,6 +74,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
         concat(
           path("vote") {
             post {
+              import com.lunatech.pointingpoker.CirceSupport.given
               parameter("userId") { userIdStr =>
                 entity(as[VoteRequest]) { req =>
                   roomManager ! RoomManager.Vote(roomId, UUID.fromString(userIdStr), req.estimation)
@@ -106,6 +109,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           },
           path("edit-issue") {
             post {
+              import com.lunatech.pointingpoker.CirceSupport.given
               parameter("userId") { userIdStr =>
                 entity(as[EditIssueRequest]) { req =>
                   roomManager ! RoomManager.EditIssue(roomId, UUID.fromString(userIdStr), req.issue)

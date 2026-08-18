@@ -63,13 +63,13 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe index
       }
     }
-    "create a room" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
+    "create a room" in
+      // Deliberately no CirceSupport import here: create-room must stay a plain
+      // text/plain body containing the bare roomId, not a JSON-quoted string.
       Post("/create-room") ~> apiRoute ~> check {
-        val responseBody = responseAs[String]
-        responseBody mustBe roomId
+        contentType mustBe ContentTypes.`text/plain(UTF-8)`
+        responseAs[String] mustBe roomId
       }
-    }
     "join a room and return a minted userId" in {
       import com.lunatech.pointingpoker.CirceSupport.given
       Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
