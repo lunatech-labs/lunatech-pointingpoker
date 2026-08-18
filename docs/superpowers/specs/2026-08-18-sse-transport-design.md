@@ -35,7 +35,9 @@ redesign beyond swapping the carrier.
 - `RoomManager.scala`: `ConnectToRoom` finds-or-creates the `Room` actor and
   sends `Room.Join(User(...))`. `IncomeWSMessage` dispatches by
   `MessageType` to typed `Room.Command`s (`Vote`, `ShowVotes`, `ClearVotes`,
-  `ReVote`, `EditIssue`).
+  `ReVote`, `EditIssue`). Also defines `WSCompleted`/`WSFailure` (fired on
+  socket close/failure) and `CompleteWS` (an outbound-stream completion
+  marker, currently unused/vestigial).
 - `Room.scala`: holds `RoomData(users: List[User], ...)` where
   `User.ref: UntypedRef` **is** the per-connection actor ref. `broadcast`
   just does `user.ref ! message` for every user. `setupNewUser` replays
@@ -99,27 +101,35 @@ not anything specific to WebSockets, and naming it after the current
 transport would just repeat the same mistake under a new name. `MessageType`
 keeps its name (already transport-neutral).
 
+This also means the `com.lunatech.pointingpoker.websocket` package is split
+rather than just renamed: `RoomEvent.scala` moves to
+`com.lunatech.pointingpoker.actors` (alongside `Room.scala`/
+`RoomManager.scala`, which already depend on it — it's a domain type, not
+transport plumbing), while the genuinely transport-specific `SSE.scala`
+stays on its own in a renamed `com.lunatech.pointingpoker.sse` package.
+
 ### Leave detection
 
 Today, closing the WS socket completes the inbound `Sink`, which fires
 `WSCompleted` → `Room.Leave`. SSE has no inbound stream tied to the
 connection (commands are separate stateless POSTs), so leave detection
 moves to the **outbound** side: `.watchTermination()` on the SSE source,
-whose completion/failure future sends `RoomManager.WSCompleted`/`WSFailure`
-(possibly renamed to transport-neutral names) exactly as today — same
-effect, same `Room.Leave` trigger, just observed from the other end of the
-pipe.
+whose completion/failure future sends `RoomManager.ConnectionCompleted`/
+`ConnectionFailure` (renamed from `WSCompleted`/`WSFailure`) exactly as
+today — same effect, same `Room.Leave` trigger, just observed from the
+other end of the pipe.
 
 ## File-by-file changes
 
 | File | Change |
 |---|---|
 | `API.scala` | Remove the `websocket` route. Add `POST /rooms/{roomId}/join`, `GET /rooms/{roomId}/events`, and `POST /rooms/{roomId}/{vote,show,clear,revote,edit-issue}`. |
-| `WS.scala` → `SSE.scala` | Delete inbound `Sink`/decode logic (no client→server stream anymore). Keep/adapt `source()` as the SSE source constructor, reused as-is for the events endpoint. Renamed since "WS" no longer fits. |
-| `RoomManager.scala` | Replace `IncomeWSMessage`/`UnsupportedWSMessage`/`handleIncomeMessage` with typed per-command messages. `ConnectToRoom` unchanged. `WSCompleted`/`WSFailure` now triggered from SSE `watchTermination()` instead of an inbound sink completing. |
+| `websocket/WS.scala` → `sse/SSE.scala` | Delete inbound `Sink`/decode logic (no client→server stream anymore). Keep/adapt `source()` as the SSE source constructor, reused as-is for the events endpoint. Package renamed `websocket` → `sse` along with the file, since it now holds only transport-specific plumbing. |
+| `RoomManager.scala` | Replace `IncomeWSMessage`/`UnsupportedWSMessage`/`handleIncomeMessage` with typed per-command messages. `ConnectToRoom` unchanged. `WSCompleted`/`WSFailure` renamed to `ConnectionCompleted`/`ConnectionFailure`, now triggered from SSE `watchTermination()` instead of an inbound sink completing. `CompleteWS` (the outbound stream's completion-strategy marker, currently unused/vestigial) renamed to `CompleteStream`. |
 | `Room.scala` | **No changes.** |
-| `WSMessage.scala` → `RoomEvent.scala` | Renamed (case class `WSMessage` → `RoomEvent`) since it represents domain events, not a WebSocket-specific format. Keep the outbound encoder/`MessageType` (still the SSE wire format). Delete the inbound decoder (dead code — nothing parses an incoming message anymore). |
-| `index.html` | Replace the WS client (~230 lines in the inline `<script>`) with: `fetch(POST /join)` → `new EventSource(.../events?...)`, `onmessage` parsing the same JSON shape as today and dispatching to the same Vue handlers; command sends become `fetch(POST ...)` instead of `ws.send(...)`. |
+| `websocket/WSMessage.scala` → `actors/RoomEvent.scala` | Renamed (case class `WSMessage` → `RoomEvent`) and moved into the `actors` package, since it's a domain type both `Room.scala` and `RoomManager.scala` already depend on, not transport plumbing. Keep the outbound encoder/`MessageType` (still the SSE wire format). Delete the inbound decoder (dead code — nothing parses an incoming message anymore). |
+| `index.html` | Replace the WS client (~230 lines in the inline `<script>`) with: `fetch(POST /join)` → `new EventSource(.../events?...)`. Rename the `wsConnection` field to `eventSource`. `onmessage` parses the same JSON shape as today and dispatches to the same Vue handlers; command sends become `fetch(POST ...)` instead of `ws.send(...)`. Note: `EventSource` has no `onclose` — the current `wsConnection.onclose` handler needs rethinking (e.g. drop it, since leave-detection is now server-side via `watchTermination()`), not just a rename. |
+| `application.conf` | Remove `pekko.http.server.websocket.periodic-keep-alive-max-idle` — it configures Pekko's own WebSocket module, which is unused once the WS route is gone; it doesn't apply to the new SSE route, so it's dead config rather than something to rename. |
 
 ## Error handling
 
