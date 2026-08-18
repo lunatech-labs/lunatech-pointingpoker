@@ -388,6 +388,10 @@
             var params = new URLSearchParams({ userId: userId, name: ref.user.name });
             ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events?' + params.toString());
             ref.eventSource.onmessage = function(event) {
+              // Keep-alive heartbeats arrive as an event with an empty data payload.
+              if (!event.data) {
+                return;
+              }
               ref.inRoom = true;
               var message = JSON.parse(event.data);
               if (message.messageType === 'init') {

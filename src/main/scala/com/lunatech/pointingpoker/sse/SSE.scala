@@ -3,6 +3,7 @@ package com.lunatech.pointingpoker.sse
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success}
 
 import io.circe.syntax.*
@@ -17,6 +18,13 @@ import com.lunatech.pointingpoker.actors.RoomEvent.given
 object SSE:
 
   val disabledBufferSize = 0
+
+  /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default
+    * `pekko.http.server.idle-timeout` (60 seconds), otherwise an idle stream is killed by the
+    * server and read as the participant leaving the room. Pekko renders `ServerSentEvent.heartbeat`
+    * as an event with an empty `data` payload, which the frontend ignores.
+    */
+  val heartbeatInterval = 15.seconds
 
   def source(roomManager: ActorRef, roomId: UUID, userId: UUID, name: String)(using
       ec: ExecutionContext
@@ -38,11 +46,12 @@ object SSE:
       .watchTermination() { (user, done) =>
         done.onComplete {
           case Success(_) => roomManager ! RoomManager.ConnectionCompleted(roomId, userId)
-          case Failure(t) => roomManager ! RoomManager.ConnectionFailure(t)
+          case Failure(t) => roomManager ! RoomManager.ConnectionFailure(roomId, userId, t)
         }
         user
       }
       .map(event => ServerSentEvent(event.asJson.noSpaces))
+      .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 
   private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
     case RoomManager.CompleteStream => CompletionStrategy.immediately

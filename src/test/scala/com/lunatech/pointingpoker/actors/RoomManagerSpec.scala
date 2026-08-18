@@ -80,6 +80,28 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       }
     }
 
+    "report stream termination to the room manager as ConnectionCompleted" in {
+      import com.lunatech.pointingpoker.sse.SSE
+      given ExecutionContext                     = testKit.system.executionContext
+      given org.apache.pekko.stream.Materializer =
+        org.apache.pekko.stream.Materializer.matFromSystem(testKit.system.classicSystem)
+
+      val roomId       = UUID.randomUUID()
+      val userId       = UUID.randomUUID()
+      val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
+
+      // Sink.cancelled cancels downstream demand immediately, terminating the source.
+      SSE
+        .source(classicProbe.ref, roomId, userId, "user 1")
+        .to(org.apache.pekko.stream.scaladsl.Sink.cancelled)
+        .run()
+
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(message, _) =>
+        message.userId mustBe userId
+      }
+      classicProbe.expectMsg(RoomManager.ConnectionCompleted(roomId, userId))
+    }
+
     "handle connection completed" in {
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
@@ -91,6 +113,21 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val userId = UUID.randomUUID()
 
       managerRef ! RoomManager.ConnectionCompleted(roomId, userId)
+
+      roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
+    }
+
+    "handle connection failure by removing the user from the room" in {
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
+      val userId = UUID.randomUUID()
+
+      managerRef ! RoomManager.ConnectionFailure(roomId, userId, new RuntimeException("boom"))
 
       roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
     }
