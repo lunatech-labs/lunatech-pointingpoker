@@ -14,9 +14,9 @@ object RoomManager:
   case class CreateRoom(replyTo: ActorRef[Response])             extends Command
   case class IncomeWSMessage(message: RoomEvent)                 extends Command
   case object UnsupportedWSMessage                               extends Command
-  case class ConnectionCompleted(roomId: UUID, userId: UUID)             extends Command
-  case class ConnectionFailure(t: Throwable)                             extends Command
-  case class CompleteStream()                                        extends Command
+  case class ConnectionCompleted(roomId: UUID, userId: UUID)     extends Command
+  case class ConnectionFailure(t: Throwable)                     extends Command
+  case class CompleteStream()                                    extends Command
   case class ConnectToRoom(message: RoomEvent, user: UntypedRef) extends Command
   case class RoomResponseWrapper(response: Room.Response)        extends Command
 
