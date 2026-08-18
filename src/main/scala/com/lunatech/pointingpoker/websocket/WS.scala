@@ -10,8 +10,9 @@ import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
 import org.apache.pekko.stream.scaladsl.{Flow, Sink, Source}
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import com.lunatech.pointingpoker.actors.RoomManager
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
-import com.lunatech.pointingpoker.websocket.WSMessage.given
+import com.lunatech.pointingpoker.actors.RoomEvent
+import com.lunatech.pointingpoker.actors.RoomEvent.MessageType
+import com.lunatech.pointingpoker.actors.RoomEvent.given
 
 object WS:
 
@@ -33,7 +34,7 @@ object WS:
       )
       .contramap {
         case TextMessage.Strict(body) =>
-          decode[WSMessage](body) match
+          decode[RoomEvent](body) match
             case Right(msg) => RoomManager.IncomeWSMessage(msg)
             case _          => RoomManager.UnsupportedWSMessage
         case _ => RoomManager.UnsupportedWSMessage
@@ -46,7 +47,7 @@ object WS:
       name: String
   ): Source[Message, ActorRef] =
     Source
-      .actorRef[WSMessage](
+      .actorRef[RoomEvent](
         completionMatcher,
         failureMatcher,
         disabledBufferSize,
@@ -54,7 +55,7 @@ object WS:
       )
       .mapMaterializedValue { user =>
         roomManager ! RoomManager.ConnectToRoom(
-          WSMessage(MessageType.Join, roomId, userId, name),
+          RoomEvent(MessageType.Join, roomId, userId, name),
           user
         )
         user

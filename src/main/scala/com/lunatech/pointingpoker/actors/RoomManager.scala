@@ -6,19 +6,18 @@ import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
 import org.apache.pekko.actor.ActorRef as UntypedRef
 import com.lunatech.pointingpoker.actors
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
+import RoomEvent.MessageType
 
 object RoomManager:
 
   sealed trait Command
   case class CreateRoom(replyTo: ActorRef[Response])             extends Command
-  case class IncomeWSMessage(message: WSMessage)                 extends Command
+  case class IncomeWSMessage(message: RoomEvent)                 extends Command
   case object UnsupportedWSMessage                               extends Command
   case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
   case class WSFailure(t: Throwable)                             extends Command
   case class CompleteWS()                                        extends Command
-  case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
+  case class ConnectToRoom(message: RoomEvent, user: UntypedRef) extends Command
   case class RoomResponseWrapper(response: Room.Response)        extends Command
 
   sealed trait Response
@@ -111,7 +110,7 @@ object RoomManager:
 
   private[actors] def handleIncomeMessage(
       room: ActorRef[Room.Command],
-      message: WSMessage,
+      message: RoomEvent,
       context: ActorContext[Command]
   ): Unit =
     message.messageType match

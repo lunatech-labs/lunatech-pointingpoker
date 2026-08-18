@@ -5,11 +5,10 @@ import java.util.UUID
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import org.apache.pekko.testkit.*
 import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
+import RoomEvent.MessageType
 
 class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -42,11 +41,11 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       behaviorTestKit.run(
         RoomManager
-          .ConnectToRoom(WSMessage(MessageType.Join, roomId, user1.id, user1.name), user1Probe.ref)
+          .ConnectToRoom(RoomEvent(MessageType.Join, roomId, user1.id, user1.name), user1Probe.ref)
       )
       behaviorTestKit.run(
         RoomManager
-          .ConnectToRoom(WSMessage(MessageType.Join, roomId, user2.id, user2.name), user2Probe.ref)
+          .ConnectToRoom(RoomEvent(MessageType.Join, roomId, user2.id, user2.name), user2Probe.ref)
       )
 
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
@@ -64,12 +63,12 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
       val userId = UUID.randomUUID()
 
-      managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Vote, roomId, userId, "5"))
+      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Vote, roomId, userId, "5"))
       managerRef ! RoomManager.IncomeWSMessage(
-        WSMessage(MessageType.EditIssue, roomId, userId, "issue name")
+        RoomEvent(MessageType.EditIssue, roomId, userId, "issue name")
       )
-      managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Show, roomId, userId, ""))
-      managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Clear, roomId, userId, ""))
+      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Show, roomId, userId, ""))
+      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Clear, roomId, userId, ""))
 
       roomProbe.expectMessage(Room.Vote(userId, "5"))
       roomProbe.expectMessage(Room.EditIssue(userId, "issue name"))
@@ -88,12 +87,12 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val userId = UUID.randomUUID()
 
       managerRef ! RoomManager.IncomeWSMessage(
-        WSMessage(MessageType.Init, roomId, userId, user1Name)
+        RoomEvent(MessageType.Init, roomId, userId, user1Name)
       )
       managerRef ! RoomManager.IncomeWSMessage(
-        WSMessage(MessageType.Join, roomId, userId, user1Name)
+        RoomEvent(MessageType.Join, roomId, userId, user1Name)
       )
-      managerRef ! RoomManager.IncomeWSMessage(WSMessage(MessageType.Leave, roomId, userId, ""))
+      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Leave, roomId, userId, ""))
 
       roomProbe.expectNoMessage()
     }

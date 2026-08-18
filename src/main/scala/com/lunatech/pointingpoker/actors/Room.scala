@@ -5,8 +5,7 @@ import java.util.UUID
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.ActorRef as UntypedRef
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
+import RoomEvent.MessageType
 
 object Room:
 
@@ -69,16 +68,16 @@ object Room:
         case Join(user) =>
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
-          broadcast(WSMessage(MessageType.Join, roomId, user.id, user.name), newData.users, context)
+          broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
           receiveBehaviour(roomId, newData)
         case Vote(userId, estimation) =>
           val newData = data.vote(userId, estimation)
-          broadcast(WSMessage(MessageType.Vote, roomId, userId, estimation), newData.users, context)
+          broadcast(RoomEvent(MessageType.Vote, roomId, userId, estimation), newData.users, context)
           receiveBehaviour(roomId, newData)
         case ClearVotes(userId) =>
           val newData = data.clear()
           broadcast(
-            WSMessage(MessageType.Clear, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Clear, roomId, userId, RoomEvent.NoExtra),
             newData.users,
             context
           )
@@ -86,14 +85,14 @@ object Room:
         case ReVote(userId) =>
           val newData = data.reVote()
           broadcast(
-            WSMessage(MessageType.Revote, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Revote, roomId, userId, RoomEvent.NoExtra),
             newData.users,
             context
           )
           receiveBehaviour(roomId, newData)
         case ShowVotes(userId) =>
           broadcast(
-            WSMessage(MessageType.Show, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Show, roomId, userId, RoomEvent.NoExtra),
             data.users,
             context
           )
@@ -101,7 +100,7 @@ object Room:
         case Leave(userId, replyTo) =>
           val newData = data.leave(userId)
           broadcast(
-            WSMessage(MessageType.Leave, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra),
             newData.users,
             context
           )
@@ -112,7 +111,7 @@ object Room:
             replyTo ! Running(roomId)
             receiveBehaviour(roomId, newData)
         case EditIssue(userId, issue) =>
-          broadcast(WSMessage(MessageType.EditIssue, roomId, userId, issue), data.users, context)
+          broadcast(RoomEvent(MessageType.EditIssue, roomId, userId, issue), data.users, context)
           receiveBehaviour(
             roomId,
             data.editIssue(issue, userId)
@@ -124,7 +123,7 @@ object Room:
     }
 
   private[actors] def broadcast(
-      message: WSMessage,
+      message: RoomEvent,
       users: List[User],
       context: ActorContext[Command]
   ): Unit =
@@ -135,13 +134,13 @@ object Room:
   end broadcast
 
   private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit =
-    user.ref ! WSMessage(MessageType.Init, roomId, user.id, user.name)
+    user.ref ! RoomEvent(MessageType.Init, roomId, user.id, user.name)
     data.issueLastEditBy.foreach(lastEditUser =>
-      user.ref ! WSMessage(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
+      user.ref ! RoomEvent(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
     )
     data.users.foreach { u =>
-      user.ref ! WSMessage(MessageType.Join, roomId, u.id, u.name)
-      if u.voted then user.ref ! WSMessage(MessageType.Vote, roomId, u.id, u.estimation)
+      user.ref ! RoomEvent(MessageType.Join, roomId, u.id, u.name)
+      if u.voted then user.ref ! RoomEvent(MessageType.Vote, roomId, u.id, u.estimation)
     }
   end setupNewUser
 end Room
