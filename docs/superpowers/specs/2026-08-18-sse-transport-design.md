@@ -86,11 +86,18 @@ response (exact parity with today's silent no-op — no 404 introduced here).
 ### Push (server → client)
 
 Unchanged in shape: `Room.broadcast`/`setupNewUser` keep sending the same
-`WSMessage`-shaped events (`Init`, `Join`, `Vote`, `Show`, `Clear`,
+`RoomEvent`-shaped events (`Init`, `Join`, `Vote`, `Show`, `Clear`,
 `Revote`, `EditIssue`, `Leave`) to each participant's `ref`. The only change
 is that `ref` now points at an SSE connection instead of a WS connection,
 and those messages are marshalled as `text/event-stream` (Pekko HTTP's
 `EventStreamMarshalling`) instead of WS text frames.
+
+`WSMessage.scala` (the flat case class `(messageType, roomId, userId,
+extra)` plus `MessageType` enum) is renamed to `RoomEvent.scala`/`RoomEvent`
+as part of this PR — it represents domain events pushed to participants,
+not anything specific to WebSockets, and naming it after the current
+transport would just repeat the same mistake under a new name. `MessageType`
+keeps its name (already transport-neutral).
 
 ### Leave detection
 
@@ -108,10 +115,10 @@ pipe.
 | File | Change |
 |---|---|
 | `API.scala` | Remove the `websocket` route. Add `POST /rooms/{roomId}/join`, `GET /rooms/{roomId}/events`, and `POST /rooms/{roomId}/{vote,show,clear,revote,edit-issue}`. |
-| `WS.scala` | Delete inbound `Sink`/decode logic (no client→server stream anymore). Keep/adapt `source()` as the SSE source constructor, reused as-is for the events endpoint. Consider renaming the file/object since "WS" no longer fits (e.g. `SSE.scala`) — implementation detail. |
+| `WS.scala` → `SSE.scala` | Delete inbound `Sink`/decode logic (no client→server stream anymore). Keep/adapt `source()` as the SSE source constructor, reused as-is for the events endpoint. Renamed since "WS" no longer fits. |
 | `RoomManager.scala` | Replace `IncomeWSMessage`/`UnsupportedWSMessage`/`handleIncomeMessage` with typed per-command messages. `ConnectToRoom` unchanged. `WSCompleted`/`WSFailure` now triggered from SSE `watchTermination()` instead of an inbound sink completing. |
 | `Room.scala` | **No changes.** |
-| `WSMessage.scala` | Keep the outbound case class/encoder/`MessageType` (still the SSE wire format). Delete the inbound decoder (dead code — nothing parses an incoming `WSMessage` anymore). |
+| `WSMessage.scala` → `RoomEvent.scala` | Renamed (case class `WSMessage` → `RoomEvent`) since it represents domain events, not a WebSocket-specific format. Keep the outbound encoder/`MessageType` (still the SSE wire format). Delete the inbound decoder (dead code — nothing parses an incoming message anymore). |
 | `index.html` | Replace the WS client (~230 lines in the inline `<script>`) with: `fetch(POST /join)` → `new EventSource(.../events?...)`, `onmessage` parsing the same JSON shape as today and dispatching to the same Vue handlers; command sends become `fetch(POST ...)` instead of `ws.send(...)`. |
 
 ## Error handling
