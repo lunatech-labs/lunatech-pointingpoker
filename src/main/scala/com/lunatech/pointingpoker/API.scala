@@ -2,6 +2,7 @@ package com.lunatech.pointingpoker
 
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.Http
@@ -15,6 +16,7 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.websocket.WS
 import com.lunatech.pointingpoker.config.ApiConfig
+import com.lunatech.pointingpoker.CirceSupport.given
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.Future
@@ -49,6 +51,13 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
             case Failure(reason) =>
               log.error("Error while creating room: {}", reason)
               complete(StatusCodes.InternalServerError)
+          }
+        }
+      },
+      path("rooms" / JavaUUID / "join") { _ =>
+        post {
+          entity(as[JoinRequest]) { _ =>
+            complete(JoinResponse(UUID.randomUUID()))
           }
         }
       },

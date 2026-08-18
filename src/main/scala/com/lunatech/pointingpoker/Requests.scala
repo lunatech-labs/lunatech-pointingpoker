@@ -1,0 +1,16 @@
+package com.lunatech.pointingpoker
+
+import java.util.UUID
+
+import io.circe.{Decoder, Encoder}
+import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
+
+case class JoinRequest(name: String)
+object JoinRequest:
+  given Decoder[JoinRequest] = deriveDecoder[JoinRequest]
+  given Encoder[JoinRequest] = deriveEncoder[JoinRequest]
+
+case class JoinResponse(userId: UUID)
+object JoinResponse:
+  given Encoder[JoinResponse] = deriveEncoder[JoinResponse]
+  given Decoder[JoinResponse] = deriveDecoder[JoinResponse]

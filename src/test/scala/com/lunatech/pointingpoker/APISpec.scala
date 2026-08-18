@@ -13,6 +13,10 @@ import com.lunatech.pointingpoker.actors.RoomManager
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
+import com.lunatech.pointingpoker.JoinRequest
+import com.lunatech.pointingpoker.JoinResponse
+import io.circe.parser.decode
+import io.circe.syntax.*
 
 import scala.io.Source
 
@@ -46,10 +50,21 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe index
       }
     }
-    "create a room" in
+    "create a room" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
       Post("/create-room") ~> apiRoute ~> check {
-        responseAs[String] mustBe roomId
+        val responseBody = responseAs[String]
+        responseBody mustBe roomId
       }
+    }
+    "join a room and return a minted userId" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        val response = responseAs[JoinResponse]
+        response.userId.toString.length > 0 mustBe true
+      }
+    }
 
   }
 end APISpec
