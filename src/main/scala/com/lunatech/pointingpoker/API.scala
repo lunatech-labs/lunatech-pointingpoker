@@ -1,7 +1,5 @@
 package com.lunatech.pointingpoker
 
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.util.UUID
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
@@ -16,7 +14,6 @@ import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
-import com.lunatech.pointingpoker.websocket.WS
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.lunatech.pointingpoker.CirceSupport.given
 import org.slf4j.{Logger, LoggerFactory}
@@ -117,16 +114,6 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
               }
             }
           }
-        )
-      },
-      path("websocket" / JavaUUID / Remaining) { (roomId, encodedName) =>
-        log.debug("Websocket call: {} {}", roomId, encodedName)
-        handleWebSocketMessages(
-          WS.handler(
-            roomId,
-            URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name()),
-            roomManager.toClassic
-          )
         )
       }
     )

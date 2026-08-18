@@ -12,8 +12,6 @@ object RoomManager:
 
   sealed trait Command
   case class CreateRoom(replyTo: ActorRef[Response])              extends Command
-  case class IncomeWSMessage(message: RoomEvent)                  extends Command
-  case object UnsupportedWSMessage                                extends Command
   case class ConnectionCompleted(roomId: UUID, userId: UUID)      extends Command
   case class ConnectionFailure(t: Throwable)                      extends Command
   case class CompleteStream()                                     extends Command
@@ -101,12 +99,6 @@ object RoomManager:
           case EditIssue(roomId, userId, issue) =>
             data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(userId, issue))
             Behaviors.same
-          case IncomeWSMessage(message) =>
-            data.rooms.get(message.roomId).foreach(handleIncomeMessage(_, message, context))
-            Behaviors.same
-          case UnsupportedWSMessage =>
-            context.log.error("UnsupportedWSMessage received")
-            Behaviors.same
           case ConnectionCompleted(roomId, userId) =>
             data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
             Behaviors.same
@@ -127,23 +119,4 @@ object RoomManager:
       context: ActorContext[Command]
   ): ActorRef[Room.Command] =
     context.spawn(actors.Room(roomId), name = roomId.toString)
-
-  private[actors] def handleIncomeMessage(
-      room: ActorRef[Room.Command],
-      message: RoomEvent,
-      context: ActorContext[Command]
-  ): Unit =
-    message.messageType match
-      case MessageType.Init => // Should never arrive here
-        context.log.error("Received Init MessageType []", message)
-      case MessageType.Join => // Should be handle by ConnectToRoom
-        context.log.error("Received Join MessageType []", message)
-      case MessageType.Leave => // Should never arrive here
-        context.log.error("Received Leave MessageType []", message)
-      case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
-      case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
-      case MessageType.Show      => room ! Room.ShowVotes(message.userId)
-      case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
-      case MessageType.Revote    => room ! Room.ReVote(message.userId)
-  end handleIncomeMessage
 end RoomManager

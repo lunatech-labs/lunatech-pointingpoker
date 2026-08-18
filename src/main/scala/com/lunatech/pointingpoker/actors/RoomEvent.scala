@@ -60,8 +60,6 @@ object RoomEvent:
   given messageTypeEncoder: Encoder[MessageType] =
     Encoder.encodeString.contramap(m => m.stringRep)
 
-  given roomEventDecoder: Decoder[RoomEvent] = deriveDecoder[RoomEvent]
-
   given roomEventEncoder: Encoder[RoomEvent] = deriveEncoder[RoomEvent]
 
 end RoomEvent

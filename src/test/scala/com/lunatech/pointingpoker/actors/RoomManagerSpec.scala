@@ -80,50 +80,6 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       }
     }
 
-    "handle an IncomeWSMessage that generates an outcome" in {
-      val roomId            = UUID.randomUUID()
-      val roomProbe         = testKit.createTestProbe[Room.Command]()
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef        = testKit.spawn(
-        RoomManager
-          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
-      )
-      val userId = UUID.randomUUID()
-
-      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Vote, roomId, userId, "5"))
-      managerRef ! RoomManager.IncomeWSMessage(
-        RoomEvent(MessageType.EditIssue, roomId, userId, "issue name")
-      )
-      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Show, roomId, userId, ""))
-      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Clear, roomId, userId, ""))
-
-      roomProbe.expectMessage(Room.Vote(userId, "5"))
-      roomProbe.expectMessage(Room.EditIssue(userId, "issue name"))
-      roomProbe.expectMessage(Room.ShowVotes(userId))
-      roomProbe.expectMessage(Room.ClearVotes(userId))
-    }
-
-    "handle IncomeWSMessage that don't generate outcome" in {
-      val roomId            = UUID.randomUUID()
-      val roomProbe         = testKit.createTestProbe[Room.Command]()
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef        = testKit.spawn(
-        RoomManager
-          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
-      )
-      val userId = UUID.randomUUID()
-
-      managerRef ! RoomManager.IncomeWSMessage(
-        RoomEvent(MessageType.Init, roomId, userId, user1Name)
-      )
-      managerRef ! RoomManager.IncomeWSMessage(
-        RoomEvent(MessageType.Join, roomId, userId, user1Name)
-      )
-      managerRef ! RoomManager.IncomeWSMessage(RoomEvent(MessageType.Leave, roomId, userId, ""))
-
-      roomProbe.expectNoMessage()
-    }
-
     "handle connection completed" in {
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
