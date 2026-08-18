@@ -2,6 +2,8 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.ExecutionContext
+
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import org.apache.pekko.testkit.*
 import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
@@ -51,6 +53,31 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
       childInbox.expectMessage(Room.Join(user1))
       childInbox.expectMessage(Room.Join(user2))
+    }
+
+    "connect a user via SSE.source and register it with ConnectToRoom" in {
+      import com.lunatech.pointingpoker.sse.SSE
+      given ExecutionContext                     = testKit.system.executionContext
+      given org.apache.pekko.stream.Materializer =
+        org.apache.pekko.stream.Materializer.matFromSystem(testKit.system.classicSystem)
+
+      val roomId       = UUID.randomUUID()
+      val userId       = UUID.randomUUID()
+      val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
+
+      // ConnectToRoom is sent to a classic ActorRef in production (roomManager.toClassic),
+      // so drive SSE.source with a classic probe standing in for it.
+      SSE
+        .source(classicProbe.ref, roomId, userId, "user 1")
+        .to(org.apache.pekko.stream.scaladsl.Sink.ignore)
+        .run()
+
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(message, _) =>
+        message.messageType mustBe com.lunatech.pointingpoker.actors.RoomEvent.MessageType.Join
+        message.roomId mustBe roomId
+        message.userId mustBe userId
+        message.extra mustBe "user 1"
+      }
     }
 
     "handle an IncomeWSMessage that generates an outcome" in {

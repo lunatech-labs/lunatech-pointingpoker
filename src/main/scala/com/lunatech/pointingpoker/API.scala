@@ -6,6 +6,7 @@ import java.util.UUID
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.marshalling.sse.EventStreamMarshalling
 import org.apache.pekko.http.scaladsl.model.*
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
@@ -14,6 +15,7 @@ import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
+import com.lunatech.pointingpoker.sse.SSE
 import com.lunatech.pointingpoker.websocket.WS
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.lunatech.pointingpoker.CirceSupport.given
@@ -24,10 +26,11 @@ import scala.util.{Failure, Success}
 
 class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
     actorSystem: ActorSystem[SpawnProtocol.Command]
-):
+) extends EventStreamMarshalling:
 
-  private given timeout: Timeout = Timeout(apiConfig.timeout)
-  private val log: Logger        = LoggerFactory.getLogger(this.getClass)
+  private given timeout: Timeout                      = Timeout(apiConfig.timeout)
+  private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
+  private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
 
   val route: Route =
     concat(
@@ -58,6 +61,13 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
         post {
           entity(as[JoinRequest]) { _ =>
             complete(JoinResponse(UUID.randomUUID()))
+          }
+        }
+      },
+      path("rooms" / JavaUUID / "events") { roomId =>
+        get {
+          parameters("userId", "name") { (userIdStr, name) =>
+            complete(SSE.source(roomManager.toClassic, roomId, UUID.fromString(userIdStr), name))
           }
         }
       },
