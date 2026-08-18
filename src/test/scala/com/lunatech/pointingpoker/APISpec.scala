@@ -134,6 +134,14 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       )
     }
 
+    "open an SSE events stream" in {
+      val userId = UUID.randomUUID()
+      Get(s"/rooms/$roomId/events?userId=$userId&name=Alice") ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        mediaType.toString mustBe "text/event-stream"
+      }
+    }
+
     "reject a malformed vote body with 400" in {
       val userId        = UUID.randomUUID()
       val malformedBody =
