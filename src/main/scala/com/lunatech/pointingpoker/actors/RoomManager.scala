@@ -14,9 +14,9 @@ object RoomManager:
   case class CreateRoom(replyTo: ActorRef[Response])             extends Command
   case class IncomeWSMessage(message: RoomEvent)                 extends Command
   case object UnsupportedWSMessage                               extends Command
-  case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
-  case class WSFailure(t: Throwable)                             extends Command
-  case class CompleteWS()                                        extends Command
+  case class ConnectionCompleted(roomId: UUID, userId: UUID)             extends Command
+  case class ConnectionFailure(t: Throwable)                             extends Command
+  case class CompleteStream()                                        extends Command
   case class ConnectToRoom(message: RoomEvent, user: UntypedRef) extends Command
   case class RoomResponseWrapper(response: Room.Response)        extends Command
 
@@ -87,14 +87,14 @@ object RoomManager:
           case UnsupportedWSMessage =>
             context.log.error("UnsupportedWSMessage received")
             Behaviors.same
-          case WSCompleted(roomId, userId) =>
+          case ConnectionCompleted(roomId, userId) =>
             data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
             Behaviors.same
-          case WSFailure(t) =>
-            context.log.error("WSFailure: {}", t)
+          case ConnectionFailure(t) =>
+            context.log.error("ConnectionFailure: {}", t)
             Behaviors.same
-          case CompleteWS() =>
-            context.log.error("CompleteWS: should never be received")
+          case CompleteStream() =>
+            context.log.error("CompleteStream: should never be received")
             Behaviors.same
       }
       .receiveSignal { case (_, Terminated(ref)) =>

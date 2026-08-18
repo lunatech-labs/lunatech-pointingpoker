@@ -97,7 +97,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       roomProbe.expectNoMessage()
     }
 
-    "handle web socket connection completed" in {
+    "handle connection completed" in {
       val roomId            = UUID.randomUUID()
       val roomProbe         = testKit.createTestProbe[Room.Command]()
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
@@ -107,7 +107,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
       val userId = UUID.randomUUID()
 
-      managerRef ! RoomManager.WSCompleted(roomId, userId)
+      managerRef ! RoomManager.ConnectionCompleted(roomId, userId)
 
       roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
     }

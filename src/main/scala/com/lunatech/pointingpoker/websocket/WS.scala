@@ -29,8 +29,8 @@ object WS:
     Sink
       .actorRef(
         roomManager,
-        RoomManager.WSCompleted(roomId, userId),
-        failure => RoomManager.WSFailure(failure)
+        RoomManager.ConnectionCompleted(roomId, userId),
+        failure => RoomManager.ConnectionFailure(failure)
       )
       .contramap {
         case TextMessage.Strict(body) =>
@@ -63,7 +63,7 @@ object WS:
       .map(message => TextMessage(message.asJson.noSpaces))
 
   private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
-    case RoomManager.CompleteWS => CompletionStrategy.immediately
+    case RoomManager.CompleteStream => CompletionStrategy.immediately
   }
 
   private val failureMatcher: PartialFunction[Any, Throwable] = PartialFunction.empty
