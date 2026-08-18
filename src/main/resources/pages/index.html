@@ -334,7 +334,7 @@
       el: '#app',
       data: {
         roomId: localStorage.getItem("roomId"),
-        wsConnection: undefined,
+        eventSource: undefined,
         estimationValues: ['0','0.5','1','2','3','5','8','13','21','34','55','89','?'],
         creating: true,
         joining: false,
@@ -381,25 +381,16 @@
           var ref = this;
           localStorage.setItem("roomId", this.roomId);
           localStorage.setItem("name", this.user.name);
-          var protocol = "ws";
-          if (window.location.protocol.includes('s')) {
-            protocol = "wss";
-          }
-          this.wsConnection = new WebSocket(protocol+'://'+window.location.host+'/websocket/'+this.roomId+'/'+this.user.name);
-          this.wsConnection.onmessage = function(event) {
-            ref.inRoom = true;
-            var message = JSON.parse(event.data);
-            if (message.messageType === 'init') {
-              ref.user.id = message.userId
-              ref.users.push({
-                id: message.userId,
-                name: message.extra,
-                voted: false,
-                estimation: ""
-              });
-            }
-            if (message.messageType === 'join') {
-              if (message.userId !== ref.user.id) {
+          axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
+          .then(function (response) {
+            var userId = response.data.userId;
+            ref.user.id = userId;
+            var params = new URLSearchParams({ userId: userId, name: ref.user.name });
+            ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events?' + params.toString());
+            ref.eventSource.onmessage = function(event) {
+              ref.inRoom = true;
+              var message = JSON.parse(event.data);
+              if (message.messageType === 'init') {
                 ref.users.push({
                   id: message.userId,
                   name: message.extra,
@@ -407,95 +398,94 @@
                   estimation: ""
                 });
               }
-              ref.updateSummary();
-              ref.allVoted();
-            }
-            if (message.messageType === 'vote') {
-              ref.users = ref.users.map(u => {
-                if (u.id === message.userId) {
-                  u.estimation = message.extra;
-                  u.voted = true;
+              if (message.messageType === 'join') {
+                if (message.userId !== ref.user.id) {
+                  ref.users.push({
+                    id: message.userId,
+                    name: message.extra,
+                    voted: false,
+                    estimation: ""
+                  });
                 }
-                return u;
-              });
-              if (ref.user.id === message.userId) {
-                ref.user.estimation = message.extra;
+                ref.updateSummary();
+                ref.allVoted();
               }
-              ref.updateSummary();
-              ref.allVoted();
-            }
-            if (message.messageType === 'show') {
-              ref.votesRevealed = true;
-              ref.updateSummary();
-            }
-            if (message.messageType === 'clear') {
-              ref.votesRevealed = false;
-              ref.ownVoteConfirmed = true;
-              ref.votesSummary = [];
-              ref.user.estimation = "";
-              ref.users = ref.users.map(u => {
-                u.estimation = "";
-                u.voted = false;
-                return u;
-              });
-            }
-            if (message.messageType === 'revote') {
-              ref.votesRevealed = false;
-              ref.ownVoteConfirmed = false;
-              ref.updateSummary();
-              ref.users = ref.users.map(u => {
-                u.voted = false;
-                return u;
-              });
-            }
-            if (message.messageType === 'leave') {
-              ref.users = ref.users.filter(u => {
-                return u.id !== message.userId;
-              });
-              ref.updateSummary();
-              ref.allVoted();
-            }
-            if (message.messageType === 'edit_issue') {
-              ref.currentIssue = message.extra;
-            }
-          };
-          this.wsConnection.onerror = function(event) {
-            ref.showError = true;
-            ref.errorMessage = event;
-            console.error("WebSocket error observed:", event);
-          };
-          this.wsConnection.onclose = function() {
-            ref.showError = true;
-            ref.errorMessage = "Web socket connection lost";
-          };
-
+              if (message.messageType === 'vote') {
+                ref.users = ref.users.map(u => {
+                  if (u.id === message.userId) {
+                    u.estimation = message.extra;
+                    u.voted = true;
+                  }
+                  return u;
+                });
+                if (ref.user.id === message.userId) {
+                  ref.user.estimation = message.extra;
+                }
+                ref.updateSummary();
+                ref.allVoted();
+              }
+              if (message.messageType === 'show') {
+                ref.votesRevealed = true;
+                ref.updateSummary();
+              }
+              if (message.messageType === 'clear') {
+                ref.votesRevealed = false;
+                ref.ownVoteConfirmed = true;
+                ref.votesSummary = [];
+                ref.user.estimation = "";
+                ref.users = ref.users.map(u => {
+                  u.estimation = "";
+                  u.voted = false;
+                  return u;
+                });
+              }
+              if (message.messageType === 'revote') {
+                ref.votesRevealed = false;
+                ref.ownVoteConfirmed = false;
+                ref.updateSummary();
+                ref.users = ref.users.map(u => {
+                  u.voted = false;
+                  return u;
+                });
+              }
+              if (message.messageType === 'leave') {
+                ref.users = ref.users.filter(u => {
+                  return u.id !== message.userId;
+                });
+                ref.updateSummary();
+                ref.allVoted();
+              }
+              if (message.messageType === 'edit_issue') {
+                ref.currentIssue = message.extra;
+              }
+            };
+            ref.eventSource.onerror = function(event) {
+              ref.showError = true;
+              ref.errorMessage = "Connection to the room was lost";
+              console.error("EventSource error observed:", event);
+            };
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         doShowVotes: function () {
-          var message = {
-            messageType: "show",
-            roomId: this.roomId,
-            userId: this.user.id,
-            extra: ""
-          };
-          this.wsConnection.send(JSON.stringify(message));
+          axios.post('/rooms/' + this.roomId + '/show?userId=' + this.user.id, {})
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         doClearVotes: function () {
-          var message = {
-            messageType: "clear",
-            roomId: this.roomId,
-            userId: this.user.id,
-            extra: ""
-          };
-          this.wsConnection.send(JSON.stringify(message));
+          axios.post('/rooms/' + this.roomId + '/clear?userId=' + this.user.id, {})
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         doReVote: function () {
-          var message = {
-            messageType: "revote",
-            roomId: this.roomId,
-            userId: this.user.id,
-            extra: ""
-          };
-          this.wsConnection.send(JSON.stringify(message));
+          axios.post('/rooms/' + this.roomId + '/revote?userId=' + this.user.id, {})
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         doLeave: function () {
           localStorage.clear();
@@ -503,17 +493,14 @@
           this.votesSummary = [],
           this.user.estimation = "";
           this.users = [],
-          this.wsConnection.close();
+          this.eventSource.close();
         },
         doEdit: function () {
           this.editing = false;
-          var message = {
-            messageType: "edit_issue",
-            roomId: this.roomId,
-            userId: this.user.id,
-            extra: this.currentIssue
-          };
-          this.wsConnection.send(JSON.stringify(message));
+          axios.post('/rooms/' + this.roomId + '/edit-issue?userId=' + this.user.id, { issue: this.currentIssue })
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         doCopy: function () {
           const el = document.createElement('textarea');
@@ -529,14 +516,11 @@
           }, 2000);
         },
         vote: function (voteValue) {
-          var message = {
-            messageType: "vote",
-            roomId: this.roomId,
-            userId: this.user.id,
-            extra: voteValue
-          };
           this.ownVoteConfirmed = true;
-          this.wsConnection.send(JSON.stringify(message));
+          axios.post('/rooms/' + this.roomId + '/vote?userId=' + this.user.id, { estimation: voteValue })
+          .catch(function (error) {
+            console.log(error);
+          });
         },
         updateSummary: function() {
           var updatedSummary = {};
