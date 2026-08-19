@@ -387,6 +387,13 @@
             ref.user.id = userId;
             var params = new URLSearchParams({ userId: userId, name: ref.user.name });
             ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events?' + params.toString());
+            ref.eventSource.onopen = function() {
+              // EventSource retries automatically on transient network blips; a
+              // successful (re)connection means any earlier "connection lost"
+              // banner from a prior onerror is now stale.
+              ref.showError = false;
+              ref.errorMessage = "";
+            };
             ref.eventSource.onmessage = function(event) {
               // Keep-alive heartbeats arrive as an event with an empty data payload.
               if (!event.data) {
@@ -470,7 +477,9 @@
             };
           })
           .catch(function (error) {
-            console.log(error);
+            ref.showError = true;
+            ref.errorMessage = "Could not join the room. Please try again.";
+            console.error("Failed to join room:", error);
           });
         },
         doShowVotes: function () {
