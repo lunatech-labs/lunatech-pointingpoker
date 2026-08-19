@@ -10,17 +10,18 @@ import com.lunatech.pointingpoker.actors
 object RoomManager:
 
   sealed trait Command
-  case class CreateRoom(replyTo: ActorRef[Response])                     extends Command
-  case class ConnectionCompleted(roomId: UUID, userId: UUID)             extends Command
-  case class ConnectionFailure(roomId: UUID, userId: UUID, t: Throwable) extends Command
-  case object CompleteStream                                             extends Command
-  case class ConnectToRoom(message: RoomEvent, user: UntypedRef)         extends Command
-  case class RoomResponseWrapper(response: Room.Response)                extends Command
-  case class Vote(roomId: UUID, userId: UUID, estimation: String)        extends Command
-  case class Show(roomId: UUID, userId: UUID)                            extends Command
-  case class Clear(roomId: UUID, userId: UUID)                           extends Command
-  case class Revote(roomId: UUID, userId: UUID)                          extends Command
-  case class EditIssue(roomId: UUID, userId: UUID, issue: String)        extends Command
+  case class CreateRoom(replyTo: ActorRef[Response])                          extends Command
+  case class ConnectionCompleted(roomId: UUID, userId: UUID, ref: UntypedRef) extends Command
+  case class ConnectionFailure(roomId: UUID, userId: UUID, ref: UntypedRef, t: Throwable)
+      extends Command
+  case object CompleteStream                                      extends Command
+  case class ConnectToRoom(message: RoomEvent, user: UntypedRef)  extends Command
+  case class RoomResponseWrapper(response: Room.Response)         extends Command
+  case class Vote(roomId: UUID, userId: UUID, estimation: String) extends Command
+  case class Show(roomId: UUID, userId: UUID)                     extends Command
+  case class Clear(roomId: UUID, userId: UUID)                    extends Command
+  case class Revote(roomId: UUID, userId: UUID)                   extends Command
+  case class EditIssue(roomId: UUID, userId: UUID, issue: String) extends Command
 
   sealed trait Response
   case class RoomId(value: String) extends Response
@@ -98,12 +99,12 @@ object RoomManager:
           case EditIssue(roomId, userId, issue) =>
             data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(userId, issue))
             Behaviors.same
-          case ConnectionCompleted(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
+          case ConnectionCompleted(roomId, userId, ref) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
-          case ConnectionFailure(roomId, userId, t) =>
+          case ConnectionFailure(roomId, userId, ref, t) =>
             context.log.error("ConnectionFailure: {}", t)
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
+            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
           case CompleteStream =>
             context.log.error("CompleteStream: should never be received")

@@ -99,7 +99,10 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(message, _) =>
         message.userId mustBe userId
       }
-      classicProbe.expectMsg(RoomManager.ConnectionCompleted(roomId, userId))
+      classicProbe.expectMsgPF() { case RoomManager.ConnectionCompleted(rId, uId, _) =>
+        rId mustBe roomId
+        uId mustBe userId
+      }
     }
 
     "handle connection completed" in {
@@ -111,10 +114,11 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )
       val userId = UUID.randomUUID()
+      val ref    = TestProbe()(testKit.system.classicSystem).ref
 
-      managerRef ! RoomManager.ConnectionCompleted(roomId, userId)
+      managerRef ! RoomManager.ConnectionCompleted(roomId, userId, ref)
 
-      roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
+      roomProbe.expectMessage(Room.Leave(userId, ref, roomResponseProbe.ref))
     }
 
     "handle connection failure by removing the user from the room" in {
@@ -126,10 +130,11 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )
       val userId = UUID.randomUUID()
+      val ref    = TestProbe()(testKit.system.classicSystem).ref
 
-      managerRef ! RoomManager.ConnectionFailure(roomId, userId, new RuntimeException("boom"))
+      managerRef ! RoomManager.ConnectionFailure(roomId, userId, ref, new RuntimeException("boom"))
 
-      roomProbe.expectMessage(Room.Leave(userId, roomResponseProbe.ref))
+      roomProbe.expectMessage(Room.Leave(userId, ref, roomResponseProbe.ref))
     }
 
     "handle typed per-command messages" in {

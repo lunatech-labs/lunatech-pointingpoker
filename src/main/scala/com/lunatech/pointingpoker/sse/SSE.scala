@@ -45,8 +45,8 @@ object SSE:
       }
       .watchTermination() { (user, done) =>
         done.onComplete {
-          case Success(_) => roomManager ! RoomManager.ConnectionCompleted(roomId, userId)
-          case Failure(t) => roomManager ! RoomManager.ConnectionFailure(roomId, userId, t)
+          case Success(_) => roomManager ! RoomManager.ConnectionCompleted(roomId, userId, user)
+          case Failure(t) => roomManager ! RoomManager.ConnectionFailure(roomId, userId, user, t)
         }
         user
       }

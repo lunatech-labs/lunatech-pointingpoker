@@ -10,14 +10,14 @@ import RoomEvent.MessageType
 object Room:
 
   sealed trait Command
-  final case class Join(user: User)                                       extends Command
-  final case class Leave(userId: UUID, replyTo: ActorRef[Response])       extends Command
-  final case class Vote(userId: UUID, estimation: String)                 extends Command
-  final case class ClearVotes(userId: UUID)                               extends Command
-  final case class ReVote(userId: UUID)                                   extends Command
-  final case class ShowVotes(userId: UUID)                                extends Command
-  final case class EditIssue(userId: UUID, issue: String)                 extends Command
-  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
+  final case class Join(user: User)                                                  extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
+  final case class Vote(userId: UUID, estimation: String)                            extends Command
+  final case class ClearVotes(userId: UUID)                                          extends Command
+  final case class ReVote(userId: UUID)                                              extends Command
+  final case class ShowVotes(userId: UUID)                                           extends Command
+  final case class EditIssue(userId: UUID, issue: String)                            extends Command
+  final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
 
   final case class DataStatus(data: RoomData)
 
@@ -33,7 +33,10 @@ object Room:
       issueLastEditBy: Option[UUID]
   ):
     def joinUser(user: User): RoomData =
-      this.copy(users = user :: this.users)
+      // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
+      // automatic EventSource retry racing an old connection's slow-to-detect failure)
+      // doesn't leave two entries for the same user.
+      this.copy(users = user :: this.users.filterNot(_.id == user.id))
 
     def vote(userId: UUID, estimation: String): RoomData =
       this.copy(users = this.users.map { u =>
@@ -47,8 +50,10 @@ object Room:
     def reVote(): RoomData =
       this.copy(users = this.users.map(u => u.copy(voted = false)))
 
-    def leave(userId: UUID): RoomData =
-      this.copy(users = this.users.filterNot(_.id == userId))
+    def leave(userId: UUID, ref: UntypedRef): RoomData =
+      // Scoped to the specific connection's ref, not just userId, so a stale connection's
+      // delayed teardown can't evict a newer connection the same user reconnected with.
+      this.copy(users = this.users.filterNot(u => u.id == userId && u.ref == ref))
 
     def editIssue(issue: String, userId: UUID): RoomData =
       this.copy(currentIssue = issue, issueLastEditBy = Option(userId))
@@ -97,19 +102,24 @@ object Room:
             context
           )
           Behaviors.same
-        case Leave(userId, replyTo) =>
-          val newData = data.leave(userId)
-          broadcast(
-            RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra),
-            newData.users,
-            context
-          )
-          if newData.users.isEmpty then
-            replyTo ! Stopped(roomId)
-            Behaviors.stopped
+        case Leave(userId, ref, replyTo) =>
+          if data.users.exists(u => u.id == userId && u.ref == ref) then
+            val newData = data.leave(userId, ref)
+            broadcast(
+              RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra),
+              newData.users,
+              context
+            )
+            if newData.users.isEmpty then
+              replyTo ! Stopped(roomId)
+              Behaviors.stopped
+            else
+              replyTo ! Running(roomId)
+              receiveBehaviour(roomId, newData)
           else
-            replyTo ! Running(roomId)
-            receiveBehaviour(roomId, newData)
+            // Stale teardown: this userId already reconnected under a different ref
+            // (joinUser replaced the entry), so there's nothing left to remove.
+            Behaviors.same
         case EditIssue(userId, issue) =>
           broadcast(RoomEvent(MessageType.EditIssue, roomId, userId, issue), data.users, context)
           receiveBehaviour(
