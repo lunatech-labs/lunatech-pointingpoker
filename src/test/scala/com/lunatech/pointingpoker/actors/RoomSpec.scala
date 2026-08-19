@@ -177,9 +177,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.GetData(dataProbe.ref)
 
-      val expectedData = Room.DataStatus(data =
-        RoomData.empty.copy(users = List(reconnectedUser, user2))
-      )
+      val expectedData =
+        Room.DataStatus(data = RoomData.empty.copy(users = List(reconnectedUser, user2)))
       dataProbe.expectMessage(expectedData)
 
       // The stale leave must not broadcast a Leave event or reply, since nothing was removed.
