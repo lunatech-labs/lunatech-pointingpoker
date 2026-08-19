@@ -23,6 +23,14 @@ inside a long-lived socket payload.
 - [ ] Session/identity mechanism: validate `userId` per request, closing the
       spoofing gap the transport swap deliberately left open. See `docs/known-issues.md`
       for why this is now more urgent than originally scoped (userId exposure).
+- [ ] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
+      from fire-and-forget (`roomManager ! ...`) to the ask-pattern already used by
+      `create-room`, so `Room`/`RoomManager` can reply with a real result (applied /
+      room not found / not a member) instead of the API always answering `204`
+      regardless of what happened. Natural to build alongside the identity
+      validation above, since both need the same request/response plumbing. To be
+      studied in its own follow-up PR rather than bundled into the identity work
+      blindly. See `docs/known-issues.md`.
 
 ## Phase 2: Durable session identity
 
@@ -99,6 +107,8 @@ directly in the new frontend.
 
 ## Backlog: suggested, not yet prioritized
 
+- [ ] Per-user command sequencing/idempotency to guard against HTTP POST
+      reordering (see `docs/known-issues.md`).
 - [ ] Copy/export round history at end of session.
 - [ ] Presentation/TV-mode read-only view for screen sharing.
 - [ ] Custom voting scale beyond fibonacci/t-shirt.
