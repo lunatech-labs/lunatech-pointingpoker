@@ -11,6 +11,7 @@ import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Defa
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
@@ -27,6 +28,10 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   private given timeout: Timeout                      = Timeout(apiConfig.timeout)
   private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
   private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
+
+  // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
+  // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
+  private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
 
   val route: Route =
     concat(
@@ -65,8 +70,8 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       },
       path("rooms" / JavaUUID / "events") { roomId =>
         get {
-          parameters("userId", "name") { (userIdStr, name) =>
-            complete(SSE.source(roomManager.toClassic, roomId, UUID.fromString(userIdStr), name))
+          parameters("userId".as[UUID], "name") { (userId, name) =>
+            complete(SSE.source(roomManager.toClassic, roomId, userId, name))
           }
         }
       },
@@ -75,9 +80,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("vote") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId") { userIdStr =>
+              parameter("userId".as[UUID]) { userId =>
                 entity(as[VoteRequest]) { req =>
-                  roomManager ! RoomManager.Vote(roomId, UUID.fromString(userIdStr), req.estimation)
+                  roomManager ! RoomManager.Vote(roomId, userId, req.estimation)
                   complete(StatusCodes.NoContent)
                 }
               }
@@ -85,24 +90,24 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           },
           path("show") {
             post {
-              parameter("userId") { userIdStr =>
-                roomManager ! RoomManager.Show(roomId, UUID.fromString(userIdStr))
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Show(roomId, userId)
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("clear") {
             post {
-              parameter("userId") { userIdStr =>
-                roomManager ! RoomManager.Clear(roomId, UUID.fromString(userIdStr))
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Clear(roomId, userId)
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("revote") {
             post {
-              parameter("userId") { userIdStr =>
-                roomManager ! RoomManager.Revote(roomId, UUID.fromString(userIdStr))
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Revote(roomId, userId)
                 complete(StatusCodes.NoContent)
               }
             }
@@ -110,9 +115,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("edit-issue") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId") { userIdStr =>
+              parameter("userId".as[UUID]) { userId =>
                 entity(as[EditIssueRequest]) { req =>
-                  roomManager ! RoomManager.EditIssue(roomId, UUID.fromString(userIdStr), req.issue)
+                  roomManager ! RoomManager.EditIssue(roomId, userId, req.issue)
                   complete(StatusCodes.NoContent)
                 }
               }

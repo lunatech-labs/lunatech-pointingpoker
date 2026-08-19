@@ -150,5 +150,15 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         status mustBe StatusCodes.BadRequest
       }
     }
+
+    "reject a non-UUID userId query param with 400" in
+      Post(s"/rooms/$roomId/show?userId=not-a-uuid") ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+
+    "reject a non-UUID userId query param on the events stream with 400" in
+      Get(s"/rooms/$roomId/events?userId=not-a-uuid&name=Alice") ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
   }
 end APISpec
