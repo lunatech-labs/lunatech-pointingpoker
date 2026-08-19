@@ -14,7 +14,6 @@ object RoomManager:
   case class ConnectionCompleted(roomId: UUID, userId: UUID, ref: UntypedRef) extends Command
   case class ConnectionFailure(roomId: UUID, userId: UUID, ref: UntypedRef, t: Throwable)
       extends Command
-  case object CompleteStream                                      extends Command
   case class ConnectToRoom(message: RoomEvent, user: UntypedRef)  extends Command
   case class RoomResponseWrapper(response: Room.Response)         extends Command
   case class Vote(roomId: UUID, userId: UUID, estimation: String) extends Command
@@ -100,14 +99,15 @@ object RoomManager:
             data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(userId, issue))
             Behaviors.same
           case ConnectionCompleted(roomId, userId, ref) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
           case ConnectionFailure(roomId, userId, ref, t) =>
             context.log.error("ConnectionFailure: {}", t)
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
-            Behaviors.same
-          case CompleteStream =>
-            context.log.error("CompleteStream: should never be received")
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
       }
       .receiveSignal { case (_, Terminated(ref)) =>

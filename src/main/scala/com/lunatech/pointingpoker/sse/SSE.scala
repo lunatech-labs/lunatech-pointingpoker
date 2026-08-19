@@ -53,9 +53,9 @@ object SSE:
       .map(event => ServerSentEvent(event.asJson.noSpaces))
       .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 
-  private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
-    case RoomManager.CompleteStream => CompletionStrategy.immediately
-  }
+  // No message ever completes the stream from the outside; it ends only via
+  // watchTermination (client disconnect, stream failure, etc).
+  private val completionMatcher: PartialFunction[Any, CompletionStrategy] = PartialFunction.empty
 
   private val failureMatcher: PartialFunction[Any, Throwable] = PartialFunction.empty
 end SSE
