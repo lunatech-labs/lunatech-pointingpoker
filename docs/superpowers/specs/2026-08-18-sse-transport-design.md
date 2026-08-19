@@ -5,7 +5,7 @@ Status: Approved design, pending implementation plan
 
 ## Purpose
 
-This is Phase 1 / PR1 of the roadmap in `todolist.txt`: replace the current
+This is Phase 1 / PR1 of the roadmap in `docs/roadmap.md`: replace the current
 WebSocket transport with Server-Sent Events (push) + authenticated HTTP POST
 (commands). It is the foundation the rest of the roadmap depends on, since
 per-request identity validation (PR2) only makes sense once client actions

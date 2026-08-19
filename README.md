@@ -63,5 +63,12 @@ This project uses:
   * Vue.js
   * pekko/pekko-http
 
+### Roadmap and known issues
+
+This app is going through a multi-PR modernization effort. See
+[`docs/roadmap.md`](docs/roadmap.md) for the phased plan and
+[`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
+found along the way that are not yet scheduled or fixed.
+
 ### Deployment
 
