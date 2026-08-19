@@ -107,6 +107,19 @@ directly in the new frontend.
 
 ## Backlog: suggested, not yet prioritized
 
+- [ ] Client-side connection-liveness watchdog: reset a timer on every SSE
+      heartbeat/message and show the "connection lost" banner if none arrives
+      within roughly 2x the heartbeat interval (~30-40s), instead of relying
+      solely on `EventSource.onerror` (which only fires once the browser's
+      networking stack itself gives up, and doesn't reliably or quickly catch
+      a real client-side network drop — confirmed by manual testing: killing
+      the server surfaces the banner promptly, but simulating offline via
+      browser devtools does not). This is newly possible because SSE
+      heartbeats arrive as actual `message` events visible to app code
+      (`index.html`'s `onmessage`); the old WebSocket transport's ping/pong
+      keepalive frames were invisible to JavaScript, so this watchdog wasn't
+      buildable under the old transport at all. Not a migration regression,
+      an improvement the transport swap unlocked.
 - [ ] Per-user command sequencing/idempotency to guard against HTTP POST
       reordering (see `docs/known-issues.md`).
 - [ ] Copy/export round history at end of session.
