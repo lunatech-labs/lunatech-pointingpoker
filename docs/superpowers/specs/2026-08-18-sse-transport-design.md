@@ -20,6 +20,15 @@ auto-creating a room for any unknown `roomId` is preserved as-is; rejecting
 unknown rooms is a Phase 2 item, out of scope here. No protocol/behavior
 redesign beyond swapping the carrier.
 
+**Post-implementation note (2026-08-19):** "preserved" undersells one
+consequence of the carrier swap itself. Under WebSocket, `userId` was minted
+server-side once per connection and never sent again by the client. Under
+this PR, `userId` travels as a query parameter on every single command POST
+and on the SSE connect, so it now lands repeatedly in access logs, browser
+history, and any intermediate proxy log. The trust model (client-supplied,
+unchecked) is unchanged, but its exposure surface is materially wider, not
+merely carried over. See `docs/known-issues.md` for the full writeup.
+
 ## Current architecture (for reference)
 
 - `API.scala`: single route `path("websocket" / JavaUUID / Remaining)` calls
@@ -126,7 +135,7 @@ other end of the pipe.
 | `API.scala` | Remove the `websocket` route. Add `POST /rooms/{roomId}/join`, `GET /rooms/{roomId}/events`, and `POST /rooms/{roomId}/{vote,show,clear,revote,edit-issue}`. |
 | `websocket/WS.scala` → `sse/SSE.scala` | Delete inbound `Sink`/decode logic (no client→server stream anymore). Keep/adapt `source()` as the SSE source constructor, reused as-is for the events endpoint. Package renamed `websocket` → `sse` along with the file, since it now holds only transport-specific plumbing. |
 | `RoomManager.scala` | Replace `IncomeWSMessage`/`UnsupportedWSMessage`/`handleIncomeMessage` with typed per-command messages. `ConnectToRoom` unchanged. `WSCompleted`/`WSFailure` renamed to `ConnectionCompleted`/`ConnectionFailure`, now triggered from SSE `watchTermination()` instead of an inbound sink completing. `CompleteWS` (the outbound stream's completion-strategy marker, currently unused/vestigial) renamed to `CompleteStream`. |
-| `Room.scala` | **No changes.** |
+| `Room.scala` | Planned as **no changes**; ended up touched. Implementation surfaced a real reconnect race (`EventSource`'s automatic retry can open a new connection before the old one's `watchTermination()` fires, so a stale teardown could evict the live one) and fixed it: `RoomData.joinUser` now upserts by `userId` instead of always appending, and `Room.Leave`/`RoomData.leave` are scoped to the specific `ActorRef`, not just `userId`, so a stale teardown for a since-replaced connection is a no-op. Landed in a follow-up commit within this PR (`394dd22`), not deferred. See `docs/known-issues.md`. |
 | `websocket/WSMessage.scala` → `actors/RoomEvent.scala` | Renamed (case class `WSMessage` → `RoomEvent`) and moved into the `actors` package, since it's a domain type both `Room.scala` and `RoomManager.scala` already depend on, not transport plumbing. Keep the outbound encoder/`MessageType` (still the SSE wire format). Delete the inbound decoder (dead code — nothing parses an incoming message anymore). |
 | `index.html` | Replace the WS client (~230 lines in the inline `<script>`) with: `fetch(POST /join)` → `new EventSource(.../events?...)`. Rename the `wsConnection` field to `eventSource`. `onmessage` parses the same JSON shape as today and dispatches to the same Vue handlers; command sends become `fetch(POST ...)` instead of `ws.send(...)`. Note: `EventSource` has no `onclose` — the current `wsConnection.onclose` handler needs rethinking (e.g. drop it, since leave-detection is now server-side via `watchTermination()`), not just a rename. |
 | `application.conf` | Remove `pekko.http.server.websocket.periodic-keep-alive-max-idle` — it configures Pekko's own WebSocket module, which is unused once the WS route is gone; it doesn't apply to the new SSE route, so it's dead config rather than something to rename. |
@@ -144,7 +153,10 @@ other end of the pipe.
 
 ## Testing
 
-- `RoomSpec`: unchanged (Room untouched).
+- `RoomSpec`: planned as unchanged; gained new cases for the reconnect-race
+  fix (upsert-by-`userId` on rejoin, and ignoring a stale `Leave` from a
+  `ref` already replaced by a reconnect), since `Room.scala` ended up
+  touched — see the file-by-file table above.
 - `RoomManagerSpec`: replace `IncomeWSMessage`-based cases with the new
   typed command cases.
 - `APISpec`: replace the WebSocket test harness with an SSE test harness
