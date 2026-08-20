@@ -16,11 +16,11 @@ object RoomManager:
       extends Command
   case class ConnectToRoom(message: RoomEvent, user: UntypedRef)  extends Command
   case class RoomResponseWrapper(response: Room.Response)         extends Command
-  case class Vote(roomId: UUID, userId: UUID, estimation: String) extends Command
-  case class Show(roomId: UUID, userId: UUID)                     extends Command
-  case class Clear(roomId: UUID, userId: UUID)                    extends Command
-  case class Revote(roomId: UUID, userId: UUID)                   extends Command
-  case class EditIssue(roomId: UUID, userId: UUID, issue: String) extends Command
+  case class Vote(roomId: UUID, token: Room.SessionToken, estimation: String) extends Command
+  case class Show(roomId: UUID, token: Room.SessionToken)                     extends Command
+  case class Clear(roomId: UUID, token: Room.SessionToken)                    extends Command
+  case class Revote(roomId: UUID, token: Room.SessionToken)                   extends Command
+  case class EditIssue(roomId: UUID, token: Room.SessionToken, issue: String) extends Command
 
   sealed trait Response
   case class RoomId(value: String) extends Response
@@ -83,20 +83,20 @@ object RoomManager:
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
                 receiveBehaviour(newData, roomResponseWrapper)
-          case Vote(roomId, userId, estimation) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Vote(userId, estimation))
+          case Vote(roomId, token, estimation) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.Vote(token, estimation))
             Behaviors.same
-          case Show(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.ShowVotes(userId))
+          case Show(roomId, token) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ShowVotes(token))
             Behaviors.same
-          case Clear(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.ClearVotes(userId))
+          case Clear(roomId, token) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ClearVotes(token))
             Behaviors.same
-          case Revote(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.ReVote(userId))
+          case Revote(roomId, token) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.ReVote(token))
             Behaviors.same
-          case EditIssue(roomId, userId, issue) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(userId, issue))
+          case EditIssue(roomId, token, issue) =>
+            data.rooms.get(roomId).foreach(room => room ! Room.EditIssue(token, issue))
             Behaviors.same
           case ConnectionCompleted(roomId, userId, ref) =>
             data.rooms

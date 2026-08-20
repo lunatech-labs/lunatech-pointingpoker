@@ -13,6 +13,7 @@ import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
 import org.apache.pekko.util.Timeout
+import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
 import com.lunatech.pointingpoker.config.ApiConfig
@@ -32,6 +33,13 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
   // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
   private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
+
+  // Temporary bridge until Task 11 replaces the query-param userId with a real
+  // cookie-based token. UUID.toString always round-trips through
+  // SessionToken.parse successfully, so getOrElse's fallback is unreachable
+  // in practice — it's there only so this stays total.
+  private def tokenFromLegacyUserId(userId: UUID): Room.SessionToken =
+    Room.SessionToken.parse(userId.toString).getOrElse(Room.SessionToken.mint())
 
   val route: Route =
     concat(
@@ -82,7 +90,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
               import com.lunatech.pointingpoker.CirceSupport.given
               parameter("userId".as[UUID]) { userId =>
                 entity(as[VoteRequest]) { req =>
-                  roomManager ! RoomManager.Vote(roomId, userId, req.estimation)
+                  roomManager ! RoomManager.Vote(roomId, tokenFromLegacyUserId(userId), req.estimation)
                   complete(StatusCodes.NoContent)
                 }
               }
@@ -91,7 +99,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("show") {
             post {
               parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Show(roomId, userId)
+                roomManager ! RoomManager.Show(roomId, tokenFromLegacyUserId(userId))
                 complete(StatusCodes.NoContent)
               }
             }
@@ -99,7 +107,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("clear") {
             post {
               parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Clear(roomId, userId)
+                roomManager ! RoomManager.Clear(roomId, tokenFromLegacyUserId(userId))
                 complete(StatusCodes.NoContent)
               }
             }
@@ -107,7 +115,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("revote") {
             post {
               parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Revote(roomId, userId)
+                roomManager ! RoomManager.Revote(roomId, tokenFromLegacyUserId(userId))
                 complete(StatusCodes.NoContent)
               }
             }
@@ -117,7 +125,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
               import com.lunatech.pointingpoker.CirceSupport.given
               parameter("userId".as[UUID]) { userId =>
                 entity(as[EditIssueRequest]) { req =>
-                  roomManager ! RoomManager.EditIssue(roomId, userId, req.issue)
+                  roomManager ! RoomManager.EditIssue(roomId, tokenFromLegacyUserId(userId), req.issue)
                   complete(StatusCodes.NoContent)
                 }
               }

@@ -10,6 +10,7 @@ import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
+import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
@@ -93,7 +94,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/vote?userId=$userId", VoteRequest("5")) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), userId, "5"))
+      commandProbe.expectMessage(
+        RoomManager.Vote(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get, "5")
+      )
     }
 
     "dispatch a show command" in {
@@ -101,7 +104,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/show?userId=$userId") ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(
+        RoomManager.Show(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
+      )
     }
 
     "dispatch a clear command" in {
@@ -109,7 +114,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/clear?userId=$userId") ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(
+        RoomManager.Clear(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
+      )
     }
 
     "dispatch a revote command" in {
@@ -117,7 +124,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/revote?userId=$userId") ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(
+        RoomManager.Revote(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
+      )
     }
 
     "dispatch an edit-issue command" in {
@@ -130,7 +139,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessage(
-        RoomManager.EditIssue(UUID.fromString(roomId), userId, "new issue")
+        RoomManager.EditIssue(
+          UUID.fromString(roomId),
+          Room.SessionToken.parse(userId.toString).get,
+          "new issue"
+        )
       )
     }
 

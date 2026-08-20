@@ -25,28 +25,21 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val actingUserId        = UUID.randomUUID()
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
 
-      val expectedMessage = RoomEvent(MessageType.EditIssue, roomId, actingUserId, issue)
+      val expectedMessage = RoomEvent(MessageType.EditIssue, roomId, user.id, issue)
       val expectedData    = Room.DataStatus(data =
-        RoomData(
-          users = List(user, user2),
-          currentIssue = issue,
-          issueLastEditBy = Option(actingUserId)
-        )
+        RoomData(users = List(user, user2), currentIssue = issue, issueLastEditBy = Option(user.id))
       )
 
-      roomRef ! Room.EditIssue(actingUserId, issue)
-
+      roomRef ! Room.EditIssue(user.token, issue)
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
-
       dataProbe.expectMessage(expectedData)
     }
 
@@ -54,77 +47,100 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val actingUserId        = UUID.randomUUID()
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
 
-      val expectedMessage = RoomEvent(
-        MessageType.Clear,
-        roomId,
-        actingUserId,
-        RoomEvent.NoExtra
-      )
-      val expectedData = Room.DataStatus(data =
+      val expectedMessage = RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra)
+      val expectedData    = Room.DataStatus(data =
         RoomData.empty.copy(users =
-          List(
-            user.copy(voted = false, estimation = ""),
-            user2.copy(voted = false, estimation = "")
-          )
+          List(user.copy(voted = false, estimation = ""), user2.copy(voted = false, estimation = ""))
         )
       )
 
-      roomRef ! Room.ClearVotes(actingUserId)
-
+      roomRef ! Room.ClearVotes(user.token)
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
+      dataProbe.expectMessage(expectedData)
+    }
 
+    "revote and broadcast it" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (roomId, roomRef)   = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      val expectedMessage = RoomEvent(MessageType.Revote, roomId, user.id, RoomEvent.NoExtra)
+      val expectedData    = Room.DataStatus(data =
+        RoomData.empty.copy(users = List(user.copy(voted = false), user2.copy(voted = false)))
+      )
+
+      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      userProbe.expectMsg(expectedMessage)
+      user2Probe.expectMsg(expectedMessage)
       dataProbe.expectMessage(expectedData)
     }
 
     "broadcast show votes" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
-      val actingUserId        = UUID.randomUUID()
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
-      val expectedMessage =
-        RoomEvent(MessageType.Show, roomId, actingUserId, RoomEvent.NoExtra)
+      val expectedMessage = RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra)
 
-      roomRef ! Room.ShowVotes(actingUserId)
+      roomRef ! Room.ShowVotes(user.token)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
     }
 
     "vote and broadcast it" in {
-      val estimation          = "5"
+      val estimation           = "5"
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val actingUserId        = user.id
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
-      val expectedMessage = RoomEvent(MessageType.Vote, roomId, actingUserId, estimation)
+      val expectedMessage = RoomEvent(MessageType.Vote, roomId, user.id, estimation)
       val expectedData    = Room.DataStatus(data =
         RoomData.empty.copy(users = List(user.copy(voted = true, estimation = estimation), user2))
       )
 
-      roomRef ! Room.Vote(actingUserId, estimation)
-
+      roomRef ! Room.Vote(user.token, estimation)
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectMsg(expectedMessage)
       user2Probe.expectMsg(expectedMessage)
-
       dataProbe.expectMessage(expectedData)
+    }
+
+    "ignore a vote from an unresolvable token" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (roomId, roomRef)   = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      roomRef ! Room.Vote(Room.SessionToken.mint(), "5")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      userProbe.expectNoMessage()
+      user2Probe.expectNoMessage()
+      dataProbe.expectMessage(Room.DataStatus(data = RoomData.empty.copy(users = List(user, user2))))
     }
 
     "leave room and broadcast it" in {

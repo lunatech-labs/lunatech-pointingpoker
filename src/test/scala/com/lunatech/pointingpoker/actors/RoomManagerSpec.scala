@@ -155,19 +155,19 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         RoomManager
           .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
       )
-      val userId = UUID.randomUUID()
+      val token = Room.SessionToken.mint()
 
-      managerRef ! RoomManager.Vote(roomId, userId, "5")
-      managerRef ! RoomManager.Show(roomId, userId)
-      managerRef ! RoomManager.Clear(roomId, userId)
-      managerRef ! RoomManager.Revote(roomId, userId)
-      managerRef ! RoomManager.EditIssue(roomId, userId, "issue name")
+      managerRef ! RoomManager.Vote(roomId, token, "5")
+      managerRef ! RoomManager.Show(roomId, token)
+      managerRef ! RoomManager.Clear(roomId, token)
+      managerRef ! RoomManager.Revote(roomId, token)
+      managerRef ! RoomManager.EditIssue(roomId, token, "issue name")
 
-      roomProbe.expectMessage(Room.Vote(userId, "5"))
-      roomProbe.expectMessage(Room.ShowVotes(userId))
-      roomProbe.expectMessage(Room.ClearVotes(userId))
-      roomProbe.expectMessage(Room.ReVote(userId))
-      roomProbe.expectMessage(Room.EditIssue(userId, "issue name"))
+      roomProbe.expectMessage(Room.Vote(token, "5"))
+      roomProbe.expectMessage(Room.ShowVotes(token))
+      roomProbe.expectMessage(Room.ClearVotes(token))
+      roomProbe.expectMessage(Room.ReVote(token))
+      roomProbe.expectMessage(Room.EditIssue(token, "issue name"))
     }
 
     "no-op typed per-command messages for an unknown room" in {
@@ -182,7 +182,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         )
       )
 
-      managerRef ! RoomManager.Vote(unknownRoomId, UUID.randomUUID(), "5")
+      managerRef ! RoomManager.Vote(unknownRoomId, Room.SessionToken.mint(), "5")
 
       roomProbe.expectNoMessage()
     }

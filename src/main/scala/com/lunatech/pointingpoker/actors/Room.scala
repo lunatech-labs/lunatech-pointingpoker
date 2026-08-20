@@ -19,11 +19,11 @@ object Room:
   sealed trait Command
   final case class Join(user: User)                                                  extends Command
   final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final case class Vote(userId: UUID, estimation: String)                            extends Command
-  final case class ClearVotes(userId: UUID)                                          extends Command
-  final case class ReVote(userId: UUID)                                              extends Command
-  final case class ShowVotes(userId: UUID)                                           extends Command
-  final case class EditIssue(userId: UUID, issue: String)                            extends Command
+  final case class Vote(token: SessionToken, estimation: String)                     extends Command
+  final case class ClearVotes(token: SessionToken)                                   extends Command
+  final case class ReVote(token: SessionToken)                                       extends Command
+  final case class ShowVotes(token: SessionToken)                                    extends Command
+  final case class EditIssue(token: SessionToken, issue: String)                     extends Command
   final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
   final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution]) extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
@@ -104,32 +104,43 @@ object Room:
           val newData = data.registerSession(token, userId, name)
           replyTo ! SessionMinted(userId, token)
           receiveBehaviour(roomId, newData)
-        case Vote(userId, estimation) =>
-          val newData = data.vote(userId, estimation)
-          broadcast(RoomEvent(MessageType.Vote, roomId, userId, estimation), newData.users, context)
-          receiveBehaviour(roomId, newData)
-        case ClearVotes(userId) =>
-          val newData = data.clear()
-          broadcast(
-            RoomEvent(MessageType.Clear, roomId, userId, RoomEvent.NoExtra),
-            newData.users,
-            context
-          )
-          receiveBehaviour(roomId, newData)
-        case ReVote(userId) =>
-          val newData = data.reVote()
-          broadcast(
-            RoomEvent(MessageType.Revote, roomId, userId, RoomEvent.NoExtra),
-            newData.users,
-            context
-          )
-          receiveBehaviour(roomId, newData)
-        case ShowVotes(userId) =>
-          broadcast(
-            RoomEvent(MessageType.Show, roomId, userId, RoomEvent.NoExtra),
-            data.users,
-            context
-          )
+        case Vote(token, estimation) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.vote(user.id, estimation)
+              broadcast(RoomEvent(MessageType.Vote, roomId, user.id, estimation), newData.users, context)
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ClearVotes(token) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.clear()
+              broadcast(
+                RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ReVote(token) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.reVote()
+              broadcast(
+                RoomEvent(MessageType.Revote, roomId, user.id, RoomEvent.NoExtra),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ShowVotes(token) =>
+          data.users.find(_.token == token).foreach { user =>
+            broadcast(
+              RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra),
+              data.users,
+              context
+            )
+          }
           Behaviors.same
         case Leave(userId, ref, replyTo) =>
           if data.users.exists(u => u.id == userId && u.ref == ref) then
@@ -149,12 +160,12 @@ object Room:
             // Stale teardown: this userId already reconnected under a different ref
             // (joinUser replaced the entry), so there's nothing left to remove.
             Behaviors.same
-        case EditIssue(userId, issue) =>
-          broadcast(RoomEvent(MessageType.EditIssue, roomId, userId, issue), data.users, context)
-          receiveBehaviour(
-            roomId,
-            data.editIssue(issue, userId)
-          )
+        case EditIssue(token, issue) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              broadcast(RoomEvent(MessageType.EditIssue, roomId, user.id, issue), data.users, context)
+              receiveBehaviour(roomId, data.editIssue(issue, user.id))
+            case None => Behaviors.same
         case ValidateToken(token, replyTo) =>
           val resolution = data.pendingSessions.get(token) match
             case Some(pending) => Resolved(pending.userId, pending.name)
