@@ -385,8 +385,7 @@
           .then(function (response) {
             var userId = response.data.userId;
             ref.user.id = userId;
-            var params = new URLSearchParams({ userId: userId, name: ref.user.name });
-            ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events?' + params.toString());
+            ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events');
             ref.eventSource.onopen = function() {
               // EventSource retries automatically on transient network blips; a
               // successful (re)connection means any earlier "connection lost"
@@ -483,19 +482,19 @@
           });
         },
         doShowVotes: function () {
-          axios.post('/rooms/' + this.roomId + '/show?userId=' + this.user.id, {})
+          axios.post('/rooms/' + this.roomId + '/show', {})
           .catch(function (error) {
             console.log(error);
           });
         },
         doClearVotes: function () {
-          axios.post('/rooms/' + this.roomId + '/clear?userId=' + this.user.id, {})
+          axios.post('/rooms/' + this.roomId + '/clear', {})
           .catch(function (error) {
             console.log(error);
           });
         },
         doReVote: function () {
-          axios.post('/rooms/' + this.roomId + '/revote?userId=' + this.user.id, {})
+          axios.post('/rooms/' + this.roomId + '/revote', {})
           .catch(function (error) {
             console.log(error);
           });
@@ -510,7 +509,7 @@
         },
         doEdit: function () {
           this.editing = false;
-          axios.post('/rooms/' + this.roomId + '/edit-issue?userId=' + this.user.id, { issue: this.currentIssue })
+          axios.post('/rooms/' + this.roomId + '/edit-issue', { issue: this.currentIssue })
           .catch(function (error) {
             console.log(error);
           });
@@ -530,7 +529,7 @@
         },
         vote: function (voteValue) {
           this.ownVoteConfirmed = true;
-          axios.post('/rooms/' + this.roomId + '/vote?userId=' + this.user.id, { estimation: voteValue })
+          axios.post('/rooms/' + this.roomId + '/vote', { estimation: voteValue })
           .catch(function (error) {
             console.log(error);
           });
