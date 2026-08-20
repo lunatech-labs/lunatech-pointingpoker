@@ -67,6 +67,13 @@ closes). As a strictly-necessary functional cookie (it exists only to operate th
 session the user actively joined, not for tracking or analytics), it doesn't require
 a cookie-consent banner under the ePrivacy Directive.
 
+This session cookie closes an identity-spoofing gap, not room access control: anyone
+who knows a `roomId` can still call `/join` and legitimately participate in that
+room. What it prevents is impersonating a specific existing member and acting
+without ever having joined. Actual room access control (e.g. limiting who can create
+or enter a room at all) is a separate, unscheduled concern, closest to the
+room-creation hardening listed under Phase 5 in `docs/roadmap.md`.
+
 ### Tech stack
 
 This project uses:

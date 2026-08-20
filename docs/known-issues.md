@@ -53,9 +53,8 @@ roadmap item instead of leaving it here as stale history.
   (`RoomManagerData`).
 - **Issue:** A room is only removed from memory when its last joined participant
   leaves. `POST /create-room` no longer requires a completed join to keep a room
-  alive (see the `/join` issue above), so an abandoned tab, a network failure before
-  `/join`, or stray traffic can accumulate rooms that live for the life of the
-  process.
+  alive, so an abandoned tab, a network failure before `/join`, or stray traffic
+  can accumulate rooms that live for the life of the process.
 - **Resolution:** Added to Phase 5 in `docs/roadmap.md` (room-creation hardening
   neighbors this but does not cover it). Becomes more important once Phase 2 makes
   sessions durable across restarts, since an idle-expiry policy will be needed there
