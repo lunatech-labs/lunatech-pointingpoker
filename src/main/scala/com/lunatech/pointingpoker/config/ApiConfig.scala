@@ -6,7 +6,7 @@ import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
 
-final case class ApiConfig(host: String, port: Int, timeout: FiniteDuration, indexPath: String)
+final case class ApiConfig(host: String, port: Int, timeout: FiniteDuration, indexPath: String, secureCookies: Boolean)
 
 object ApiConfig:
   def load(config: Config): ApiConfig =
@@ -17,6 +17,7 @@ object ApiConfig:
         config.getDuration("pointing-poker.service.timeout").toMillis,
         TimeUnit.MILLISECONDS
       ),
-      indexPath = config.getString("pointing-poker.service.index-path")
+      indexPath = config.getString("pointing-poker.service.index-path"),
+      secureCookies = config.getBoolean("pointing-poker.service.secure-cookies")
     )
 end ApiConfig

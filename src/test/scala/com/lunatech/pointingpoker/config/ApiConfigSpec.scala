@@ -17,6 +17,7 @@ class ApiConfigSpec extends AnyWordSpec with must.Matchers:
       apiConfig.port mustBe 8080
       apiConfig.timeout mustBe 5.seconds
       apiConfig.indexPath mustBe "src/main/resources/pages/index.html"
+      apiConfig.secureCookies mustBe true
     }
   }
 end ApiConfigSpec
