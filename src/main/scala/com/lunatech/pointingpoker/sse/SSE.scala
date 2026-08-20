@@ -11,7 +11,7 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.http.scaladsl.model.sse.ServerSentEvent
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
-import com.lunatech.pointingpoker.actors.{RoomEvent, RoomManager}
+import com.lunatech.pointingpoker.actors.{Room, RoomEvent, RoomManager}
 import com.lunatech.pointingpoker.actors.RoomEvent.MessageType
 import com.lunatech.pointingpoker.actors.RoomEvent.given
 
@@ -26,9 +26,13 @@ object SSE:
     */
   val heartbeatInterval = 15.seconds
 
-  def source(roomManager: ActorRef, roomId: UUID, userId: UUID, name: String)(using
-      ec: ExecutionContext
-  ): Source[ServerSentEvent, ActorRef] =
+  def source(
+      roomManager: ActorRef,
+      roomId: UUID,
+      userId: UUID,
+      name: String,
+      token: Room.SessionToken
+  )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
       .actorRef[RoomEvent](
         completionMatcher,
@@ -37,10 +41,7 @@ object SSE:
         OverflowStrategy.dropTail
       )
       .mapMaterializedValue { user =>
-        roomManager ! RoomManager.ConnectToRoom(
-          RoomEvent(MessageType.Join, roomId, userId, name),
-          user
-        )
+        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, user)
         user
       }
       .watchTermination() { (user, done) =>

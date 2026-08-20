@@ -10,7 +10,6 @@ import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
-import RoomEvent.MessageType
 
 class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -33,36 +32,70 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "connect user to room" in {
-      val behaviorTestKit = BehaviorTestKit(RoomManager())
-
-      val roomId     = UUID.randomUUID()
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
       val user1Probe = TestProbe()(testKit.system.classicSystem)
       val user2Probe = TestProbe()(testKit.system.classicSystem)
-      val user1      = Room.User(UUID.randomUUID(), user1Name, false, "", user1Probe.ref, Room.SessionToken.mint())
-      val user2      = Room.User(UUID.randomUUID(), user2Name, false, "", user2Probe.ref, Room.SessionToken.mint())
+      val token1     = Room.SessionToken.mint()
+      val token2     = Room.SessionToken.mint()
+      val userId1    = UUID.randomUUID()
+      val userId2    = UUID.randomUUID()
 
-      behaviorTestKit.run(
-        RoomManager
-          .ConnectToRoom(RoomEvent(MessageType.Join, roomId, user1.id, user1.name), user1Probe.ref)
+      managerRef ! RoomManager.ConnectToRoom(roomId, userId1, user1Name, token1, user1Probe.ref)
+      managerRef ! RoomManager.ConnectToRoom(roomId, userId2, user2Name, token2, user2Probe.ref)
+
+      roomProbe.expectMessage(Room.Join(Room.User(userId1, user1Name, false, "", user1Probe.ref, token1)))
+      roomProbe.expectMessage(Room.Join(Room.User(userId2, user2Name, false, "", user2Probe.ref, token2)))
+    }
+
+    "no-op ConnectToRoom for an unknown room" in {
+      val knownRoomId       = UUID.randomUUID()
+      val unknownRoomId     = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager.receiveBehaviour(
+          RoomManagerData(Map(knownRoomId -> roomProbe.ref)),
+          roomResponseProbe.ref
+        )
       )
-      behaviorTestKit.run(
-        RoomManager
-          .ConnectToRoom(RoomEvent(MessageType.Join, roomId, user2.id, user2.name), user2Probe.ref)
-      )
+      val probe = TestProbe()(testKit.system.classicSystem)
+
+      managerRef ! RoomManager
+        .ConnectToRoom(unknownRoomId, UUID.randomUUID(), "Alice", Room.SessionToken.mint(), probe.ref)
+
+      roomProbe.expectNoMessage()
+    }
+
+    "pass RequestSession through to the room, auto-creating it if needed" in {
+      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val roomId          = UUID.randomUUID()
+      val sessionProbe    = testKit.createTestProbe[Room.SessionMinted]()
+
+      behaviorTestKit.run(RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref))
 
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
-      val join1      = childInbox.receiveMessage()
-      join1 match
-        case Room.Join(user) =>
-          user.id mustBe user1.id
-          user.name mustBe user1Name
-        case _ => fail("Expected Room.Join message")
-      val join2 = childInbox.receiveMessage()
-      join2 match
-        case Room.Join(user) =>
-          user.id mustBe user2.id
-          user.name mustBe user2Name
-        case _ => fail("Expected Room.Join message")
+      childInbox.expectMessage(Room.RequestSession("Alice", sessionProbe.ref))
+    }
+
+    "resolve ValidateToken against an unknown room as Unresolved instead of creating it" in {
+      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val roomId          = UUID.randomUUID()
+      val resultProbe     = testKit.createTestProbe[Room.TokenResolution]()
+
+      // Drain the MessageAdapter effect that RoomManager()'s Behaviors.setup records on
+      // startup, so the assertion below reflects only effects from handling ValidateToken.
+      behaviorTestKit.retrieveAllEffects()
+
+      behaviorTestKit.run(RoomManager.ValidateToken(roomId, Room.SessionToken.mint(), resultProbe.ref))
+
+      resultProbe.expectMessage(Room.Unresolved)
+      behaviorTestKit.retrieveAllEffects() mustBe empty
     }
 
     "connect a user via SSE.source and register it with ConnectToRoom" in {
@@ -73,20 +106,21 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
+      val token        = Room.SessionToken.mint()
       val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
 
       // ConnectToRoom is sent to a classic ActorRef in production (roomManager.toClassic),
       // so drive SSE.source with a classic probe standing in for it.
       SSE
-        .source(classicProbe.ref, roomId, userId, "user 1")
+        .source(classicProbe.ref, roomId, userId, "user 1", token)
         .to(org.apache.pekko.stream.scaladsl.Sink.ignore)
         .run()
 
-      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(message, _) =>
-        message.messageType mustBe com.lunatech.pointingpoker.actors.RoomEvent.MessageType.Join
-        message.roomId mustBe roomId
-        message.userId mustBe userId
-        message.extra mustBe "user 1"
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(rId, uId, name, tok, _) =>
+        rId mustBe roomId
+        uId mustBe userId
+        name mustBe "user 1"
+        tok mustBe token
       }
     }
 
@@ -98,16 +132,17 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
+      val token        = Room.SessionToken.mint()
       val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
 
       // Sink.cancelled cancels downstream demand immediately, terminating the source.
       SSE
-        .source(classicProbe.ref, roomId, userId, "user 1")
+        .source(classicProbe.ref, roomId, userId, "user 1", token)
         .to(org.apache.pekko.stream.scaladsl.Sink.cancelled)
         .run()
 
-      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(message, _) =>
-        message.userId mustBe userId
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(_, uId, _, _, _) =>
+        uId mustBe userId
       }
       classicProbe.expectMsgPF() { case RoomManager.ConnectionCompleted(rId, uId, _) =>
         rId mustBe roomId

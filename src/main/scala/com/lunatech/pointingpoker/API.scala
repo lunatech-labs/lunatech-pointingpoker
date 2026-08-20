@@ -79,7 +79,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       path("rooms" / JavaUUID / "events") { roomId =>
         get {
           parameters("userId".as[UUID], "name") { (userId, name) =>
-            complete(SSE.source(roomManager.toClassic, roomId, userId, name))
+            complete(SSE.source(roomManager.toClassic, roomId, userId, name, tokenFromLegacyUserId(userId)))
           }
         }
       },
