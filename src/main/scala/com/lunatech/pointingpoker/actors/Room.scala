@@ -25,10 +25,15 @@ object Room:
   final case class ShowVotes(userId: UUID)                                           extends Command
   final case class EditIssue(userId: UUID, issue: String)                            extends Command
   final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
+  final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution]) extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
 
   final case class DataStatus(data: RoomData)
   final case class SessionMinted(userId: UUID, token: SessionToken)
+
+  sealed trait TokenResolution
+  final case class Resolved(userId: UUID, name: String) extends TokenResolution
+  case object Unresolved                                 extends TokenResolution
 
   sealed trait Response
   final case class Running(roomId: UUID) extends Response
@@ -147,6 +152,15 @@ object Room:
             roomId,
             data.editIssue(issue, userId)
           )
+        case ValidateToken(token, replyTo) =>
+          val resolution = data.pendingSessions.get(token) match
+            case Some(pending) => Resolved(pending.userId, pending.name)
+            case None          =>
+              data.users.find(_.token == token) match
+                case Some(user) => Resolved(user.id, user.name)
+                case None       => Unresolved
+          replyTo ! resolution
+          Behaviors.same
         case GetData(replyTo) =>
           replyTo ! Room.DataStatus(data)
           Behaviors.same

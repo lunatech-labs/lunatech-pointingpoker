@@ -293,6 +293,38 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         Room.PendingSession(minted.userId, "Alice")
       )
     }
+
+    "resolve a pending session by token" in {
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+      val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+
+      roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
+
+      resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
+    }
+
+    "resolve a confirmed member by token (reconnect)" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
+
+      roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
+
+      resultProbe.expectMessage(Room.Resolved(user.id, user.name))
+    }
+
+    "return Unresolved for an unknown token" in {
+      val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+
+      roomRef ! Room.ValidateToken(Room.SessionToken.mint(), resultProbe.ref)
+
+      resultProbe.expectMessage(Room.Unresolved)
+    }
   }
 end RoomSpec
 
