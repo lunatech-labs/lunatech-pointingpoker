@@ -54,22 +54,19 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "no-op ConnectToRoom for an unknown room" in {
-      val knownRoomId       = UUID.randomUUID()
-      val unknownRoomId     = UUID.randomUUID()
-      val roomProbe         = testKit.createTestProbe[Room.Command]()
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val managerRef        = testKit.spawn(
-        RoomManager.receiveBehaviour(
-          RoomManagerData(Map(knownRoomId -> roomProbe.ref)),
-          roomResponseProbe.ref
-        )
+      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val unknownRoomId   = UUID.randomUUID()
+      val probe           = TestProbe()(testKit.system.classicSystem)
+
+      // Drain the MessageAdapter effect that RoomManager()'s Behaviors.setup records on
+      // startup, so the assertion below reflects only effects from handling ConnectToRoom.
+      behaviorTestKit.retrieveAllEffects()
+
+      behaviorTestKit.run(
+        RoomManager.ConnectToRoom(unknownRoomId, UUID.randomUUID(), "Alice", Room.SessionToken.mint(), probe.ref)
       )
-      val probe = TestProbe()(testKit.system.classicSystem)
 
-      managerRef ! RoomManager
-        .ConnectToRoom(unknownRoomId, UUID.randomUUID(), "Alice", Room.SessionToken.mint(), probe.ref)
-
-      roomProbe.expectNoMessage()
+      behaviorTestKit.retrieveAllEffects() mustBe empty
     }
 
     "pass RequestSession through to the room, auto-creating it if needed" in {

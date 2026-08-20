@@ -34,10 +34,11 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
   private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
 
-  // Temporary bridge until Task 11 replaces the query-param userId with a real
-  // cookie-based token. UUID.toString always round-trips through
-  // SessionToken.parse successfully, so getOrElse's fallback is unreachable
-  // in practice — it's there only so this stays total.
+  // Temporary bridge: the /events usage below is removed by Task 10; the five
+  // command-route usages elsewhere in this file are removed by Task 11. Once both
+  // land, this helper is dead code and can be deleted.
+  // UUID.toString always round-trips through SessionToken.parse successfully, so
+  // getOrElse's fallback is unreachable in practice. It's there only so this stays total.
   private def tokenFromLegacyUserId(userId: UUID): Room.SessionToken =
     Room.SessionToken.parse(userId.toString).getOrElse(Room.SessionToken.mint())
 
