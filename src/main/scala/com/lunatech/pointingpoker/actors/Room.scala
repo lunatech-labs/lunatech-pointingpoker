@@ -34,7 +34,7 @@ object Room:
   final case class Running(roomId: UUID) extends Response
   final case class Stopped(roomId: UUID) extends Response
 
-  final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef)
+  final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef, token: SessionToken)
 
   final case class PendingSession(userId: UUID, name: String)
 

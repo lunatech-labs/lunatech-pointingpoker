@@ -189,8 +189,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "stop itself if empty" in {
       val probe             = TestProbe()(testKit.system.classicSystem)
-      val user              = Room.User(UUID.randomUUID(), "user1", false, "", probe.ref)
-      val user2             = Room.User(UUID.randomUUID(), "user2", false, "", probe.ref)
+      val user              = Room.User(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
+      val user2             = Room.User(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
 
       val roomId          = UUID.randomUUID()
@@ -209,7 +209,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
 
       val newRefProbe  = TestProbe()(testKit.system.classicSystem)
-      val rejoinedUser = Room.User(user.id, "user1", false, "", newRefProbe.ref)
+      val rejoinedUser = Room.User(user.id, "user1", false, "", newRefProbe.ref, user.token)
 
       roomRef ! Room.Join(rejoinedUser)
       roomRef ! Room.GetData(dataProbe.ref)
@@ -232,7 +232,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), internalData)
 
       val newUserProbe = TestProbe()(testKit.system.classicSystem)
-      val newUser      = Room.User(UUID.randomUUID(), "new user", false, "", newUserProbe.ref)
+      val newUser      = Room.User(UUID.randomUUID(), "new user", false, "", newUserProbe.ref, Room.SessionToken.mint())
 
       val expectedMessage = RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)
       val expectedData    =
@@ -301,7 +301,7 @@ object RoomSpec:
       testKit: ActorTestKit
   ): (Room.User, TestProbe) =
     val probe = TestProbe()(testKit.system.classicSystem)
-    val user  = Room.User(uuid, name, voted, estimation, probe.ref)
+    val user  = Room.User(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint())
     (user, probe)
 
   def createRoom(roomId: UUID, data: RoomData)(using

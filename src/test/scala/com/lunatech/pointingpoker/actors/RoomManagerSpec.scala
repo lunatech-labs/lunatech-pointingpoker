@@ -38,8 +38,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val user1Probe = TestProbe()(testKit.system.classicSystem)
       val user2Probe = TestProbe()(testKit.system.classicSystem)
-      val user1      = Room.User(UUID.randomUUID(), user1Name, false, "", user1Probe.ref)
-      val user2      = Room.User(UUID.randomUUID(), user2Name, false, "", user2Probe.ref)
+      val user1      = Room.User(UUID.randomUUID(), user1Name, false, "", user1Probe.ref, Room.SessionToken.mint())
+      val user2      = Room.User(UUID.randomUUID(), user2Name, false, "", user2Probe.ref, Room.SessionToken.mint())
 
       behaviorTestKit.run(
         RoomManager
@@ -51,8 +51,18 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
 
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
-      childInbox.expectMessage(Room.Join(user1))
-      childInbox.expectMessage(Room.Join(user2))
+      val join1      = childInbox.receiveMessage()
+      join1 match
+        case Room.Join(user) =>
+          user.id mustBe user1.id
+          user.name mustBe user1Name
+        case _ => fail("Expected Room.Join message")
+      val join2 = childInbox.receiveMessage()
+      join2 match
+        case Room.Join(user) =>
+          user.id mustBe user2.id
+          user.name mustBe user2Name
+        case _ => fail("Expected Room.Join message")
     }
 
     "connect a user via SSE.source and register it with ConnectToRoom" in {

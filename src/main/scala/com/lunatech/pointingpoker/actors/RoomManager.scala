@@ -67,13 +67,13 @@ object RoomManager:
                 val newData = data.addRoom(message.roomId, roomActor)
                 roomActor ! Room.Join(
                   Room
-                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
+                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user, Room.SessionToken.mint())
                 )
                 receiveBehaviour(newData, roomResponseWrapper)
               } { room =>
                 room ! Room.Join(
                   Room
-                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
+                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user, Room.SessionToken.mint())
                 )
                 Behaviors.same
               }
