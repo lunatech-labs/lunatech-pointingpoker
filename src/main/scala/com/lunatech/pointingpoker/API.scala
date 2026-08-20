@@ -12,6 +12,7 @@ import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
+import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
@@ -33,6 +34,18 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
   // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
   private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
+
+  private val SessionCookieName = "session"
+
+  private def sessionCookie(roomId: UUID, token: Room.SessionToken): HttpCookie =
+    HttpCookie(
+      name = SessionCookieName,
+      value = token.raw,
+      path = Some(s"/rooms/$roomId"),
+      httpOnly = true,
+      secure = apiConfig.secureCookies,
+      extension = Some("SameSite=Strict")
+    )
 
   // Temporary bridge: the /events usage below is removed by Task 10; the five
   // command-route usages elsewhere in this file are removed by Task 11. Once both
@@ -67,13 +80,23 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           }
         }
       },
-      path("rooms" / JavaUUID / "join") { _ =>
+      path("rooms" / JavaUUID / "join") { roomId =>
         post {
           // Scoped locally so the generic circe marshaller cannot hijack routes that
           // complete with a plain String (e.g. create-room, which stays text/plain).
           import com.lunatech.pointingpoker.CirceSupport.given
-          entity(as[JoinRequest]) { _ =>
-            complete(JoinResponse(UUID.randomUUID()))
+          entity(as[JoinRequest]) { req =>
+            onComplete(
+              roomManager.ask[Room.SessionMinted](RoomManager.RequestSession(roomId, req.name, _))
+            ) {
+              case Success(minted) =>
+                setCookie(sessionCookie(roomId, minted.token)) {
+                  complete(JoinResponse(minted.userId))
+                }
+              case Failure(reason) =>
+                log.error("Error while joining room {}: {}", roomId, reason)
+                complete(StatusCodes.InternalServerError)
+            }
           }
         }
       },

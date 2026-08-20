@@ -12,6 +12,7 @@ import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
+import org.apache.pekko.http.scaladsl.model.headers.`Set-Cookie`
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -39,6 +40,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! RoomManager.RoomId(roomId)
+        Behaviors.same
+      case RoomManager.RequestSession(_, _, replyTo) =>
+        replyTo ! Room.SessionMinted(UUID.randomUUID(), Room.SessionToken.mint())
         Behaviors.same
       case other =>
         commandProbe.ref ! other
@@ -71,12 +75,18 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
         responseAs[String] mustBe roomId
       }
-    "join a room and return a minted userId" in {
+    "join a room, return a minted userId, and set a session cookie" in {
       import com.lunatech.pointingpoker.CirceSupport.given
       Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         val response = responseAs[JoinResponse]
         response.userId.toString.length > 0 mustBe true
+
+        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+        cookieHeader.cookie.name mustBe "session"
+        cookieHeader.cookie.httpOnly mustBe true
+        cookieHeader.cookie.path mustBe Some(s"/rooms/$roomId")
+        cookieHeader.cookie.extension mustBe Some("SameSite=Strict")
       }
     }
     "reject malformed JSON on join endpoint with 400" in
