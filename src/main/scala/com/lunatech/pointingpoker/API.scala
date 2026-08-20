@@ -11,7 +11,6 @@ import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Defa
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
-import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookiePair
 import org.apache.pekko.util.Timeout
@@ -31,10 +30,6 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   private given timeout: Timeout                      = Timeout(apiConfig.timeout)
   private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
   private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
-
-  // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
-  // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
-  private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
 
   private val SessionCookieName = "session"
 
