@@ -277,6 +277,22 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       dataProbe.expectMessage(expectedData)
     }
+
+    "mint a session and store it as pending on RequestSession" in {
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus]
+      data.data.pendingSessions.get(minted.token) mustBe Some(
+        Room.PendingSession(minted.userId, "Alice")
+      )
+    }
   }
 end RoomSpec
 

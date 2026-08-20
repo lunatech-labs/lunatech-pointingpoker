@@ -9,6 +9,13 @@ import RoomEvent.MessageType
 
 object Room:
 
+  opaque type SessionToken = UUID
+
+  object SessionToken:
+    def mint(): SessionToken                      = UUID.randomUUID()
+    def parse(raw: String): Option[SessionToken]  = scala.util.Try(UUID.fromString(raw)).toOption
+    extension (token: SessionToken) def raw: String = token.toString
+
   sealed trait Command
   final case class Join(user: User)                                                  extends Command
   final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
@@ -17,9 +24,11 @@ object Room:
   final case class ReVote(userId: UUID)                                              extends Command
   final case class ShowVotes(userId: UUID)                                           extends Command
   final case class EditIssue(userId: UUID, issue: String)                            extends Command
+  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
 
   final case class DataStatus(data: RoomData)
+  final case class SessionMinted(userId: UUID, token: SessionToken)
 
   sealed trait Response
   final case class Running(roomId: UUID) extends Response
@@ -27,16 +36,22 @@ object Room:
 
   final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef)
 
+  final case class PendingSession(userId: UUID, name: String)
+
   final case class RoomData(
       users: List[User],
       currentIssue: String,
-      issueLastEditBy: Option[UUID]
+      issueLastEditBy: Option[UUID],
+      pendingSessions: Map[SessionToken, PendingSession] = Map.empty
   ):
     def joinUser(user: User): RoomData =
       // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
       // automatic EventSource retry racing an old connection's slow-to-detect failure)
       // doesn't leave two entries for the same user.
       this.copy(users = user :: this.users.filterNot(_.id == user.id))
+
+    def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
+      this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
       this.copy(users = this.users.map { u =>
@@ -74,6 +89,12 @@ object Room:
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
           broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
+          receiveBehaviour(roomId, newData)
+        case RequestSession(name, replyTo) =>
+          val userId  = UUID.randomUUID()
+          val token   = SessionToken.mint()
+          val newData = data.registerSession(token, userId, name)
+          replyTo ! SessionMinted(userId, token)
           receiveBehaviour(roomId, newData)
         case Vote(userId, estimation) =>
           val newData = data.vote(userId, estimation)
