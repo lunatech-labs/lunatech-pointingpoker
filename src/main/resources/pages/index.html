@@ -471,7 +471,16 @@
             };
             ref.eventSource.onerror = function(event) {
               ref.showError = true;
-              ref.errorMessage = "Connection to the room was lost";
+              // A closed readyState means the browser got a non-2xx response (e.g. 401
+              // because the room was reaped and the session no longer resolves) and will
+              // not retry on its own - this tab is stuck until the user reloads. Any other
+              // readyState (CONNECTING) is a transient network blip that EventSource is
+              // already retrying automatically.
+              if (ref.eventSource.readyState === EventSource.CLOSED) {
+                ref.errorMessage = "Your session has ended. Please reload the page to rejoin.";
+              } else {
+                ref.errorMessage = "Connection to the room was lost";
+              }
               console.error("EventSource error observed:", event);
             };
           })
