@@ -325,6 +325,23 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       resultProbe.expectMessage(Room.Unresolved)
     }
+
+    "clear the pending session once Join promotes it to a member" in {
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe         = TestProbe()(testKit.system.classicSystem)
+      val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+
+      roomRef ! Room.Join(Room.User(minted.userId, "Alice", false, "", userProbe.ref, minted.token))
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val data = dataProbe.expectMessageType[Room.DataStatus]
+      data.data.pendingSessions.get(minted.token) mustBe None
+      data.data.users.map(_.id) must contain(minted.userId)
+    }
   }
 end RoomSpec
 

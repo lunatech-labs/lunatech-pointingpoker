@@ -53,7 +53,10 @@ object Room:
       // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
       // automatic EventSource retry racing an old connection's slow-to-detect failure)
       // doesn't leave two entries for the same user.
-      this.copy(users = user :: this.users.filterNot(_.id == user.id))
+      this.copy(
+        users = user :: this.users.filterNot(_.id == user.id),
+        pendingSessions = this.pendingSessions - user.token
+      )
 
     def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
