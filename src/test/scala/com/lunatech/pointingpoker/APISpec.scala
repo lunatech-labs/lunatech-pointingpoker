@@ -107,60 +107,50 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
     "dispatch a vote command" in {
       import com.lunatech.pointingpoker.CirceSupport.given
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/vote?userId=$userId", VoteRequest("5")) ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.Vote(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get, "5")
-      )
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), token, "5"))
     }
 
     "dispatch a show command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/show?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/show") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.Show(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
-      )
+      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), token))
     }
 
     "dispatch a clear command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/clear?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/clear") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.Clear(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
-      )
+      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), token))
     }
 
     "dispatch a revote command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/revote?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/revote") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.Revote(UUID.fromString(roomId), Room.SessionToken.parse(userId.toString).get)
-      )
+      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), token))
     }
 
     "dispatch an edit-issue command" in {
       import com.lunatech.pointingpoker.CirceSupport.given
-      val userId = UUID.randomUUID()
+      val token = Room.SessionToken.mint()
       Post(
-        s"/rooms/$roomId/edit-issue?userId=$userId",
+        s"/rooms/$roomId/edit-issue",
         EditIssueRequest("new issue")
-      ) ~> apiRoute ~> check {
+      ) ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessage(
-        RoomManager.EditIssue(
-          UUID.fromString(roomId),
-          Room.SessionToken.parse(userId.toString).get,
-          "new issue"
-        )
+        RoomManager.EditIssue(UUID.fromString(roomId), token, "new issue")
       )
     }
 
@@ -188,17 +178,20 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
 
     "reject a malformed vote body with 400" in {
-      val userId        = UUID.randomUUID()
-      val malformedBody =
-        HttpEntity(ContentTypes.`application/json`, """{"not-estimation": 5}""")
-      Post(s"/rooms/$roomId/vote?userId=$userId", malformedBody) ~> apiRoute ~> check {
+      val malformedBody = HttpEntity(ContentTypes.`application/json`, """{"not-estimation": 5}""")
+      Post(s"/rooms/$roomId/vote", malformedBody) ~> apiRoute ~> check {
         status mustBe StatusCodes.BadRequest
       }
     }
 
-    "reject a non-UUID userId query param with 400" in
-      Post(s"/rooms/$roomId/show?userId=not-a-uuid") ~> apiRoute ~> check {
-        status mustBe StatusCodes.BadRequest
+    "still return 204 for a vote with no session cookie (silently no-ops downstream)" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
       }
+      // The API layer never rejects a missing/invalid credential for command endpoints. Room is
+      // the one that resolves the token and silently no-ops on a miss (see RoomSpec/RoomManagerSpec).
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
   }
 end APISpec

@@ -48,13 +48,11 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       extension = Some("SameSite=Strict")
     )
 
-  // Temporary bridge: the /events usage below is removed by Task 10; the five
-  // command-route usages elsewhere in this file are removed by Task 11. Once both
-  // land, this helper is dead code and can be deleted.
-  // UUID.toString always round-trips through SessionToken.parse successfully, so
-  // getOrElse's fallback is unreachable in practice. It's there only so this stays total.
-  private def tokenFromLegacyUserId(userId: UUID): Room.SessionToken =
-    Room.SessionToken.parse(userId.toString).getOrElse(Room.SessionToken.mint())
+  // A missing or malformed cookie resolves to a freshly-minted, unmatchable token rather than
+  // an Option threaded through every command. Room already no-ops on any token that doesn't
+  // resolve to a member, so this reuses that path instead of adding a second "no credential" case.
+  private def resolveToken(maybeCookie: Option[HttpCookiePair]): Room.SessionToken =
+    maybeCookie.flatMap(c => Room.SessionToken.parse(c.value)).getOrElse(Room.SessionToken.mint())
 
   val route: Route =
     concat(
@@ -127,9 +125,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("vote") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId".as[UUID]) { userId =>
+              optionalCookie(SessionCookieName) { maybeCookie =>
                 entity(as[VoteRequest]) { req =>
-                  roomManager ! RoomManager.Vote(roomId, tokenFromLegacyUserId(userId), req.estimation)
+                  roomManager ! RoomManager.Vote(roomId, resolveToken(maybeCookie), req.estimation)
                   complete(StatusCodes.NoContent)
                 }
               }
@@ -137,24 +135,24 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           },
           path("show") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Show(roomId, tokenFromLegacyUserId(userId))
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Show(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("clear") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Clear(roomId, tokenFromLegacyUserId(userId))
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Clear(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("revote") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Revote(roomId, tokenFromLegacyUserId(userId))
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Revote(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
@@ -162,9 +160,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("edit-issue") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId".as[UUID]) { userId =>
+              optionalCookie(SessionCookieName) { maybeCookie =>
                 entity(as[EditIssueRequest]) { req =>
-                  roomManager ! RoomManager.EditIssue(roomId, tokenFromLegacyUserId(userId), req.issue)
+                  roomManager ! RoomManager.EditIssue(roomId, resolveToken(maybeCookie), req.issue)
                   complete(StatusCodes.NoContent)
                 }
               }
