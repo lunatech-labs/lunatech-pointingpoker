@@ -12,7 +12,6 @@ import org.apache.pekko.http.scaladsl.model.sse.ServerSentEvent
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import com.lunatech.pointingpoker.actors.{Room, RoomEvent, RoomManager}
-import com.lunatech.pointingpoker.actors.RoomEvent.MessageType
 import com.lunatech.pointingpoker.actors.RoomEvent.given
 
 object SSE:

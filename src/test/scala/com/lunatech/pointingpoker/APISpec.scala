@@ -14,6 +14,7 @@ import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.apache.pekko.http.scaladsl.model.headers.`Set-Cookie`
 import org.apache.pekko.http.scaladsl.model.headers.Cookie
+import org.apache.pekko.http.scaladsl.model.headers.SameSite
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -45,7 +46,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         replyTo ! RoomManager.RoomId(roomId)
         Behaviors.same
       case RoomManager.RequestSession(_, _, replyTo) =>
-        replyTo ! Room.SessionMinted(UUID.randomUUID(), Room.SessionToken.mint())
+        replyTo ! Room.SessionMinted(UUID.randomUUID(), validToken)
         Behaviors.same
       case RoomManager.ValidateToken(_, token, replyTo) =>
         if token == validToken then replyTo ! Room.Resolved(UUID.randomUUID(), "Alice")
@@ -92,8 +93,26 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
         cookieHeader.cookie.name mustBe "session"
         cookieHeader.cookie.httpOnly mustBe true
+        cookieHeader.cookie.secure mustBe true
         cookieHeader.cookie.path mustBe Some(s"/rooms/$roomId")
-        cookieHeader.cookie.extension mustBe Some("SameSite=Strict")
+        cookieHeader.cookie.sameSite mustBe Some(SameSite.Strict)
+        cookieHeader.cookie.maxAge mustBe None
+      }
+    }
+    "set the same session token on /join that /events later accepts" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      val cookieValue = Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+        cookieHeader.cookie.value
+      }
+      cookieValue mustBe validToken.raw
+
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", cookieValue)
+      ) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        mediaType.toString mustBe "text/event-stream"
       }
     }
     "reject malformed JSON on join endpoint with 400" in
@@ -134,7 +153,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
     "dispatch a revote command" in {
       val token = Room.SessionToken.mint()
-      Post(s"/rooms/$roomId/revote") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
+      Post(s"/rooms/$roomId/revote") ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), token))
@@ -160,7 +181,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
 
     "reject an events connection with a malformed session cookie" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(Cookie("session", "not-a-uuid")) ~> apiRoute ~> check {
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", "not-a-uuid")
+      ) ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
@@ -172,7 +195,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
 
     "open an SSE events stream for a resolved session" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(Cookie("session", validToken.raw)) ~> apiRoute ~> check {
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         mediaType.toString mustBe "text/event-stream"
       }

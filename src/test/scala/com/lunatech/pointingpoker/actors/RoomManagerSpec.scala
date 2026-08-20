@@ -49,8 +49,12 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.ConnectToRoom(roomId, userId1, user1Name, token1, user1Probe.ref)
       managerRef ! RoomManager.ConnectToRoom(roomId, userId2, user2Name, token2, user2Probe.ref)
 
-      roomProbe.expectMessage(Room.Join(Room.User(userId1, user1Name, false, "", user1Probe.ref, token1)))
-      roomProbe.expectMessage(Room.Join(Room.User(userId2, user2Name, false, "", user2Probe.ref, token2)))
+      roomProbe.expectMessage(
+        Room.Join(Room.User(userId1, user1Name, false, "", user1Probe.ref, token1))
+      )
+      roomProbe.expectMessage(
+        Room.Join(Room.User(userId2, user2Name, false, "", user2Probe.ref, token2))
+      )
     }
 
     "no-op ConnectToRoom for an unknown room" in {
@@ -63,7 +67,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       behaviorTestKit.retrieveAllEffects()
 
       behaviorTestKit.run(
-        RoomManager.ConnectToRoom(unknownRoomId, UUID.randomUUID(), "Alice", Room.SessionToken.mint(), probe.ref)
+        RoomManager.ConnectToRoom(
+          unknownRoomId,
+          UUID.randomUUID(),
+          "Alice",
+          Room.SessionToken.mint(),
+          probe.ref
+        )
       )
 
       behaviorTestKit.retrieveAllEffects() mustBe empty
@@ -80,6 +90,37 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       childInbox.expectMessage(Room.RequestSession("Alice", sessionProbe.ref))
     }
 
+    "pass ValidateToken through to an existing room" in {
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
+      val resultProbe = testKit.createTestProbe[Room.TokenResolution]()
+      val token       = Room.SessionToken.mint()
+
+      managerRef ! RoomManager.ValidateToken(roomId, token, resultProbe.ref)
+
+      roomProbe.expectMessage(Room.ValidateToken(token, resultProbe.ref))
+    }
+
+    "pass RequestSession through to an existing room without creating a new one" in {
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+
+      managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
+
+      roomProbe.expectMessage(Room.RequestSession("Alice", sessionProbe.ref))
+    }
+
     "resolve ValidateToken against an unknown room as Unresolved instead of creating it" in {
       val behaviorTestKit = BehaviorTestKit(RoomManager())
       val roomId          = UUID.randomUUID()
@@ -89,7 +130,9 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       // startup, so the assertion below reflects only effects from handling ValidateToken.
       behaviorTestKit.retrieveAllEffects()
 
-      behaviorTestKit.run(RoomManager.ValidateToken(roomId, Room.SessionToken.mint(), resultProbe.ref))
+      behaviorTestKit.run(
+        RoomManager.ValidateToken(roomId, Room.SessionToken.mint(), resultProbe.ref)
+      )
 
       resultProbe.expectMessage(Room.Unresolved)
       behaviorTestKit.retrieveAllEffects() mustBe empty

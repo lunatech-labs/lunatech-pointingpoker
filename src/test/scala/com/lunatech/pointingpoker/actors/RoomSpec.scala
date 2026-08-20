@@ -55,7 +55,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val expectedMessage = RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra)
       val expectedData    = Room.DataStatus(data =
         RoomData.empty.copy(users =
-          List(user.copy(voted = false, estimation = ""), user2.copy(voted = false, estimation = ""))
+          List(
+            user.copy(voted = false, estimation = ""),
+            user2.copy(voted = false, estimation = "")
+          )
         )
       )
 
@@ -105,7 +108,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "vote and broadcast it" in {
-      val estimation           = "5"
+      val estimation          = "5"
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
@@ -140,7 +143,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       userProbe.expectNoMessage()
       user2Probe.expectNoMessage()
-      dataProbe.expectMessage(Room.DataStatus(data = RoomData.empty.copy(users = List(user, user2))))
+      dataProbe.expectMessage(
+        Room.DataStatus(data = RoomData.empty.copy(users = List(user, user2)))
+      )
     }
 
     "leave room and broadcast it" in {
@@ -204,9 +209,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "stop itself if empty" in {
-      val probe             = TestProbe()(testKit.system.classicSystem)
-      val user              = Room.User(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
-      val user2             = Room.User(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
+      val probe = TestProbe()(testKit.system.classicSystem)
+      val user  =
+        Room.User(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
+      val user2 =
+        Room.User(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
 
       val roomId          = UUID.randomUUID()
@@ -248,7 +255,14 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), internalData)
 
       val newUserProbe = TestProbe()(testKit.system.classicSystem)
-      val newUser      = Room.User(UUID.randomUUID(), "new user", false, "", newUserProbe.ref, Room.SessionToken.mint())
+      val newUser      = Room.User(
+        UUID.randomUUID(),
+        "new user",
+        false,
+        "",
+        newUserProbe.ref,
+        Room.SessionToken.mint()
+      )
 
       val expectedMessage = RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)
       val expectedData    =

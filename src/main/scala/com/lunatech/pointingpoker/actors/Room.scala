@@ -12,8 +12,8 @@ object Room:
   opaque type SessionToken = UUID
 
   object SessionToken:
-    def mint(): SessionToken                      = UUID.randomUUID()
-    def parse(raw: String): Option[SessionToken]  = scala.util.Try(UUID.fromString(raw)).toOption
+    def mint(): SessionToken                        = UUID.randomUUID()
+    def parse(raw: String): Option[SessionToken]    = scala.util.Try(UUID.fromString(raw)).toOption
     extension (token: SessionToken) def raw: String = token.toString
 
   sealed trait Command
@@ -25,21 +25,29 @@ object Room:
   final case class ShowVotes(token: SessionToken)                                    extends Command
   final case class EditIssue(token: SessionToken, issue: String)                     extends Command
   final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
-  final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution]) extends Command
-  final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
+  final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
+      extends Command
+  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
 
   final case class DataStatus(data: RoomData)
   final case class SessionMinted(userId: UUID, token: SessionToken)
 
   sealed trait TokenResolution
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
-  case object Unresolved                                 extends TokenResolution
+  case object Unresolved                                extends TokenResolution
 
   sealed trait Response
   final case class Running(roomId: UUID) extends Response
   final case class Stopped(roomId: UUID) extends Response
 
-  final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef, token: SessionToken)
+  final case class User(
+      id: UUID,
+      name: String,
+      voted: Boolean,
+      estimation: String,
+      ref: UntypedRef,
+      token: SessionToken
+  )
 
   final case class PendingSession(userId: UUID, name: String)
 
@@ -108,7 +116,11 @@ object Room:
           data.users.find(_.token == token) match
             case Some(user) =>
               val newData = data.vote(user.id, estimation)
-              broadcast(RoomEvent(MessageType.Vote, roomId, user.id, estimation), newData.users, context)
+              broadcast(
+                RoomEvent(MessageType.Vote, roomId, user.id, estimation),
+                newData.users,
+                context
+              )
               receiveBehaviour(roomId, newData)
             case None => Behaviors.same
         case ClearVotes(token) =>
@@ -163,7 +175,11 @@ object Room:
         case EditIssue(token, issue) =>
           data.users.find(_.token == token) match
             case Some(user) =>
-              broadcast(RoomEvent(MessageType.EditIssue, roomId, user.id, issue), data.users, context)
+              broadcast(
+                RoomEvent(MessageType.EditIssue, roomId, user.id, issue),
+                data.users,
+                context
+              )
               receiveBehaviour(roomId, data.editIssue(issue, user.id))
             case None => Behaviors.same
         case ValidateToken(token, replyTo) =>

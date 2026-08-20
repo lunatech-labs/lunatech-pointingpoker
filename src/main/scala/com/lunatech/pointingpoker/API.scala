@@ -13,6 +13,7 @@ import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookiePair
+import org.apache.pekko.http.scaladsl.model.headers.SameSite
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
@@ -39,9 +40,8 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       value = token.raw,
       path = Some(s"/rooms/$roomId"),
       httpOnly = true,
-      secure = apiConfig.secureCookies,
-      extension = Some("SameSite=Strict")
-    )
+      secure = apiConfig.secureCookies
+    ).withSameSite(SameSite.Strict)
 
   // A missing or malformed cookie resolves to a freshly-minted, unmatchable token rather than
   // an Option threaded through every command. Room already no-ops on any token that doesn't

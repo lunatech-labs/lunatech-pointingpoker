@@ -6,7 +6,13 @@ import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
 
-final case class ApiConfig(host: String, port: Int, timeout: FiniteDuration, indexPath: String, secureCookies: Boolean)
+final case class ApiConfig(
+    host: String,
+    port: Int,
+    timeout: FiniteDuration,
+    indexPath: String,
+    secureCookies: Boolean
+)
 
 object ApiConfig:
   def load(config: Config): ApiConfig =

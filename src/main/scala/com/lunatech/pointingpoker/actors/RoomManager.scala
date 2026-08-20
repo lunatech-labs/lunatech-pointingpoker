@@ -14,17 +14,26 @@ object RoomManager:
   case class ConnectionCompleted(roomId: UUID, userId: UUID, ref: UntypedRef) extends Command
   case class ConnectionFailure(roomId: UUID, userId: UUID, ref: UntypedRef, t: Throwable)
       extends Command
-  case class ConnectToRoom(roomId: UUID, userId: UUID, name: String, token: Room.SessionToken, ref: UntypedRef)
-      extends Command
-  case class RoomResponseWrapper(response: Room.Response)         extends Command
+  case class ConnectToRoom(
+      roomId: UUID,
+      userId: UUID,
+      name: String,
+      token: Room.SessionToken,
+      ref: UntypedRef
+  ) extends Command
+  case class RoomResponseWrapper(response: Room.Response)                     extends Command
   case class Vote(roomId: UUID, token: Room.SessionToken, estimation: String) extends Command
   case class Show(roomId: UUID, token: Room.SessionToken)                     extends Command
   case class Clear(roomId: UUID, token: Room.SessionToken)                    extends Command
   case class Revote(roomId: UUID, token: Room.SessionToken)                   extends Command
   case class EditIssue(roomId: UUID, token: Room.SessionToken, issue: String) extends Command
-  case class RequestSession(roomId: UUID, name: String, replyTo: ActorRef[Room.SessionMinted]) extends Command
-  case class ValidateToken(roomId: UUID, token: Room.SessionToken, replyTo: ActorRef[Room.TokenResolution])
+  case class RequestSession(roomId: UUID, name: String, replyTo: ActorRef[Room.SessionMinted])
       extends Command
+  case class ValidateToken(
+      roomId: UUID,
+      token: Room.SessionToken,
+      replyTo: ActorRef[Room.TokenResolution]
+  ) extends Command
 
   sealed trait Response
   case class RoomId(value: String) extends Response
@@ -64,7 +73,9 @@ object RoomManager:
             receiveBehaviour(newData, roomResponseWrapper)
           case ConnectToRoom(roomId, userId, name, token, ref) =>
             data.rooms.get(roomId).foreach { room =>
-              room ! Room.Join(Room.User(userId, name, InitialVoteState, InitialEstimation, ref, token))
+              room ! Room.Join(
+                Room.User(userId, name, InitialVoteState, InitialEstimation, ref, token)
+              )
             }
             Behaviors.same
           case RequestSession(roomId, name, replyTo) =>
