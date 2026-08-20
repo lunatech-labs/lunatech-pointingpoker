@@ -55,6 +55,38 @@ response body. Cookie attributes:
   ePrivacy Directive (no consent banner needed) and matches the existing
   ephemeral lifetime of a `Room` actor's state.
 
+**`apiConfig.secureCookies` (`pointing-poker.service.secure-cookies` /
+`SECURE_COOKIES`) defaults to `true`, and that's safe to make loud rather
+than convenient:** this flag is security-relevant, and the two ways to get
+it wrong aren't symmetric. Defaulting `true` but forgetting to flip it for
+local plain-HTTP development fails loud and immediately — nothing works, every request 401s
+the moment `/events` doesn't get the cookie back, since a `Secure` cookie is
+never returned over a non-TLS connection. Defaulting `false` but forgetting
+to set it for a real deployment fails silently — the app works perfectly
+while quietly sending the session credential over plain HTTP if TLS
+termination is ever misconfigured upstream. Fail loud-and-safe by default,
+not quiet-and-convenient.
+
+That said, discoverability of the local-dev case is a real gap worth closing
+deliberately rather than leaving to the README alone: this project has no
+dev/prod profile split today (no `docker-compose`, no `.env`, just
+`application.conf` plus env-var overrides), and inferring `Secure` from the
+inbound request's scheme or from `apiConfig.host` doesn't actually work —
+TLS is normally terminated by a reverse proxy in front of this app in a real
+deployment (see the existing "SSE reverse-proxy buffering is undocumented"
+known issue), so the Pekko HTTP server itself receives plain HTTP from the
+proxy in production too. A local run and a correctly-deployed production
+instance are indistinguishable from inside the app, so there's no reliable
+signal to auto-detect this from. Instead:
+
+- `Main.scala` logs the resolved setting unconditionally at startup, e.g.
+  `Session cookies: Secure=true (requires HTTPS end-to-end, including
+  through any reverse proxy). Set SECURE_COOKIES=false for local plain-HTTP
+  development.` — the first thing visible in the console when `sbt run`
+  is followed by a mysteriously-401ing join.
+- `README.md` gets a "Running locally" section (doesn't exist today) stating
+  the same thing for anyone reading docs before running.
+
 The token is represented server-side as `opaque type SessionToken = UUID`
 (defined in `Room.scala`, alongside `User`/`RoomData`), minted with
 `UUID.randomUUID()` — the same generation mechanism `userId` already uses,
@@ -206,8 +238,9 @@ response body is kept as-is, for the client's own broadcast-matching logic.
 | `API.scala` | `/join` becomes a real ask to `RoomManager`, sets the cookie. `/events` becomes cookie-only input, asks `ValidateToken` before opening the SSE source, `401` on `Unresolved`. The five command routes read the token from the cookie instead of a `userId` query param; unmarshalling/response shape otherwise unchanged. |
 | `config/ApiConfig.scala` | Add `secureCookies: Boolean`. |
 | `application.conf` | Add `pointing-poker.service.secure-cookies = true` / `${?SECURE_COOKIES}`. |
+| `Main.scala` | Log the resolved `secureCookies` setting at startup, unconditionally, with a one-line explanation of what it implies and how to override it for local plain-HTTP development. |
 | `index.html` | Remove `userId`/`name` from the `/events` URL and from the five command POST URLs. No new client-side cookie-handling code needed. |
-| `README.md` | Add a short "Cookies" section. |
+| `README.md` | Add a short "Cookies" section, plus a "Running locally" section (doesn't exist today) noting `SECURE_COOKIES=false` is needed for plain-HTTP local development. |
 | `docs/known-issues.md` | Remove the two "Open" entries this resolves (`userId` never authenticated..., `/join` accepts a `name` it never uses). Add a short entry documenting the "unknown `roomId` silently gets an empty room, no bookmark continuity" behavior, cross-linked to Phase 2. |
 | `docs/roadmap.md` | Check off Phase 1's "Session/identity mechanism" item once this lands. |
 
