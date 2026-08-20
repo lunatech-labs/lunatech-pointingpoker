@@ -13,6 +13,7 @@ import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.apache.pekko.http.scaladsl.model.headers.`Set-Cookie`
+import org.apache.pekko.http.scaladsl.model.headers.Cookie
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -36,6 +37,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val commandProbe: org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe[RoomManager.Command] =
     testKit.createTestProbe[RoomManager.Command]()
 
+  val validToken: Room.SessionToken = Room.SessionToken.mint()
+
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
@@ -43,6 +46,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         Behaviors.same
       case RoomManager.RequestSession(_, _, replyTo) =>
         replyTo ! Room.SessionMinted(UUID.randomUUID(), Room.SessionToken.mint())
+        Behaviors.same
+      case RoomManager.ValidateToken(_, token, replyTo) =>
+        if token == validToken then replyTo ! Room.Resolved(UUID.randomUUID(), "Alice")
+        else replyTo ! Room.Unresolved
         Behaviors.same
       case other =>
         commandProbe.ref ! other
@@ -157,13 +164,28 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       )
     }
 
-    "open an SSE events stream" in {
-      val userId = UUID.randomUUID()
-      Get(s"/rooms/$roomId/events?userId=$userId&name=Alice") ~> apiRoute ~> check {
+    "reject an events connection with no session cookie" in
+      Get(s"/rooms/$roomId/events") ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "reject an events connection with a malformed session cookie" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(Cookie("session", "not-a-uuid")) ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "reject an events connection with an unresolvable session cookie" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "open an SSE events stream for a resolved session" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(Cookie("session", validToken.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         mediaType.toString mustBe "text/event-stream"
       }
-    }
 
     "reject a malformed vote body with 400" in {
       val userId        = UUID.randomUUID()
@@ -176,11 +198,6 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
     "reject a non-UUID userId query param with 400" in
       Post(s"/rooms/$roomId/show?userId=not-a-uuid") ~> apiRoute ~> check {
-        status mustBe StatusCodes.BadRequest
-      }
-
-    "reject a non-UUID userId query param on the events stream with 400" in
-      Get(s"/rooms/$roomId/events?userId=not-a-uuid&name=Alice") ~> apiRoute ~> check {
         status mustBe StatusCodes.BadRequest
       }
   }

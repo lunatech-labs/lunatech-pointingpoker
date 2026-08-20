@@ -13,6 +13,7 @@ import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
+import org.apache.pekko.http.scaladsl.model.headers.HttpCookiePair
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
@@ -102,8 +103,22 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       },
       path("rooms" / JavaUUID / "events") { roomId =>
         get {
-          parameters("userId".as[UUID], "name") { (userId, name) =>
-            complete(SSE.source(roomManager.toClassic, roomId, userId, name, tokenFromLegacyUserId(userId)))
+          optionalCookie(SessionCookieName) { maybeCookie =>
+            maybeCookie.flatMap(c => Room.SessionToken.parse(c.value)) match
+              case None =>
+                complete(StatusCodes.Unauthorized)
+              case Some(token) =>
+                onComplete(
+                  roomManager.ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
+                ) {
+                  case Success(Room.Resolved(userId, name)) =>
+                    complete(SSE.source(roomManager.toClassic, roomId, userId, name, token))
+                  case Success(Room.Unresolved) =>
+                    complete(StatusCodes.Unauthorized)
+                  case Failure(reason) =>
+                    log.error("Error while validating session for room {}: {}", roomId, reason)
+                    complete(StatusCodes.InternalServerError)
+                }
           }
         }
       },
