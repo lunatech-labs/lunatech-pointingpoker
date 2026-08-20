@@ -20,7 +20,7 @@ inside a long-lived socket payload.
 - [x] Reconnect-aware `Join`: upsert an existing participant by id instead of
       always appending a new one. Landed alongside the transport swap once a
       connection's identity (its `ActorRef`) could be told apart from a stale one.
-- [ ] Session/identity mechanism: validate `userId` per request, closing the
+- [x] Session/identity mechanism: validate `userId` per request, closing the
       spoofing gap the transport swap deliberately left open. See `docs/known-issues.md`
       for why this is now more urgent than originally scoped (userId exposure).
 - [ ] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
