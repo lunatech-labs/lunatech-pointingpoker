@@ -60,6 +60,23 @@ roadmap item instead of leaving it here as stale history.
   sessions durable across restarts, since an idle-expiry policy will be needed there
   too.
 
+### A `/join` with no follow-up `/events` leaks a pending session for the room's lifetime
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.pendingSessions`, `registerSession`).
+- **Issue:** Same shape as the room-level GC issue above, one level deeper: a
+  `PendingSession` created by `RequestSession` (backing `/join`) is only cleared
+  when a matching `Join` promotes it to a real member. An abandoned tab, a
+  network failure between `/join` and `/events`, or a client that calls `/join`
+  more than once before connecting leaves the earlier entry in
+  `pendingSessions` for as long as the room actor lives, even if that room
+  already has active, joined members and would otherwise stay alive
+  indefinitely.
+- **Resolution:** No separate fix needed beyond whatever resolves the room-level
+  GC issue above; a room-level idle-expiry or durable-session policy (Phase 2/5)
+  should sweep unpromoted pending sessions too, not just reap the room actor
+  itself.
+
 ### SSE reverse-proxy buffering is undocumented
 
 - **Where:** `README.md` / deployment notes (no dedicated section exists).
