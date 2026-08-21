@@ -98,7 +98,20 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           optionalCookie(SessionCookieName) { maybeCookie =>
             maybeCookie.flatMap(c => Room.SessionToken.parse(c.value)) match
               case None =>
-                complete(StatusCodes.Unauthorized)
+                optionalHeaderValueByName("X-Forwarded-Proto") { forwardedProto =>
+                  // Pekko's own listener is always plain HTTP here (see Main's startup log) - TLS,
+                  // if any, is terminated by a reverse proxy in front, so X-Forwarded-Proto is the
+                  // only signal for whether the client's connection was actually secure.
+                  val arrivedOverHttps = forwardedProto.exists(_.equalsIgnoreCase("https"))
+                  if apiConfig.secureCookies && !arrivedOverHttps then
+                    log.warn(
+                      "Rejecting session for room {}: SECURE_COOKIES is enabled but the request did not arrive over HTTPS (no X-Forwarded-Proto: https), so the browser will not return the Secure session cookie. Set SECURE_COOKIES=false for non-HTTPS deployments, or confirm your reverse proxy sets X-Forwarded-Proto.",
+                      roomId
+                    )
+                  else
+                    log.debug("No session cookie provided for room {}", roomId)
+                  complete(StatusCodes.Unauthorized)
+                }
               case Some(token) =>
                 onComplete(
                   roomManager.ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
@@ -106,6 +119,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
                   case Success(Room.Resolved(userId, name)) =>
                     complete(SSE.source(roomManager.toClassic, roomId, userId, name, token))
                   case Success(Room.Unresolved) =>
+                    log.debug("Session token did not resolve for room {}", roomId)
                     complete(StatusCodes.Unauthorized)
                   case Failure(reason) =>
                     log.error("Error while validating session for room {}: {}", roomId, reason)
