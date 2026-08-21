@@ -228,6 +228,14 @@ response body is kept as-is, for the client's own broadcast-matching logic.
 - Add a short "Cookies" note to `README.md`: what the session cookie is for,
   that it's session-only (cleared on browser close), and that it's exempt
   from consent requirements as a strictly-necessary functional cookie.
+- A session token has no lifecycle independent of the `Room` actor it belongs
+  to: no expiry, no rotation, and no way to invalidate one early short of the
+  whole room dying (its last member leaving). That matches the app's existing
+  architecture today (in-memory, single-process, nothing persisted ahead of
+  Phase 2's durable `sessions` store), not a new limitation introduced by this
+  mechanism. Don't read "session" here as implying a real session store with
+  its own lifecycle; it's an ambient credential whose lifetime is borrowed
+  from the `Room` actor's.
 
 ## File-by-file changes
 
