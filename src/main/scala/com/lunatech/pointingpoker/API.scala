@@ -43,11 +43,10 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
       secure = apiConfig.secureCookies
     ).withSameSite(SameSite.Strict)
 
-  // A missing or malformed cookie resolves to a freshly-minted, unmatchable token rather than
-  // an Option threaded through every command. Room already no-ops on any token that doesn't
-  // resolve to a member, so this reuses that path instead of adding a second "no credential" case.
-  private def resolveToken(maybeCookie: Option[HttpCookiePair]): Room.SessionToken =
-    maybeCookie.flatMap(c => Room.SessionToken.parse(c.value)).getOrElse(Room.SessionToken.mint())
+  // None (missing cookie, or a value that doesn't parse as a SessionToken) means RoomManager
+  // never asks Room at all; Some(token) that doesn't resolve to a member is Room's own no-op case.
+  private def resolveToken(maybeCookie: Option[HttpCookiePair]): Option[Room.SessionToken] =
+    maybeCookie.flatMap(c => Room.SessionToken.parse(c.value))
 
   val route: Route =
     concat(

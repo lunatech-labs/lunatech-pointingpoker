@@ -132,7 +132,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), token, "5"))
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), Some(token), "5"))
     }
 
     "dispatch a show command" in {
@@ -140,7 +140,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/show") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), token))
+      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch a clear command" in {
@@ -148,7 +148,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/clear") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), token))
+      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch a revote command" in {
@@ -158,7 +158,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), token))
+      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch an edit-issue command" in {
@@ -171,7 +171,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessage(
-        RoomManager.EditIssue(UUID.fromString(roomId), token, "new issue")
+        RoomManager.EditIssue(UUID.fromString(roomId), Some(token), "new issue")
       )
     }
 
@@ -214,9 +214,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
       }
-      // The API layer never rejects a missing/invalid credential for command endpoints. Room is
-      // the one that resolves the token and silently no-ops on a miss (see RoomSpec/RoomManagerSpec).
-      commandProbe.expectMessageType[RoomManager.Vote]
+      // The API layer never rejects a missing/invalid credential for command endpoints.
+      // A missing cookie resolves to None here; RoomManager never asks Room in that case
+      // (see RoomManagerSpec). A cookie that parses but doesn't resolve to a member is
+      // Room's own no-op case instead (see RoomSpec).
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), None, "5"))
     }
   }
 end APISpec

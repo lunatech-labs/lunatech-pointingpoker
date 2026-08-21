@@ -232,11 +232,11 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
       val token = Room.SessionToken.mint()
 
-      managerRef ! RoomManager.Vote(roomId, token, "5")
-      managerRef ! RoomManager.Show(roomId, token)
-      managerRef ! RoomManager.Clear(roomId, token)
-      managerRef ! RoomManager.Revote(roomId, token)
-      managerRef ! RoomManager.EditIssue(roomId, token, "issue name")
+      managerRef ! RoomManager.Vote(roomId, Some(token), "5")
+      managerRef ! RoomManager.Show(roomId, Some(token))
+      managerRef ! RoomManager.Clear(roomId, Some(token))
+      managerRef ! RoomManager.Revote(roomId, Some(token))
+      managerRef ! RoomManager.EditIssue(roomId, Some(token), "issue name")
 
       roomProbe.expectMessage(Room.Vote(token, "5"))
       roomProbe.expectMessage(Room.ShowVotes(token))
@@ -257,7 +257,21 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         )
       )
 
-      managerRef ! RoomManager.Vote(unknownRoomId, Room.SessionToken.mint(), "5")
+      managerRef ! RoomManager.Vote(unknownRoomId, Some(Room.SessionToken.mint()), "5")
+
+      roomProbe.expectNoMessage()
+    }
+
+    "no-op a command with no session token, without asking the room" in {
+      val roomId            = UUID.randomUUID()
+      val roomProbe         = testKit.createTestProbe[Room.Command]()
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val managerRef        = testKit.spawn(
+        RoomManager
+          .receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref)), roomResponseProbe.ref)
+      )
+
+      managerRef ! RoomManager.Vote(roomId, None, "5")
 
       roomProbe.expectNoMessage()
     }
