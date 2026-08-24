@@ -52,9 +52,9 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (roomId, userId, user, probe) = wire()
       probe.ensureSubscription()
 
-      // No demand requested yet: production's buffer size is 0, so a clear excess of
-      // undelivered batches must fail the stream (and let the client reconnect), not
-      // vanish silently.
+      // No demand requested yet: production's buffer only tolerates bufferSize + 1 = 2
+      // undelivered batches (see SSE.bufferSize), so a clear excess must fail the stream
+      // (and let the client reconnect), not vanish silently.
       (1 to 5).foreach(i =>
         user ! List(RoomEvent(MessageType.Vote, roomId, userId, i.toString))
       )
