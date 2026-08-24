@@ -58,6 +58,17 @@ further work, cause a visible "so-and-so left, then rejoined" flicker for
 every other participant, not just the affected client. The grace-period fix
 below exists specifically to close that gap.
 
+A true backpressure mechanism, `Source.queue` with `OverflowStrategy.backpressure`
+instead of `Source.actorRef`, was not seriously considered as an alternative to
+fail-fast, for a structural reason rather than an oversight: `Room.broadcast`
+sends to every participant from inside the `Room` actor's own synchronous message
+processing (`user.ref ! List(message)`, fire-and-forget). Backpressure would mean
+`Room` either blocking on a slow participant's queue-offer future before moving on
+to its next message, or restructuring broadcast into an async operation, both
+worse for this app than letting one slow client fail and resync while the rest of
+the room proceeds unaffected. Fail-fast is not a compromise version of real
+backpressure here; it is the better fit for a fan-out from a single-threaded actor.
+
 **Option 2 (deferred): sequence numbers + `Last-Event-ID` resumption.**
 Attach a monotonic sequence number to each event, read the `Last-Event-ID`
 header on reconnect, and replay only the missed events from a short
@@ -204,6 +215,16 @@ hops.
    overhead, and jitter) now that `retry` is a known, controlled quantity
    rather than an unpinned default that would have required padding for the
    unknown.
+
+   Unlike the buffer-size facts above, the 6-second figure itself is a
+   heuristic, not something measured against real network conditions: there
+   is no test or field data confirming that a genuine reconnect completes
+   within 6 seconds on a slow or lossy connection (a bad mobile network, a
+   backgrounded tab a browser deprioritizes) rather than this app's usual
+   office network. If that assumption turns out to be wrong in practice, a
+   slow-but-genuine reconnect would look identical to a real departure and
+   still produce the flicker this fix was meant to prevent, just less often.
+   Revisit the constant, not the mechanism, if that's ever observed.
 
 ## What was deferred
 

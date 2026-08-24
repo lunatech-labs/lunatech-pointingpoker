@@ -85,15 +85,18 @@ roadmap item instead of leaving it here as stale history.
   good" - both arrive as the SSE stream simply ending, so both wait out the same
   grace period before the rest of the room is told. A participant closing their tab
   mid-meeting still shows as present for up to 6 seconds afterward.
-- **Resolution:** Unscheduled; worth confirming with real usage whether this lag is
-  actually noticeable enough to matter before investing further. If it is, the fix is
-  to disambiguate at the source instead of guessing after the fact: have the client
-  send an explicit "I'm leaving" signal on deliberate departure (e.g. a `pagehide` /
-  `visibilitychange` handler firing `navigator.sendBeacon` to a dedicated leave
-  endpoint) that maps to an immediate `Room.Leave` bypassing the grace period
-  entirely, while an SSE stream simply ending with no such signal keeps going through
-  the grace period as today. `sendBeacon` is the right primitive here since a normal
-  `fetch`/POST is not reliably delivered from an unload-adjacent handler.
+- **Resolution:** Unscheduled. This app's sessions run 30 minutes to an hour, so a
+  6-second lingering presence after a genuine departure is proportionally small,
+  which lowers the urgency here rather than removing it: still worth confirming with
+  real usage whether it's noticeable enough to matter before investing further. If it
+  is, the fix is to disambiguate at the source instead of guessing after the fact:
+  have the client send an explicit "I'm leaving" signal on deliberate departure (e.g.
+  a `pagehide` / `visibilitychange` handler firing `navigator.sendBeacon` to a
+  dedicated leave endpoint) that maps to an immediate `Room.Leave` bypassing the
+  grace period entirely, while an SSE stream simply ending with no such signal keeps
+  going through the grace period as today. `sendBeacon` is the right primitive here
+  since a normal `fetch`/POST is not reliably delivered from an unload-adjacent
+  handler.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
