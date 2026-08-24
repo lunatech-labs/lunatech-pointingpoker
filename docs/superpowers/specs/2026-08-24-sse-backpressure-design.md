@@ -72,6 +72,21 @@ scope, it's just not needed yet. Revisit specifically when that work starts,
 since that's the point reliable delivery becomes load-bearing rather than
 merely nice-to-have.
 
+There's a second reason to revisit this beyond that trigger. The batching fix
+below removes the burst at *arrival* (a join replay is one buffer slot, not
+one per event), but a slow client can still be mid-drain of a large replay
+list - `mapConcat` unpacks it downstream one frame at a time, only pulling the
+next buffered element once that unpacking finishes - and the buffer (sized 1)
+tolerates only one more broadcast arriving during that drain before failing
+the stream. A bigger room means both a bigger list to drain and more
+concurrent activity likely to land during the drain window, so a slow client
+joining a large, active room could hit a fail-reconnect-fail loop, fetching
+the same large replay each time. This is bounded (it self-heals, and no data
+is lost) rather than a correctness bug, so it doesn't change the fail-fast
+decision above, but it means the "no longer room-size-scaling" claim below
+only fully holds once delta resync replaces full-replay-on-reconnect - i.e.
+this option, not a tweak to the buffer or batching here.
+
 ## The join-replay burst: a second, separate problem
 
 While sizing the buffer for Option 1, a second, unrelated risk surfaced:
@@ -193,12 +208,29 @@ hops.
 ## What was deferred
 
 - Sequence numbers / `Last-Event-ID` resumption (Option 2 above), revisit
-  when Phase 4's server-authoritative auto-reveal work begins.
+  when Phase 4's server-authoritative auto-reveal work begins - now for two
+  reasons, not one: it's still the prerequisite for trustworthy auto-reveal,
+  and it's also what fully closes the room-size-scaling risk below, since a
+  delta resync never needs to hand a slow client a large replay list to drain
+  in the first place.
 - Any buffer sizing tied to room size or padded "just in case." The batching
-  fix removed the only legitimate room-size-scaling burst; further headroom
-  would only slow down detection of genuine backpressure without a
+  fix removed the room-size-scaling burst at connection time; further
+  headroom would only slow down detection of genuine backpressure without a
   corresponding benefit the fail+reconnect+resync fallback doesn't already
-  cover.
+  cover. It does not remove every room-size-correlated risk: a slow client
+  can still be mid-drain of a large replay list when the buffer's small
+  tolerance is exhausted by ordinary room activity, causing a bounded
+  fail-reconnect-fail loop rather than data loss (see Option 2 above). Left
+  as-is rather than padded, since that loop self-heals and no evidence yet
+  suggests it happens in practice at this app's scale.
+- Disambiguating a deliberate tab close from a transient reconnect. The grace
+  period in the final design (below) treats both identically, since nothing in
+  the SSE stream ending tells the server which one happened; a deliberate close
+  now waits out the same 6 seconds as a genuine reconnect before the rest of
+  the room is told. Logged as its own entry in `docs/known-issues.md` rather
+  than fixed here, since closing the gap means adding a client-initiated
+  signal (e.g. `navigator.sendBeacon` on `pagehide`) rather than tuning
+  anything in this change.
 
 ## Testing
 

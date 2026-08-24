@@ -72,6 +72,29 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, cheap to fix. Good to bundle with Phase 5 hardening
   or the next deployment-related change.
 
+### A deliberate tab close is as slow to announce as a transient reconnect
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace period).
+- **Issue:** The grace period introduced in
+  `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md` to swallow a
+  reconnect-driven leave-then-rejoin flicker delays *every* disconnect by the same
+  6 seconds, not just the transient ones. The server has no signal that distinguishes
+  "this connection will retry" from "this participant closed the tab and is gone for
+  good" - both arrive as the SSE stream simply ending, so both wait out the same
+  grace period before the rest of the room is told. A participant closing their tab
+  mid-meeting still shows as present for up to 6 seconds afterward.
+- **Resolution:** Unscheduled; worth confirming with real usage whether this lag is
+  actually noticeable enough to matter before investing further. If it is, the fix is
+  to disambiguate at the source instead of guessing after the fact: have the client
+  send an explicit "I'm leaving" signal on deliberate departure (e.g. a `pagehide` /
+  `visibilitychange` handler firing `navigator.sendBeacon` to a dedicated leave
+  endpoint) that maps to an immediate `Room.Leave` bypassing the grace period
+  entirely, while an SSE stream simply ending with no such signal keeps going through
+  the grace period as today. `sendBeacon` is the right primitive here since a normal
+  `fetch`/POST is not reliably delivered from an unload-adjacent handler.
+
 ### HTTP command ordering is not guaranteed between a client and the server
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all mutating
