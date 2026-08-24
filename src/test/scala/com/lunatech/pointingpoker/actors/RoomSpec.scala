@@ -198,6 +198,40 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomResponseProbe.expectNoMessage()
     }
 
+    "reset the grace period if Leave is called twice for the same connection before it elapses" in {
+      // Room.Leave's timer is keyed on (userId, ref) on the assumption that RoomManager
+      // calls it at most once per connection. This proves what actually happens if that
+      // assumption is ever violated: the second call's startSingleTimer replaces the
+      // pending timer outright, restarting the grace period from the second call rather
+      // than firing twice or being ignored - see the comment on Room.Leave.
+      val (user, _)            = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe)  = createUser(UUID.randomUUID(), "user2", false, "")
+      val firstReplyProbe      = testKit.createTestProbe[Room.Response]()
+      val secondReplyProbe     = testKit.createTestProbe[Room.Response]()
+      val (roomId, roomRef)    = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2)),
+        gracePeriod = 200.millis
+      )
+      val expectedMessage = RoomEvent(MessageType.Leave, roomId, user.id, RoomEvent.NoExtra)
+
+      roomRef ! Room.Leave(user.id, user.ref, firstReplyProbe.ref)
+
+      Thread.sleep(120) // still inside the first call's grace window
+
+      roomRef ! Room.Leave(user.id, user.ref, secondReplyProbe.ref)
+
+      // Past the first call's original 200ms deadline, but the timer was reset by the
+      // second call, so nothing has fired yet.
+      user2Probe.expectNoMessage(120.millis)
+
+      // Fires exactly once, delivering the second call's replyTo - proving the timer
+      // was replaced, not run twice in parallel.
+      user2Probe.expectMsg(List(expectedMessage))
+      secondReplyProbe.expectMessage(Room.Running(roomId))
+      firstReplyProbe.expectNoMessage()
+    }
+
     "leave room and broadcast it" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")

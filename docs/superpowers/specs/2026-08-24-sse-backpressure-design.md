@@ -239,11 +239,25 @@ hops.
   `setupNewUser`'s replay arrives as a single batched message; a new case
   proving `Leave` is delayed rather than acted on immediately; a new case
   proving a reconnect within the grace period produces no `Leave` broadcast
-  at all. The `BehaviorTestKit`-based "stops when empty" case sends
-  `ConfirmLeave` directly, since `BehaviorTestKit` doesn't drive real timers.
+  at all; a new case (added after review) proving a second `Leave` for the
+  same connection resets the grace period rather than firing twice, which
+  documents the (userId, ref) timer key's single-call assumption instead of
+  leaving it implicit. The `BehaviorTestKit`-based "stops when empty" case
+  sends `ConfirmLeave` directly, since `BehaviorTestKit` doesn't drive real
+  timers.
 - `SSESpec` (new): the batched-list-to-individual-frames flattening, the
   buffer overflow failing the stream rather than dropping silently, and the
   `retry` field being set on outgoing events.
+- `BackpressureReconnectSpec` (new, added after review): an end-to-end case
+  wiring a real `RoomManager`, a real `Room`, and two real `SSE.source`
+  streams standing in for two browser tabs. Proves the actual failure-to-
+  reconnect path RoomSpec and SSESpec each only cover in isolation: a
+  stalled client's stream overflows and fails, and the rest of the room
+  never sees a `Leave` for it because the reconnect lands inside the grace
+  period. This is the test that would catch a future regression like
+  reverting the buffer size to 0 or dropping the grace period, since either
+  change could leave RoomSpec and SSESpec both green while still breaking
+  the combination.
 - Manual/throwaway verification during design, not part of the permanent
   suite: the `dropTail`/buffer-size mechanics above, and the real-socket
   connection-race check across 80 trials.

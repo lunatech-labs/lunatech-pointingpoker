@@ -180,6 +180,13 @@ object Room:
           // within that window (retry after a dropped SSE stream, a page refresh, an
           // ordinary network blip) replaces this ref via Join before the timer fires, so
           // the rest of the room never sees a spurious leave-then-rejoin flicker.
+          //
+          // Keying the timer on (userId, ref) relies on RoomManager calling Leave at most
+          // once per connection (ConnectionCompleted and ConnectionFailure are mutually
+          // exclusive outcomes of the same watchTermination). If that ever stops holding, a
+          // second Leave for the same (userId, ref) replaces the pending timer rather than
+          // running two independent ones, restarting the grace period from the second call
+          // instead of the first - see the "reset the grace period" case in RoomSpec.
           timers.startSingleTimer(
             key = (userId, ref),
             msg = ConfirmLeave(userId, ref, replyTo),
