@@ -2,8 +2,10 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
-import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
+import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import org.apache.pekko.actor.ActorRef as UntypedRef
 import RoomEvent.MessageType
 
@@ -19,12 +21,17 @@ object Room:
   sealed trait Command
   final case class Join(user: User)                                                  extends Command
   final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final case class Vote(token: SessionToken, estimation: String)                     extends Command
-  final case class ClearVotes(token: SessionToken)                                   extends Command
-  final case class ReVote(token: SessionToken)                                       extends Command
-  final case class ShowVotes(token: SessionToken)                                    extends Command
-  final case class EditIssue(token: SessionToken, issue: String)                     extends Command
-  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
+  final private[actors] case class ConfirmLeave(
+      userId: UUID,
+      ref: UntypedRef,
+      replyTo: ActorRef[Response]
+  ) extends Command
+  final case class Vote(token: SessionToken, estimation: String)                  extends Command
+  final case class ClearVotes(token: SessionToken)                                extends Command
+  final case class ReVote(token: SessionToken)                                    extends Command
+  final case class ShowVotes(token: SessionToken)                                 extends Command
+  final case class EditIssue(token: SessionToken, issue: String)                  extends Command
+  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted]) extends Command
   final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
       extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
@@ -93,25 +100,38 @@ object Room:
   object RoomData:
     val empty: RoomData = RoomData(List.empty[User], "", Option.empty[UUID])
 
-  def apply(roomId: UUID): Behavior[Command] =
+  val defaultGracePeriod: FiniteDuration = 6.seconds
+
+  def apply(
+      roomId: UUID,
+      initialData: RoomData = RoomData.empty,
+      gracePeriod: FiniteDuration = defaultGracePeriod
+  ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
-      receiveBehaviour(roomId, RoomData.empty)
+      Behaviors.withTimers[Command] { timers =>
+        receiveBehaviour(roomId, initialData, gracePeriod, timers)
+      }
     }
 
-  private[actors] def receiveBehaviour(roomId: UUID, data: RoomData): Behavior[Command] =
+  private[actors] def receiveBehaviour(
+      roomId: UUID,
+      data: RoomData,
+      gracePeriod: FiniteDuration,
+      timers: TimerScheduler[Command]
+  ): Behavior[Command] =
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
           broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
-          receiveBehaviour(roomId, newData)
+          receiveBehaviour(roomId, newData, gracePeriod, timers)
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
           val token   = SessionToken.mint()
           val newData = data.registerSession(token, userId, name)
           replyTo ! SessionMinted(userId, token)
-          receiveBehaviour(roomId, newData)
+          receiveBehaviour(roomId, newData, gracePeriod, timers)
         case Vote(token, estimation) =>
           data.users.find(_.token == token) match
             case Some(user) =>
@@ -121,7 +141,7 @@ object Room:
                 newData.users,
                 context
               )
-              receiveBehaviour(roomId, newData)
+              receiveBehaviour(roomId, newData, gracePeriod, timers)
             case None => Behaviors.same
         case ClearVotes(token) =>
           data.users.find(_.token == token) match
@@ -132,7 +152,7 @@ object Room:
                 newData.users,
                 context
               )
-              receiveBehaviour(roomId, newData)
+              receiveBehaviour(roomId, newData, gracePeriod, timers)
             case None => Behaviors.same
         case ReVote(token) =>
           data.users.find(_.token == token) match
@@ -143,7 +163,7 @@ object Room:
                 newData.users,
                 context
               )
-              receiveBehaviour(roomId, newData)
+              receiveBehaviour(roomId, newData, gracePeriod, timers)
             case None => Behaviors.same
         case ShowVotes(token) =>
           data.users.find(_.token == token).foreach { user =>
@@ -155,6 +175,18 @@ object Room:
           }
           Behaviors.same
         case Leave(userId, ref, replyTo) =>
+          // Delay acting on this until the grace period elapses (see ConfirmLeave below),
+          // instead of removing the user and broadcasting Leave right away. A reconnect
+          // within that window (retry after a dropped SSE stream, a page refresh, an
+          // ordinary network blip) replaces this ref via Join before the timer fires, so
+          // the rest of the room never sees a spurious leave-then-rejoin flicker.
+          timers.startSingleTimer(
+            key = (userId, ref),
+            msg = ConfirmLeave(userId, ref, replyTo),
+            delay = gracePeriod
+          )
+          Behaviors.same
+        case ConfirmLeave(userId, ref, replyTo) =>
           if data.users.exists(u => u.id == userId && u.ref == ref) then
             val newData = data.leave(userId, ref)
             broadcast(
@@ -167,7 +199,7 @@ object Room:
               Behaviors.stopped
             else
               replyTo ! Running(roomId)
-              receiveBehaviour(roomId, newData)
+              receiveBehaviour(roomId, newData, gracePeriod, timers)
           else
             // Stale teardown: this userId already reconnected under a different ref
             // (joinUser replaced the entry), so there's nothing left to remove.
@@ -180,7 +212,7 @@ object Room:
                 data.users,
                 context
               )
-              receiveBehaviour(roomId, data.editIssue(issue, user.id))
+              receiveBehaviour(roomId, data.editIssue(issue, user.id), gracePeriod, timers)
             case None => Behaviors.same
         case ValidateToken(token, replyTo) =>
           val resolution = data.pendingSessions.get(token) match
@@ -204,18 +236,21 @@ object Room:
   ): Unit =
     context.log.debug("Broadcasting: {} ", message)
     users.foreach { user =>
-      user.ref ! message
+      user.ref ! List(message)
     }
   end broadcast
 
   private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit =
-    user.ref ! RoomEvent(MessageType.Init, roomId, user.id, user.name)
-    data.issueLastEditBy.foreach(lastEditUser =>
-      user.ref ! RoomEvent(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
+    val init      = List(RoomEvent(MessageType.Init, roomId, user.id, user.name))
+    val editIssue = data.issueLastEditBy.map(lastEditUser =>
+      RoomEvent(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
     )
-    data.users.foreach { u =>
-      user.ref ! RoomEvent(MessageType.Join, roomId, u.id, u.name)
-      if u.voted then user.ref ! RoomEvent(MessageType.Vote, roomId, u.id, u.estimation)
+    val perUser = data.users.flatMap { u =>
+      RoomEvent(MessageType.Join, roomId, u.id, u.name) ::
+        (if u.voted then List(RoomEvent(MessageType.Vote, roomId, u.id, u.estimation)) else Nil)
     }
+    // One send for the whole replay - not one per event - so a large room's worth of
+    // catch-up state can't overrun the outbound SSE buffer on connect.
+    user.ref ! (init ++ editIssue.toList ++ perUser)
   end setupNewUser
 end Room

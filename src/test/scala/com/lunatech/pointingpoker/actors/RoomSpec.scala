@@ -2,6 +2,8 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.duration.*
+
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.testkit.TestProbe
@@ -38,8 +40,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.EditIssue(user.token, issue)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
       dataProbe.expectMessage(expectedData)
     }
 
@@ -65,8 +67,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.ClearVotes(user.token)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
       dataProbe.expectMessage(expectedData)
     }
 
@@ -87,8 +89,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.ReVote(user.token)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
       dataProbe.expectMessage(expectedData)
     }
 
@@ -103,8 +105,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.ShowVotes(user.token)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
     }
 
     "vote and broadcast it" in {
@@ -124,8 +126,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Vote(user.token, estimation)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
       dataProbe.expectMessage(expectedData)
     }
 
@@ -148,6 +150,54 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
+    "delay a Leave broadcast by the grace period instead of acting immediately" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
+      val (roomId, roomRef)   = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2)),
+        gracePeriod = 200.millis
+      )
+      val expectedMessage = RoomEvent(MessageType.Leave, roomId, user.id, RoomEvent.NoExtra)
+
+      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+
+      user2Probe.expectNoMessage(50.millis)       // still within the grace period
+      user2Probe.expectMsg(List(expectedMessage)) // arrives once the grace period elapses
+    }
+
+    "swallow a Leave entirely if the same user reconnects within the grace period" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (roomId, roomRef)   = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2)),
+        gracePeriod = 200.millis
+      )
+
+      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+
+      // Reconnect well within the grace period, under a new ref but the same user id/token.
+      val reconnectedUserProbe = TestProbe()(testKit.system.classicSystem)
+      val reconnectedUser      = user.copy(ref = reconnectedUserProbe.ref)
+      roomRef ! Room.Join(reconnectedUser)
+
+      // The room-wide Join broadcast (which includes the reconnecting user themselves) is
+      // the only thing user2 should ever see - no Leave, no flicker, before or after the
+      // grace period elapses.
+      user2Probe.expectMsg(List(RoomEvent(MessageType.Join, roomId, user.id, user.name)))
+      user2Probe.expectNoMessage(300.millis) // spans past the 200ms grace period
+
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessage(
+        Room.DataStatus(data = RoomData.empty.copy(users = List(reconnectedUser, user2)))
+      )
+      roomResponseProbe.expectNoMessage()
+    }
+
     "leave room and broadcast it" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
@@ -156,7 +206,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val actingUserId        = user.id
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
-        RoomData.empty.copy(users = List(user, user2))
+        RoomData.empty.copy(users = List(user, user2)),
+        gracePeriod = 50.millis
       )
       val expectedMessage = RoomEvent(
         MessageType.Leave,
@@ -168,12 +219,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.Leave(actingUserId, user.ref, roomResponseProbe.ref)
 
+      user2Probe.expectMsg(List(expectedMessage)) // waits past the (short) grace period
+      roomResponseProbe.expectMessage(Room.Running(roomId))
+
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectNoMessage()
-      user2Probe.expectMsg(expectedMessage)
-      roomResponseProbe.expectMessage(Room.Running(roomId))
-
       dataProbe.expectMessage(expectedData)
     }
 
@@ -203,7 +254,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessage(expectedData)
 
       // The stale leave must not broadcast a Leave event or reply, since nothing was removed.
-      user2Probe.expectMsgType[RoomEvent] // the Join broadcast from the reconnect
+      user2Probe.expectMsgType[List[RoomEvent]] // the Join broadcast from the reconnect
       user2Probe.expectNoMessage()
       roomResponseProbe.expectNoMessage()
     }
@@ -221,8 +272,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       behaviorTestKit.run(Room.Join(user))
       behaviorTestKit.run(Room.Join(user2))
-      behaviorTestKit.run(Room.Leave(user.id, user.ref, roomResponseProbe.ref))
-      behaviorTestKit.run(Room.Leave(user2.id, user2.ref, roomResponseProbe.ref))
+      // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
+      // directly rather than Leave (which only schedules it) - this test is about the
+      // "room stops when empty" invariant, not the grace-period delay itself.
+      behaviorTestKit.run(Room.ConfirmLeave(user.id, user.ref, roomResponseProbe.ref))
+      behaviorTestKit.run(Room.ConfirmLeave(user2.id, user2.ref, roomResponseProbe.ref))
       behaviorTestKit.isAlive mustBe false
     }
 
@@ -240,6 +294,42 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessage(
         Room.DataStatus(data = RoomData.empty.copy(users = List(rejoinedUser)))
       )
+    }
+
+    "batch the entire join replay into a single message instead of one send per event" in {
+      val issue        = "current issue"
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "5")
+      val internalData =
+        RoomData(users = List(user), currentIssue = issue, issueLastEditBy = Option(user.id))
+      val (roomId, roomRef) = createRoom(UUID.randomUUID(), internalData)
+
+      val newUserProbe = TestProbe()(testKit.system.classicSystem)
+      val newUser      =
+        Room.User(
+          UUID.randomUUID(),
+          "new user",
+          false,
+          "",
+          newUserProbe.ref,
+          Room.SessionToken.mint()
+        )
+
+      roomRef ! Room.Join(newUser)
+
+      val expectedReplay = List(
+        RoomEvent(MessageType.Init, roomId, newUser.id, newUser.name),
+        RoomEvent(MessageType.EditIssue, roomId, user.id, issue),
+        RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name),
+        RoomEvent(MessageType.Join, roomId, user.id, user.name),
+        RoomEvent(MessageType.Vote, roomId, user.id, user.estimation)
+      )
+
+      newUserProbe.expectMsg(expectedReplay)
+      // The room-wide Join broadcast (which includes the new user themselves, and which
+      // the client already ignores via message.userId !== ref.user.id) is a separate,
+      // pre-existing send - not part of what this test is proving.
+      newUserProbe.expectMsg(List(RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)))
+      newUserProbe.expectNoMessage() // proves the replay itself arrived as one message, not several
     }
 
     "join the room, get all info, and broadcast it" in {
@@ -278,31 +368,19 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.GetData(dataProbe.ref)
 
-      userProbe.expectMsg(expectedMessage)
-      user2Probe.expectMsg(expectedMessage)
+      userProbe.expectMsg(List(expectedMessage))
+      user2Probe.expectMsg(List(expectedMessage))
 
+      // The whole catch-up replay arrives as a single batched message, not one per event.
       newUserProbe.expectMsg(
-        RoomEvent(MessageType.Init, roomId, newUser.id, newUser.name)
-      )
-      newUserProbe.expectMsg(
-        RoomEvent(
-          MessageType.EditIssue,
-          roomId,
-          user.id,
-          internalData.currentIssue
+        List(
+          RoomEvent(MessageType.Init, roomId, newUser.id, newUser.name),
+          RoomEvent(MessageType.EditIssue, roomId, user.id, internalData.currentIssue),
+          RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name),
+          RoomEvent(MessageType.Join, roomId, user.id, user.name),
+          RoomEvent(MessageType.Vote, roomId, user.id, user.estimation),
+          RoomEvent(MessageType.Join, roomId, user2.id, user2.name)
         )
-      )
-      newUserProbe.expectMsg(
-        RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)
-      )
-      newUserProbe.expectMsg(
-        RoomEvent(MessageType.Join, roomId, user.id, user.name)
-      )
-      newUserProbe.expectMsg(
-        RoomEvent(MessageType.Vote, roomId, user.id, user.estimation)
-      )
-      newUserProbe.expectMsg(
-        RoomEvent(MessageType.Join, roomId, user2.id, user2.name)
       )
 
       dataProbe.expectMessage(expectedData)
@@ -383,9 +461,13 @@ object RoomSpec:
     val user  = Room.User(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint())
     (user, probe)
 
-  def createRoom(roomId: UUID, data: RoomData)(using
+  def createRoom(
+      roomId: UUID,
+      data: RoomData,
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod
+  )(using
       testKit: ActorTestKit
   ): (UUID, ActorRef[Room.Command]) =
-    val roomRef = testKit.spawn[Room.Command](Room.receiveBehaviour(roomId, data))
+    val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod))
     (roomId, roomRef)
 end RoomSpec

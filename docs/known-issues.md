@@ -31,22 +31,6 @@ roadmap item instead of leaving it here as stale history.
   is what would let the server distinguish the two cases and make an informed choice
   about whether to 404.
 
-### SSE broadcasts can be silently dropped under backpressure
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`
-  (`disabledBufferSize = 0`, `OverflowStrategy.dropTail`, carried over unchanged
-  from the old WebSocket source).
-- **Issue:** With a zero-size buffer, a broadcast event that arrives while the
-  downstream write is not immediately ready is dropped, with no sequence number,
-  no `Last-Event-ID` resumption, and no periodic full-state resync. A dropped
-  `vote`/`show`/`clear` event can leave a client's UI stale until something else
-  triggers a reconnect and a fresh catch-up replay.
-- **Resolution:** Reliable delivery is a prerequisite for server-authoritative
-  auto-reveal, not parallel work, so don't wait for Phase 4 to start on it. Treat
-  it as its own near-term item, ideally scheduled alongside Phase 1: that phase
-  already introduces per-request identity validation, and a resync/ack mechanism
-  pairs naturally with that same request path.
-
 ### No garbage collection for abandoned or never-joined rooms
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`

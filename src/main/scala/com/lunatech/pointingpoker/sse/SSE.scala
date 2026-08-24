@@ -16,7 +16,15 @@ import com.lunatech.pointingpoker.actors.RoomEvent.given
 
 object SSE:
 
-  val disabledBufferSize = 0
+  // Source.actorRef tolerates bufferSize + 1 elements in flight before OverflowStrategy
+  // engages (one already "current", plus this many queued behind it) - confirmed
+  // empirically, since a bufferSize of 0 special-cases to an unconditional silent drop
+  // that never consults the strategy at all, rather than "zero tolerance under the
+  // strategy" as the name might suggest. 1 covers two ordinary actions landing close
+  // together; a rarer larger coincidence (e.g. a mass departure) is left to fall through
+  // to OverflowStrategy.fail below and self-heal via reconnect + full resync, which is
+  // already the intended path, not a degraded one.
+  val bufferSize = 1
 
   /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default
     * `pekko.http.server.idle-timeout` (60 seconds), otherwise an idle stream is killed by the
@@ -24,6 +32,12 @@ object SSE:
     * as an event with an empty `data` payload, which the frontend ignores.
     */
   val heartbeatInterval = 15.seconds
+
+  /** How long a client should wait before reconnecting after this stream ends. Set explicitly
+    * rather than left to each browser's own unpinned default, so the room-level grace period before
+    * a Leave is announced (see Room.Leave) can be sized against a known value.
+    */
+  val retryMillis = 2000
 
   def source(
       roomManager: ActorRef,
@@ -33,11 +47,11 @@ object SSE:
       token: Room.SessionToken
   )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
-      .actorRef[RoomEvent](
+      .actorRef[List[RoomEvent]](
         completionMatcher,
         failureMatcher,
-        disabledBufferSize,
-        OverflowStrategy.dropTail
+        bufferSize,
+        OverflowStrategy.fail
       )
       .mapMaterializedValue { user =>
         roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, user)
@@ -50,7 +64,8 @@ object SSE:
         }
         user
       }
-      .map(event => ServerSentEvent(event.asJson.noSpaces))
+      .mapConcat(identity)
+      .map(event => ServerSentEvent(data = event.asJson.noSpaces, retry = Some(retryMillis)))
       .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 
   // No message ever completes the stream from the outside; it ends only via

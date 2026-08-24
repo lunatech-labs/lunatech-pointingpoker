@@ -70,15 +70,20 @@ directly in the new frontend.
 - [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
       become real backend logic.
-- [ ] Guarantee SSE broadcast delivery before the above is trustworthy. The
-      outbound SSE source (`sse/SSE.scala`) uses a zero-size buffer with
-      `OverflowStrategy.dropTail`, carried over unchanged from the old WebSocket
-      source, so a `vote`/`show`/`clear` event can be silently dropped under
-      backpressure with no sequence number, no `Last-Event-ID` resumption, and no
-      periodic full-state resync. A client can then sit on stale state until an
-      unrelated reconnect triggers a fresh catch-up replay. Server-authoritative
-      auto-reveal is only as reliable as this delivery path, so fix this first or
-      alongside it. See `docs/known-issues.md`.
+- [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
+      causes rather than compensating for them: a joining user's full catch-up
+      replay now goes out as a single batched message instead of one send per
+      event, removing the one systematic, room-size-scaling burst against the
+      outbound buffer; the source switched to `OverflowStrategy.fail` with a small
+      non-zero buffer, since a zero-size buffer turned out to bypass whichever
+      overflow strategy is configured entirely rather than applying it at a
+      zero-element threshold. A failed connection self-heals through the client's
+      existing reconnect-and-replay path, now on an explicit `retry` interval this
+      app controls instead of each browser's own unpinned default. A grace period
+      before a disconnect is announced (`Room.Leave`/`ConfirmLeave`) keeps an
+      ordinary reconnect invisible to the rest of the room instead of showing as a
+      leave-then-rejoin flicker. See
+      `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`.
 - [ ] Re-vote refinement: prior-vote tracking, confirm-vs-change distinction, the
       pre/post-reveal visibility rules from the spec. The current `ReVote` command
       is a stub.
