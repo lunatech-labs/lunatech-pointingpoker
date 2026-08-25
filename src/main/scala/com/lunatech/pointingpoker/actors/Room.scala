@@ -122,6 +122,11 @@ object Room:
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
+          // setupNewUser's batched replay send races the new connection's downstream demand
+          // not yet being established; only checked empirically (not guaranteed), see the
+          // "connection-establishment race" section of
+          // docs/superpowers/specs/2026-08-24-sse-backpressure-design.md. Re-verify if this
+          // Join -> setupNewUser actor-hop chain is ever restructured.
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
           broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
