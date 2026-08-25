@@ -204,11 +204,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // assumption is ever violated: the second call's startSingleTimer replaces the
       // pending timer outright, restarting the grace period from the second call rather
       // than firing twice or being ignored - see the comment on Room.Leave.
-      val (user, _)            = createUser(UUID.randomUUID(), "user1", false, "")
-      val (user2, user2Probe)  = createUser(UUID.randomUUID(), "user2", false, "")
-      val firstReplyProbe      = testKit.createTestProbe[Room.Response]()
-      val secondReplyProbe     = testKit.createTestProbe[Room.Response]()
-      val (roomId, roomRef)    = createRoom(
+      val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val firstReplyProbe     = testKit.createTestProbe[Room.Response]()
+      val secondReplyProbe    = testKit.createTestProbe[Room.Response]()
+      val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2)),
         gracePeriod = 200.millis
@@ -269,7 +269,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val (roomId, roomRef)   = createRoom(
         UUID.randomUUID(),
-        RoomData.empty.copy(users = List(user, user2))
+        RoomData.empty.copy(users = List(user, user2)),
+        gracePeriod = 200.millis
       )
 
       // Simulate the user's browser having already reconnected (a new ref replaced
@@ -281,16 +282,18 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
 
+      user2Probe.expectMsgType[List[RoomEvent]] // the Join broadcast from the reconnect
+
+      // Wait past the grace period so ConfirmLeave actually fires and exercises the
+      // stale-ref guard, instead of asserting "nothing happened yet" before the timer runs.
+      user2Probe.expectNoMessage(300.millis)
+      roomResponseProbe.expectNoMessage()
+
       roomRef ! Room.GetData(dataProbe.ref)
 
       val expectedData =
         Room.DataStatus(data = RoomData.empty.copy(users = List(reconnectedUser, user2)))
       dataProbe.expectMessage(expectedData)
-
-      // The stale leave must not broadcast a Leave event or reply, since nothing was removed.
-      user2Probe.expectMsgType[List[RoomEvent]] // the Join broadcast from the reconnect
-      user2Probe.expectNoMessage()
-      roomResponseProbe.expectNoMessage()
     }
 
     "stop itself if empty" in {
