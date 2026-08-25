@@ -187,6 +187,13 @@ object Room:
           // second Leave for the same (userId, ref) replaces the pending timer rather than
           // running two independent ones, restarting the grace period from the second call
           // instead of the first - see the "reset the grace period" case in RoomSpec.
+          if timers.isTimerActive((userId, ref)) then
+            context.log.warn(
+              "Leave received again for user {} on the same connection before its prior " +
+                "grace period elapsed; resetting the grace period instead of firing twice. " +
+                "RoomManager is expected to call Leave at most once per connection.",
+              userId
+            )
           timers.startSingleTimer(
             key = (userId, ref),
             msg = ConfirmLeave(userId, ref, replyTo),

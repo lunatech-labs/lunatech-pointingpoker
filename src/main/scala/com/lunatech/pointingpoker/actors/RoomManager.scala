@@ -5,6 +5,7 @@ import java.util.UUID
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
 import org.apache.pekko.actor.ActorRef as UntypedRef
+import org.apache.pekko.stream.BufferOverflowException
 import com.lunatech.pointingpoker.actors
 
 object RoomManager:
@@ -140,7 +141,17 @@ object RoomManager:
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
           case ConnectionFailure(roomId, userId, ref, t) =>
-            context.log.error("ConnectionFailure: {}", t)
+            // BufferOverflowException is the backpressure fix's intended, self-healing path
+            // (see docs/superpowers/specs/2026-08-24-sse-backpressure-design.md), not an incident.
+            t match
+              case _: BufferOverflowException =>
+                context.log.info(
+                  "SSE stream for user {} in room {} closed by backpressure (buffer overflow); expecting a reconnect",
+                  userId,
+                  roomId
+                )
+              case _ =>
+                context.log.error("ConnectionFailure: {}", t)
             data.rooms
               .get(roomId)
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
