@@ -187,6 +187,28 @@ This is empirical, not a compile-time guarantee, and worth re-checking with a
 similar test if this path is ever restructured to remove or reorder those
 hops.
 
+### Ordinary concurrent voting bursts don't threaten the buffer in practice
+
+A later review raised a specific worry the connection-establishment-race check above didn't
+cover: several people voting within milliseconds of each other (a normal event in this app,
+not an edge case) fires several separate broadcasts back to back, and the arithmetic of
+`bufferSize = 1` says any 3rd undelivered element overflows a client that hasn't pulled
+demand for the first 2 - so does a merely-slow client (not a fully stalled one) get caught by
+ordinary room activity?
+
+Checked with a spike: a real bound Pekko HTTP server, a real HTTP client actually consuming
+the response body (not a demand-starved `TestSink`), against burst sizes from 1 to 100
+simultaneous voters and a simulated per-event processing delay up to 300ms. Zero overflows
+across all cases (18 combinations, 3-5 trials each). The likely reason: Pekko HTTP's own
+response-streaming pipeline buffers and writes ahead of whatever `Source.actorRef`'s single
+buffer slot suggests, so ordinary application-level slowness (a slow render, a busy event
+loop) never actually propagates back to `Source.actorRef`'s demand signal - only a genuine
+transport-level stall (a dead socket, a full OS send buffer) does, which is exactly the
+scenario `BackpressureReconnectSpec`'s demand-starved `TestSink` already models. No code
+change made as a result; this confirms rather than revises the buffer-size decision above.
+This was a throwaway spike, not added to the permanent suite, per the same convention as the
+connection-race check.
+
 ## Final design
 
 1. **Batching.** `Room.broadcast` and `setupNewUser` send `List[RoomEvent]`;
