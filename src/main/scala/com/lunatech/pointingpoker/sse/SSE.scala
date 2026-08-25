@@ -33,18 +33,18 @@ object SSE:
     */
   val heartbeatInterval = 15.seconds
 
-  /** How long a client should wait before reconnecting after this stream ends. Set explicitly
-    * rather than left to each browser's own unpinned default, so the room-level grace period before
-    * a Leave is announced (see Room.Leave) can be sized against a known value.
+  /** Fallback for `retryMillis` below when unspecified; production wires the real value from
+    * `SseConfig` instead - see `Main.scala`.
     */
-  val retryMillis = 2000
+  val defaultRetryMillis = 2000
 
   def source(
       roomManager: ActorRef,
       roomId: UUID,
       userId: UUID,
       name: String,
-      token: Room.SessionToken
+      token: Room.SessionToken,
+      retryMillis: Int = defaultRetryMillis
   )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
       .actorRef[List[RoomEvent]](

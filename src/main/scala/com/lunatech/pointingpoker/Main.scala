@@ -2,7 +2,7 @@ package com.lunatech.pointingpoker
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, Props, SpawnProtocol}
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
-import com.lunatech.pointingpoker.config.ApiConfig
+import com.lunatech.pointingpoker.config.{ApiConfig, SseConfig}
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
@@ -19,6 +19,7 @@ object Main extends App:
     ActorSystem(Behaviors.setup[SpawnProtocol.Command](_ => SpawnProtocol()), "pointing-poker")
 
   val apiConfig: ApiConfig = ApiConfig.load(system.settings.config)
+  val sseConfig: SseConfig = SseConfig.load(system.settings.config)
 
   log.info(
     "Session cookies: Secure={} (requires HTTPS end-to-end, including through any reverse proxy). " +
@@ -29,13 +30,13 @@ object Main extends App:
   given timeout: Timeout = 3.seconds
 
   val roomManagerFuture: Future[ActorRef[RoomManager.Command]] = system.ask { ref =>
-    SpawnProtocol.Spawn(RoomManager(), "room-manager", Props.empty, ref)
+    SpawnProtocol.Spawn(RoomManager(sseConfig.gracePeriod), "room-manager", Props.empty, ref)
   }
   given ec: ExecutionContextExecutor = system.executionContext
 
   roomManagerFuture.onComplete {
     case Success(roomManager) =>
-      val api = API(roomManager, apiConfig)
+      val api = API(roomManager, apiConfig, sseConfig)
       api.run()
     case Failure(exception) =>
       log.error("Error creating room manager {}", exception)
