@@ -18,14 +18,12 @@ import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
 import com.lunatech.pointingpoker.sse.SSE
 
 /** End-to-end regression coverage for the SSE backpressure fix (see
-  * docs/superpowers/specs/2026-08-24-sse-backpressure-design.md): a real RoomManager
-  * routing to a real Room, with real SSE.source streams standing in for two browser
-  * tabs, rather than the isolated pieces RoomSpec and SSESpec each verify on their
-  * own. Guards against the specific thing the design doc warns is easy to silently
-  * undo (e.g. "simplifying" the buffer size back to 0, or dropping the grace period):
-  * a change like that could leave RoomSpec and SSESpec both green while still
-  * breaking the actual failure-to-reconnect path, since neither exercises it
-  * end-to-end.
+  * docs/superpowers/specs/2026-08-24-sse-backpressure-design.md): a real RoomManager routing to a
+  * real Room, with real SSE.source streams standing in for two browser tabs, rather than the
+  * isolated pieces RoomSpec and SSESpec each verify on their own. Guards against the specific thing
+  * the design doc warns is easy to silently undo (e.g. "simplifying" the buffer size back to 0, or
+  * dropping the grace period): a change like that could leave RoomSpec and SSESpec both green while
+  * still breaking the actual failure-to-reconnect path, since neither exercises it end-to-end.
   */
 class BackpressureReconnectSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -38,8 +36,8 @@ class BackpressureReconnectSpec extends AnyWordSpec with must.Matchers with Befo
 
     "let a stalled client's stream fail and silently reconnect, invisible to the rest of the room" in {
       given system: org.apache.pekko.actor.ActorSystem = testKit.system.classicSystem
-      given ExecutionContext                            = testKit.system.executionContext
-      given Materializer                                = Materializer.matFromSystem(system)
+      given ExecutionContext                           = testKit.system.executionContext
+      given Materializer                               = Materializer.matFromSystem(system)
 
       val roomId      = UUID.randomUUID()
       val gracePeriod = 600.millis

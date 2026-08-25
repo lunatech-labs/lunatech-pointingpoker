@@ -23,15 +23,16 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   private def wire() =
     val roomManagerProbe = TestProbe()
-    val roomId            = UUID.randomUUID()
-    val userId            = UUID.randomUUID()
-    val token             = Room.SessionToken.mint()
-    val (user, probe)     =
+    val roomId           = UUID.randomUUID()
+    val userId           = UUID.randomUUID()
+    val token            = Room.SessionToken.mint()
+    val (user, probe)    =
       SSE
         .source(roomManagerProbe.ref, roomId, userId, "Alice", token)
         .toMat(TestSink())(Keep.both)
         .run()
     (roomId, userId, user, probe)
+  end wire
 
   "SSE.source" should {
 
@@ -55,9 +56,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // No demand requested yet: production's buffer only tolerates bufferSize + 1 = 2
       // undelivered batches (see SSE.bufferSize), so a clear excess must fail the stream
       // (and let the client reconnect), not vanish silently.
-      (1 to 5).foreach(i =>
-        user ! List(RoomEvent(MessageType.Vote, roomId, userId, i.toString))
-      )
+      (1 to 5).foreach(i => user ! List(RoomEvent(MessageType.Vote, roomId, userId, i.toString)))
       probe.request(5)
       probe.expectError()
     }
