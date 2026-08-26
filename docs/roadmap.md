@@ -20,9 +20,12 @@ inside a long-lived socket payload.
 - [x] Reconnect-aware `Join`: upsert an existing participant by id instead of
       always appending a new one. Landed alongside the transport swap once a
       connection's identity (its `ActorRef`) could be told apart from a stale one.
-- [ ] Session/identity mechanism: validate `userId` per request, closing the
-      spoofing gap the transport swap deliberately left open. See `docs/known-issues.md`
-      for why this is now more urgent than originally scoped (userId exposure).
+- [x] Session/identity mechanism: validate `userId` per request, closing the
+      spoofing gap the transport swap deliberately left open. This was more urgent
+      than originally scoped because the SSE migration made `userId` travel in the
+      query string of every action and the SSE connect, landing repeatedly in
+      server access logs, browser history, and proxy logs, instead of being minted
+      once server-side per WebSocket connection as before.
 - [ ] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
       from fire-and-forget (`roomManager ! ...`) to the ask-pattern already used by
       `create-room`, so `Room`/`RoomManager` can reply with a real result (applied /
@@ -30,7 +33,7 @@ inside a long-lived socket payload.
       regardless of what happened. Natural to build alongside the identity
       validation above, since both need the same request/response plumbing. To be
       studied in its own follow-up PR rather than bundled into the identity work
-      blindly. See `docs/known-issues.md`.
+      blindly.
 
 ## Phase 2: Durable session identity
 

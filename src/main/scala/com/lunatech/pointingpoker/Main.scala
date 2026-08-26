@@ -20,6 +20,12 @@ object Main extends App:
 
   val apiConfig: ApiConfig = ApiConfig.load(system.settings.config)
 
+  log.info(
+    "Session cookies: Secure={} (requires HTTPS end-to-end, including through any reverse proxy). " +
+      "Set SECURE_COOKIES=false for local plain-HTTP development.",
+    apiConfig.secureCookies
+  )
+
   given timeout: Timeout = 3.seconds
 
   val roomManagerFuture: Future[ActorRef[RoomManager.Command]] = system.ask { ref =>

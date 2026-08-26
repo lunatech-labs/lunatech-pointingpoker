@@ -11,8 +11,11 @@ import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Defa
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
-import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
+import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
+import org.apache.pekko.http.scaladsl.model.headers.HttpCookiePair
+import org.apache.pekko.http.scaladsl.model.headers.SameSite
 import org.apache.pekko.util.Timeout
+import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
 import com.lunatech.pointingpoker.config.ApiConfig
@@ -29,9 +32,21 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
   private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
   private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
 
-  // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
-  // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
-  private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
+  private val SessionCookieName = "session"
+
+  private def sessionCookie(roomId: UUID, token: Room.SessionToken): HttpCookie =
+    HttpCookie(
+      name = SessionCookieName,
+      value = token.raw,
+      path = Some(s"/rooms/$roomId"),
+      httpOnly = true,
+      secure = apiConfig.secureCookies
+    ).withSameSite(SameSite.Strict)
+
+  // None (missing cookie, or a value that doesn't parse as a SessionToken) means RoomManager
+  // never asks Room at all; Some(token) that doesn't resolve to a member is Room's own no-op case.
+  private def resolveToken(maybeCookie: Option[HttpCookiePair]): Option[Room.SessionToken] =
+    maybeCookie.flatMap(c => Room.SessionToken.parse(c.value))
 
   val route: Route =
     concat(
@@ -58,20 +73,57 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           }
         }
       },
-      path("rooms" / JavaUUID / "join") { _ =>
+      path("rooms" / JavaUUID / "join") { roomId =>
         post {
           // Scoped locally so the generic circe marshaller cannot hijack routes that
           // complete with a plain String (e.g. create-room, which stays text/plain).
           import com.lunatech.pointingpoker.CirceSupport.given
-          entity(as[JoinRequest]) { _ =>
-            complete(JoinResponse(UUID.randomUUID()))
+          entity(as[JoinRequest]) { req =>
+            onComplete(
+              roomManager.ask[Room.SessionMinted](RoomManager.RequestSession(roomId, req.name, _))
+            ) {
+              case Success(minted) =>
+                setCookie(sessionCookie(roomId, minted.token)) {
+                  complete(JoinResponse(minted.userId))
+                }
+              case Failure(reason) =>
+                log.error("Error while joining room {}: {}", roomId, reason)
+                complete(StatusCodes.InternalServerError)
+            }
           }
         }
       },
       path("rooms" / JavaUUID / "events") { roomId =>
         get {
-          parameters("userId".as[UUID], "name") { (userId, name) =>
-            complete(SSE.source(roomManager.toClassic, roomId, userId, name))
+          optionalCookie(SessionCookieName) { maybeCookie =>
+            maybeCookie.flatMap(c => Room.SessionToken.parse(c.value)) match
+              case None =>
+                optionalHeaderValueByName("X-Forwarded-Proto") { forwardedProto =>
+                  // Pekko's own listener is always plain HTTP here (see Main's startup log) - TLS,
+                  // if any, is terminated by a reverse proxy in front, so X-Forwarded-Proto is the
+                  // only signal for whether the client's connection was actually secure.
+                  val arrivedOverHttps = forwardedProto.exists(_.equalsIgnoreCase("https"))
+                  if apiConfig.secureCookies && !arrivedOverHttps then
+                    log.warn(
+                      "Rejecting session for room {}: SECURE_COOKIES is enabled but the request did not arrive over HTTPS (no X-Forwarded-Proto: https), so the browser will not return the Secure session cookie. Set SECURE_COOKIES=false for non-HTTPS deployments, or confirm your reverse proxy sets X-Forwarded-Proto.",
+                      roomId
+                    )
+                  else log.debug("No session cookie provided for room {}", roomId)
+                  complete(StatusCodes.Unauthorized)
+                }
+              case Some(token) =>
+                onComplete(
+                  roomManager.ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
+                ) {
+                  case Success(Room.Resolved(userId, name)) =>
+                    complete(SSE.source(roomManager.toClassic, roomId, userId, name, token))
+                  case Success(Room.Unresolved) =>
+                    log.debug("Session token did not resolve for room {}", roomId)
+                    complete(StatusCodes.Unauthorized)
+                  case Failure(reason) =>
+                    log.error("Error while validating session for room {}: {}", roomId, reason)
+                    complete(StatusCodes.InternalServerError)
+                }
           }
         }
       },
@@ -80,9 +132,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("vote") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId".as[UUID]) { userId =>
+              optionalCookie(SessionCookieName) { maybeCookie =>
                 entity(as[VoteRequest]) { req =>
-                  roomManager ! RoomManager.Vote(roomId, userId, req.estimation)
+                  roomManager ! RoomManager.Vote(roomId, resolveToken(maybeCookie), req.estimation)
                   complete(StatusCodes.NoContent)
                 }
               }
@@ -90,24 +142,24 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           },
           path("show") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Show(roomId, userId)
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Show(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("clear") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Clear(roomId, userId)
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Clear(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
           },
           path("revote") {
             post {
-              parameter("userId".as[UUID]) { userId =>
-                roomManager ! RoomManager.Revote(roomId, userId)
+              optionalCookie(SessionCookieName) { maybeCookie =>
+                roomManager ! RoomManager.Revote(roomId, resolveToken(maybeCookie))
                 complete(StatusCodes.NoContent)
               }
             }
@@ -115,9 +167,9 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           path("edit-issue") {
             post {
               import com.lunatech.pointingpoker.CirceSupport.given
-              parameter("userId".as[UUID]) { userId =>
+              optionalCookie(SessionCookieName) { maybeCookie =>
                 entity(as[EditIssueRequest]) { req =>
-                  roomManager ! RoomManager.EditIssue(roomId, userId, req.issue)
+                  roomManager ! RoomManager.EditIssue(roomId, resolveToken(maybeCookie), req.issue)
                   complete(StatusCodes.NoContent)
                 }
               }

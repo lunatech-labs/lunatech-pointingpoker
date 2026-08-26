@@ -44,18 +44,35 @@ Available endpoints:
 |---------------------------------|--------|-----------------------|----------------------------------------------------------------------|
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
-|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId for the room and returns `{"userId": "..."}`          |
-|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires `userId` and `name` query parameters |
-|`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires a `userId` query parameter          |
-|`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires a `userId` query parameter    |
-|`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires a `userId` query parameter     |
-|`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires a `userId` query parameter        |
-|`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires a `userId` query parameter |
+|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId and a session, returns `{"userId": "..."}`, and sets a room-scoped session cookie |
+|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
+|`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
+|`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
+|`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
+|`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires the session cookie               |
+|`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires the session cookie        |
 
-Command endpoints return `204 No Content`. An unknown `roomId` is a silent no-op.
+Command endpoints return `204 No Content`. An unknown `roomId`, or a missing/invalid
+session cookie, is a silent no-op.
 
 There is also a `GET /{roomId}` route that serves the same frontend index page,
 so a room link can be shared directly.
+
+### Cookies
+
+`/join` sets one cookie, scoped to `Path=/rooms/{roomId}`: a session token used to
+authorize later requests to that room. It's `HttpOnly` (never read by JavaScript),
+`SameSite=Strict`, and has no `Max-Age`/`Expires` (it's cleared when the browser
+closes). As a strictly-necessary functional cookie (it exists only to operate the
+session the user actively joined, not for tracking or analytics), it doesn't require
+a cookie-consent banner under the ePrivacy Directive.
+
+This session cookie closes an identity-spoofing gap, not room access control: anyone
+who knows a `roomId` can still call `/join` and legitimately participate in that
+room. What it prevents is impersonating a specific existing member and acting
+without ever having joined. Actual room access control (e.g. limiting who can create
+or enter a room at all) is a separate, unscheduled concern, closest to the
+room-creation hardening listed under Phase 5 in `docs/roadmap.md`.
 
 ### Tech stack
 
@@ -69,6 +86,19 @@ This app is going through a multi-PR modernization effort. See
 [`docs/roadmap.md`](docs/roadmap.md) for the phased plan and
 [`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
 found along the way that are not yet scheduled or fixed.
+
+### Running locally
+
+`SECURE_COOKIES` defaults to `true`, which marks the session cookie `Secure` (the
+browser will not send it back over a plain-HTTP connection). Local development that
+isn't served over HTTPS needs:
+
+```
+SECURE_COOKIES=false sbt run
+```
+
+Without this, `/join` will appear to succeed but every subsequent request will get a
+`401`, since the cookie set by `/join` never comes back on `/events`.
 
 ### Deployment
 

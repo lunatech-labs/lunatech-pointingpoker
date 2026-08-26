@@ -11,53 +11,25 @@ roadmap item instead of leaving it here as stale history.
 
 ## Open
 
-### `userId` is never authenticated or checked for room membership
+### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (the
-  `Vote`, `ClearVotes`, `ReVote`, `ShowVotes`, and `EditIssue` branches of
-  `receiveBehaviour`), reached from every `POST` command endpoint in `API.scala`
-  plus `GET /rooms/{roomId}/events`.
-- **Issue:** The trust model was already insecure before this PR (`userId` is
-  client-supplied and never cross-checked against connection identity). The SSE
-  transport migration preserved that gap by design, but changed its exposure: under
-  the old WebSocket transport, `userId` was minted server-side once per connection
-  and never had to be sent again. Now it appears in the query string of every single
-  action (vote, show, clear, revote, edit-issue) and the SSE connect, which means it
-  now lands repeatedly in server access logs, browser history, and any intermediate
-  proxy log.
-
-  The gap is broader than "spoofable identity" suggests. Of the five mutating
-  commands, only `Leave` checks that the acting `userId`/`ref` pair is a current
-  member of the room (`data.users.exists(u => u.id == userId && u.ref == ref)`);
-  `Vote`, `ClearVotes`, `ReVote`, `ShowVotes`, and `EditIssue` apply and broadcast
-  unconditionally. Combined with `RoomManager.ConnectToRoom` auto-creating a room on
-  first reference, anyone who knows or guesses a `roomId` can call any mutating
-  endpoint, including `edit-issue`, with an arbitrary, never-joined `userId` and no
-  prior call to `/join` or `/events` at all. There is currently no join or
-  connection precondition on any write.
-- **Resolution:** Phase 1, "Session/identity mechanism" in `docs/roadmap.md`. That
-  work should validate both that `userId` belongs to the caller and that `userId`
-  is a current member of `roomId` before a command is applied, and should thread a
-  real result back to the API layer (see the `/join` entry above and the
-  always-`204` behavior documented in the README's API table) so callers can be
-  told a command didn't apply instead of always being told it succeeded. Until it
-  lands, treat log retention and access to logs for this service as more sensitive
-  than the original design assumed.
-
-### `POST /rooms/{roomId}/join` accepts a `name` it never uses
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala:61-70`,
-  `src/main/scala/com/lunatech/pointingpoker/Requests.scala` (`JoinRequest`).
-- **Issue:** The join endpoint decodes and validates a `JoinRequest{name}` body but
-  discards it (`entity(as[JoinRequest]) { _ => ... }`). It also does not check that
-  the room exists. The name that actually sticks comes from a separate `name` query
-  parameter on the later `GET /events` call. A client can send different names to
-  `/join` and `/events` with no error, and nothing about the API contract suggests
-  that the first `name` is meaningless.
-- **Resolution:** Fold into Phase 1's identity mechanism work: either drop `name`
-  from `JoinRequest` until `/join` actually stores pending-join state keyed by the
-  minted `userId`, or make `/events` require the join to have happened first and use
-  the name captured there.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`RequestSession`'s find-or-create).
+- **Issue:** `/join` (and, transitively, `/events`) auto-creates a room for any
+  `roomId` it doesn't recognize, rather than rejecting it. A bookmarked room link
+  therefore never *errors* - but if the room's actor has already been reaped (its
+  last member left, or the process restarted), the link silently opens a brand-new,
+  empty room under the same UUID: no prior participants, no vote history, no
+  in-progress issue. There is currently no way for the server to tell "this UUID was
+  never used" apart from "this UUID was a real room, but everyone left" - both look
+  identical: an absent map entry.
+- **Resolution:** This is a deliberate, scoped choice for the session/identity work
+  (see `docs/superpowers/specs/2026-08-20-session-identity-design.md`), not an
+  oversight - today's model has no persistence to actually restore, so a `404`
+  instead of silent auto-create wouldn't recover any lost state either. Real
+  continuity requires Phase 2's durable `sessions` store in `docs/roadmap.md`, which
+  is what would let the server distinguish the two cases and make an informed choice
+  about whether to 404.
 
 ### SSE broadcasts can be silently dropped under backpressure
 
@@ -81,13 +53,29 @@ roadmap item instead of leaving it here as stale history.
   (`RoomManagerData`).
 - **Issue:** A room is only removed from memory when its last joined participant
   leaves. `POST /create-room` no longer requires a completed join to keep a room
-  alive (see the `/join` issue above), so an abandoned tab, a network failure before
-  `/join`, or stray traffic can accumulate rooms that live for the life of the
-  process.
+  alive, so an abandoned tab, a network failure before `/join`, or stray traffic
+  can accumulate rooms that live for the life of the process.
 - **Resolution:** Added to Phase 5 in `docs/roadmap.md` (room-creation hardening
   neighbors this but does not cover it). Becomes more important once Phase 2 makes
   sessions durable across restarts, since an idle-expiry policy will be needed there
   too.
+
+### A `/join` with no follow-up `/events` leaks a pending session for the room's lifetime
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.pendingSessions`, `registerSession`).
+- **Issue:** Same shape as the room-level GC issue above, one level deeper: a
+  `PendingSession` created by `RequestSession` (backing `/join`) is only cleared
+  when a matching `Join` promotes it to a real member. An abandoned tab, a
+  network failure between `/join` and `/events`, or a client that calls `/join`
+  more than once before connecting leaves the earlier entry in
+  `pendingSessions` for as long as the room actor lives, even if that room
+  already has active, joined members and would otherwise stay alive
+  indefinitely.
+- **Resolution:** No separate fix needed beyond whatever resolves the room-level
+  GC issue above; a room-level idle-expiry or durable-session policy (Phase 2/5)
+  should sweep unpromoted pending sessions too, not just reap the room actor
+  itself.
 
 ### SSE reverse-proxy buffering is undocumented
 

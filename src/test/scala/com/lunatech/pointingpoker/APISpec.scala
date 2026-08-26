@@ -10,7 +10,11 @@ import com.lunatech.pointingpoker.config.ApiConfig
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
+import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
+import org.apache.pekko.http.scaladsl.model.headers.`Set-Cookie`
+import org.apache.pekko.http.scaladsl.model.headers.Cookie
+import org.apache.pekko.http.scaladsl.model.headers.SameSite
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -34,10 +38,19 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val commandProbe: org.apache.pekko.actor.testkit.typed.scaladsl.TestProbe[RoomManager.Command] =
     testKit.createTestProbe[RoomManager.Command]()
 
+  val validToken: Room.SessionToken = Room.SessionToken.mint()
+
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! RoomManager.RoomId(roomId)
+        Behaviors.same
+      case RoomManager.RequestSession(_, _, replyTo) =>
+        replyTo ! Room.SessionMinted(UUID.randomUUID(), validToken)
+        Behaviors.same
+      case RoomManager.ValidateToken(_, token, replyTo) =>
+        if token == validToken then replyTo ! Room.Resolved(UUID.randomUUID(), "Alice")
+        else replyTo ! Room.Unresolved
         Behaviors.same
       case other =>
         commandProbe.ref ! other
@@ -70,12 +83,36 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
         responseAs[String] mustBe roomId
       }
-    "join a room and return a minted userId" in {
+    "join a room, return a minted userId, and set a session cookie" in {
       import com.lunatech.pointingpoker.CirceSupport.given
       Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         val response = responseAs[JoinResponse]
         response.userId.toString.length > 0 mustBe true
+
+        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+        cookieHeader.cookie.name mustBe "session"
+        cookieHeader.cookie.httpOnly mustBe true
+        cookieHeader.cookie.secure mustBe true
+        cookieHeader.cookie.path mustBe Some(s"/rooms/$roomId")
+        cookieHeader.cookie.sameSite mustBe Some(SameSite.Strict)
+        cookieHeader.cookie.maxAge mustBe None
+      }
+    }
+    "set the same session token on /join that /events later accepts" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      val cookieValue = Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+        cookieHeader.cookie.value
+      }
+      cookieValue mustBe validToken.raw
+
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", cookieValue)
+      ) ~> apiRoute ~> check {
+        status.isSuccess() mustBe true
+        mediaType.toString mustBe "text/event-stream"
       }
     }
     "reject malformed JSON on join endpoint with 400" in
@@ -89,76 +126,99 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
     "dispatch a vote command" in {
       import com.lunatech.pointingpoker.CirceSupport.given
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/vote?userId=$userId", VoteRequest("5")) ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), userId, "5"))
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), Some(token), "5"))
     }
 
     "dispatch a show command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/show?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/show") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch a clear command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/clear?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/clear") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch a revote command" in {
-      val userId = UUID.randomUUID()
-      Post(s"/rooms/$roomId/revote?userId=$userId") ~> apiRoute ~> check {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/revote") ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), userId))
+      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), Some(token)))
     }
 
     "dispatch an edit-issue command" in {
       import com.lunatech.pointingpoker.CirceSupport.given
-      val userId = UUID.randomUUID()
+      val token = Room.SessionToken.mint()
       Post(
-        s"/rooms/$roomId/edit-issue?userId=$userId",
+        s"/rooms/$roomId/edit-issue",
         EditIssueRequest("new issue")
-      ) ~> apiRoute ~> check {
+      ) ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessage(
-        RoomManager.EditIssue(UUID.fromString(roomId), userId, "new issue")
+        RoomManager.EditIssue(UUID.fromString(roomId), Some(token), "new issue")
       )
     }
 
-    "open an SSE events stream" in {
-      val userId = UUID.randomUUID()
-      Get(s"/rooms/$roomId/events?userId=$userId&name=Alice") ~> apiRoute ~> check {
+    "reject an events connection with no session cookie" in
+      Get(s"/rooms/$roomId/events") ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "reject an events connection with a malformed session cookie" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", "not-a-uuid")
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "reject an events connection with an unresolvable session cookie" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.Unauthorized
+      }
+
+    "open an SSE events stream for a resolved session" in
+      Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         mediaType.toString mustBe "text/event-stream"
       }
-    }
 
     "reject a malformed vote body with 400" in {
-      val userId        = UUID.randomUUID()
-      val malformedBody =
-        HttpEntity(ContentTypes.`application/json`, """{"not-estimation": 5}""")
-      Post(s"/rooms/$roomId/vote?userId=$userId", malformedBody) ~> apiRoute ~> check {
+      val malformedBody = HttpEntity(ContentTypes.`application/json`, """{"not-estimation": 5}""")
+      Post(s"/rooms/$roomId/vote", malformedBody) ~> apiRoute ~> check {
         status mustBe StatusCodes.BadRequest
       }
     }
 
-    "reject a non-UUID userId query param with 400" in
-      Post(s"/rooms/$roomId/show?userId=not-a-uuid") ~> apiRoute ~> check {
-        status mustBe StatusCodes.BadRequest
+    "still return 204 for a vote with no session cookie (silently no-ops downstream)" in {
+      import com.lunatech.pointingpoker.CirceSupport.given
+      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
       }
-
-    "reject a non-UUID userId query param on the events stream with 400" in
-      Get(s"/rooms/$roomId/events?userId=not-a-uuid&name=Alice") ~> apiRoute ~> check {
-        status mustBe StatusCodes.BadRequest
-      }
+      // The API layer never rejects a missing/invalid credential for command endpoints.
+      // A missing cookie resolves to None here; RoomManager never asks Room in that case
+      // (see RoomManagerSpec). A cookie that parses but doesn't resolve to a member is
+      // Room's own no-op case instead (see RoomSpec).
+      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), None, "5"))
+    }
   }
 end APISpec

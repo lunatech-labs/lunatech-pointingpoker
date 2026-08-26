@@ -9,34 +9,65 @@ import RoomEvent.MessageType
 
 object Room:
 
+  opaque type SessionToken = UUID
+
+  object SessionToken:
+    def mint(): SessionToken                        = UUID.randomUUID()
+    def parse(raw: String): Option[SessionToken]    = scala.util.Try(UUID.fromString(raw)).toOption
+    extension (token: SessionToken) def raw: String = token.toString
+
   sealed trait Command
   final case class Join(user: User)                                                  extends Command
   final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final case class Vote(userId: UUID, estimation: String)                            extends Command
-  final case class ClearVotes(userId: UUID)                                          extends Command
-  final case class ReVote(userId: UUID)                                              extends Command
-  final case class ShowVotes(userId: UUID)                                           extends Command
-  final case class EditIssue(userId: UUID, issue: String)                            extends Command
-  final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
+  final case class Vote(token: SessionToken, estimation: String)                     extends Command
+  final case class ClearVotes(token: SessionToken)                                   extends Command
+  final case class ReVote(token: SessionToken)                                       extends Command
+  final case class ShowVotes(token: SessionToken)                                    extends Command
+  final case class EditIssue(token: SessionToken, issue: String)                     extends Command
+  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted])    extends Command
+  final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
+      extends Command
+  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
 
   final case class DataStatus(data: RoomData)
+  final case class SessionMinted(userId: UUID, token: SessionToken)
+
+  sealed trait TokenResolution
+  final case class Resolved(userId: UUID, name: String) extends TokenResolution
+  case object Unresolved                                extends TokenResolution
 
   sealed trait Response
   final case class Running(roomId: UUID) extends Response
   final case class Stopped(roomId: UUID) extends Response
 
-  final case class User(id: UUID, name: String, voted: Boolean, estimation: String, ref: UntypedRef)
+  final case class User(
+      id: UUID,
+      name: String,
+      voted: Boolean,
+      estimation: String,
+      ref: UntypedRef,
+      token: SessionToken
+  )
+
+  final case class PendingSession(userId: UUID, name: String)
 
   final case class RoomData(
       users: List[User],
       currentIssue: String,
-      issueLastEditBy: Option[UUID]
+      issueLastEditBy: Option[UUID],
+      pendingSessions: Map[SessionToken, PendingSession] = Map.empty
   ):
     def joinUser(user: User): RoomData =
       // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
       // automatic EventSource retry racing an old connection's slow-to-detect failure)
       // doesn't leave two entries for the same user.
-      this.copy(users = user :: this.users.filterNot(_.id == user.id))
+      this.copy(
+        users = user :: this.users.filterNot(_.id == user.id),
+        pendingSessions = this.pendingSessions - user.token
+      )
+
+    def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
+      this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
       this.copy(users = this.users.map { u =>
@@ -75,32 +106,53 @@ object Room:
           setupNewUser(user, roomId, newData)
           broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
           receiveBehaviour(roomId, newData)
-        case Vote(userId, estimation) =>
-          val newData = data.vote(userId, estimation)
-          broadcast(RoomEvent(MessageType.Vote, roomId, userId, estimation), newData.users, context)
+        case RequestSession(name, replyTo) =>
+          val userId  = UUID.randomUUID()
+          val token   = SessionToken.mint()
+          val newData = data.registerSession(token, userId, name)
+          replyTo ! SessionMinted(userId, token)
           receiveBehaviour(roomId, newData)
-        case ClearVotes(userId) =>
-          val newData = data.clear()
-          broadcast(
-            RoomEvent(MessageType.Clear, roomId, userId, RoomEvent.NoExtra),
-            newData.users,
-            context
-          )
-          receiveBehaviour(roomId, newData)
-        case ReVote(userId) =>
-          val newData = data.reVote()
-          broadcast(
-            RoomEvent(MessageType.Revote, roomId, userId, RoomEvent.NoExtra),
-            newData.users,
-            context
-          )
-          receiveBehaviour(roomId, newData)
-        case ShowVotes(userId) =>
-          broadcast(
-            RoomEvent(MessageType.Show, roomId, userId, RoomEvent.NoExtra),
-            data.users,
-            context
-          )
+        case Vote(token, estimation) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.vote(user.id, estimation)
+              broadcast(
+                RoomEvent(MessageType.Vote, roomId, user.id, estimation),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ClearVotes(token) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.clear()
+              broadcast(
+                RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ReVote(token) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.reVote()
+              broadcast(
+                RoomEvent(MessageType.Revote, roomId, user.id, RoomEvent.NoExtra),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData)
+            case None => Behaviors.same
+        case ShowVotes(token) =>
+          data.users.find(_.token == token).foreach { user =>
+            broadcast(
+              RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra),
+              data.users,
+              context
+            )
+          }
           Behaviors.same
         case Leave(userId, ref, replyTo) =>
           if data.users.exists(u => u.id == userId && u.ref == ref) then
@@ -120,12 +172,25 @@ object Room:
             // Stale teardown: this userId already reconnected under a different ref
             // (joinUser replaced the entry), so there's nothing left to remove.
             Behaviors.same
-        case EditIssue(userId, issue) =>
-          broadcast(RoomEvent(MessageType.EditIssue, roomId, userId, issue), data.users, context)
-          receiveBehaviour(
-            roomId,
-            data.editIssue(issue, userId)
-          )
+        case EditIssue(token, issue) =>
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              broadcast(
+                RoomEvent(MessageType.EditIssue, roomId, user.id, issue),
+                data.users,
+                context
+              )
+              receiveBehaviour(roomId, data.editIssue(issue, user.id))
+            case None => Behaviors.same
+        case ValidateToken(token, replyTo) =>
+          val resolution = data.pendingSessions.get(token) match
+            case Some(pending) => Resolved(pending.userId, pending.name)
+            case None          =>
+              data.users.find(_.token == token) match
+                case Some(user) => Resolved(user.id, user.name)
+                case None       => Unresolved
+          replyTo ! resolution
+          Behaviors.same
         case GetData(replyTo) =>
           replyTo ! Room.DataStatus(data)
           Behaviors.same
