@@ -161,6 +161,21 @@ signal needed. This is a full replacement for defensive/idempotent handler
 guards, not an addition to them, the reconnecting client's own state is
 always rebuilt from an authoritative snapshot, never patched.
 
+**What id `Reset` carries.** `Reset` is not itself a room event: it's
+generated fresh per-connection at resolution time, not appended to
+`eventLog`, and doesn't consume a new sequence number. Its SSE `id:` field
+is a *read* of the room's current `sequence` (e.g. 12 if 12 real events
+have been logged so far), establishing the client's new baseline, not an
+increment of it. Every frame in the resync burst that follows (`Reset`,
+`Init`, replayed `Join`/`Vote`, `EditIssue`) carries that same `id: 12`,
+repeated rather than incrementing, since they're a reconstructed view of
+current state, not new log entries. Repeating it on every frame, rather
+than relying on the SSE spec's "the last-event-id buffer carries forward
+across frames that omit `id:`" behavior, keeps the invariant locally
+obvious on each frame instead of depending on that subtler spec detail.
+The client's next reconnect then correctly requests everything after 12,
+a genuine delta from exactly that point.
+
 ### 5. Client fix, others: suppress the `Join` broadcast on resume
 
 Distinct problem from section 4: bystanders (other already-connected
@@ -200,9 +215,21 @@ Client-side (`index.html`'s `doJoin`):
 - If the timer fires with nothing received: close that connection, mark an
   in-memory `sseBounded = true` for this page instance (not persisted to
   `sessionStorage`/`localStorage`, a fresh page load always re-detects),
-  and reopen with `?bounded=1`. Every later reconnect within this page
-  instance, whether from a scheduled bounded close or an ordinary drop,
-  goes straight to `?bounded=1` once set, no repeated wait.
+  and manually open a new `EventSource` with `?bounded=1`. This is the
+  *only* manually-driven reconnect in this design, needed because the URL
+  itself changes.
+- Every reconnect after that, every scheduled bounded close and any
+  ordinary drop, is handled by the browser's own native `EventSource`
+  auto-reconnect on that same object, not further custom JS: same URL, so
+  `retry`/`Last-Event-ID` are applied automatically per the SSE spec. This
+  matters beyond simplicity: it guarantees at most one connection open per
+  client at any time, so there's never a window where an old,
+  still-closing connection and a newly opened one could overlap and
+  deliver events out of order. The one manual switch above is exempt from
+  that concern for a different reason: by construction nothing was ever
+  received on the unbounded connection it replaces (that's the detection
+  signal itself), so there's no prior `Last-Event-ID` to lose or race
+  against.
 
 Server-side (`SSE.scala`/`API.scala`):
 
