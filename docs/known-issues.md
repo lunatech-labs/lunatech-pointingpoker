@@ -116,6 +116,26 @@ roadmap item instead of leaving it here as stale history.
   work: a per-user monotonic sequence number attached to each command, with `Room`
   rejecting or ignoring one that arrives out of order.
 
+### Resync doesn't replay whether votes are currently revealed
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`setupNewUser`); `src/main/resources/pages/index.html` (`votesRevealed`).
+- **Issue:** `setupNewUser`'s catch-up replay reconstructs participants,
+  votes, and the current issue for a (re)connecting client, but has no
+  equivalent of a `Show` replay: whether votes are currently revealed isn't
+  part of the resync. A client that reconnects mid-session (a dropped
+  connection, a page reload, or the bounded-mode reconnect proposed in
+  `docs/superpowers/specs/2026-08-26-sse-delta-resync-design.md`) has no way
+  to know votes are already shown until, if ever, a subsequent `Show`/`Clear`
+  happens to arrive live.
+- **Resolution:** Unscheduled. Flagged during the 2026-08-26 SSE delta
+  resync design as pre-existing and unrelated to that work, not worsened by
+  it. Fix is presumably a `votesRevealed`-equivalent flag on `RoomData`,
+  included in the resync burst, natural to bundle with Phase 4's
+  "server-authoritative auto-reveal" item in `docs/roadmap.md`, since that
+  work already needs reveal state to become real backend logic rather than
+  client-only.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
