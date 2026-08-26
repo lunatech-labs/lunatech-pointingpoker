@@ -31,22 +31,6 @@ roadmap item instead of leaving it here as stale history.
   is what would let the server distinguish the two cases and make an informed choice
   about whether to 404.
 
-### SSE broadcasts can be silently dropped under backpressure
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`
-  (`disabledBufferSize = 0`, `OverflowStrategy.dropTail`, carried over unchanged
-  from the old WebSocket source).
-- **Issue:** With a zero-size buffer, a broadcast event that arrives while the
-  downstream write is not immediately ready is dropped, with no sequence number,
-  no `Last-Event-ID` resumption, and no periodic full-state resync. A dropped
-  `vote`/`show`/`clear` event can leave a client's UI stale until something else
-  triggers a reconnect and a fresh catch-up replay.
-- **Resolution:** Reliable delivery is a prerequisite for server-authoritative
-  auto-reveal, not parallel work, so don't wait for Phase 4 to start on it. Treat
-  it as its own near-term item, ideally scheduled alongside Phase 1: that phase
-  already introduces per-request identity validation, and a resync/ack mechanism
-  pairs naturally with that same request path.
-
 ### No garbage collection for abandoned or never-joined rooms
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -87,6 +71,32 @@ roadmap item instead of leaving it here as stale history.
   equivalent for whatever proxy fronts this in deployment.
 - **Resolution:** Unscheduled, cheap to fix. Good to bundle with Phase 5 hardening
   or the next deployment-related change.
+
+### A deliberate tab close is as slow to announce as a transient reconnect
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace period).
+- **Issue:** The grace period introduced in
+  `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md` to swallow a
+  reconnect-driven leave-then-rejoin flicker delays *every* disconnect by the same
+  6 seconds, not just the transient ones. The server has no signal that distinguishes
+  "this connection will retry" from "this participant closed the tab and is gone for
+  good" - both arrive as the SSE stream simply ending, so both wait out the same
+  grace period before the rest of the room is told. A participant closing their tab
+  mid-meeting still shows as present for up to 6 seconds afterward.
+- **Resolution:** Unscheduled. This app's sessions run 30 minutes to an hour, so a
+  6-second lingering presence after a genuine departure is proportionally small,
+  which lowers the urgency here rather than removing it: still worth confirming with
+  real usage whether it's noticeable enough to matter before investing further. If it
+  is, the fix is to disambiguate at the source instead of guessing after the fact:
+  have the client send an explicit "I'm leaving" signal on deliberate departure (e.g.
+  a `pagehide` / `visibilitychange` handler firing `navigator.sendBeacon` to a
+  dedicated leave endpoint) that maps to an immediate `Room.Leave` bypassing the
+  grace period entirely, while an SSE stream simply ending with no such signal keeps
+  going through the grace period as today. `sendBeacon` is the right primitive here
+  since a normal `fetch`/POST is not reliably delivered from an unload-adjacent
+  handler.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 

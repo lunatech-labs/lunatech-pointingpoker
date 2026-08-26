@@ -6,7 +6,7 @@ import org.apache.pekko.actor.testkit.typed.scaladsl.ActorTestKit
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
-import com.lunatech.pointingpoker.config.ApiConfig
+import com.lunatech.pointingpoker.config.{ApiConfig, SseConfig}
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
@@ -31,6 +31,7 @@ import scala.io.Source
 class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
 
   val apiConfig: ApiConfig = ApiConfig.load(ConfigFactory.load())
+  val sseConfig: SseConfig = SseConfig.load(ConfigFactory.load())
   val roomId: String       = UUID.randomUUID().toString
 
   val testKit: ActorTestKit = ActorTestKit()
@@ -60,7 +61,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     ActorSystem(Behaviors.setup[SpawnProtocol.Command](_ => SpawnProtocol()), "pointing-poker")
 
   val apiRoute: Route = handleRejections(RejectionHandler.default) {
-    API(roomManager, apiConfig).route
+    API(roomManager, apiConfig, sseConfig).route
   }
 
   override def afterAll(): Unit =

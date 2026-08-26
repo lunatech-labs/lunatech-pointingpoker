@@ -18,14 +18,14 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
-import com.lunatech.pointingpoker.config.ApiConfig
+import com.lunatech.pointingpoker.config.{ApiConfig, SseConfig}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
-    actorSystem: ActorSystem[SpawnProtocol.Command]
+class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseConfig: SseConfig)(
+    using actorSystem: ActorSystem[SpawnProtocol.Command]
 ) extends EventStreamMarshalling:
 
   private given timeout: Timeout                      = Timeout(apiConfig.timeout)
@@ -116,7 +116,16 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
                   roomManager.ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
                 ) {
                   case Success(Room.Resolved(userId, name)) =>
-                    complete(SSE.source(roomManager.toClassic, roomId, userId, name, token))
+                    complete(
+                      SSE.source(
+                        roomManager.toClassic,
+                        roomId,
+                        userId,
+                        name,
+                        token,
+                        sseConfig.retryMillis
+                      )
+                    )
                   case Success(Room.Unresolved) =>
                     log.debug("Session token did not resolve for room {}", roomId)
                     complete(StatusCodes.Unauthorized)
@@ -185,7 +194,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
 end API
 
 object API:
-  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
-      actorSystem: ActorSystem[SpawnProtocol.Command]
+  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseConfig: SseConfig)(
+      using actorSystem: ActorSystem[SpawnProtocol.Command]
   ): API =
-    new API(roomManager, apiConfig)
+    new API(roomManager, apiConfig, sseConfig)

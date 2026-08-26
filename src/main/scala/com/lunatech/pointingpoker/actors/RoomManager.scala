@@ -2,9 +2,12 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.duration.FiniteDuration
+
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
 import org.apache.pekko.actor.ActorRef as UntypedRef
+import org.apache.pekko.stream.BufferOverflowException
 import com.lunatech.pointingpoker.actors
 
 object RoomManager:
@@ -51,28 +54,29 @@ object RoomManager:
   object RoomManagerData:
     val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[UUID, ActorRef[Room.Command]])
 
-  def apply(): Behavior[Command] =
+  def apply(gracePeriod: FiniteDuration = Room.defaultGracePeriod): Behavior[Command] =
     Behaviors.setup[Command] { context =>
       val roomResponseActor: ActorRef[Room.Response] =
         context.messageAdapter(response => RoomResponseWrapper(response))
-      receiveBehaviour(RoomManagerData.empty, roomResponseActor)
+      receiveBehaviour(RoomManagerData.empty, roomResponseActor, gracePeriod)
     }
 
   private[actors] def receiveBehaviour(
       data: RoomManagerData,
-      roomResponseWrapper: ActorRef[Room.Response]
+      roomResponseWrapper: ActorRef[Room.Response],
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
         message match
           case CreateRoom(replyTo) =>
             val roomId    = UUID.randomUUID()
-            val roomActor = createRoom(roomId, context)
+            val roomActor = createRoom(roomId, context, gracePeriod)
             val newData   = data.addRoom(roomId, roomActor)
 
             context.watch(roomActor)
             replyTo ! RoomId(roomId.toString)
-            receiveBehaviour(newData, roomResponseWrapper)
+            receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
           case ConnectToRoom(roomId, userId, name, token, ref) =>
             data.rooms.get(roomId).foreach { room =>
               room ! Room.Join(
@@ -84,11 +88,11 @@ object RoomManager:
             data.rooms
               .get(roomId)
               .fold {
-                val roomActor = createRoom(roomId, context)
+                val roomActor = createRoom(roomId, context, gracePeriod)
                 context.watch(roomActor)
                 val newData = data.addRoom(roomId, roomActor)
                 roomActor ! Room.RequestSession(name, replyTo)
-                receiveBehaviour(newData, roomResponseWrapper)
+                receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
               } { room =>
                 room ! Room.RequestSession(name, replyTo)
                 Behaviors.same
@@ -103,7 +107,7 @@ object RoomManager:
               case Room.Running(_)      => Behaviors.same
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
-                receiveBehaviour(newData, roomResponseWrapper)
+                receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
           case Vote(roomId, token, estimation) =>
             for
               room <- data.rooms.get(roomId)
@@ -140,7 +144,17 @@ object RoomManager:
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
           case ConnectionFailure(roomId, userId, ref, t) =>
-            context.log.error("ConnectionFailure: {}", t)
+            // BufferOverflowException is the backpressure fix's intended, self-healing path
+            // (see docs/superpowers/specs/2026-08-24-sse-backpressure-design.md), not an incident.
+            t match
+              case _: BufferOverflowException =>
+                context.log.info(
+                  "SSE stream for user {} in room {} closed by backpressure (buffer overflow); expecting a reconnect",
+                  userId,
+                  roomId
+                )
+              case _ =>
+                context.log.error("ConnectionFailure: {}", t)
             data.rooms
               .get(roomId)
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
@@ -148,12 +162,13 @@ object RoomManager:
       }
       .receiveSignal { case (_, Terminated(ref)) =>
         val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
-        receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper)
+        receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper, gracePeriod)
       }
 
   private[actors] def createRoom(
       roomId: UUID,
-      context: ActorContext[Command]
+      context: ActorContext[Command],
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod
   ): ActorRef[Room.Command] =
-    context.spawn(actors.Room(roomId), name = roomId.toString)
+    context.spawn(actors.Room(roomId, gracePeriod = gracePeriod), name = roomId.toString)
 end RoomManager
