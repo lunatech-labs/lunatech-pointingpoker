@@ -117,6 +117,17 @@ unchanged.
 appends to the log (after assigning the next sequence id) before sending.
 On each append, prune entries older than the retention window.
 
+**`sequence = 0` means "nothing logged yet", not "the first event is id
+0".** Worth spelling out since it's easy to misread otherwise: `Room.Join`
+(`Room.scala:124-133`) calls `setupNewUser` (the resync batch, using
+`sequence` as-is) *before* `broadcast` (the only thing that increments
+`sequence`), for every join, including a room's very first. So the first
+person into an empty room gets `Reset(id=0)` + their own resync batch at
+the pre-broadcast baseline, then separately receives their own ordinary
+`Join` broadcast at `id=1`, the room's actual first log entry. This isn't
+special-cased for the bootstrap case, it falls out of the existing call
+order holding for every join, first or hundredth.
+
 **Retention: a 5-minute time window only, no count-based cap, no
 ack-based compaction.** Considered and rejected: pruning an event once
 every currently-connected client has already passed it (tracking a live
