@@ -157,6 +157,31 @@ Three cases, resolved against the room's `eventLog`:
   resync, same as the first-connection case (with `Reset`), this is the
   existing self-heal fallback, not new.
 
+**Data path: `Last-Event-ID` reaches `Room` through the existing `Join`
+message, not a new query.** The route reads the header the same way it
+already reads `X-Forwarded-Proto` (`optionalHeaderValueByName`,
+`API.scala:101`), parses it to `Option[Long]`, and treats anything absent
+or unparseable as `None`, folding straight into the first case above rather
+than a separate error path. That `Option[Long]` is threaded as a new
+parameter through the same fire-and-forget chain the connection already
+goes through: `SSE.source` takes it and passes it into the
+`RoomManager.ConnectToRoom` message it sends from `mapMaterializedValue`,
+`ConnectToRoom`'s handler passes it into `Room.Join`, and `Join`'s handler
+(`Room.scala:124`) resolves it against `newData.eventLog`/`newData.sequence`
+in place of today's unconditional `setupNewUser` call, sending either the
+delta or the `Reset` + full-resync batch to `user.ref`, before `broadcast`,
+same ordering as today.
+
+This deliberately avoids a separate ask-based resolution step (e.g. a
+`Room.ResolveResync(lastEventId, replyTo)` queried before subscribing).
+Today, `Join` computes the resync content and registers the connection for
+future broadcasts inside one actor message, so there's no window where an
+event could be logged after the log is read but before this connection
+starts receiving live broadcasts, or the reverse, causing a duplicate.
+Resolving in a separate step ahead of `Join` would reopen exactly that
+race. Piggybacking on `Join`, which already does the presence update and
+the reply send atomically, avoids inventing a new failure mode.
+
 ### 4. Client fix, self: `Reset` before any full resync
 
 A new message type, `Reset` (not `Clear`, that name is taken by vote
@@ -187,27 +212,91 @@ obvious on each frame instead of depending on that subtler spec detail.
 The client's next reconnect then correctly requests everything after 12,
 a genuine delta from exactly that point.
 
-### 5. Client fix, others: suppress the `Join` broadcast on resume
+### 5. Server fix: resuming `Join` must merge, not replace, and must not
+broadcast
 
-Distinct problem from section 4: bystanders (other already-connected
-clients) receive `Join`/etc. via their own live/delta stream, which never
-gets a `Reset` (deltas are pure incremental application). Since every
-reconnect, resume or genuinely new, currently triggers `Room.Join` and an
-unconditional broadcast (`Room.scala:124-133`), a resuming client's routine
-~20-30s reconnect cycle would otherwise broadcast a redundant `Join` to
-everyone else every cycle, duplicating that participant in every
-bystander's list (their `join` handler only guards against pushing the
-client's own id, `index.html:412`).
+Two distinct problems share one root cause and one fix, both stemming from
+`Room.Join`'s handler treating every `Join` as a brand-new arrival
+(`Room.scala:124-133`), never asking whether this `userId` was already
+present:
 
-Fix: in `Room.Join`, if `data.users` already contains this `userId` (a
-resume, not a genuine arrival), skip the broadcast and skip logging it,
-since nothing actually changed from the room's perspective. Only a
-genuinely new `userId` broadcasts and gets logged. This is safe now in a
-way it wasn't when first considered earlier in this design process: the
-resuming client's own correct state no longer depends on receiving its own
-`Join` broadcast, that's entirely owned by the delta/full-resync resolution
-in section 3, so suppressing the broadcast can't cause the resuming client
-to miss anything about itself or others.
+**Problem A, vote state loss.** `RoomManager.ConnectToRoom` always builds
+the `User` it sends with `RoomManager.InitialVoteState`/`InitialEstimation`
+(`RoomManager.scala:82-84`), and `RoomData.joinUser` (`Room.scala:67-74`)
+fully replaces the existing entry for that `userId`, `voted`/`estimation`
+included, not just `ref`. Today this only matters on the rare reconnect
+(buffer overflow). Under this design a bounded client reconnects on a
+routine ~20-30s cycle for the whole session, so any vote cast is very
+likely to be silently reset to "not voted" in the room's own state before
+the round is ever revealed, well before the client would vote again. This
+is invisible in the delta path (bystanders' own state is untouched, since
+suppressing the broadcast, problem B below, means they never hear about
+it) until something reads the room's actual state: a new client's full
+resync would show this participant as not having voted, and it directly
+undermines this spec's own stated motivation of enabling trustworthy
+server-authoritative auto-reveal (see Purpose), which would need to check
+exactly this state and would likely never see it go true for a room with
+any bounded client in it.
+
+**Problem B, duplicate `Join` broadcasts.** Bystanders (other
+already-connected clients) receive `Join`/etc. via their own live/delta
+stream, which never gets a `Reset` (deltas are pure incremental
+application). Since every reconnect, resume or genuinely new, currently
+triggers an unconditional broadcast, a resuming client's routine ~20-30s
+cycle would otherwise broadcast a redundant `Join` to everyone else every
+cycle, duplicating that participant in every bystander's list (their
+`join` handler only guards against pushing the client's own id,
+`index.html:412`).
+
+**Fix:** `RoomData.joinUser` looks up the existing entry by `id` first. If
+one exists (a resume), it carries over that entry's `voted`/`estimation`
+onto the incoming `User`, only `ref` actually changes on a reconnect, name
+doesn't change (no rename feature) and token doesn't change for any
+reconnect path this design covers, native `EventSource` retry and the
+manual bounded switch both reuse the existing session cookie, not a fresh
+`/join`. `joinUser` also returns whether this was a resume, so `Join`'s
+handler has one source of truth for both fixes instead of two separate
+lookups that could drift:
+
+```scala
+def joinUser(user: User): (RoomData, Boolean) =
+  this.users.find(_.id == user.id) match
+    case Some(existing) =>
+      val merged = user.copy(voted = existing.voted, estimation = existing.estimation)
+      (this.copy(users = merged :: this.users.filterNot(_.id == user.id),
+                  pendingSessions = this.pendingSessions - user.token),
+       true)
+    case None =>
+      (this.copy(users = user :: this.users,
+                  pendingSessions = this.pendingSessions - user.token),
+       false)
+```
+
+```scala
+case Join(user) =>
+  val (newData, isResume) = data.joinUser(user)
+  // resolve delta or Reset+full per section 3, send to user.ref, as before
+  if !isResume then
+    broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
+  receiveBehaviour(roomId, newData, gracePeriod, timers)
+```
+
+Only a genuinely new `userId` broadcasts and gets logged. Suppressing the
+broadcast for a resume is safe in a way it wasn't when first considered
+earlier in this design process: the resuming client's own correct state no
+longer depends on receiving its own `Join` broadcast, that's entirely
+owned by the delta/full-resync resolution in section 3, so suppressing it
+can't cause the resuming client to miss anything about itself or others.
+
+`joinUser` has exactly one call site (`Room.scala:130`), so this signature
+change is contained. `RoomSpec`'s existing reconnect tests
+(`RoomSpec.scala:184-186`) hand-construct the reconnecting `User` via
+`user.copy(ref = ...)`, which preserves `voted`/`estimation` by
+construction and so never exercised problem A against the real
+`ConnectToRoom` path (`RoomManager.scala:82-84`), which always resets
+them; those tests should be updated to go through `ConnectToRoom` (or
+otherwise start from `InitialVoteState`/`InitialEstimation`) so they'd
+actually catch a regression here.
 
 ### 6. Bounded/long-poll fallback for proxy-detected clients
 
@@ -256,7 +345,17 @@ Server-side (`SSE.scala`/`API.scala`):
     the connection open for a short flush window (about 1 second, a plain
     constant, not configurable) to catch near-simultaneous follow-up events
     (e.g. two or three people voting within the same second) into the same
-    batch, then close.
+    batch, then close. **The flush window is a fixed 1 second from the first
+    event in the batch, it does not reset on each subsequent event.**
+    Sustained activity (events landing faster than the window closes) cannot
+    keep a connection open indefinitely waiting for a gap, that would
+    contradict the whole reason bounded connections close promptly instead
+    of waiting out a fixed window, and would make per-cycle duration
+    unbounded in the design itself rather than provably under the proxy's
+    45s limit. Anything that lands after the window closes is picked up by
+    the very next cycle, which reopens immediately (native `EventSource`
+    reconnect, non-empty delta) and repeats the same send-then-flush-then-close,
+    at the cost of one extra round trip, not added latency worth avoiding.
   - If the resolution is empty (nothing missed, the common case for a
     client reconnecting promptly with nothing new): stay open, waiting for
     either a new event, which triggers the same send-then-flush-then-close
@@ -332,10 +431,21 @@ for the established style):
 - `Join` broadcast suppression on resume: a resuming client's reconnect
   produces no `Join` event for bystanders; a genuinely new participant
   still does.
+- A resuming client's vote survives the reconnect: a user who has voted,
+  then reconnects (built via `RoomManager.ConnectToRoom`, not a
+  hand-constructed `User` that already carries the prior vote), still shows
+  as voted with their prior estimation in the room's own state afterward,
+  both when the reconnect resolves as a delta and when it resolves as a
+  full resync (their own replayed `Vote` event is still present, not
+  dropped).
 - The bounded path's adaptive completion: closes after the flush window
   when an event is available (including batching near-simultaneous
   events into one delta), and closes at the wall-clock cap when nothing
   happened.
+- The flush window does not reset on new activity: a burst of events
+  spanning more than 1 second closes at the fixed 1-second mark with
+  only the events up to then batched, the remainder is delivered via the
+  immediately-following cycle, not by extending the same connection.
 - A bounded, idle connection does not receive `.keepAlive` heartbeats and
   closes at the jittered wall-clock cap (20-30s), not at ~15s+1s; an
   unbounded connection still receives heartbeats unchanged.
