@@ -2,3 +2,4 @@ target/
 .idea/
 .bsp/
 .vscode/
+.claude/settings.local.json

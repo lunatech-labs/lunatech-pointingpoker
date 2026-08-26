@@ -5,20 +5,19 @@ import java.util.UUID
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.ActorRef as UntypedRef
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
+import RoomEvent.MessageType
 
 object Room:
 
   sealed trait Command
-  final case class Join(user: User)                                       extends Command
-  final case class Leave(userId: UUID, replyTo: ActorRef[Response])       extends Command
-  final case class Vote(userId: UUID, estimation: String)                 extends Command
-  final case class ClearVotes(userId: UUID)                               extends Command
-  final case class ReVote(userId: UUID)                                   extends Command
-  final case class ShowVotes(userId: UUID)                                extends Command
-  final case class EditIssue(userId: UUID, issue: String)                 extends Command
-  final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
+  final case class Join(user: User)                                                  extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
+  final case class Vote(userId: UUID, estimation: String)                            extends Command
+  final case class ClearVotes(userId: UUID)                                          extends Command
+  final case class ReVote(userId: UUID)                                              extends Command
+  final case class ShowVotes(userId: UUID)                                           extends Command
+  final case class EditIssue(userId: UUID, issue: String)                            extends Command
+  final private[actors] case class GetData(replyTo: ActorRef[DataStatus])            extends Command
 
   final case class DataStatus(data: RoomData)
 
@@ -34,7 +33,10 @@ object Room:
       issueLastEditBy: Option[UUID]
   ):
     def joinUser(user: User): RoomData =
-      this.copy(users = user :: this.users)
+      // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
+      // automatic EventSource retry racing an old connection's slow-to-detect failure)
+      // doesn't leave two entries for the same user.
+      this.copy(users = user :: this.users.filterNot(_.id == user.id))
 
     def vote(userId: UUID, estimation: String): RoomData =
       this.copy(users = this.users.map { u =>
@@ -48,8 +50,10 @@ object Room:
     def reVote(): RoomData =
       this.copy(users = this.users.map(u => u.copy(voted = false)))
 
-    def leave(userId: UUID): RoomData =
-      this.copy(users = this.users.filterNot(_.id == userId))
+    def leave(userId: UUID, ref: UntypedRef): RoomData =
+      // Scoped to the specific connection's ref, not just userId, so a stale connection's
+      // delayed teardown can't evict a newer connection the same user reconnected with.
+      this.copy(users = this.users.filterNot(u => u.id == userId && u.ref == ref))
 
     def editIssue(issue: String, userId: UUID): RoomData =
       this.copy(currentIssue = issue, issueLastEditBy = Option(userId))
@@ -69,16 +73,16 @@ object Room:
         case Join(user) =>
           val newData = data.joinUser(user)
           setupNewUser(user, roomId, newData)
-          broadcast(WSMessage(MessageType.Join, roomId, user.id, user.name), newData.users, context)
+          broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
           receiveBehaviour(roomId, newData)
         case Vote(userId, estimation) =>
           val newData = data.vote(userId, estimation)
-          broadcast(WSMessage(MessageType.Vote, roomId, userId, estimation), newData.users, context)
+          broadcast(RoomEvent(MessageType.Vote, roomId, userId, estimation), newData.users, context)
           receiveBehaviour(roomId, newData)
         case ClearVotes(userId) =>
           val newData = data.clear()
           broadcast(
-            WSMessage(MessageType.Clear, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Clear, roomId, userId, RoomEvent.NoExtra),
             newData.users,
             context
           )
@@ -86,33 +90,38 @@ object Room:
         case ReVote(userId) =>
           val newData = data.reVote()
           broadcast(
-            WSMessage(MessageType.Revote, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Revote, roomId, userId, RoomEvent.NoExtra),
             newData.users,
             context
           )
           receiveBehaviour(roomId, newData)
         case ShowVotes(userId) =>
           broadcast(
-            WSMessage(MessageType.Show, roomId, userId, WSMessage.NoExtra),
+            RoomEvent(MessageType.Show, roomId, userId, RoomEvent.NoExtra),
             data.users,
             context
           )
           Behaviors.same
-        case Leave(userId, replyTo) =>
-          val newData = data.leave(userId)
-          broadcast(
-            WSMessage(MessageType.Leave, roomId, userId, WSMessage.NoExtra),
-            newData.users,
-            context
-          )
-          if newData.users.isEmpty then
-            replyTo ! Stopped(roomId)
-            Behaviors.stopped
+        case Leave(userId, ref, replyTo) =>
+          if data.users.exists(u => u.id == userId && u.ref == ref) then
+            val newData = data.leave(userId, ref)
+            broadcast(
+              RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra),
+              newData.users,
+              context
+            )
+            if newData.users.isEmpty then
+              replyTo ! Stopped(roomId)
+              Behaviors.stopped
+            else
+              replyTo ! Running(roomId)
+              receiveBehaviour(roomId, newData)
           else
-            replyTo ! Running(roomId)
-            receiveBehaviour(roomId, newData)
+            // Stale teardown: this userId already reconnected under a different ref
+            // (joinUser replaced the entry), so there's nothing left to remove.
+            Behaviors.same
         case EditIssue(userId, issue) =>
-          broadcast(WSMessage(MessageType.EditIssue, roomId, userId, issue), data.users, context)
+          broadcast(RoomEvent(MessageType.EditIssue, roomId, userId, issue), data.users, context)
           receiveBehaviour(
             roomId,
             data.editIssue(issue, userId)
@@ -124,7 +133,7 @@ object Room:
     }
 
   private[actors] def broadcast(
-      message: WSMessage,
+      message: RoomEvent,
       users: List[User],
       context: ActorContext[Command]
   ): Unit =
@@ -135,13 +144,13 @@ object Room:
   end broadcast
 
   private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit =
-    user.ref ! WSMessage(MessageType.Init, roomId, user.id, user.name)
+    user.ref ! RoomEvent(MessageType.Init, roomId, user.id, user.name)
     data.issueLastEditBy.foreach(lastEditUser =>
-      user.ref ! WSMessage(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
+      user.ref ! RoomEvent(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
     )
     data.users.foreach { u =>
-      user.ref ! WSMessage(MessageType.Join, roomId, u.id, u.name)
-      if u.voted then user.ref ! WSMessage(MessageType.Vote, roomId, u.id, u.estimation)
+      user.ref ! RoomEvent(MessageType.Join, roomId, u.id, u.name)
+      if u.voted then user.ref ! RoomEvent(MessageType.Vote, roomId, u.id, u.estimation)
     }
   end setupNewUser
 end Room

@@ -6,11 +6,10 @@ import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTest
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
+import RoomEvent.MessageType
 
 class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
   import RoomSpec.*
@@ -32,7 +31,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         RoomData.empty.copy(users = List(user, user2))
       )
 
-      val expectedMessage = WSMessage(MessageType.EditIssue, roomId, actingUserId, issue)
+      val expectedMessage = RoomEvent(MessageType.EditIssue, roomId, actingUserId, issue)
       val expectedData    = Room.DataStatus(data =
         RoomData(
           users = List(user, user2),
@@ -61,11 +60,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         RoomData.empty.copy(users = List(user, user2))
       )
 
-      val expectedMessage = WSMessage(
+      val expectedMessage = RoomEvent(
         MessageType.Clear,
         roomId,
         actingUserId,
-        WSMessage.NoExtra
+        RoomEvent.NoExtra
       )
       val expectedData = Room.DataStatus(data =
         RoomData.empty.copy(users =
@@ -95,7 +94,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         RoomData.empty.copy(users = List(user, user2))
       )
       val expectedMessage =
-        WSMessage(MessageType.Show, roomId, actingUserId, WSMessage.NoExtra)
+        RoomEvent(MessageType.Show, roomId, actingUserId, RoomEvent.NoExtra)
 
       roomRef ! Room.ShowVotes(actingUserId)
 
@@ -113,7 +112,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
-      val expectedMessage = WSMessage(MessageType.Vote, roomId, actingUserId, estimation)
+      val expectedMessage = RoomEvent(MessageType.Vote, roomId, actingUserId, estimation)
       val expectedData    = Room.DataStatus(data =
         RoomData.empty.copy(users = List(user.copy(voted = true, estimation = estimation), user2))
       )
@@ -138,15 +137,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2))
       )
-      val expectedMessage = WSMessage(
+      val expectedMessage = RoomEvent(
         MessageType.Leave,
         roomId,
         actingUserId,
-        WSMessage.NoExtra
+        RoomEvent.NoExtra
       )
       val expectedData = Room.DataStatus(data = RoomData.empty.copy(users = List(user2)))
 
-      roomRef ! Room.Leave(actingUserId, roomResponseProbe.ref)
+      roomRef ! Room.Leave(actingUserId, user.ref, roomResponseProbe.ref)
 
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -155,6 +154,37 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomResponseProbe.expectMessage(Room.Running(roomId))
 
       dataProbe.expectMessage(expectedData)
+    }
+
+    "ignore a stale leave from a ref that already got replaced by a reconnect" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
+      val (roomId, roomRef)   = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      // Simulate the user's browser having already reconnected (a new ref replaced
+      // the old entry for the same userId) before the stale connection's own
+      // termination is observed.
+      val reconnectedUserProbe = TestProbe()(testKit.system.classicSystem)
+      val reconnectedUser      = user.copy(ref = reconnectedUserProbe.ref)
+      roomRef ! Room.Join(reconnectedUser)
+
+      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val expectedData =
+        Room.DataStatus(data = RoomData.empty.copy(users = List(reconnectedUser, user2)))
+      dataProbe.expectMessage(expectedData)
+
+      // The stale leave must not broadcast a Leave event or reply, since nothing was removed.
+      user2Probe.expectMsgType[RoomEvent] // the Join broadcast from the reconnect
+      user2Probe.expectNoMessage()
+      roomResponseProbe.expectNoMessage()
     }
 
     "stop itself if empty" in {
@@ -168,9 +198,25 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       behaviorTestKit.run(Room.Join(user))
       behaviorTestKit.run(Room.Join(user2))
-      behaviorTestKit.run(Room.Leave(user.id, roomResponseProbe.ref))
-      behaviorTestKit.run(Room.Leave(user2.id, roomResponseProbe.ref))
+      behaviorTestKit.run(Room.Leave(user.id, user.ref, roomResponseProbe.ref))
+      behaviorTestKit.run(Room.Leave(user2.id, user2.ref, roomResponseProbe.ref))
       behaviorTestKit.isAlive mustBe false
+    }
+
+    "replace an existing user's entry on rejoin instead of duplicating it" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "5")
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
+
+      val newRefProbe  = TestProbe()(testKit.system.classicSystem)
+      val rejoinedUser = Room.User(user.id, "user1", false, "", newRefProbe.ref)
+
+      roomRef ! Room.Join(rejoinedUser)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessage(
+        Room.DataStatus(data = RoomData.empty.copy(users = List(rejoinedUser)))
+      )
     }
 
     "join the room, get all info, and broadcast it" in {
@@ -188,7 +234,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val newUserProbe = TestProbe()(testKit.system.classicSystem)
       val newUser      = Room.User(UUID.randomUUID(), "new user", false, "", newUserProbe.ref)
 
-      val expectedMessage = WSMessage(MessageType.Join, roomId, newUser.id, newUser.name)
+      val expectedMessage = RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)
       val expectedData    =
         Room.DataStatus(data =
           RoomData(
@@ -206,10 +252,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       user2Probe.expectMsg(expectedMessage)
 
       newUserProbe.expectMsg(
-        WSMessage(MessageType.Init, roomId, newUser.id, newUser.name)
+        RoomEvent(MessageType.Init, roomId, newUser.id, newUser.name)
       )
       newUserProbe.expectMsg(
-        WSMessage(
+        RoomEvent(
           MessageType.EditIssue,
           roomId,
           user.id,
@@ -217,16 +263,16 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         )
       )
       newUserProbe.expectMsg(
-        WSMessage(MessageType.Join, roomId, newUser.id, newUser.name)
+        RoomEvent(MessageType.Join, roomId, newUser.id, newUser.name)
       )
       newUserProbe.expectMsg(
-        WSMessage(MessageType.Join, roomId, user.id, user.name)
+        RoomEvent(MessageType.Join, roomId, user.id, user.name)
       )
       newUserProbe.expectMsg(
-        WSMessage(MessageType.Vote, roomId, user.id, user.estimation)
+        RoomEvent(MessageType.Vote, roomId, user.id, user.estimation)
       )
       newUserProbe.expectMsg(
-        WSMessage(MessageType.Join, roomId, user2.id, user2.name)
+        RoomEvent(MessageType.Join, roomId, user2.id, user2.name)
       )
 
       dataProbe.expectMessage(expectedData)

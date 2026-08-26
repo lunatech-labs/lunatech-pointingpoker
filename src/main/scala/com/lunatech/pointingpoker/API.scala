@@ -1,19 +1,20 @@
 package com.lunatech.pointingpoker
 
-import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.Http
+import org.apache.pekko.http.scaladsl.marshalling.sse.EventStreamMarshalling
 import org.apache.pekko.http.scaladsl.model.*
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
+import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshaller
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.RoomManager
-import com.lunatech.pointingpoker.websocket.WS
+import com.lunatech.pointingpoker.sse.SSE
 import com.lunatech.pointingpoker.config.ApiConfig
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -22,10 +23,15 @@ import scala.util.{Failure, Success}
 
 class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(using
     actorSystem: ActorSystem[SpawnProtocol.Command]
-):
+) extends EventStreamMarshalling:
 
-  private given timeout: Timeout = Timeout(apiConfig.timeout)
-  private val log: Logger        = LoggerFactory.getLogger(this.getClass)
+  private given timeout: Timeout                      = Timeout(apiConfig.timeout)
+  private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
+  private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
+
+  // Rejects malformed UUIDs as a 400 MalformedQueryParamRejection instead of letting
+  // UUID.fromString's IllegalArgumentException escape uncaught as a 500.
+  private given Unmarshaller[String, UUID] = Unmarshaller.strict(UUID.fromString)
 
   val route: Route =
     concat(
@@ -52,14 +58,71 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig)(usin
           }
         }
       },
-      path("websocket" / JavaUUID / Remaining) { (roomId, encodedName) =>
-        log.debug("Websocket call: {} {}", roomId, encodedName)
-        handleWebSocketMessages(
-          WS.handler(
-            roomId,
-            URLDecoder.decode(encodedName, StandardCharsets.UTF_8.name()),
-            roomManager.toClassic
-          )
+      path("rooms" / JavaUUID / "join") { _ =>
+        post {
+          // Scoped locally so the generic circe marshaller cannot hijack routes that
+          // complete with a plain String (e.g. create-room, which stays text/plain).
+          import com.lunatech.pointingpoker.CirceSupport.given
+          entity(as[JoinRequest]) { _ =>
+            complete(JoinResponse(UUID.randomUUID()))
+          }
+        }
+      },
+      path("rooms" / JavaUUID / "events") { roomId =>
+        get {
+          parameters("userId".as[UUID], "name") { (userId, name) =>
+            complete(SSE.source(roomManager.toClassic, roomId, userId, name))
+          }
+        }
+      },
+      pathPrefix("rooms" / JavaUUID) { roomId =>
+        concat(
+          path("vote") {
+            post {
+              import com.lunatech.pointingpoker.CirceSupport.given
+              parameter("userId".as[UUID]) { userId =>
+                entity(as[VoteRequest]) { req =>
+                  roomManager ! RoomManager.Vote(roomId, userId, req.estimation)
+                  complete(StatusCodes.NoContent)
+                }
+              }
+            }
+          },
+          path("show") {
+            post {
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Show(roomId, userId)
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("clear") {
+            post {
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Clear(roomId, userId)
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("revote") {
+            post {
+              parameter("userId".as[UUID]) { userId =>
+                roomManager ! RoomManager.Revote(roomId, userId)
+                complete(StatusCodes.NoContent)
+              }
+            }
+          },
+          path("edit-issue") {
+            post {
+              import com.lunatech.pointingpoker.CirceSupport.given
+              parameter("userId".as[UUID]) { userId =>
+                entity(as[EditIssueRequest]) { req =>
+                  roomManager ! RoomManager.EditIssue(roomId, userId, req.issue)
+                  complete(StatusCodes.NoContent)
+                }
+              }
+            }
+          }
         )
       }
     )

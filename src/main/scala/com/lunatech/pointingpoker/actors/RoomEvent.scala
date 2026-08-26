@@ -1,20 +1,20 @@
-package com.lunatech.pointingpoker.websocket
+package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
+import com.lunatech.pointingpoker.actors.RoomEvent.MessageType
 import io.circe.*
 import io.circe.generic.semiauto.*
 import scala.util.Try
 
-case class WSMessage(
+case class RoomEvent(
     messageType: MessageType,
     roomId: UUID,
     userId: UUID,
     extra: String
 )
 
-object WSMessage:
+object RoomEvent:
 
   val NoExtra = ""
 
@@ -60,8 +60,6 @@ object WSMessage:
   given messageTypeEncoder: Encoder[MessageType] =
     Encoder.encodeString.contramap(m => m.stringRep)
 
-  given wsMessageDecoder: Decoder[WSMessage] = deriveDecoder[WSMessage]
+  given roomEventEncoder: Encoder[RoomEvent] = deriveEncoder[RoomEvent]
 
-  given wsMessageEncoder: Encoder[WSMessage] = deriveEncoder[WSMessage]
-
-end WSMessage
+end RoomEvent

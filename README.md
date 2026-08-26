@@ -1,11 +1,14 @@
 # Poiting Poker
 
 ### Description
-This project provides a web/websocket based pointing poker session.
+This project provides an HTTP + Server-Sent-Events (SSE) based pointing poker session.
 
 ### Messaging
 
-Web socket messaging is based on the class `WSMessage`. Json example:
+Clients send commands as plain HTTP POST requests (see the API table below). The
+server pushes room updates the other way, over a long-lived SSE stream opened on
+`GET /rooms/{roomId}/events`. Each pushed event carries one `RoomEvent` JSON
+object as its `data` payload. Json example:
 
 ```json
 {
@@ -24,26 +27,48 @@ Possible values for messageType:
 * "revote"
 * "clear"
 * "leave"
+* "edit_issue"
 
 `roomId` and `userId` should be `UUID`.
 
 `extra` value depends `messageType`.
 
+The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
+connection is not closed by the server's idle timeout.
+
 ### API
 
 Available endpoints:
 
-| Path                             | Method    | Description                                               |
-|----------------------------------|-----------|-----------------------------------------------------------|
-|`/`                               | GET       | Load index with frontend                                  |
-|`/create-room`                    | POST      | Creates a room and returns roomId                         |
-|`/websocket/[roomId]/[user-name]` | WebSocket | Creates a websocket connection and joins the user to room |
+| Path                            | Method | Request body          | Description                                                          |
+|---------------------------------|--------|-----------------------|----------------------------------------------------------------------|
+|`/`                              | GET    | none                  | Load index with frontend                                             |
+|`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
+|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId for the room and returns `{"userId": "..."}`          |
+|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires `userId` and `name` query parameters |
+|`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires a `userId` query parameter          |
+|`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires a `userId` query parameter    |
+|`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires a `userId` query parameter     |
+|`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires a `userId` query parameter        |
+|`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires a `userId` query parameter |
+
+Command endpoints return `204 No Content`. An unknown `roomId` is a silent no-op.
+
+There is also a `GET /{roomId}` route that serves the same frontend index page,
+so a room link can be shared directly.
 
 ### Tech stack
 
 This project uses:
   * Vue.js
   * pekko/pekko-http
+
+### Roadmap and known issues
+
+This app is going through a multi-PR modernization effort. See
+[`docs/roadmap.md`](docs/roadmap.md) for the phased plan and
+[`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
+found along the way that are not yet scheduled or fixed.
 
 ### Deployment
 
