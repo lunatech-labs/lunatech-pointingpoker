@@ -269,6 +269,19 @@ Server-side (`SSE.scala`/`API.scala`):
     early on an event, since a genuinely idle room must still self-close
     before 45s, otherwise it's exactly today's failure, the proxy killing
     an open-ended stream with nothing delivered.
+- **The existing 15-second `.keepAlive` heartbeat (`SSE.scala:29-34,69`) is
+  not applied to bounded connections.** Its only purpose is keeping a
+  connection alive under Pekko's 60-second idle-timeout, and a bounded
+  connection's own wall-clock cap (20-30s) already stays well under that,
+  so the failure it exists to prevent can't happen here regardless. Applying
+  it unchanged would actively break the intended timing: a heartbeat is not
+  a `RoomEvent` and carries no `id:`, but if the adaptive close logic above
+  treated its arrival as "something to flush" (the natural default if this
+  isn't handled deliberately), every idle bounded connection would close
+  at a fixed ~15s + the 1s flush window, not the intended jittered
+  20-30s, silently defeating the jitter's purpose of keeping clients from
+  cycling in lockstep. Unbounded connections keep `.keepAlive` exactly as
+  today, unchanged, they still need it.
 - When absent, behavior is unchanged, unbounded, exactly as today.
 - Configurable via env var following the existing `SseConfig` pattern
   (e.g. `SSE_BOUNDED_DURATION`, default 20s base for the wall-clock cap).
@@ -302,8 +315,8 @@ path.
 - **Replaying "are votes currently revealed" state on resync**: not
   addressed here. `setupNewUser` today has no equivalent of a `Show` replay,
   a resyncing client has no way to know if votes are currently revealed.
-  Pre-existing, unrelated to this design, not worsened by it. Not fixed
-  here; flag separately if it turns out to matter in practice.
+  Pre-existing, unrelated to this design, not worsened by it. Logged in
+  `docs/known-issues.md`.
 
 ## Testing
 
@@ -323,6 +336,9 @@ for the established style):
   when an event is available (including batching near-simultaneous
   events into one delta), and closes at the wall-clock cap when nothing
   happened.
+- A bounded, idle connection does not receive `.keepAlive` heartbeats and
+  closes at the jittered wall-clock cap (20-30s), not at ~15s+1s; an
+  unbounded connection still receives heartbeats unchanged.
 - An end-to-end case (mirroring `BackpressureReconnectSpec`) proving a vote
   landing exactly in a bounded client's reconnect gap is delivered via the
   next delta, not lost, closing the "vote4" question raised during this
