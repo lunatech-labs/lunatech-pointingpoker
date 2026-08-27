@@ -128,17 +128,25 @@ the pre-broadcast baseline, then separately receives their own ordinary
 special-cased for the bootstrap case, it falls out of the existing call
 order holding for every join, first or hundredth.
 
-**Retention: a 5-minute time window only, no count-based cap, no
-ack-based compaction.** Considered and rejected: pruning an event once
-every currently-connected client has already passed it (tracking a live
+**Retention: a time window only, no count-based cap, no ack-based
+compaction.** Considered and rejected: pruning an event once every
+currently-connected client has already passed it (tracking a live
 per-connection delivery cursor). Correct in principle, but this app's event
 volume (a handful of participants, occasional votes/joins/leaves/edits,
-30-60 minute sessions) means even a generous 5-minute window holds at most
-a few dozen to low hundreds of small events, genuinely negligible memory
+30-60 minute sessions) means even a generous window holds at most a few
+dozen to low hundreds of small events, genuinely negligible memory
 regardless of eviction strategy. The added state (a live cursor per
 connected user, updated on every send) and edge cases aren't justified by
-the memory it would save. If a client's gap exceeds 5 minutes, it falls
+the memory it would save. If a client's gap exceeds the window, it falls
 back to a full resync, the existing self-heal path, not a new failure mode.
+
+Configurable via env var, `SSE_EVENT_LOG_RETENTION`, default 5 minutes,
+same `SseConfig` pattern and same reasoning as the bounded-mode timing
+knobs in section 6: this is a judgment call trading memory against
+full-resync fallback frequency, not something this design can fully settle
+ahead of time. Unlike the bounded knobs, it's consumed entirely server-side
+(the prune check in `Room`), so no client-delivery mechanism is needed for
+this one.
 
 ### 3. Connection-time resolution
 
@@ -168,9 +176,34 @@ Three cases, resolved against the room's `eventLog`:
   event and strand the rest of the backlog for the next cycle, silently
   reintroducing the per-event reconnect cost this design removed the flush
   window to avoid.
-- **`Last-Event-ID` present but older than the log's retention:** full
+- **`Last-Event-ID` present but not resolvable to a valid position in the
+  log** (older than retention, *or* beyond the room's current `sequence`,
+  e.g. malformed, spoofed, or from a non-`EventSource` client): full
   resync, same as the first-connection case (with `Reset`), this is the
   existing self-heal fallback, not new.
+
+**Precise resolution rule.** The three cases above are stated in prose;
+the actual predicate matters, since "found in the log" and "not found"
+aren't quite the same split as "delta" vs. "full resync." Given
+`lastEventId: Option[Long]`, `currentSequence = newData.sequence`, and
+`newData.eventLog`:
+
+- `lastEventId.isEmpty` -> first-connection case.
+- `lastEventId` contains `id` where `id == currentSequence` -> delta case,
+  trivially empty (the client is already caught up; this is also what
+  keeps a room's very first reconnect, `id = 0` against an empty
+  `eventLog`, see section 2, from spuriously falling through to a full
+  resync).
+- `lastEventId` contains `id` where `id < currentSequence` and
+  `newData.eventLog.exists(_._1 == id)` -> delta case, reply with
+  `eventLog.collect { case (id2, _, event) if id2 > id => event }`.
+- Anything else, including `id > currentSequence` (never legitimately
+  issued by this room, e.g. malformed or spoofed) and `id < currentSequence`
+  with no matching entry (pruned) -> full resync case. Collapsing "too old"
+  and "never valid" into one path is deliberate: the remedy is identical
+  either way, and the alternative (silently returning an empty delta for an
+  `id` the room never issued) would leave a client stuck believing it's
+  caught up when it never validly resynced in the first place.
 
 **Data path: `Last-Event-ID` reaches `Room` through the existing `Join`
 message, not a new query.** The route reads the header the same way it
@@ -313,26 +346,102 @@ them; those tests should be updated to go through `ConnectToRoom` (or
 otherwise start from `InitialVoteState`/`InitialEstimation`) so they'd
 actually catch a regression here.
 
+**Problem C, stale grace-period timers piling up.** Every reconnect,
+including the ordinary buffer-overflow reconnect the grace period already
+exists for, arrives at the Room actor as a brand-new HTTP connection with a
+brand-new materialized `ActorRef` (`SSE.scala:56-59`). `Room.Leave`'s
+grace-period timer is keyed on `(userId, ref)` (`Room.scala:195-206`), so a
+resume never actually cancels the old timer, it just sits scheduled for the
+full `gracePeriod` and fires later as a no-op once `ConfirmLeave`'s
+existing `data.users.exists(u => u.id == userId && u.ref == ref)` check
+finds the old `ref` already replaced. Harmless today, since reconnects are
+rare (only buffer overflow triggers one). Under this design, a bounded
+client reconnects routinely, up to once per event in the worst case (see
+section 6), so "schedule and let it fire uselessly" goes from a rare,
+one-off cost to something that can leave several stale timers alive per
+user at once, each occupying a slot in the Room actor's `TimerScheduler`
+and each still producing a wasted `ConfirmLeave` message later.
+
+**Fix:** re-key the timer on `userId` alone, and have `Join` cancel it
+explicitly:
+
+```scala
+case Leave(userId, ref, replyTo) =>
+  // unchanged reasoning, just the key:
+  timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId, ref, replyTo), delay = gracePeriod)
+  Behaviors.same
+
+case Join(user) =>
+  timers.cancel(user.id)
+  val (newData, isResume) = data.joinUser(user)
+  // ... as above
+```
+
+`startSingleTimer` already cancels any existing timer under the same key,
+so keying on `userId` alone means two `Leave` calls for the same user, the
+same connection retrying or two different connections/refs racing, collapse
+to at most one live timer rather than one per `ref`. `timers.cancel(user.id)`
+in `Join` goes further: a fresh `Join` means this user is present again
+right now, so any pending scheduled removal for them is stale immediately,
+not just eventually. Net effect: bounded mode's routine reconnect cycling
+holds at most one live grace timer per user at any instant, actively
+cleared on every rejoin, instead of potentially several stacking up and
+self-clearing only as each individually fires later.
+
+This doesn't change `ConfirmLeave`'s existing ref-scoped safety check,
+which stays exactly as-is and remains necessary: the unavoidable
+out-of-order case, a `Leave` for an old connection's `ref` arriving *after*
+the room has already processed the new `Join`, has nothing pending to
+cancel at `Leave`-time (the `Join`'s cancel ran too early to catch it), so
+a fresh timer gets scheduled and must still self-discover staleness at fire
+time via that same check, exactly as today. Not a correctness change, only
+a cost one: it changes *when* a stale timer's futility is discovered
+(immediately at rejoin, the common case, vs. eventually at fire-time, the
+residual race case), not what protects against it.
+
+The existing `(userId, ref)`-key comment and its "relies on RoomManager
+calling Leave at most once per connection" caveat (`Room.scala:189-193`)
+go away with this change: keying on `userId` alone no longer depends on
+that assumption, since any two `Leave`s for the same user now collapse via
+the same mechanism regardless of whether they share a `ref`.
+
 ### 6. Bounded/long-poll fallback for proxy-detected clients
 
 Client-side (`index.html`'s `doJoin`):
 
 - Open `EventSource` unbounded, as today, by default.
-- Start a 5-second timer on open (a plain JS constant, not configurable).
-  This detection only ever runs on this first connection of a fresh page
-  load, which always has no `Last-Event-ID` yet, so per section 3 it always
-  gets an immediate `Reset` + full-resync burst, meaning the timer only has
-  to detect "did the connection open at all," not "did some arbitrary
-  future event occur." A later bounded reconnect within the same page
-  instance skips detection entirely (see below) and may legitimately wait
-  out an empty delta, so this timer is never armed for those. Any message,
-  including a heartbeat, clears it.
+- Start a detection timer on open, duration sent from the server (see
+  below), default 5s. This detection only ever runs on this first
+  connection of a fresh page load, which always has no `Last-Event-ID` yet,
+  so per section 3 it always gets an immediate `Reset` + full-resync burst,
+  meaning the timer only has to detect "did the connection open at all,"
+  not "did some arbitrary future event occur." A later bounded reconnect
+  within the same page instance skips detection entirely (see below) and
+  may legitimately wait out an empty delta, so this timer is never armed
+  for those. Any message, including a heartbeat, clears it.
 - If the timer fires with nothing received: close that connection, mark an
   in-memory `sseBounded = true` for this page instance (not persisted to
   `sessionStorage`/`localStorage`, a fresh page load always re-detects),
   and manually open a new `EventSource` with `?bounded=1`. This is the
   *only* manually-driven reconnect in this design, needed because the URL
   itself changes.
+- **Connecting spinner.** From the moment `doJoin` starts (whether
+  triggered by submitting the join/create form, or by `created()` auto-
+  joining a bookmarked room URL with a remembered name from `localStorage`,
+  `index.html:560-574`) until the first real SSE message arrives (`inRoom`
+  flips true, `index.html:401`) or the connection definitively fails, show
+  a connecting spinner in place of the join/create form (`v-if="!inRoom &&
+  !connecting"` on the existing form, a sibling `v-if="connecting"` block
+  for the spinner). One flag (`connecting`), set at the top of `doJoin`,
+  cleared alongside `inRoom` and on hard failure (existing `onerror`/
+  `showError` path). Both entry points converge on the same `doJoin`, so
+  this covers the bookmark case with no separate logic. Motivation: today
+  there is no feedback at all between submitting the form (or auto-joining
+  from a bookmark) and the first SSE message landing, the user just keeps
+  looking at the static form; that gap is exactly what the detection timer
+  above spans in the worst case, and it's fully unmasked. See "What was
+  deferred or rejected" for the follow-up: the spinner is a stopgap, not
+  a full fix for the perceived-lag problem the detection timer creates.
 - Every reconnect after that, every scheduled bounded close and any
   ordinary drop, is handled by the browser's own native `EventSource`
   auto-reconnect on that same object, not further custom JS: same URL, so
@@ -445,6 +554,18 @@ Server-side (`SSE.scala`/`API.scala`):
   fully settle ahead of time. The intent is to revisit them with real
   feedback after the first production deployment, not treat the defaults
   above as final.
+- The client-side detection timeout (above) is configurable the same way,
+  `SSE_DETECTION_TIMEOUT`, default 5s, same "judgment call, revisit after
+  production feedback" reasoning. It can't reach the client by riding the
+  wire protocol the way `retry:` does, though, since detection is deciding
+  *whether* an SSE connection is working at all, by timing the absence of
+  any frame; there's no frame to carry it on. Instead it's threaded through
+  the existing `POST /rooms/:roomId/join` response (`JoinResponse`,
+  `API.scala:76-95`), which already precedes `EventSource` creation
+  (`doJoin`, `index.html:380-388`) and is a small, finite response, so the
+  buffering proxy this spec targets releases it almost immediately
+  regardless (it only ever fails to release a response that never
+  completes, see Problem).
 - No `Room`/`RoomManager` structural changes needed beyond sections 1-5,
   the bounded path is just a client-driven reconnect cadence riding on the
   same delta-resync mechanism every client uses.
@@ -461,6 +582,16 @@ path.
 
 ## What was deferred or rejected
 
+- **Shipping Problems A/B/C (section 5) as an isolated hotfix ahead of this
+  design**: rejected. These are already-live correctness gaps independent
+  of the proxy work, and the fix is small and self-contained, so splitting
+  it out was considered. Rejected because their visibility and criticality
+  are directly increased by this design (routine bounded reconnects turn a
+  rare edge case into a routine one), the fix is cheap enough that bundling
+  adds negligible risk to this delivery, and this design is the next
+  priority for this project, splitting would mean a second review/release
+  cycle for bugs that only became consequential because of the feature
+  being shipped next anyway.
 - **Ack-based log compaction** (section 2): rejected, negligible benefit at
   this app's scale versus the added per-connection cursor-tracking state.
 - **Durable/persisted event log**: deferred to whenever Phase 2 durable
@@ -472,6 +603,22 @@ path.
   `Reset` design (section 4), which is strictly more correct (it also
   handles departed-participant removal, which pure idempotency would not)
   and simpler to reason about.
+- **Room-skeleton loading experience**: not addressed here beyond the
+  connecting spinner (section 6). The spinner is a stopgap: it gives
+  feedback that something is happening, but the user still stares at an
+  inert screen for the full detection window in the worst case. A fuller
+  fix would render the room skeleton itself (participant list layout,
+  voting area, etc.) before the `/events` connection succeeds, bounded or
+  not, so the page feels loaded rather than pending, and separately revisit
+  `SSE_DETECTION_TIMEOUT`'s default upward, since a skeleton removes most
+  of the pressure to keep that window short. If this is built, the
+  skeleton must stay non-interactive (no voting, no editing the issue,
+  nothing that implies the room's actual state is known) until the real
+  sync, delta or full, completes, exactly the same guarantee `inRoom`
+  currently provides by gating the whole room view on it; a skeleton that
+  looks ready but isn't would be worse than the current plain wait, not
+  better. Deferred rather than done here because it's a UI redesign, not a
+  resync-correctness change, and shouldn't block this delivery.
 - **Replaying "are votes currently revealed" state on resync**: not
   addressed here. `setupNewUser` today has no equivalent of a `Show` replay,
   a resyncing client has no way to know if votes are currently revealed.
@@ -522,3 +669,11 @@ for the established style):
   landing exactly in a bounded client's reconnect gap is delivered via the
   next delta, not lost, closing the "vote4" question raised during this
   design's review.
+- A `Last-Event-ID` beyond the room's current `sequence` (malformed,
+  spoofed, or otherwise never issued by this room) resolves to a full
+  resync with `Reset`, not a silently-empty delta, per the precise
+  resolution rule in section 3.
+- The connecting spinner (section 6) clears on both the success path
+  (first real SSE message, `inRoom` becomes true) and the hard-failure
+  path (`onerror` with a closed `readyState`), and is not shown for a
+  bounded reconnect that legitimately waits out an empty delta.
