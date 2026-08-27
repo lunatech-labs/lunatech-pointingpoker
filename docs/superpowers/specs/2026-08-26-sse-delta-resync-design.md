@@ -167,13 +167,21 @@ for mutating state:
 def logEvent(event: RoomEvent, config: RoomConfig): (RoomData, SequencedRoomEvent) =
   val id      = this.sequence + 1
   val stamped = SequencedRoomEvent(id, event)
-  val prunedByAge = (this.eventLog :+ (Instant.now(), stamped))
-    .dropWhile { case (ts, _) => ts.isBefore(Instant.now().minus(config.eventLogRetention)) }
+  val now     = Instant.now()
+  val cutoff  = now.minus(config.eventLogRetention)
+  val prunedByAge = (this.eventLog :+ (now, stamped))
+    .dropWhile { case (ts, _) => ts.isBefore(cutoff) }
   val pruned = if prunedByAge.size > config.eventLogMaxEntries
     then prunedByAge.drop(prunedByAge.size - config.eventLogMaxEntries)
     else prunedByAge
   (this.copy(sequence = id, eventLog = pruned), stamped)
 ```
+
+`now`/`cutoff` are each captured once and reused, rather than calling
+`Instant.now()` again inside `dropWhile`'s predicate for every element
+scanned, which would recompute (and let drift slightly across the scan)
+the cutoff on each check instead of pruning the whole pass against one
+consistent instant.
 
 Each handler that broadcasts calls `logEvent` first, sends the stamped
 event via `broadcast` unchanged, and threads the returned `RoomData` into
@@ -287,6 +295,18 @@ back to full resync, the same self-heal path as the time-based case, not a
 new failure mode. See `docs/known-issues.md` ("No rate limiting on
 mutating room endpoints") for the broader gap this backstop works around
 but doesn't solve.
+
+**This is a shared-fate cost, not only a self-heal for the client causing
+it.** `eventLog` is per-room state, so one client's abuse (or even a
+legitimate burst that outruns the retention window) prunes entries every
+*other* bounded client in that same room may still need. Each bystander's
+next reconnect then also falls back to full resync with `Reset`,
+repeatedly for as long as the pruning keeps outrunning their retention
+window, producing a visible participant-list clear-and-rebuild on
+innocent clients, not just on the one causing it. The rate-limiting gap
+in `docs/known-issues.md` is the root cause; this backstop only bounds
+memory and prune-scan cost, it does not prevent this cross-client
+degradation.
 
 Both configurable via env var, same `SseConfig` pattern and same reasoning
 as the bounded-mode timing knobs in section 6: `SSE_EVENT_LOG_RETENTION`
@@ -736,7 +756,8 @@ Server-side (`SSE.scala`/`API.scala`):
   - If the resolution is empty (nothing missed, the common case for a
     client reconnecting promptly with nothing new): stay open, waiting for
     either a new push, which triggers the same send-then-close above, or
-    the wall-clock cap (base 20s + 0-10s jitter, so clients don't cycle in
+    the wall-clock cap (`SSE_BOUNDED_DURATION` base 20s +
+    `SSE_BOUNDED_DURATION_JITTER` 0-10s, so clients don't cycle in
     lockstep) elapsing with nothing new, in which case it closes anyway
     with no data, purely to stay safely under the proxy's 45s limit, and
     the client reconnects with the same `Last-Event-ID` since nothing
@@ -801,10 +822,16 @@ def source(
 push regardless of how many events that push contained, the same
 single-push discipline section 3 requires, not after the first
 individual flattened event. Composing `take(1)` with `takeWithin` gives
-"close on the first batch, or at the cap, whichever happens first"; the
-exact operator combination should be confirmed against Pekko Streams'
-actual `take`/`takeWithin` interaction during implementation, this is
-the intended behavior, not a verified-working snippet.
+"close on the first batch, or at the cap, whichever happens first";
+confirmed with a standalone spike against a `Source.actorRef[List[Int]]`
+wired the same way (`take(1).takeWithin(cap).mapConcat(identity)`): a
+multi-element push flows through in full, in order, before the stream
+completes (no truncation after the first flattened element); the stream
+closes immediately on a push that arrives well before the cap rather
+than waiting out the remainder; an idle source closes with nothing
+delivered once the cap elapses; and a push arriving after `take(1)` has
+already closed the stream is silently dropped (dead letters), not an
+error, no extra guarding needed against it.
 
 This also tightens something section 3 left implicit: for this to work,
 `Join`'s handler must send nothing to `user.ref` when the resolved delta
@@ -851,9 +878,13 @@ next real push, live broadcast or otherwise.
 - When absent, behavior is unchanged, unbounded, exactly as today.
 - The bounded-mode timing constants are configurable via env var following
   the existing `SseConfig` pattern, rather than hardcoded:
-  `SSE_BOUNDED_DURATION` (wall-clock cap base, default 20s) and
-  `SSE_BOUNDED_RETRY` / `SSE_BOUNDED_RETRY_JITTER` (default 500ms +/-
-  100ms). Made tunable
+  `SSE_BOUNDED_DURATION` (wall-clock cap base, default 20s),
+  `SSE_BOUNDED_DURATION_JITTER` (jitter added to that cap, default 10s,
+  giving the "0-10s jitter" above a named, tunable value rather than an
+  unconfigurable constant; distinct from the retry jitter below, this one
+  randomizes when an idle connection force-closes, not how long the
+  browser waits before reopening one), and `SSE_BOUNDED_RETRY` /
+  `SSE_BOUNDED_RETRY_JITTER` (default 500ms +/- 100ms). Made tunable
   deliberately: these values are a judgment call about a real proxy's
   behavior and real users' tolerance for lag, which this design can't
   fully settle ahead of time. The intent is to revisit them with real
@@ -922,10 +953,11 @@ require(
     s"pointing-poker.sse.bounded-retry ($boundedRetryMillis ms)"
 )
 require(
-  boundedDurationMillis + boundedRetryJitterMillis < 60000,
+  boundedDurationMillis + boundedDurationJitterMillis < 60000,
   s"pointing-poker.sse.bounded-duration ($boundedDurationMillis ms) plus " +
-    s"jitter must stay safely under Pekko's own 60s idle-timeout, or a " +
-    s"bounded connection risks the framework itself killing it before the " +
+    s"pointing-poker.sse.bounded-duration-jitter ($boundedDurationJitterMillis ms) " +
+    s"must stay safely under Pekko's own 60s idle-timeout, or a bounded " +
+    s"connection risks the framework itself killing it before the " +
     s"scheduled close"
 )
 require(
@@ -936,10 +968,11 @@ require(
     s"connection outright"
 )
 require(
-  eventLogRetention.toMillis >= 2 * (boundedDurationMillis + boundedRetryJitterMillis),
+  eventLogRetention.toMillis >= 2 * (boundedDurationMillis + boundedDurationJitterMillis),
   s"pointing-poker.sse.event-log-retention ($eventLogRetention) must be at " +
-    s"least twice pointing-poker.sse.bounded-duration plus jitter " +
-    s"($boundedDurationMillis + $boundedRetryJitterMillis ms), or a bounded " +
+    s"least twice pointing-poker.sse.bounded-duration plus " +
+    s"pointing-poker.sse.bounded-duration-jitter " +
+    s"($boundedDurationMillis + $boundedDurationJitterMillis ms), or a bounded " +
     s"client's routine reconnect cycle will regularly fall outside the " +
     s"retained window and be forced back to full resync on every cycle, " +
     s"defeating the point of delta resync"
@@ -947,6 +980,7 @@ require(
 require(eventLogRetention.toMillis > 0, "...")
 require(eventLogMaxEntries > 0, "...")
 require(boundedDurationMillis > 0, "...")
+require(boundedDurationJitterMillis >= 0, "...")
 require(boundedRetryMillis > 0, "...")
 require(detectionTimeoutMillis > 0, "...")
 require(detectionCacheTtlMillis > 0, "...")
@@ -1127,13 +1161,16 @@ for the established style):
   debounce. Covers both bounded and unbounded reconnects.
 - `SseConfig.load`'s new invariants (section 6): rejects a
   `SSE_BOUNDED_RETRY` that leaves `gracePeriod` under twice its value;
-  rejects a `SSE_BOUNDED_DURATION` (plus max jitter) that doesn't stay
-  safely under Pekko's 60s idle-timeout; rejects a `SSE_DETECTION_TIMEOUT`
-  that isn't strictly under `SSE_BOUNDED_DURATION`; rejects a
-  `SSE_EVENT_LOG_RETENTION` under twice `SSE_BOUNDED_DURATION` plus
-  jitter; rejects non-positive values for `SSE_EVENT_LOG_RETENTION`,
-  `SSE_EVENT_LOG_MAX_ENTRIES`, `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`,
-  `SSE_DETECTION_TIMEOUT`, and `SSE_DETECTION_CACHE_TTL`.
+  rejects a `SSE_BOUNDED_DURATION` plus `SSE_BOUNDED_DURATION_JITTER` that
+  doesn't stay safely under Pekko's 60s idle-timeout; rejects a
+  `SSE_DETECTION_TIMEOUT` that isn't strictly under `SSE_BOUNDED_DURATION`;
+  rejects a `SSE_EVENT_LOG_RETENTION` under twice `SSE_BOUNDED_DURATION`
+  plus `SSE_BOUNDED_DURATION_JITTER`; rejects non-positive values for
+  `SSE_EVENT_LOG_RETENTION`, `SSE_EVENT_LOG_MAX_ENTRIES`,
+  `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`, `SSE_DETECTION_TIMEOUT`,
+  and `SSE_DETECTION_CACHE_TTL`; rejects a negative
+  `SSE_BOUNDED_DURATION_JITTER` (zero is a valid "no jitter" value,
+  unlike the others).
 - The detection cache (section 6): a valid, non-expired `sseBoundedUntil`
   entry skips detection entirely and opens directly with `?bounded=1`, no
   unbounded connection attempted; an expired or absent entry runs
