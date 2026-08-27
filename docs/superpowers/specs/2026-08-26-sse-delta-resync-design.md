@@ -787,6 +787,27 @@ Server-side (`SSE.scala`/`API.scala`):
   detection-cache-check bullet above) self-corrects within about a
   business day, long enough that a customer joining several rooms across a
   single day only pays the detection window once, on their first join.
+- **Logging at the decision points this design introduces**, plain SLF4J
+  log lines, no new dependency, since several constants above are
+  explicitly framed as "revisit after production feedback" and that
+  revisit is unactionable without a way to observe what actually
+  happened: a debug/info line in `Room`'s `Join` handling when
+  resolution falls back to full resync for a non-first-connection reason
+  (section 3's "not resolvable" case), noting whether it was
+  age/count-pruned or an id the room never issued, this is the signal for
+  whether `SSE_EVENT_LOG_RETENTION`/`SSE_EVENT_LOG_MAX_ENTRIES` are sized
+  correctly for real reconnect cadences; a line when a connection
+  resolves with `?bounded=1` present, a rough count of how many clients
+  are actually on the bounded path; and a line at bounded-connection
+  close noting which of the two close reasons fired (push-triggered vs.
+  wall-clock cap), the signal for whether `SSE_BOUNDED_DURATION` is
+  well-tuned (mostly push-triggered closes means the cap is rarely the
+  limiting factor; mostly cap-triggered closes in an active room may mean
+  it's too short). Deliberately not proposing a metrics library or
+  dashboard here, this codebase has none today and adopting one is a
+  separate infrastructure decision; these are the minimum log lines
+  needed so a later look at production logs can actually answer the
+  tuning questions this spec defers, not a full observability solution.
 - No `Room`/`RoomManager` structural changes needed beyond sections 1-5,
   the bounded path is just a client-driven reconnect cadence riding on the
   same delta-resync mechanism every client uses.
