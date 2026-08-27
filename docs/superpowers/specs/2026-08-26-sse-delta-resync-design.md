@@ -359,6 +359,15 @@ aren't quite the same split as "delta" vs. "full resync." Given
   `id` the room never issued) would leave a client stuck believing it's
   caught up when it never validly resynced in the first place.
 
+This same `id > currentSequence` branch is also what covers a room actor
+restarting mid-session (a crash, a redeploy): `sequence`/`eventLog` are
+in-memory only (see "Approaches considered"), so a restart resets
+`sequence` to 0 while a still-connected browser may hold a much higher
+`Last-Event-ID` from before the restart. That id is now greater than the
+freshly-reset `currentSequence`, so it falls into the same full-resync
+path as a malformed or spoofed id, no special-casing needed, the general
+rule already covers it.
+
 **Data path: `Last-Event-ID` reaches `Room` through the existing `Join`
 message, not a new query.** The route reads the header the same way it
 already reads `X-Forwarded-Proto` (`optionalHeaderValueByName`,
@@ -1005,6 +1014,12 @@ for the established style):
   spoofed, or otherwise never issued by this room) resolves to a full
   resync with `Reset`, not a silently-empty delta, per the precise
   resolution rule in section 3.
+- A `Last-Event-ID` from before a simulated room-actor restart (a fresh
+  `RoomData` with `sequence` reset to 0, holding an id from the "prior"
+  session) resolves to a full resync with `Reset` via the same
+  `id > currentSequence` branch, not a distinct code path, confirming
+  restart recovery falls out of the general rule rather than needing its
+  own handling.
 - The connecting spinner (section 6) clears on both the success path
   (first real SSE message, `inRoom` becomes true) and the hard-failure
   path (`onerror` with a closed `readyState`), and is not shown for a
