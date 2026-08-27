@@ -393,6 +393,17 @@ Resolving in a separate step ahead of `Join` would reopen exactly that
 race. Piggybacking on `Join`, which already does the presence update and
 the reply send atomically, avoids inventing a new failure mode.
 
+This preserves the actor-hop shape the existing "connection-establishment
+race" comment on `Room.scala:125-129` depends on: `setupNewUser`'s
+unconditional call is replaced by this section's delta/full/`Reset`
+resolution, but it's still one direct `user.ref ! ...` push made
+synchronously from inside the `Join` handler, not a new intermediate hop
+or an ask-based round trip. That comment's caveat, the send racing the
+new connection's downstream demand not yet being established, is about
+this hop's existence and timing relative to stream materialization, not
+about what content the push carries, so it applies unchanged here; there
+is nothing new to re-verify from restructuring this design didn't do.
+
 ### 4. Client fix, self: `Reset` before any full resync
 
 A new `RoomEvent.MessageType` case, `Reset` (not `Clear`, that name is
