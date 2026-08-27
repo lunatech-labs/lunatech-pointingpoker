@@ -734,10 +734,82 @@ Server-side (`SSE.scala`/`API.scala`):
     cycle closes immediately on a push, since a genuinely idle room must
     still self-close before 45s, otherwise it's exactly today's failure,
     the proxy killing an open-ended stream with nothing delivered.
+
+**Implementation shape: a `BoundedConfig` parameter on `SSE.source`, not a
+separate bounded-mode source.** The retry value, the no-`.keepAlive` rule,
+and the adaptive close all have to be decided by the same caller (the
+`/events` route, once it knows `bounded` is present), so they're carried
+together rather than threaded as separate loose parameters the way
+section 1's plain `retryMillis: Int` might suggest in isolation:
+
+```scala
+final case class BoundedConfig(retryMillis: Int, durationMillis: Int)
+
+def source(
+    roomManager: ActorRef,
+    roomId: UUID,
+    userId: UUID,
+    name: String,
+    token: Room.SessionToken,
+    lastEventId: Option[Long],
+    retryMillis: Int = defaultRetryMillis,
+    bounded: Option[BoundedConfig] = None
+)(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
+  val base =
+    Source
+      .actorRef[List[SequencedRoomEvent]](completionMatcher, failureMatcher, bufferSize, OverflowStrategy.fail)
+      .mapMaterializedValue { user =>
+        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, lastEventId, user)
+        user
+      }
+      .watchTermination() { (user, done) =>
+        done.onComplete {
+          case Success(_) => roomManager ! RoomManager.ConnectionCompleted(roomId, userId, user)
+          case Failure(t) => roomManager ! RoomManager.ConnectionFailure(roomId, userId, user, t)
+        }
+        user
+      }
+
+  bounded match
+    case Some(cfg) =>
+      base
+        .take(1) // close after the first pushed batch, whatever it contains
+        .takeWithin(cfg.durationMillis.millis) // ...or the wall-clock cap, whichever is first
+        .mapConcat(identity)
+        .map(seq => ServerSentEvent(data = seq.event.asJson.noSpaces, id = Some(seq.id.toString), retry = Some(cfg.retryMillis)))
+        // no .keepAlive: see below, the cap already stays under Pekko's idle-timeout
+    case None =>
+      base
+        .mapConcat(identity)
+        .map(seq => ServerSentEvent(data = seq.event.asJson.noSpaces, id = Some(seq.id.toString), retry = Some(retryMillis)))
+        .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
+```
+
+`take(1)` operates on the `List[SequencedRoomEvent]` batches, *before*
+`.mapConcat(identity)` flattens them, so it closes after one complete
+push regardless of how many events that push contained, the same
+single-push discipline section 3 requires, not after the first
+individual flattened event. Composing `take(1)` with `takeWithin` gives
+"close on the first batch, or at the cap, whichever happens first"; the
+exact operator combination should be confirmed against Pekko Streams'
+actual `take`/`takeWithin` interaction during implementation, this is
+the intended behavior, not a verified-working snippet.
+
+This also tightens something section 3 left implicit: for this to work,
+`Join`'s handler must send nothing to `user.ref` when the resolved delta
+is empty (the "trivially empty" case in the precise resolution rule),
+rather than pushing an empty `List`, otherwise `take(1)` would consume
+that empty push and close the bounded connection immediately with
+nothing delivered, turning the "stay open" case into an accidental
+zero-content close every cycle. An empty resolution simply results in no
+send at all, letting the connection sit open for `take(1)` to catch the
+next real push, live broadcast or otherwise.
+
 - **Bounded connections carry a distinct, smaller `retry:` hint than the
-  unbounded default.** `SseConfig.retryMillis` (2000ms) keeps governing
-  unbounded connections unchanged, but a bounded connection's frames carry
-  a separate value: 500ms base with +/-100ms jitter per connection (same
+  unbounded default**, `BoundedConfig.retryMillis` above.
+  `SseConfig.retryMillis` (2000ms) keeps governing unbounded connections
+  unchanged, but a bounded connection's frames carry a separate value:
+  500ms base with +/-100ms jitter per connection (same
   lockstep-avoidance reasoning as the wall-clock cap's jitter). This is
   what the browser's native `EventSource` reconnect delay uses after every
   close, scheduled or not. A single tuned constant was chosen over
@@ -1005,6 +1077,10 @@ for the established style):
 - The bounded path's adaptive completion: closes immediately after sending
   whatever a single push contains (a delta, a full resync, or a live
   broadcast), and closes at the wall-clock cap when nothing happened.
+- A trivially-empty delta resolution (client already caught up) sends
+  nothing to `user.ref`, not an empty `List`, so a bounded connection's
+  `take(1)` correctly stays open for the next real push instead of
+  closing immediately with nothing delivered.
 - A multi-event push (a full resync burst, or a delta containing several
   events accumulated since the client's `Last-Event-ID`) is delivered as
   one connection cycle, not split across several.
