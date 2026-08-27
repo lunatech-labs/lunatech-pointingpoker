@@ -919,6 +919,14 @@ path.
   `Reset` design (section 4), which is strictly more correct (it also
   handles departed-participant removal, which pure idempotency would not)
   and simpler to reason about.
+- **Handling an old cached client against a new server during rollout**:
+  not addressed. `index.html`'s `onmessage` dispatch is a flat sequence
+  of `messageType` checks with no fallback case, so an old page that
+  doesn't yet know about `Reset` simply ignores it, harmless, but loses
+  `Reset`'s de-dup guarantee for the duration of that stale page load.
+  Judged not worth engineering around (a version-mismatch banner, forcing
+  a hard refresh) for an internal tool with short-lived sessions and no
+  long-tail of cached clients.
 - **Room-skeleton loading experience**: not addressed here beyond the
   connecting spinner (section 6). The spinner is a stopgap: it gives
   feedback that something is happening, but the user still stares at an
