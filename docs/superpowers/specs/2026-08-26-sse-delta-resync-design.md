@@ -905,6 +905,21 @@ path.
   looks ready but isn't would be worse than the current plain wait, not
   better. Deferred rather than done here because it's a UI redesign, not a
   resync-correctness change, and shouldn't block this delivery.
+- **Distinguishing proxy buffering from transient server-side latency in
+  detection** (section 6): accepted as a known limitation, not fixed. The
+  5-second detection timer only measures "did anything arrive," not
+  specifically "is a buffering proxy in the path." A GC pause, cold
+  start, or load spike that happens to delay the first message past the
+  timeout is indistinguishable from the target proxy, and gets the same
+  outcome: `sseBoundedUntil` cached for up to `SSE_DETECTION_CACHE_TTL`
+  (default 24h). This is judged acceptable because the cost of a false
+  positive is bounded and non-critical, a client pays the bounded path's
+  higher reconnect overhead for up to a day, the same category of
+  tradeoff already accepted for the cache generally (see the
+  detection-cache-check bullet in section 6), never a connectivity or
+  correctness loss. Not worth a more precise signal (e.g. distinguishing
+  "no bytes at all" from "slow but arriving") for a failure mode this
+  narrow and this cheap.
 - **Replaying "are votes currently revealed" state on resync**: not
   addressed here. `setupNewUser` today has no equivalent of a `Show` replay,
   a resyncing client has no way to know if votes are currently revealed.
