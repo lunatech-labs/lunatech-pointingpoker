@@ -152,7 +152,22 @@ Three cases, resolved against the room's `eventLog`:
 - **`Last-Event-ID` present and still within the log:** reply with exactly
   the events after that id, a precise delta. No `Reset`, no full roster
   replay, this is the common case for a bounded client's routine
-  reconnects.
+  reconnects. **Sent as a single `user.ref ! events` push of one
+  `List[RoomEvent]`** (`newData.eventLog.collect { case (id, _, event) if
+  id > lastEventId => event }`), never a loop of individual sends, exactly
+  mirroring how `setupNewUser` already sends a multi-event resync burst as
+  one `List[RoomEvent]` (`Room.scala:273`). This isn't just a style
+  preference: section 6's bounded-mode close logic closes the connection
+  right after a push is delivered, and it can only do that safely if a
+  multi-event delta genuinely arrives as one push, since the stream's
+  `.mapConcat(identity)` (`SSE.scala:67`) flattens either a single N-element
+  list or N separate one-element sends into the same downstream sequence of
+  individual events, indistinguishable to a reader once flattened. If the
+  delta were instead sent as a loop of single-event pushes, a naive
+  close-after-send implementation could close after the first flattened
+  event and strand the rest of the backlog for the next cycle, silently
+  reintroducing the per-event reconnect cost this design removed the flush
+  window to avoid.
 - **`Last-Event-ID` present but older than the log's retention:** full
   resync, same as the first-connection case (with `Reset`), this is the
   existing self-heal fallback, not new.
@@ -335,39 +350,77 @@ Server-side (`SSE.scala`/`API.scala`):
 
 - The route accepts an optional `bounded` query param.
 - When present, the connection resolves `Last-Event-ID` immediately per
-  section 3, then behaves adaptively rather than on a pure fixed timer,
-  since the proxy withholds everything until close regardless of when
-  during the window an event happened, so closing sooner whenever there's
-  something to deliver directly lowers worst-case latency instead of always
-  paying the full window:
+  section 3, then behaves adaptively rather than on a fixed timer, since
+  the proxy withholds everything until close regardless of when an event
+  happened, so closing as soon as there's something to deliver directly
+  lowers latency instead of paying any deliberate wait:
   - If the resolution is non-empty (a delta with content, or a
-    first-connection/stale-cursor full resync with `Reset`): send it, hold
-    the connection open for a short flush window (about 1 second, a plain
-    constant, not configurable) to catch near-simultaneous follow-up events
-    (e.g. two or three people voting within the same second) into the same
-    batch, then close. **The flush window is a fixed 1 second from the first
-    event in the batch, it does not reset on each subsequent event.**
-    Sustained activity (events landing faster than the window closes) cannot
-    keep a connection open indefinitely waiting for a gap, that would
-    contradict the whole reason bounded connections close promptly instead
-    of waiting out a fixed window, and would make per-cycle duration
-    unbounded in the design itself rather than provably under the proxy's
-    45s limit. Anything that lands after the window closes is picked up by
-    the very next cycle, which reopens immediately (native `EventSource`
-    reconnect, non-empty delta) and repeats the same send-then-flush-then-close,
-    at the cost of one extra round trip, not added latency worth avoiding.
+    first-connection/stale-cursor full resync with `Reset`): send it, then
+    close immediately. No hold-open step. **"Close immediately" means after
+    the complete push is written to the response, not after the first
+    individual `RoomEvent` the stream happens to expose downstream of
+    `.mapConcat(identity)`** (`SSE.scala:67`), which flattens a multi-event
+    push into individual stream elements and so can't itself distinguish
+    "one push of N" from "N separate pushes" once flattened, see section 3's
+    note on why the delta query must be sent as a single `List[RoomEvent]`
+    in the first place. Whatever a single push contains
+    is what gets delivered together, and this app already has a mechanism
+    for "more than one event at once": `setupNewUser` (`Room.scala:262-274`)
+    builds a multi-event `List[RoomEvent]` and sends it as one push for a
+    full resync, and the delta-resolution query does the same for whatever
+    accumulated in `eventLog` since the client's `Last-Event-ID`. Both are
+    exact, since the events genuinely originated together (the same resync
+    computation, or the same accumulation window), not probabilistic like a
+    timer would be. A future feature that generates more than one event
+    from a single decision (e.g. an auto-reveal handler broadcasting a vote
+    and a reveal together) gets the same benefit for free by sending them
+    as one `List`, same pattern as `setupNewUser`, no timer involved.
+    An earlier version of this design held the connection open for a fixed
+    window after sending, to probabilistically catch independent events
+    landing close together in time. Dropped: at a window short enough to
+    not noticeably lag every isolated action (the common case, and the one
+    that matters most once a passive observer-mode display exists with no
+    participant to absorb the delay), the odds of two independently-timed
+    human actions actually landing inside it are low, so it bought little
+    batching benefit while taxing every single action and, worse, doubling
+    that tax (wait for the window, miss it, wait the retry gap, wait a
+    second window) for anything that missed it by a hair. Two genuinely
+    independent events (e.g. two different users' `Vote` commands, each its
+    own `broadcast` call, `Room.scala:251-259`, each `user.ref ! List(message)`)
+    landing close together in wall-clock time remain two separate pushes
+    and may land in two separate connection cycles instead of one; accepted
+    rather than engineered around, at the cost of one extra, cheap round
+    trip in the rare case it happens, not added latency worth avoiding.
   - If the resolution is empty (nothing missed, the common case for a
     client reconnecting promptly with nothing new): stay open, waiting for
-    either a new event, which triggers the same send-then-flush-then-close
-    above, or the wall-clock cap (base 20s + 0-10s jitter, so clients don't
-    cycle in lockstep) elapsing with nothing new, in which case it closes
-    anyway with no data, purely to stay safely under the proxy's 45s limit,
-    and the client reconnects with the same `Last-Event-ID` since nothing
+    either a new push, which triggers the same send-then-close above, or
+    the wall-clock cap (base 20s + 0-10s jitter, so clients don't cycle in
+    lockstep) elapsing with nothing new, in which case it closes anyway
+    with no data, purely to stay safely under the proxy's 45s limit, and
+    the client reconnects with the same `Last-Event-ID` since nothing
     changed.
-  - Note the wall-clock cap is still required even though most cycles end
-    early on an event, since a genuinely idle room must still self-close
-    before 45s, otherwise it's exactly today's failure, the proxy killing
-    an open-ended stream with nothing delivered.
+  - Note the wall-clock cap is still required even though every other
+    cycle closes immediately on a push, since a genuinely idle room must
+    still self-close before 45s, otherwise it's exactly today's failure,
+    the proxy killing an open-ended stream with nothing delivered.
+- **Bounded connections carry a distinct, smaller `retry:` hint than the
+  unbounded default.** `SseConfig.retryMillis` (2000ms) keeps governing
+  unbounded connections unchanged, but a bounded connection's frames carry
+  a separate value: 500ms base with +/-100ms jitter per connection (same
+  lockstep-avoidance reasoning as the wall-clock cap's jitter). This is
+  what the browser's native `EventSource` reconnect delay uses after every
+  close, scheduled or not. A single tuned constant was chosen over
+  client-side exponential backoff on repeated failures, considered and
+  rejected: backoff would require manually `close()`-ing and reopening the
+  `EventSource` to control per-attempt delay (the native mechanism only
+  ever replays the last-received `retry:` value, it can't be grown from
+  script), which both adds real complexity and breaks native automatic
+  `Last-Event-ID` tracking, reintroducing exactly the kind of resume
+  bookkeeping this design otherwise avoids by staying on one `EventSource`
+  object for every reconnect. The trade-off: a real sustained outage is met
+  with a fixed ~500ms retry cadence rather than a growing one, judged
+  acceptable at this app's scale (small rooms, not a large fleet hammering
+  a shared backend during an incident).
 - **The existing 15-second `.keepAlive` heartbeat (`SSE.scala:29-34,69`) is
   not applied to bounded connections.** Its only purpose is keeping a
   connection alive under Pekko's 60-second idle-timeout, and a bounded
@@ -375,15 +428,23 @@ Server-side (`SSE.scala`/`API.scala`):
   so the failure it exists to prevent can't happen here regardless. Applying
   it unchanged would actively break the intended timing: a heartbeat is not
   a `RoomEvent` and carries no `id:`, but if the adaptive close logic above
-  treated its arrival as "something to flush" (the natural default if this
+  treated its arrival as "something to send" (the natural default if this
   isn't handled deliberately), every idle bounded connection would close
-  at a fixed ~15s + the 1s flush window, not the intended jittered
-  20-30s, silently defeating the jitter's purpose of keeping clients from
-  cycling in lockstep. Unbounded connections keep `.keepAlive` exactly as
-  today, unchanged, they still need it.
+  at a fixed ~15s, not the intended jittered 20-30s, silently defeating the
+  jitter's purpose of keeping clients from cycling in lockstep. Unbounded
+  connections keep `.keepAlive` exactly as today, unchanged, they still
+  need it.
 - When absent, behavior is unchanged, unbounded, exactly as today.
-- Configurable via env var following the existing `SseConfig` pattern
-  (e.g. `SSE_BOUNDED_DURATION`, default 20s base for the wall-clock cap).
+- The bounded-mode timing constants are configurable via env var following
+  the existing `SseConfig` pattern, rather than hardcoded:
+  `SSE_BOUNDED_DURATION` (wall-clock cap base, default 20s) and
+  `SSE_BOUNDED_RETRY` / `SSE_BOUNDED_RETRY_JITTER` (default 500ms +/-
+  100ms). Made tunable
+  deliberately: these values are a judgment call about a real proxy's
+  behavior and real users' tolerance for lag, which this design can't
+  fully settle ahead of time. The intent is to revisit them with real
+  feedback after the first production deployment, not treat the defaults
+  above as final.
 - No `Room`/`RoomManager` structural changes needed beyond sections 1-5,
   the bounded path is just a client-driven reconnect cadence riding on the
   same delta-resync mechanism every client uses.
@@ -415,7 +476,14 @@ path.
   addressed here. `setupNewUser` today has no equivalent of a `Show` replay,
   a resyncing client has no way to know if votes are currently revealed.
   Pre-existing, unrelated to this design, not worsened by it. Logged in
-  `docs/known-issues.md`.
+  `docs/known-issues.md`. Worth flagging that this gap gets more
+  consequential, not less, if a future passive "observer mode" (a
+  meeting-room display showing room state with no participant driving it)
+  is built on top of this resync mechanism: an active participant who
+  reconnects into a stale "not revealed" view has some chance of noticing
+  something's off from context; a passive display has no human in the loop
+  to catch or correct it. Still out of scope for this design, but worth
+  resolving before an observer-mode display is built on top of it.
 
 ## Testing
 
@@ -438,17 +506,18 @@ for the established style):
   both when the reconnect resolves as a delta and when it resolves as a
   full resync (their own replayed `Vote` event is still present, not
   dropped).
-- The bounded path's adaptive completion: closes after the flush window
-  when an event is available (including batching near-simultaneous
-  events into one delta), and closes at the wall-clock cap when nothing
-  happened.
-- The flush window does not reset on new activity: a burst of events
-  spanning more than 1 second closes at the fixed 1-second mark with
-  only the events up to then batched, the remainder is delivered via the
-  immediately-following cycle, not by extending the same connection.
+- The bounded path's adaptive completion: closes immediately after sending
+  whatever a single push contains (a delta, a full resync, or a live
+  broadcast), and closes at the wall-clock cap when nothing happened.
+- A multi-event push (a full resync burst, or a delta containing several
+  events accumulated since the client's `Last-Event-ID`) is delivered as
+  one connection cycle, not split across several.
 - A bounded, idle connection does not receive `.keepAlive` heartbeats and
-  closes at the jittered wall-clock cap (20-30s), not at ~15s+1s; an
+  closes at the jittered wall-clock cap (20-30s), not at a fixed ~15s; an
   unbounded connection still receives heartbeats unchanged.
+- Bounded connections carry the smaller, jittered `SSE_BOUNDED_RETRY`
+  value (not `SseConfig.retryMillis`) on their frames; unbounded
+  connections are unaffected.
 - An end-to-end case (mirroring `BackpressureReconnectSpec`) proving a vote
   landing exactly in a bounded client's reconnect gap is delivered via the
   next delta, not lost, closing the "vote4" question raised during this
