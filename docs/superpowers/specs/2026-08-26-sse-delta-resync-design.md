@@ -822,6 +822,15 @@ require(
     s"or detection can't reliably fire before a slow-enough proxy kills the " +
     s"connection outright"
 )
+require(
+  eventLogRetention.toMillis >= 2 * (boundedDurationMillis + boundedRetryJitterMillis),
+  s"pointing-poker.sse.event-log-retention ($eventLogRetention) must be at " +
+    s"least twice pointing-poker.sse.bounded-duration plus jitter " +
+    s"($boundedDurationMillis + $boundedRetryJitterMillis ms), or a bounded " +
+    s"client's routine reconnect cycle will regularly fall outside the " +
+    s"retained window and be forced back to full resync on every cycle, " +
+    s"defeating the point of delta resync"
+)
 require(eventLogRetention.toMillis > 0, "...")
 require(eventLogMaxEntries > 0, "...")
 require(boundedDurationMillis > 0, "...")
@@ -830,16 +839,22 @@ require(detectionTimeoutMillis > 0, "...")
 require(detectionCacheTtlMillis > 0, "...")
 ```
 
-The first is the important one: a direct analog of the existing check,
-extended to cover the retry value it didn't previously guard, without it
-a misconfigured `SSE_BOUNDED_RETRY` can reintroduce Problem C's flicker
-for bounded clients specifically even with the unbounded check still
-passing. The next two guard the proxy-facing values: this codebase can't
-know any given customer's actual proxy timeout (that's not information
-that exists here), but it can and should catch a value that's unsafe
-against what it *does* know, Pekko's own idle-timeout, and the
-relationship between the detection window and the bounded duration. The
-rest are the same basic sanity checks the existing two values already get.
+The first three are the important ones. The first is a direct analog of
+the existing check, extended to cover the retry value it didn't
+previously guard, without it a misconfigured `SSE_BOUNDED_RETRY` can
+reintroduce Problem C's flicker for bounded clients specifically even
+with the unbounded check still passing. The next two guard the
+proxy-facing values: this codebase can't know any given customer's
+actual proxy timeout (that's not information that exists here), but it
+can and should catch a value that's unsafe against what it *does* know,
+Pekko's own idle-timeout, and the relationship between the detection
+window and the bounded duration. The fourth guards the delta-resync
+mechanism's own reason for existing: retention is what makes the bounded
+path cheap (see "Why bounded reconnects need this"), and nothing else in
+this config would catch a value that quietly turns every bounded cycle
+into a full resync instead of a delta, still functionally correct, just
+silently paying the cost this design exists to avoid. The rest are the
+same basic sanity checks the existing values already get.
 
 ### 7. Bundled fix: buffering-proxy headers
 
@@ -968,10 +983,11 @@ for the established style):
   `SSE_BOUNDED_RETRY` that leaves `gracePeriod` under twice its value;
   rejects a `SSE_BOUNDED_DURATION` (plus max jitter) that doesn't stay
   safely under Pekko's 60s idle-timeout; rejects a `SSE_DETECTION_TIMEOUT`
-  that isn't strictly under `SSE_BOUNDED_DURATION`; rejects non-positive
-  values for `SSE_EVENT_LOG_RETENTION`, `SSE_EVENT_LOG_MAX_ENTRIES`,
-  `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`, `SSE_DETECTION_TIMEOUT`, and
-  `SSE_DETECTION_CACHE_TTL`.
+  that isn't strictly under `SSE_BOUNDED_DURATION`; rejects a
+  `SSE_EVENT_LOG_RETENTION` under twice `SSE_BOUNDED_DURATION` plus
+  jitter; rejects non-positive values for `SSE_EVENT_LOG_RETENTION`,
+  `SSE_EVENT_LOG_MAX_ENTRIES`, `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`,
+  `SSE_DETECTION_TIMEOUT`, and `SSE_DETECTION_CACHE_TTL`.
 - The detection cache (section 6): a valid, non-expired `sseBoundedUntil`
   entry skips detection entirely and opens directly with `?bounded=1`, no
   unbounded connection attempted; an expired or absent entry runs
