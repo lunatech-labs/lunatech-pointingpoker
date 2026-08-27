@@ -136,6 +136,26 @@ roadmap item instead of leaving it here as stale history.
   work already needs reveal state to become real backend logic rather than
   client-only.
 
+### No rate limiting on mutating room endpoints
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all
+  mutating `POST` endpoints (`vote`, `show`, `clear`, `revote`,
+  `edit-issue`).
+- **Issue:** Every mutating endpoint is unthrottled beyond session-token
+  resolution, a client can call any of them in a tight loop at no cost.
+  Today this mostly wastes CPU/bandwidth; the 2026-08-26 SSE delta resync
+  design adds a per-room retained `eventLog` (`Room.scala`,
+  `RoomData.eventLog`), so the same behavior now also grows server memory
+  and per-append prune cost, bounded only by a count-based safety ceiling
+  (`SSE_EVENT_LOG_MAX_ENTRIES`) added specifically for that risk, not by
+  anything at the API layer itself.
+- **Resolution:** Unscheduled. The event-log-specific symptom has a cheap
+  backstop in place (see the delta-resync design), but the underlying gap,
+  no per-user/per-endpoint rate limiting anywhere in this API, is broader
+  than that one log and should be addressed as its own piece of work if
+  abuse becomes a real concern, not patched endpoint-by-endpoint as new
+  symptoms show up.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside

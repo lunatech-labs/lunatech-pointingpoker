@@ -103,24 +103,146 @@ sessions) to offset the added complexity.
 
 ### 1. Wire format: sequence ids
 
-`RoomEvent` gains a monotonic `id: Long` (per room). SSE frames already
-carry `data:`/`retry:`; add the native SSE `id:` field, since that's what
-makes the browser's `EventSource` automatically send `Last-Event-ID` on any
-reconnect, no custom header or query param needed for this part. Message
-shape (`messageType`/`extra`) and every existing handler in `index.html` is
-unchanged.
+`RoomEvent` itself is untouched: no new field, no change to its shape, no
+change to its `roomEventEncoder`. Sequencing is carried by a separate
+wrapper instead, `SequencedRoomEvent(id: Long, event: RoomEvent)`,
+introduced alongside `RoomEvent` in `RoomEvent.scala`. This keeps "what
+happened" (`RoomEvent`, the JSON `data:` payload, message shape/`extra`
+and every existing `index.html` handler, all unchanged) separate from
+"where this sits in the room's history" (`SequencedRoomEvent`, used only
+server-side and to build the SSE frame). The alternative, adding `id`
+directly to `RoomEvent`, was considered and rejected: it would need a
+sentinel default for the many call sites that construct a `RoomEvent`
+before any id is known (only `RoomData.logEvent`, see section 2, actually
+assigns one), leaving a class of bug where an unstamped sentinel could in
+principle reach the wire, and it would either leak into the JSON payload
+via the derived encoder or need a hand-written encoder to exclude it, just
+to preserve a shape that's simply unaffected under the wrapper.
+
+The wire channel `Room` sends over changes accordingly: `SSE.source`
+materializes `Source.actorRef[List[SequencedRoomEvent]]` (today,
+`List[RoomEvent]`), and every push site in `Room` (`broadcast`, the
+resync/`Reset` construction replacing `setupNewUser`, the delta reply)
+sends `SequencedRoomEvent` values. SSE frames already carry
+`data:`/`retry:`; the native SSE `id:` field is added by unwrapping the
+pair in `SSE.scala`:
+
+```scala
+.map(seq => ServerSentEvent(
+  data = seq.event.asJson.noSpaces,
+  id = Some(seq.id.toString),
+  retry = Some(retryMillis)
+))
+```
+
+replacing today's
+`.map(event => ServerSentEvent(data = event.asJson.noSpaces, retry = Some(retryMillis)))`.
+Carrying `id:` is what makes the browser's `EventSource` automatically
+send `Last-Event-ID` on any reconnect, no custom header or query param
+needed for this part.
 
 ### 2. Room-side event log and retention
 
 `RoomData` gains `sequence: Long` (starts at 0) and
-`eventLog: Vector[(Long, Instant, RoomEvent)]`. Every call to `broadcast`
-appends to the log (after assigning the next sequence id) before sending.
-On each append, prune entries older than the retention window.
+`eventLog: Vector[(Instant, SequencedRoomEvent)]`, one entry per broadcast
+event. No separate id slot is needed on the tuple, each entry's
+`SequencedRoomEvent` already carries its own id (section 1); the `Instant`
+exists purely for the age-based prune below and never travels over the
+wire.
+
+**Implementation shape: `RoomConfig` and `RoomData.logEvent`, not a
+reshaped `broadcast`.** `broadcast` (`Room.scala:251-260`) keeps its shape
+exactly as it is today, a `Unit`-returning send, taking an already-final
+event and a `users` list, it only mutates state indirectly, it never did
+and still doesn't. Its parameter type changes from `RoomEvent` to
+`SequencedRoomEvent`, matching section 1's wire-channel type, but that's
+the only change to it. The id-assignment/append/prune work that used to be
+described as living inside `broadcast` instead becomes a new pure
+`RoomData` method, mirroring every other state transition already in this
+file (`joinUser`, `vote`, `clear`, `reVote`, `leave`, `editIssue`), rather
+than making the one side-effecting function in the file also responsible
+for mutating state:
+
+```scala
+def logEvent(event: RoomEvent, config: RoomConfig): (RoomData, SequencedRoomEvent) =
+  val id      = this.sequence + 1
+  val stamped = SequencedRoomEvent(id, event)
+  val prunedByAge = (this.eventLog :+ (Instant.now(), stamped))
+    .dropWhile { case (ts, _) => ts.isBefore(Instant.now().minus(config.eventLogRetention)) }
+  val pruned = if prunedByAge.size > config.eventLogMaxEntries
+    then prunedByAge.drop(prunedByAge.size - config.eventLogMaxEntries)
+    else prunedByAge
+  (this.copy(sequence = id, eventLog = pruned), stamped)
+```
+
+Each handler that broadcasts calls `logEvent` first, sends the stamped
+event via `broadcast` unchanged, and threads the returned `RoomData` into
+`receiveBehaviour`, e.g.:
+
+```scala
+case ShowVotes(token) =>
+  data.users.find(_.token == token) match
+    case Some(user) =>
+      val (logged, event) = data.logEvent(RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra), config)
+      broadcast(event, data.users, context)
+      receiveBehaviour(roomId, logged, config, timers)
+    case None => Behaviors.same
+```
+
+`EditIssue` needs one extra step of care, it's the one call site where
+`broadcast`'s data and the handler's own state change both independently
+touch `data` today: it broadcasts using the pre-edit `data.users`, then
+separately applies `data.editIssue(issue, user.id)` to build what's passed
+to `receiveBehaviour`. Now that `logEvent` also returns updated
+`RoomData` (sequence/log), that update has to sit *underneath* `editIssue`,
+not be overwritten by it:
+
+```scala
+case EditIssue(token, issue) =>
+  data.users.find(_.token == token) match
+    case Some(user) =>
+      val (logged, event) = data.logEvent(RoomEvent(MessageType.EditIssue, roomId, user.id, issue), config)
+      broadcast(event, data.users, context)
+      receiveBehaviour(roomId, logged.editIssue(issue, user.id), config, timers)
+    case None => Behaviors.same
+```
+
+`logged.editIssue(...)`, not `data.editIssue(...)`, so the sequence/log
+update from `logEvent` isn't silently dropped.
+
+`RoomConfig` groups `gracePeriod` with the two new knobs below, rather
+than adding them as further loose parameters:
+
+```scala
+final case class RoomConfig(
+  gracePeriod: FiniteDuration,
+  eventLogRetention: FiniteDuration,
+  eventLogMaxEntries: Int
+)
+
+object RoomConfig:
+  val default: RoomConfig = RoomConfig(6.seconds, 5.minutes, 5000)
+```
+
+nested in `object Room` alongside `RoomData`. `gracePeriod` is already
+threaded as a parameter through every recursive `receiveBehaviour` call
+in `Room.scala` today, and through `RoomManager.apply`/`createRoom`/
+`receiveBehaviour` as its own separately-declared parameter (with its own
+default referencing `Room.defaultGracePeriod`, a small existing
+duplication of `Room.apply`'s own default). It's kept off `RoomData`
+deliberately, same reasoning as before: it's config, invariant for the
+room's lifetime, not evolving room state the way `users`/`sequence`/
+`eventLog` are. Adding `eventLogRetention`/`eventLogMaxEntries` as two
+more loose parameters would widen every one of those recursive calls, not
+just the ones that call `logEvent`; `RoomConfig` keeps `receiveBehaviour`'s
+arity exactly where it is today, and replacing `RoomManager`'s standalone
+`gracePeriod` parameter with the same `RoomConfig` closes the small
+existing duplication as a side effect, done once instead of twice.
 
 **`sequence = 0` means "nothing logged yet", not "the first event is id
 0".** Worth spelling out since it's easy to misread otherwise: `Room.Join`
 (`Room.scala:124-133`) calls `setupNewUser` (the resync batch, using
-`sequence` as-is) *before* `broadcast` (the only thing that increments
+`sequence` as-is) *before* `logEvent` (the only thing that increments
 `sequence`), for every join, including a room's very first. So the first
 person into an empty room gets `Reset(id=0)` + their own resync batch at
 the pre-broadcast baseline, then separately receives their own ordinary
@@ -128,25 +250,57 @@ the pre-broadcast baseline, then separately receives their own ordinary
 special-cased for the bootstrap case, it falls out of the existing call
 order holding for every join, first or hundredth.
 
-**Retention: a time window only, no count-based cap, no ack-based
-compaction.** Considered and rejected: pruning an event once every
-currently-connected client has already passed it (tracking a live
-per-connection delivery cursor). Correct in principle, but this app's event
-volume (a handful of participants, occasional votes/joins/leaves/edits,
-30-60 minute sessions) means even a generous window holds at most a few
-dozen to low hundreds of small events, genuinely negligible memory
-regardless of eviction strategy. The added state (a live cursor per
-connected user, updated on every send) and edge cases aren't justified by
-the memory it would save. If a client's gap exceeds the window, it falls
-back to a full resync, the existing self-heal path, not a new failure mode.
+**Retention: a time window, plus a count-based ceiling as a pure safety
+backstop, no ack-based compaction.** Considered and rejected as the
+*primary* mechanism: pruning an event once every currently-connected
+client has already passed it (tracking a live per-connection delivery
+cursor). Correct in principle, but this app's event volume under realistic
+use (a handful of participants, occasional votes/joins/leaves/edits, 30-60
+minute sessions) means even a generous window holds at most a few dozen to
+low hundreds of small events, genuinely negligible memory regardless of
+eviction strategy. The added state (a live cursor per connected user,
+updated on every send) and edge cases aren't justified by the memory it
+would save.
 
-Configurable via env var, `SSE_EVENT_LOG_RETENTION`, default 5 minutes,
-same `SseConfig` pattern and same reasoning as the bounded-mode timing
-knobs in section 6: this is a judgment call trading memory against
-full-resync fallback frequency, not something this design can fully settle
-ahead of time. Unlike the bounded knobs, it's consumed entirely server-side
-(the prune check in `Room`), so no client-delivery mechanism is needed for
-this one.
+The time window alone isn't sufficient by itself, though: no endpoint in
+`API.scala` (`vote`, `show`, `clear`, `revote`, `edit-issue`) is
+rate-limited, so a client (malicious, buggy, or a runaway script) looping
+requests can grow a room's log without bound for the length of the window.
+Worst-case-but-legitimate use and pathological use are separated by a wide
+margin, worth pinning down concretely rather than arguing from vibes: a
+fast, aggressive but entirely human-paced session, 20 participants each
+voting/revoting on hesitation roughly 4 times per 30 seconds, produces
+about 80 events/30s, roughly 800 events over a full 5-minute window, still
+comfortably inside "negligible." A naive scripted loop hitting a bare POST
+endpoint with no artificial delay operates one to three orders of
+magnitude faster than that, tens of thousands of events in the same window
+is easily reachable with no attacker sophistication at all. On each
+append, after pruning entries older than the retention window, also cap
+`eventLog.size` at `SSE_EVENT_LOG_MAX_ENTRIES` (default 5000, roughly 6x
+the worst-case-legitimate figure above), dropping the oldest entries past
+it regardless of age. This isn't sized to bound memory tightly, entries
+are small enough that even the ceiling itself is only on the order of a
+few MB per room, it exists purely to put a finite bound on runaway growth
+(and on the cost of the per-append prune scan itself, which would
+otherwise grow with the abuse). A client pruned past either bound falls
+back to full resync, the same self-heal path as the time-based case, not a
+new failure mode. See `docs/known-issues.md` ("No rate limiting on
+mutating room endpoints") for the broader gap this backstop works around
+but doesn't solve.
+
+Both configurable via env var, same `SseConfig` pattern and same reasoning
+as the bounded-mode timing knobs in section 6: `SSE_EVENT_LOG_RETENTION`
+(default 5 minutes) and `SSE_EVENT_LOG_MAX_ENTRIES` (default 5000) are
+judgment calls trading memory/CPU against full-resync fallback frequency,
+not something this design can fully settle ahead of time. Unlike the
+bounded knobs, both are consumed entirely server-side (the prune check in
+`Room`), so no client-delivery mechanism is needed for either. Concretely,
+`SseConfig` gains both fields (alongside its existing `gracePeriod`/
+`retryMillis`), and `Main.scala`'s existing wiring, which already builds
+`RoomManager.apply(gracePeriod = sseConfig.gracePeriod)`, constructs a
+`RoomConfig` from the same loaded `SseConfig` instead:
+`RoomConfig(sseConfig.gracePeriod, sseConfig.eventLogRetention, sseConfig.eventLogMaxEntries)`,
+passed through in place of the standalone `gracePeriod` argument.
 
 ### 3. Connection-time resolution
 
@@ -161,10 +315,10 @@ Three cases, resolved against the room's `eventLog`:
   the events after that id, a precise delta. No `Reset`, no full roster
   replay, this is the common case for a bounded client's routine
   reconnects. **Sent as a single `user.ref ! events` push of one
-  `List[RoomEvent]`** (`newData.eventLog.collect { case (id, _, event) if
-  id > lastEventId => event }`), never a loop of individual sends, exactly
-  mirroring how `setupNewUser` already sends a multi-event resync burst as
-  one `List[RoomEvent]` (`Room.scala:273`). This isn't just a style
+  `List[SequencedRoomEvent]`** (`newData.eventLog.collect { case (_, seq)
+  if seq.id > lastEventId => seq }`), never a loop of individual sends,
+  exactly mirroring how `setupNewUser` already sends a multi-event resync
+  burst as one list (`Room.scala:273`). This isn't just a style
   preference: section 6's bounded-mode close logic closes the connection
   right after a push is delivered, and it can only do that safely if a
   multi-event delta genuinely arrives as one push, since the stream's
@@ -195,8 +349,8 @@ aren't quite the same split as "delta" vs. "full resync." Given
   `eventLog`, see section 2, from spuriously falling through to a full
   resync).
 - `lastEventId` contains `id` where `id < currentSequence` and
-  `newData.eventLog.exists(_._1 == id)` -> delta case, reply with
-  `eventLog.collect { case (id2, _, event) if id2 > id => event }`.
+  `newData.eventLog.exists(_._2.id == id)` -> delta case, reply with
+  `eventLog.collect { case (_, seq) if seq.id > id => seq }`.
 - Anything else, including `id > currentSequence` (never legitimately
   issued by this room, e.g. malformed or spoofed) and `id < currentSequence`
   with no matching entry (pruned) -> full resync case. Collapsing "too old"
@@ -232,10 +386,10 @@ the reply send atomically, avoids inventing a new failure mode.
 
 ### 4. Client fix, self: `Reset` before any full resync
 
-A new message type, `Reset` (not `Clear`, that name is taken by vote
-clearing and means something different), sent as the first element of the
-batch immediately before any full-resync burst (both cases in section 3
-that aren't a delta). Client handler: on `Reset`, clear local
+A new `RoomEvent.MessageType` case, `Reset` (not `Clear`, that name is
+taken by vote clearing and means something different), sent as the first
+element of the batch immediately before any full-resync burst (both cases
+in section 3 that aren't a delta). Client handler: on `Reset`, clear local
 room-participant state (`ref.users = []`) before applying what follows.
 Harmless on a first connection (clearing an empty list). This fixes both
 latent gaps in "Why full-resync-on-every-reconnect isn't safe either"
@@ -245,20 +399,24 @@ signal needed. This is a full replacement for defensive/idempotent handler
 guards, not an addition to them, the reconnecting client's own state is
 always rebuilt from an authoritative snapshot, never patched.
 
-**What id `Reset` carries.** `Reset` is not itself a room event: it's
-generated fresh per-connection at resolution time, not appended to
-`eventLog`, and doesn't consume a new sequence number. Its SSE `id:` field
-is a *read* of the room's current `sequence` (e.g. 12 if 12 real events
-have been logged so far), establishing the client's new baseline, not an
-increment of it. Every frame in the resync burst that follows (`Reset`,
-`Init`, replayed `Join`/`Vote`, `EditIssue`) carries that same `id: 12`,
-repeated rather than incrementing, since they're a reconstructed view of
-current state, not new log entries. Repeating it on every frame, rather
-than relying on the SSE spec's "the last-event-id buffer carries forward
-across frames that omit `id:`" behavior, keeps the invariant locally
-obvious on each frame instead of depending on that subtler spec detail.
-The client's next reconnect then correctly requests everything after 12,
-a genuine delta from exactly that point.
+**What id `Reset` carries.** The underlying `RoomEvent(MessageType.Reset,
+roomId, ..., RoomEvent.NoExtra)` is not itself a room event in the log
+sense: it's generated fresh per-connection at resolution time, never
+passed to `logEvent`, so it never appends to `eventLog` and never consumes
+a new sequence number. It's still wrapped as a `SequencedRoomEvent` like
+everything else sent over the wire (section 1), but the id it's wrapped
+with is a *read* of the room's current `sequence` (e.g.
+`SequencedRoomEvent(12, resetEvent)` if 12 real events have been logged so
+far), establishing the client's new baseline, not an increment of it.
+Every frame in the resync burst that follows (`Reset`, `Init`, replayed
+`Join`/`Vote`, `EditIssue`) is wrapped with that same id, `12`, repeated
+rather than incrementing, since they're a reconstructed view of current
+state, not new log entries. Repeating it on every frame, rather than
+relying on the SSE spec's "the last-event-id buffer carries forward across
+frames that omit `id:`" behavior, keeps the invariant locally obvious on
+each frame instead of depending on that subtler spec detail. The client's
+next reconnect then correctly requests everything after 12, a genuine
+delta from exactly that point.
 
 ### 5. Server fix: resuming `Join` must merge, not replace, and must not
 broadcast
@@ -324,9 +482,13 @@ def joinUser(user: User): (RoomData, Boolean) =
 case Join(user) =>
   val (newData, isResume) = data.joinUser(user)
   // resolve delta or Reset+full per section 3, send to user.ref, as before
-  if !isResume then
-    broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
-  receiveBehaviour(roomId, newData, gracePeriod, timers)
+  val finalData =
+    if !isResume then
+      val (logged, event) = newData.logEvent(RoomEvent(MessageType.Join, roomId, user.id, user.name), config)
+      broadcast(event, logged.users, context)
+      logged
+    else newData
+  receiveBehaviour(roomId, finalData, config, timers)
 ```
 
 Only a genuinely new `userId` broadcasts and gets logged. Suppressing the
@@ -368,7 +530,7 @@ explicitly:
 ```scala
 case Leave(userId, ref, replyTo) =>
   // unchanged reasoning, just the key:
-  timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId, ref, replyTo), delay = gracePeriod)
+  timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId, ref, replyTo), delay = config.gracePeriod)
   Behaviors.same
 
 case Join(user) =>
@@ -376,6 +538,10 @@ case Join(user) =>
   val (newData, isResume) = data.joinUser(user)
   // ... as above
 ```
+
+(`gracePeriod` above is `config.gracePeriod`, `RoomConfig` from section 2,
+`Room.apply`/`receiveBehaviour` take `config: RoomConfig` in place of the
+standalone `gracePeriod` parameter throughout this section.)
 
 `startSingleTimer` already cancels any existing timer under the same key,
 so keying on `userId` alone means two `Leave` calls for the same user, the
@@ -409,7 +575,23 @@ the same mechanism regardless of whether they share a `ref`.
 
 Client-side (`index.html`'s `doJoin`):
 
-- Open `EventSource` unbounded, as today, by default.
+- **Detection cache check, before anything else opens.** Read
+  `localStorage.getItem('sseBoundedUntil')`. If present and not expired
+  (`Date.now() < sseBoundedUntil`), skip detection entirely and open
+  directly with `?bounded=1`, same as the manually-driven switch below,
+  no unbounded connection is even attempted. Otherwise, proceed as
+  described next. Only the "detected true" outcome is ever cached, never
+  "detected false", so the only way this cache can be wrong is by making a
+  client wait out a redundant bounded-mode cycle it didn't need, never by
+  silently leaving a client on an unbounded connection the proxy will kill,
+  which is the failure this whole design exists to prevent. Reasoning:
+  whether a given network path buffers responses isn't a fixed property of
+  the browser/device, it can change (a laptop moving between office and
+  home, VPN toggling, or the whitelist request from Purpose eventually
+  succeeding), so this can't be cached forever without a way to notice
+  when it stops being true; see the TTL and self-heal note below.
+- Open `EventSource` unbounded, as today, by default, when no valid cache
+  entry short-circuited the step above.
 - Start a detection timer on open, duration sent from the server (see
   below), default 5s. This detection only ever runs on this first
   connection of a fresh page load, which always has no `Last-Event-ID` yet,
@@ -418,10 +600,14 @@ Client-side (`index.html`'s `doJoin`):
   not "did some arbitrary future event occur." A later bounded reconnect
   within the same page instance skips detection entirely (see below) and
   may legitimately wait out an empty delta, so this timer is never armed
-  for those. Any message, including a heartbeat, clears it.
+  for those. Any message, including a heartbeat, clears it, and clears any
+  stale `sseBoundedUntil` entry left over from a previous visit, this is
+  the self-heal path: if the proxy situation genuinely changed since the
+  cache was written (whitelisted, or this device is now on a different
+  network), the very next detection that's allowed to run corrects it.
 - If the timer fires with nothing received: close that connection, mark an
-  in-memory `sseBounded = true` for this page instance (not persisted to
-  `sessionStorage`/`localStorage`, a fresh page load always re-detects),
+  in-memory `sseBounded = true` for this page instance, write
+  `localStorage.setItem('sseBoundedUntil', Date.now() + SSE_DETECTION_CACHE_TTL)`,
   and manually open a new `EventSource` with `?bounded=1`. This is the
   *only* manually-driven reconnect in this design, needed because the URL
   itself changes.
@@ -442,6 +628,32 @@ Client-side (`index.html`'s `doJoin`):
   above spans in the worst case, and it's fully unmasked. See "What was
   deferred or rejected" for the follow-up: the spinner is a stopgap, not
   a full fix for the perceived-lag problem the detection timer creates.
+- **Error banner debounce.** The existing `onerror` handler
+  (`index.html:472-485`) sets `showError = true` on any `error` event,
+  including the CONNECTING case (an in-progress auto-reconnect), not just
+  CLOSED. Per the SSE spec, `EventSource` fires `error` whenever the
+  underlying connection closes for *any* reason, including a clean,
+  complete HTTP response ending normally, which is exactly what every
+  bounded cycle does by design (see the server-side adaptive close logic
+  below). Left as-is, a bounded client would show "Connection to the room
+  was lost" on every single cycle, every 20-30s in the idle case, more
+  often in a busy room, defeating much of what the connecting-spinner work
+  above is trying to achieve. Fix: track consecutive failures instead of
+  reacting to the first one. `onopen` and `onmessage` reset a
+  `consecutiveErrors` counter to 0; `onerror`'s non-CLOSED branch
+  increments it and only sets `showError = true` once it crosses a small
+  threshold (3). The CLOSED branch (session truly over, retries are
+  futile) stays immediate and undebounced. This isn't bounded-mode-specific
+  logic: `onopen` fires on every successful reconnect regardless of mode,
+  so a routine bounded cycle (close, reopen, `onopen`) resets the counter
+  every time and the banner never appears during normal operation, while a
+  genuine outage produces consecutive errors with no intervening `onopen`
+  and still escalates, just after a short, bounded delay (roughly 3x the
+  retry interval, ~1.5-2s bounded, ~6s unbounded) instead of instantly.
+  Side benefit: this also removes the existing minor banner-flash on
+  today's ordinary unbounded reconnects (the buffer-overflow path from the
+  08-24 design), which currently shows the banner then clears it on the
+  next `onopen`.
 - Every reconnect after that, every scheduled bounded close and any
   ordinary drop, is handled by the browser's own native `EventSource`
   auto-reconnect on that same object, not further custom JS: same URL, so
@@ -467,16 +679,17 @@ Server-side (`SSE.scala`/`API.scala`):
     first-connection/stale-cursor full resync with `Reset`): send it, then
     close immediately. No hold-open step. **"Close immediately" means after
     the complete push is written to the response, not after the first
-    individual `RoomEvent` the stream happens to expose downstream of
-    `.mapConcat(identity)`** (`SSE.scala:67`), which flattens a multi-event
-    push into individual stream elements and so can't itself distinguish
-    "one push of N" from "N separate pushes" once flattened, see section 3's
-    note on why the delta query must be sent as a single `List[RoomEvent]`
-    in the first place. Whatever a single push contains
-    is what gets delivered together, and this app already has a mechanism
-    for "more than one event at once": `setupNewUser` (`Room.scala:262-274`)
-    builds a multi-event `List[RoomEvent]` and sends it as one push for a
-    full resync, and the delta-resolution query does the same for whatever
+    individual `SequencedRoomEvent` the stream happens to expose downstream
+    of `.mapConcat(identity)`** (`SSE.scala:67`), which flattens a
+    multi-event push into individual stream elements and so can't itself
+    distinguish "one push of N" from "N separate pushes" once flattened,
+    see section 3's note on why the delta query must be sent as a single
+    `List[SequencedRoomEvent]` in the first place. Whatever a single push
+    contains is what gets delivered together, and this app already has a
+    mechanism for "more than one event at once": `setupNewUser`
+    (`Room.scala:262-274`) builds a multi-event list and sends it as one
+    push for a full resync, and the delta-resolution query does the same
+    for whatever
     accumulated in `eventLog` since the client's `Last-Event-ID`. Both are
     exact, since the events genuinely originated together (the same resync
     computation, or the same accumulation window), not probabilistic like a
@@ -495,7 +708,7 @@ Server-side (`SSE.scala`/`API.scala`):
     that tax (wait for the window, miss it, wait the retry gap, wait a
     second window) for anything that missed it by a hair. Two genuinely
     independent events (e.g. two different users' `Vote` commands, each its
-    own `broadcast` call, `Room.scala:251-259`, each `user.ref ! List(message)`)
+    own `logEvent` + `broadcast` pair, each `user.ref ! List(event)`)
     landing close together in wall-clock time remain two separate pushes
     and may land in two separate connection cycles instead of one; accepted
     rather than engineered around, at the cost of one extra, cheap round
@@ -566,9 +779,67 @@ Server-side (`SSE.scala`/`API.scala`):
   buffering proxy this spec targets releases it almost immediately
   regardless (it only ever fails to release a response that never
   completes, see Problem).
+- **`SSE_DETECTION_CACHE_TTL`** (default 24h), threaded the same way as
+  `SSE_DETECTION_TIMEOUT` above (via `JoinResponse`, it governs client-side
+  `localStorage` behavior, nothing that rides the SSE wire protocol), same
+  "judgment call, revisit after production feedback" reasoning: short
+  enough that a whitelist fix or a genuine network change (see the
+  detection-cache-check bullet above) self-corrects within about a
+  business day, long enough that a customer joining several rooms across a
+  single day only pays the detection window once, on their first join.
 - No `Room`/`RoomManager` structural changes needed beyond sections 1-5,
   the bounded path is just a client-driven reconnect cadence riding on the
   same delta-resync mechanism every client uses.
+
+**Config invariants.** `SseConfig.load` already enforces
+`gracePeriod >= 2 * retryMillis` specifically so a routine reconnect
+reliably beats the grace period, or Problem C (section 5) reintroduces the
+leave-then-rejoin flicker it exists to prevent. This design adds a second
+retry cadence the same property depends on, `SSE_BOUNDED_RETRY`, without
+extending that check to cover it, plus two proxy-facing values
+(`SSE_BOUNDED_DURATION`, `SSE_DETECTION_TIMEOUT`) that can silently
+reintroduce the exact failure this whole design exists to fix if
+misconfigured. All of the following extend `SseConfig.load`, same file,
+same style, alongside the existing checks:
+
+```scala
+require(
+  gracePeriod.toMillis >= 2 * boundedRetryMillis,
+  s"pointing-poker.sse.grace-period ($gracePeriod) must be at least twice " +
+    s"pointing-poker.sse.bounded-retry ($boundedRetryMillis ms)"
+)
+require(
+  boundedDurationMillis + boundedRetryJitterMillis < 60000,
+  s"pointing-poker.sse.bounded-duration ($boundedDurationMillis ms) plus " +
+    s"jitter must stay safely under Pekko's own 60s idle-timeout, or a " +
+    s"bounded connection risks the framework itself killing it before the " +
+    s"scheduled close"
+)
+require(
+  detectionTimeoutMillis < boundedDurationMillis,
+  s"pointing-poker.sse.detection-timeout ($detectionTimeoutMillis ms) must " +
+    s"stay under pointing-poker.sse.bounded-duration ($boundedDurationMillis ms), " +
+    s"or detection can't reliably fire before a slow-enough proxy kills the " +
+    s"connection outright"
+)
+require(eventLogRetention.toMillis > 0, "...")
+require(eventLogMaxEntries > 0, "...")
+require(boundedDurationMillis > 0, "...")
+require(boundedRetryMillis > 0, "...")
+require(detectionTimeoutMillis > 0, "...")
+require(detectionCacheTtlMillis > 0, "...")
+```
+
+The first is the important one: a direct analog of the existing check,
+extended to cover the retry value it didn't previously guard, without it
+a misconfigured `SSE_BOUNDED_RETRY` can reintroduce Problem C's flicker
+for bounded clients specifically even with the unbounded check still
+passing. The next two guard the proxy-facing values: this codebase can't
+know any given customer's actual proxy timeout (that's not information
+that exists here), but it can and should catch a value that's unsafe
+against what it *does* know, Pekko's own idle-timeout, and the
+relationship between the detection window and the bounded duration. The
+rest are the same basic sanity checks the existing two values already get.
 
 ### 7. Bundled fix: buffering-proxy headers
 
@@ -638,7 +909,17 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec`
 pattern (see `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`
 for the established style):
 
+- `RoomData.logEvent` assigns strictly increasing ids and returns the
+  updated `RoomData` alongside the stamped `SequencedRoomEvent`; `RoomEvent`
+  itself is unaffected (same content, same JSON shape, no `id` field) by
+  wrapping. `EditIssue`'s handler applies its own state change on top of
+  `logEvent`'s returned data, not `data` directly, a regression test for
+  the ordering subtlety in section 2.
 - Event log append and 5-minute pruning.
+- Event log count-based ceiling (`SSE_EVENT_LOG_MAX_ENTRIES`): appending
+  past the ceiling drops the oldest entries regardless of age, and a
+  client whose `Last-Event-ID` falls before the retained range falls back
+  to full resync, same as the time-based case.
 - Delta replay for a valid `Last-Event-ID`.
 - Full-resync fallback (with `Reset`) for a stale or absent `Last-Event-ID`.
 - `Reset` followed by full replay produces no duplicates and correctly
@@ -677,3 +958,25 @@ for the established style):
   (first real SSE message, `inRoom` becomes true) and the hard-failure
   path (`onerror` with a closed `readyState`), and is not shown for a
   bounded reconnect that legitimately waits out an empty delta.
+- The error banner debounce (section 6): `showError` is not set on the
+  first one or two consecutive `onerror` events (non-CLOSED), only once
+  `consecutiveErrors` reaches the threshold; `onopen` and `onmessage` both
+  reset the counter to 0, so a routine bounded cycle (close, reopen) never
+  shows the banner; the CLOSED branch still shows it immediately, no
+  debounce. Covers both bounded and unbounded reconnects.
+- `SseConfig.load`'s new invariants (section 6): rejects a
+  `SSE_BOUNDED_RETRY` that leaves `gracePeriod` under twice its value;
+  rejects a `SSE_BOUNDED_DURATION` (plus max jitter) that doesn't stay
+  safely under Pekko's 60s idle-timeout; rejects a `SSE_DETECTION_TIMEOUT`
+  that isn't strictly under `SSE_BOUNDED_DURATION`; rejects non-positive
+  values for `SSE_EVENT_LOG_RETENTION`, `SSE_EVENT_LOG_MAX_ENTRIES`,
+  `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`, `SSE_DETECTION_TIMEOUT`, and
+  `SSE_DETECTION_CACHE_TTL`.
+- The detection cache (section 6): a valid, non-expired `sseBoundedUntil`
+  entry skips detection entirely and opens directly with `?bounded=1`, no
+  unbounded connection attempted; an expired or absent entry runs
+  detection as today; a detection timer that clears (a message arrives,
+  proxy absent or since whitelisted) clears any stale cache entry rather
+  than leaving it in place, the self-heal path; only the "detected true"
+  outcome is ever written to `localStorage`, a successful unbounded
+  connection never writes a "detected false" entry.
