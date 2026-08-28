@@ -75,6 +75,10 @@ of rare.
 
 ## Approaches considered
 
+Options 1 to 3 ask where the event log lives, taking for granted that there
+is one. Option 4 asks whether there should be, and is listed last because it
+would replace this design rather than restructure it.
+
 **1. In-memory log embedded in `Room`'s existing state (chosen).** Extend
 `RoomData` with a monotonic sequence counter and a time-windowed event log,
 alongside the state it already owns (`users`, `currentIssue`,
@@ -99,6 +103,78 @@ actor-hop on every broadcast and every replay query, to split out a small
 amount of state from an actor that already centralizes everything else
 about the room. No benefit at this app's scale (low event volume, short
 sessions) to offset the added complexity.
+
+**4. Short polling instead of an SSE fallback at all.** A
+`GET /rooms/:roomId/state` returning the room's current snapshot, polled
+every second or so by detected clients, passes a buffering proxy trivially:
+a finite response completes, so it is scanned and released immediately, which
+is the one thing this proxy reliably does (see Problem). It needs none of
+this design's machinery. No sequence ids, no `Last-Event-ID`, no `Reset` id
+semantics, no `Mode` ADT, no wall-clock cap, no jitter, no proxy-timeout
+invariants, and no event log to retain, prune or size. It is genuinely the
+smaller change, and it is written up here because options 1 to 3 all quietly
+assume the fallback is SSE-shaped, which is the assumption most worth having
+on the record.
+
+Rejected, for one decisive reason and three supporting ones.
+
+*Decisive: it puts beacon-shaped traffic on the one network already known to
+be inspecting.* Ten clients at one request per second is 36,000 requests an
+hour, at a fixed interval, to a single URL, with small uniform responses.
+That is the textbook signature of malware beaconing, which is precisely what
+an antivirus-scanning appliance exists to flag. Introducing it on this
+customer's network, while a whitelist request is open with that customer's
+security team (see Purpose), risks an automated block and the goodwill the
+whitelist depends on, and the two failures compound: the traffic pattern
+argues against the exemption being requested for it. Bounded mode runs at
+roughly a tenth the request rate and, because `SSE_BOUNDED_DURATION_JITTER`
+deliberately desynchronizes clients, is not interval-regular either.
+
+*Latency, at its honest magnitude.* Polling at 1s costs a uniform 0 to 1s.
+Bounded mode is not zero against it: the proxy withholds everything until the
+response completes, so an event landing on an open bounded connection still
+costs a close plus a full scan-and-release, typically a few hundred
+milliseconds, and 1 to 2 seconds when the recipient happens to be inside its
+reconnect gap. So bounded wins on the mean by perhaps two or three times,
+with a comparable worst case. Worth having for a reveal, but not on its own a
+reason to prefer one design over the other, and stated at this magnitude so
+the rejection does not rest on a claim that would not survive measurement.
+
+*Bandwidth, which is the weakest of these and is included in order to be
+dismissed.* A 10-person snapshot is on the order of 900 bytes, so about 3 MB
+per client per hour, against roughly an eighteenth of that for bounded
+cycles. Densifying the snapshot helps less than it looks, since at that size
+the HTTP headers are comparable to the body. Neither figure matters at this
+app's scale, and neither should be cited as a reason.
+
+*Reuse.* Sequence ids and `Last-Event-ID` are preparatory rather than
+single-purpose. `docs/roadmap.md`'s Phase 4 server-authoritative auto-reveal
+is what the 08-24 backpressure spec parked "Option 2" against; section 6's
+detection and re-detection timers substantially deliver that file's backlog
+item "client-side connection-liveness watchdog", which it notes was not
+buildable at all under the old WebSocket transport; and the `connection.js`
+extraction is what Phase 3's framework rewrite ports instead of
+reimplementing. Polling delivers none of the three. Note "preparatory" and
+not "prerequisite": the stronger word belongs to the 08-24 spec's own
+framing, quoted in Purpose, and is more than this design needs. Problem A and
+Problem E give auto-reveal trustworthy vote and reveal state by themselves,
+and a full resync with `Reset` reports both correctly, so the delta mechanism
+is an optimization for that phase rather than a gate on it.
+
+*One point in polling's favour, recorded rather than argued away.* A poll is
+itself a liveness signal, so presence would fall out of the polling endpoint
+and Problems C and D would largely not arise for those clients. That is
+genuinely simpler than the grace-period machinery this design extends. It
+loses anyway, because it would mean two presence mechanisms running side by
+side, one per client type, which is worse to hold in your head and worse to
+test than the single complicated one this design already has.
+
+*When this stops being the loser.* Every argument above assumes the proxy
+model in Problem is accurate. If it turns out otherwise, most obviously a
+proxy that also kills or buffers short-lived streaming responses, or one that
+rate-limits rather than only scanning, then bounded mode's premise fails
+outright and polling is the fallback to reach for. It is recorded in this
+much detail so that it can be picked up rather than rediscovered.
 
 ## Final design
 
@@ -176,6 +252,11 @@ def logEvent(event: RoomEvent, now: Instant, config: RoomConfig): (RoomData, Seq
     else prunedByAge
   (this.copy(sequence = id, eventLog = pruned), stamped)
 ```
+
+`dropWhile` tests `isBefore(cutoff)`, so an entry whose timestamp is exactly
+`cutoff` is *retained*: its age is exactly the retention window, not past it.
+Stated here because the boundary tests below assert it in both directions and
+the predicate is the only thing that decides which way it falls.
 
 **`now` is a parameter, not an `Instant.now()` call inside the method.**
 Reading the clock in here would make `logEvent` the one impure method on
@@ -259,6 +340,39 @@ dropped. `ShowVotes` also stops being the file's one handler that returns
 `Behaviors.same` after broadcasting (`Room.scala:173-181`), since it now has
 state to thread; its `foreach` becomes a `match` like every other
 token-resolving handler.
+
+**`ConfirmLeave` logs too, and it is the broadcaster easiest to miss.** Every
+broadcast site is a log site, which means all seven: `Join`, `Vote`,
+`ClearVotes`, `ReVote`, `ShowVotes`, `EditIssue` and `ConfirmLeave`
+(`Room.scala:208-225`). `ConfirmLeave` is the one reached from a timer rather
+than from a client request, so an implementation that walks the client-facing
+handlers skips it, and the omission is not cosmetic: a `Leave` that never
+reaches `eventLog` never reaches a delta either, so a bounded client whose
+reconnect gap spans a departure keeps that participant in its list forever.
+That is the second of the two latent gaps under "Why
+full-resync-on-every-reconnect isn't safe either", reintroduced through the
+very path this design adds to close it. It carries the same overwrite trap as
+`EditIssue`, so the removal applies on top of `logged`, not `data`:
+
+```scala
+case ConfirmLeave(userId, ref, replyTo) =>
+  if data.users.exists(u => u.id == userId && u.ref == ref) then
+    val (logged, event) =
+      logNow(data, RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra), config)
+    val newData = logged.leave(userId, ref)
+    broadcast(event, newData.users, context)
+    if newData.users.isEmpty then
+      replyTo ! Stopped(roomId)
+      Behaviors.stopped
+    else
+      replyTo ! Running(roomId)
+      receiveBehaviour(roomId, newData, config, timers)
+  else Behaviors.same
+```
+
+The `Behaviors.stopped` branch discards the entry it just appended. That is
+correct rather than a leak: the room is going away and its log with it, and
+nothing can request a delta from a stopped actor.
 
 `RoomConfig` groups `gracePeriod` with the two new knobs below, rather
 than adding them as further loose parameters:
@@ -940,7 +1054,49 @@ full resync with `Reset` (part 3 below), the same self-heal path this design
 already relies on everywhere else, instead of a dead end. `SseConfig` is
 untouched by this part; it's purely a `Room`/`RoomData` change.
 
-Three consequences, stated here rather than discovered later:
+**This does not cover the solo case, and the difference is worth being exact
+about.** Retained sessions live in the room actor, so they only outlive a
+removal the actor itself outlives. When the departing user was the room's
+only member, `ConfirmLeave` reaches `newData.users.isEmpty`, replies
+`Stopped` and stops (`Room.scala:216-218`); `sessions` dies with it, and the
+next `/events` resolves `Unresolved` against a room that no longer exists. A
+lone participant whose reconnect outruns the grace period therefore still
+gets the `401` this part removes for everyone else.
+
+Two things make that a residual to state rather than a hole to engineer
+around here. The exposure closes the moment a second participant is present,
+since `users.isEmpty` is then unreachable for one client's slow reconnect, so
+it is confined to the window where someone has opened a room and is waiting
+for others. And room identity is bookmark-driven rather than
+lifecycle-driven: `RequestSession` recreates a missing room under the URL's
+own id (`RoomManager.scala:87-99`), so the next `POST /join` for that id
+resurrects it, losing only what the actor held, which for a waiting solo user
+is the issue string and nothing else.
+
+What is not acceptable is the client's half of it, and that is fixed in
+section 6 rather than here. A `401` puts `EventSource` in CLOSED with no
+retry, so the user is parked on "please reload the page" at exactly the
+moment they are least likely to be watching the screen. The reload is not a
+diagnostic step, it is a fixed recipe that would work; see "Automatic
+recovery from a terminal `401`" in section 6 for running it automatically.
+
+The remaining trigger is worth naming because bounded mode creates it. On an
+ordinary idle cycle the gap to cover is the proxy releasing a zero-byte
+response, plus `SSE_BOUNDED_RETRY`, plus a fresh connect through the proxy,
+on the order of a second or two against a 15s `boundedGracePeriod`. Nothing
+about the normal cadence comes near it, so this is not an idle-timing
+failure. What can burn 15s is the client being suspended rather than the
+network being slow, and the ordinary form of that is a backgrounded tab,
+which browsers throttle and eventually freeze. Today that costs nothing: an
+unbounded connection simply stays open and gets heartbeated. Under bounded
+mode a solo room's survival depends on its one occupant's tab reconnecting
+every 20 to 30 seconds, so backgrounding it becomes sufficient to reap the
+room. Whether `EventSource`'s own reconnect timer is throttled the same way
+`setTimeout` is, is not something this design should assert either way; the
+end-to-end case below measures it, and that measurement is the one input
+that would justify revisiting room lifetime.
+
+Four consequences, stated here rather than discovered later:
 
 - *Memory.* One small entry per `POST /rooms/:roomId/join` per room,
   unchanged by reconnects (a bounded cycle re-enters through `/events`,
@@ -959,6 +1115,20 @@ Three consequences, stated here rather than discovered later:
   the presence's, widening the window in which a captured cookie is usable.
   Accepted for an internal tool behind `SameSite=Strict`, `httpOnly`,
   path-scoped cookies, and recorded here rather than accepted silently.
+- *A grace trip now loses the returning user's vote silently, where before it
+  announced itself.* Problem A's fix carries `voted`/`estimation` across a
+  *resume*, but a user whom `ConfirmLeave` already removed is not a resume:
+  `joinUser` takes the `None` branch and inserts them fresh from
+  `RoomManager.InitialVoteState`/`InitialEstimation`. Before this part, that
+  path ended in a `401` and a visible "your session has ended" banner, so the
+  loss was at least loud. It now ends in a successful rejoin that shows the
+  participant as not having voted, with nothing on screen to say so. This is
+  Problem A's failure reached through a second door, and it lands on exactly
+  the state the Purpose says server-authoritative auto-reveal will have to
+  trust. Not fixed here, because the vote genuinely no longer exists in room
+  state by the time the reconnect arrives; part 2 below is what keeps the
+  common case away from this path, and the residual belongs with whatever
+  eventually gives `sessions` an idle expiry.
 
 **Fix, part 2: bounded connections get their own, longer grace period.**
 Part 1 makes a late reconnect recoverable but not free: every trip still
@@ -1164,6 +1334,29 @@ Client-side (`index.html`'s `doJoin`):
   today's ordinary unbounded reconnects (the buffer-overflow path from the
   08-24 design), which currently shows the banner then clears it on the
   next `onopen`.
+- **Automatic recovery from a terminal `401`.** The CLOSED branch is a dead
+  end by construction: `EventSource` does not retry a non-2xx, so today the
+  handler tells the user to reload (`index.html:479-480`). But the reload is
+  not a diagnostic step, it is a fixed recipe, `created()` re-runs `doJoin`
+  from the remembered `roomId`/`name` and mints a fresh session. So run the
+  recipe instead of asking for it: on the CLOSED branch, re-run `doJoin()`.
+  The user lands back in the room with a new identity and, if the room had
+  been reaped, an empty one, which is exactly what the reload would have
+  produced. Two properties make this compose rather than special-case:
+  `sseBounded` is sticky for the page instance, so the reopened connection
+  stays on whichever path detection already chose, and the new connection
+  carries no `Last-Event-ID`, so it resolves as `Reset` plus full resync and
+  the client's state is rebuilt rather than patched.
+- **Exactly one automatic attempt, then the banner.** A `401` has causes a
+  re-join cannot fix, most obviously the `SECURE_COOKIES` misconfiguration
+  `API.scala:106-110` already warns about, where the browser never returns
+  the cookie at all. Retrying that in a loop would replace a clear
+  instruction with a silent spin, and mint a session and possibly a room
+  actor per attempt. One attempt, tracked by a flag that any successful
+  message resets, then the existing banner unchanged. Note this is not
+  bounded-mode-specific: the dead end it removes is live today for any client
+  whose room was reaped while it was away, and it is what section 5's Problem
+  D part 1 deliberately leaves standing for the solo case.
 - **Re-detection: the timer is re-armed on every unbounded reconnect, not
   only on the first connection.** Detection as described so far runs once
   per page load and only ever caches a positive, which handles a path that
@@ -1180,6 +1373,15 @@ Client-side (`index.html`'s `doJoin`):
   and only while `sseBounded` is false), arm the same kind of timer; any
   message clears it; if it fires, take the same switch as first-connection
   detection.
+- **Arm only if one is not already armed.** `onerror` is not once-per-window:
+  a connection refused outright fails in milliseconds, so a client in a real
+  outage can produce several `onerror` events well inside a 20-second window.
+  Re-arming on each would reset the timer indefinitely and detection would
+  never conclude, which is the exact failure re-detection exists to prevent,
+  reached by a different route. The rule is that the window measures "nothing
+  has arrived since the connection started failing", not "nothing has arrived
+  since the most recent failure", so the timer is armed on the first
+  `onerror` of a failing stretch and cleared only by a message.
 - **The re-detection window has to be longer than the first-connection one,
   and the reason pins the value.** A first connection is guaranteed an
   immediate `Reset` + full resync (section 3), so 5s is generous. An
@@ -1310,6 +1512,11 @@ enum Mode:
   case Unbounded(retryMillis: Int, heartbeatInterval: FiniteDuration)
   case Bounded(retryMillis: Int, durationMillis: Int)
 
+  // Section 5's User.bounded, which has to outlive the Join to be readable at Leave time.
+  def bounded: Boolean = this match
+    case _: Bounded => true
+    case _          => false
+
 def source(
     roomManager: ActorRef,
     roomId: UUID,
@@ -1323,7 +1530,8 @@ def source(
     Source
       .actorRef[List[SequencedRoomEvent]](completionMatcher, failureMatcher, bufferSize, OverflowStrategy.fail)
       .mapMaterializedValue { user =>
-        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, lastEventId, user)
+        roomManager !
+          RoomManager.ConnectToRoom(roomId, userId, name, token, lastEventId, mode.bounded, user)
         user
       }
       .watchTermination() { (user, done) =>
@@ -1361,6 +1569,15 @@ exactly the values its branch consumes. `heartbeatInterval` sits on
 bounded rule from a convention the implementation has to remember into
 something the types do not let it express.
 
+`Mode` is also where `User.bounded` (section 5's Problem D part 2) comes
+from, rather than a second parameter alongside it: the route has already
+decided the mode by the time it calls `SSE.source`, and a separate `bounded`
+argument would be a second copy of the same fact, free to disagree with the
+one the stream branch actually uses. `mode.bounded` in `mapMaterializedValue`
+keeps one source of truth, which is the same argument the ADT itself rests
+on. Note this is the connection property `Leave` reads to pick its grace
+period; it is distinct from the stream-shaping values in the same case.
+
 Two smaller things this settles. It removes the default arguments, so the
 positional break at the existing call site (`API.scala:120-127`, which
 passes `sseConfig.retryMillis` positionally and now has to name a mode)
@@ -1387,6 +1604,30 @@ than waiting out the remainder; an idle source closes with nothing
 delivered once the cap elapses; and a push arriving after `take(1)` has
 already closed the stream is silently dropped (dead letters), not an
 error, no extra guarding needed against it.
+
+**`SSE.bufferSize` needs re-verifying against this shape rather than
+inheriting its existing justification.** The comment sizing it at 1
+(`SSE.scala:19-27`) reasons about a stream that consumes continuously, where
+the buffer only has to absorb "two ordinary actions landing close together"
+before demand returns. A bounded stream does not consume continuously: after
+`take(1)` emits, it pulls no more, so any push landing between that emission
+and the cancel propagating upstream sits in a buffer of 1 under
+`OverflowStrategy.fail`. The spike above covers pushes arriving *after* the
+stream has closed (dead letters, benign); it does not cover that window. The
+window is short and the consequence is the existing self-heal path
+(`ConnectionFailure` -> `Leave` -> reconnect -> delta), so this is a
+measurement to take rather than a redesign to plan, but it must be taken:
+the current value's stated rationale does not extend to this mode, and a
+bounded client in a busy room hits the window on every cycle.
+
+**Dead letters are routine in bounded mode, and that is by design.** A
+bounded connection closes while its user remains in `data.users` for the
+whole grace period, so every broadcast in that gap is sent to a stopped ref.
+Those events are in `eventLog` and arrive on the next delta, which is the
+mechanism working, not failing. Worth stating because Pekko logs dead
+letters and `application.conf` runs at `DEBUG`: an operator reading logs
+during rollout will see them and should not read them as an incident. The
+bounded-close log line described below is the signal to correlate against.
 
 This also tightens something section 3 left implicit: for this to work,
 `Join`'s handler must send nothing to `user.ref` when the resolved delta
@@ -1606,6 +1847,14 @@ require(
     s"retained window and be forced back to full resync on every cycle, " +
     s"defeating the point of delta resync"
 )
+require(
+  boundedRetryJitterMillis >= 0 && boundedRetryJitterMillis < boundedRetryMillis,
+  s"pointing-poker.sse.bounded-retry-jitter ($boundedRetryJitterMillis ms) must be " +
+    s"non-negative and strictly smaller than pointing-poker.sse.bounded-retry " +
+    s"($boundedRetryMillis ms): the jitter is subtracted as well as added, so one " +
+    s"that meets or exceeds the base can put a zero or negative value in a frame's " +
+    s"retry: hint, which the browser reads as an unspecified reconnect delay"
+)
 require(assumedProxyTimeoutMillis > 0, "...")
 require(boundedGracePeriod.toMillis > 0, "...")
 require(eventLogRetention.toMillis > 0, "...")
@@ -1713,8 +1962,14 @@ mechanism's own reason for existing: retention is what makes the bounded
 path cheap (see "Why bounded reconnects need this"), and nothing else in
 this config would catch a value that quietly turns every bounded cycle
 into a full resync instead of a delta, still functionally correct, just
-silently paying the cost this design exists to avoid. The rest are the
-same basic sanity checks the existing values already get.
+silently paying the cost this design exists to avoid.
+
+The eighth is a bound rather than a sanity check, and is easy to leave out
+because its sibling `SSE_BOUNDED_DURATION_JITTER` needs only non-negativity.
+The difference is that the duration jitter is added to its base and the retry
+jitter is applied in both directions, so `SSE_BOUNDED_RETRY_JITTER` at or
+above `SSE_BOUNDED_RETRY` can drive a frame's `retry:` to zero or below.
+The rest are the same basic sanity checks the existing values already get.
 
 **Implementation shape: the connection logic moves out of `index.html` into
 a testable module.** Everything above turns what is today a flat sequence
@@ -1722,7 +1977,8 @@ of `messageType` checks assigning fields (`index.html:396-471`, 113 lines)
 into a connection state machine: two modes, a construct-time detection
 timer, a re-detection timer with a different window, a `localStorage` cache
 with a TTL and a self-heal path, one manual URL switch, an error-debounce
-counter, a spinner flag, and `Reset` semantics across six fields. That is
+counter, a one-shot re-join on a terminal `401`, a spinner flag, and `Reset`
+semantics across six fields. That is
 also precisely the code a future framework migration has to port. Leaving
 it inline means it is untestable now and rewritten twice later, so it moves
 to `src/main/resources/pages/connection.js` as an ES module with its
@@ -1785,6 +2041,119 @@ irrespective of such hints), but it's a cheap, already-flagged, unrelated
 gap worth closing alongside a deployment-relevant change to this same code
 path.
 
+## Validating the proxy model
+
+Everything from section 3 onward rests on the description in Problem, which is
+stated as fact and is not tested anywhere in this design. The end-to-end layer
+does not close that gap: the stub proxy is built to this model, so a green
+suite proves the implementation matches the assumption, not that the
+assumption matches the customer. A stub built to a wrong model tests the wrong
+thing very thoroughly.
+
+**What is actually being assumed.** Problem reads as one fact but is four,
+and the design leans on three more it never states:
+
+1. The proxy buffers the complete response body before forwarding anything.
+2. It delivers no headers either, not only no body.
+3. It kills the connection at 45 seconds.
+4. That deadline is measured against response completion, which is what
+   `SSE_ASSUMED_PROXY_TIMEOUT` encodes.
+5. A response that *does* complete is released promptly.
+6. Scan-and-release latency for a tiny or empty body is small.
+7. A completed chunked `text/event-stream` reaches the browser in a form
+   `EventSource` still treats as a stream and still auto-reconnects from.
+
+**Three of these are already hedged and need no test.** Assumption 2 does not
+matter, because the detection timer arms at `EventSource` construction rather
+than in `onopen` precisely so it works whether or not headers arrive, and
+section 6 already names the headers-but-no-body variant as a reason to prefer
+a timer over an error count. Assumptions 3 and 4 are expressible: a stricter
+or differently-measured deadline is what `SSE_ASSUMED_PROXY_TIMEOUT` exists
+for, and the fractional margin follows it down. But that hedge only works if
+someone supplies the real number. If the true deadline is 20 seconds, the
+defaults produce a 20 to 30 second cap, the `require` passes because the
+assumed value still says 45, and bounded mode fails exactly as today does.
+The knob exists; the input to it is the assumption.
+
+**Assumption 5 is the one that is neither hedged nor recoverable.** Every
+mechanism in sections 3 through 6 takes it for granted that ending the
+response is sufficient to make the proxy release it, and the design states it
+once, in passing, while justifying `JoinResponse` as the detection-config
+channel. There is a plausible scanner behaviour that breaks it outright: an
+appliance whose policy is written around file-like transfers and will not
+release a streaming content type at all, completed or not. Under that
+behaviour bounded mode delivers nothing at any cap, and all seven config
+invariants pass while it does so. The softer failure is worse value rather
+than breakage: an appliance that queues responses for scanning and adds
+seconds of fixed inspection latency turns bounded mode's per-event cost from
+"a few hundred milliseconds" into something worse than the polling option
+rejected under "Approaches considered" partly on latency grounds, while
+eating the grace budget from both ends. Assumption 6 feeds
+`boundedGracePeriod` directly, which is currently a guess resting on a guess.
+
+**The blast radius is PRs 3 to 5.** PRs 1 and 2 are live bug fixes plus
+precise resumption and are justified without any of this. What rides on the
+model is roughly 780 lines of source and 770 of tests, plus the stub, the
+harness and the Playwright suite whose entire fidelity claim is that it
+reproduces the customer's report.
+
+**The ladder, cheapest first.** Each rung is worth taking on its own; the
+later ones only exist if the earlier ones do not settle it.
+
+- *Ask.* Get the appliance's make and model from the customer's
+  administrators and read its documentation. Costs an email, no user time,
+  and may settle 3, 4 and 5 outright. This is also information worth having
+  for the whitelist conversation that is already open.
+- *Probe.* One env-gated route plus one static page, deployed on the app's own
+  origin so the request traverses the identical path, roughly 80 lines. The
+  customer side is "open this URL, wait two minutes, send us the table."
+  Nothing about it looks like probing their infrastructure, and it needs no
+  contact with their security team.
+
+| Probe | Server behaviour | What it answers |
+| --- | --- | --- |
+| A | Emit three SSE frames over 2s, then close | Is a completed stream released, and is time-to-first-byte equal to close time (buffered) or near zero (streamed)? Gives assumption 6 a number. |
+| B | Heartbeat every 2s, never close | The real kill deadline, and whether zero bytes truly arrive. Replaces the assumed 45 with a measured value. |
+| C | One frame at 1s, close at 20s | Bounded mode's exact shape, proven without building bounded mode. |
+| D | Run C through a real `EventSource` for two minutes | Content type survives, the browser reconnects, and `retry:` is honoured. Assumption 7. |
+
+The page records, per connection: time to first byte, time to close, bytes
+received, frames received, and connection count. C and D together are a
+direct proof or refutation of the premise.
+
+**What each outcome means.** Confirmed, proceed and set
+`SSE_ASSUMED_PROXY_TIMEOUT` from B rather than from the default. A shorter or
+differently-measured deadline, set the value and let the invariants follow it
+down, no design change. A large scan-and-release latency in A, revisit
+`SSE_BOUNDED_GRACE_PERIOD` and re-run the latency comparison against polling.
+C or D failing, bounded mode's premise is gone and the fallback is option 4
+under "Approaches considered", which is written up in enough detail to be
+picked up rather than rediscovered.
+
+**Proceeding without it is a legitimate choice, and is recorded as one
+rather than reached by drift.** The probe needs a person on that network for
+two minutes, and if the customer cannot supply one in the time available,
+waiting is not obviously better than shipping: the whitelist request may
+land first and make all of this moot either way. If that call is made, four
+things soften it and one does not.
+
+- The timing values are all env-driven, so a wrong guess about 3, 4 or 6 is a
+  configuration change on a running deployment, not a code change. This is
+  the strongest of the consolations and it was already true for other reasons.
+- `SSE_DETECTION_CACHE_TTL` bounds how long a client can be wrongly pinned to
+  the bounded path to about a day, and any message self-heals it sooner.
+- The failure mode is the one that already exists. A client for whom bounded
+  mode does not work is a client that cannot connect today either, so an
+  unvalidated model risks wasted effort rather than a regression for anyone.
+- Polling stays available as the fallback, and the probe stays useful after
+  ship, since it is also the diagnostic to reach for when a report comes in.
+
+What none of that changes: assumption 5 stays unverified until it meets the
+real proxy, and the first place that happens is the customer's own
+deployment. The end-to-end suite cannot substitute, for the reason at the top
+of this section. Take the *Ask* rung even when the probe is skipped; it costs
+nothing and is the only other thing that can move assumption 5.
+
 ## What was deferred or rejected
 
 - **Shipping section 5's already-live fixes separately from the proxy
@@ -1806,6 +2175,12 @@ path.
   here doesn't require revisiting when that happens.
 - **A separate EventLog actor**: rejected, no benefit over embedding in
   `RoomData` at this scale.
+- **Short polling instead of an SSE fallback**: rejected, see option 4 under
+  "Approaches considered". Decisive reason is that fixed-interval polling
+  from a dozen clients is beacon-shaped traffic aimed at the one network
+  already running an inspecting appliance, with a whitelist request open with
+  that same security team. Recorded there in full because it is the fallback
+  if the proxy model in Problem turns out to be wrong.
 - **Client-side idempotency guards on `init`/`join`**: superseded by the
   `Reset` design (section 4), which is strictly more correct (it also
   handles departed-participant removal, which pure idempotency would not)
@@ -1866,6 +2241,20 @@ path.
   decision, and its worth peaks immediately before the framework
   migration, where it becomes that migration's regression safety net. CI
   integration should land before then.
+- **The room-recreation spawn race**: recorded, not fixed. `ConfirmLeave`
+  replies `Stopped` and *then* stops (`Room.scala:216-218`), so `RoomManager`
+  removes the room from its map while the child actor is still terminating. A
+  `RequestSession` for that same id landing inside that window calls
+  `context.spawn(..., name = roomId.toString)` (`RoomManager.scala:168-173`)
+  on a name that is not yet free, and throws `InvalidActorNameException`.
+  Pre-existing and microseconds wide, but this design makes solo-room reaping
+  routine, and "reap, then immediately recreate from the same bookmark" is
+  precisely the pattern that follows it (see Problem D part 1's solo
+  residual), so it gets many more chances to fire. Out of scope because the
+  fix is a `RoomManager` lifecycle change independent of everything else
+  here: defer the map removal to the `Terminated` signal that already
+  arrives, or spawn defensively. Gets a `docs/known-issues.md` entry on ship,
+  same as the CI deferral above.
 - **Room-skeleton loading experience**: not addressed here beyond the
   connecting spinner (section 6). The spinner is a stopgap: it gives
   feedback that something is happening, but the user still stares at an
@@ -1933,9 +2322,18 @@ for the established style):
 - Event log append and age-based pruning, driven by an explicit `now`
   rather than the real clock, so the boundaries are asserted rather than
   approximated: an entry one millisecond inside the retention window
-  survives, one exactly at the cutoff and one outside it are dropped. No
-  `Thread.sleep` needed. `logEvent` reads no clock of its own, which this
-  test relies on and therefore also pins.
+  survives, an entry exactly at the cutoff survives (its age is exactly the
+  window, not past it, which is what `isBefore` decides), and one a
+  millisecond outside it is dropped. No `Thread.sleep` needed. `logEvent`
+  reads no clock of its own, which this test relies on and therefore also
+  pins.
+- `ConfirmLeave` logs its `Leave` like every other broadcaster, and applies
+  the removal to `logEvent`'s returned data rather than to `data`, the same
+  regression the `EditIssue` and `ShowVotes` tests cover. The case that
+  matters end to end: a client whose `Last-Event-ID` predates a departure
+  receives that `Leave` in its delta and prunes the participant, which is the
+  gap full resync alone cannot close and which an unlogged `ConfirmLeave`
+  would silently reopen through the delta path.
 - Event log count-based ceiling (`SSE_EVENT_LOG_MAX_ENTRIES`): appending
   past the ceiling drops the oldest entries regardless of age, and a
   client whose `Last-Event-ID` falls before the retained range falls back
@@ -1980,7 +2378,11 @@ for the established style):
   already been removed by `ConfirmLeave` (today's `Unresolved` -> `401`),
   and `joinUser` no longer consumes the session entry, so two successive
   connects with the same token both resolve. An `APISpec` case that a
-  post-grace-period reconnect to `/events` gets a stream, not a `401`.
+  post-grace-period reconnect to `/events` gets a stream, not a `401`. Plus
+  the residual, asserted rather than left implicit: when the removed user was
+  the room's only member, `ConfirmLeave` still stops the actor and that same
+  reconnect still gets a `401`, since `sessions` cannot outlive the actor
+  holding it.
 - Problem D part 3: a reconnect whose user was already removed resolves to
   `Reset` + full resync even when its `Last-Event-ID` is still inside the
   retained window, and the returning client's own entry survives (its own
@@ -2029,6 +2431,13 @@ for the established style):
 - A multi-event push (a full resync burst, or a delta containing several
   events accumulated since the client's `Last-Event-ID`) is delivered as
   one connection cycle, not split across several.
+- `SSE.bufferSize` against the bounded shape, which is a measurement rather
+  than an assertion of intended behaviour: pushes landing after `take(1)` has
+  emitted but before its cancel reaches `Source.actorRef` must either be
+  absorbed or fail into the existing self-heal path, never be silently lost.
+  The existing buffer size was justified for a continuously-consuming stream
+  and that justification does not carry over, so the number is confirmed here
+  or adjusted, not assumed.
 - A bounded, idle connection does not receive `.keepAlive` heartbeats and
   closes at the jittered wall-clock cap (20-30s), not at a fixed ~15s; an
   unbounded connection still receives heartbeats unchanged.
@@ -2086,6 +2495,14 @@ under "What was deferred or rejected".
   reset the counter to 0, so a routine bounded cycle (close, reopen) never
   shows the banner; the CLOSED branch still shows it immediately, no
   debounce. Covers both bounded and unbounded reconnects.
+- The one-shot re-join (section 6): a CLOSED `onerror` re-runs `doJoin` once
+  and shows no banner; a second CLOSED `onerror` with no successful message
+  in between shows the banner and does **not** re-join again, which is the
+  loop the `SECURE_COOKIES` case would otherwise produce; any successful
+  message resets the flag, so a later unrelated terminal failure still gets
+  its own single attempt. The reopened connection sends no `Last-Event-ID`
+  and keeps whichever mode `sseBounded` already holds, so a client that had
+  detected the proxy does not silently fall back to unbounded on recovery.
 - `SseConfig.load`'s new invariants (section 6): rejects a
   `SSE_BOUNDED_GRACE_PERIOD` below `SSE_GRACE_PERIOD`, and one below four
   times `SSE_BOUNDED_RETRY`; rejects a `SSE_BOUNDED_DURATION` plus
@@ -2110,7 +2527,9 @@ under "What was deferred or rejected".
   `SSE_ASSUMED_PROXY_TIMEOUT`, `SSE_DETECTION_TIMEOUT`, and
   `SSE_DETECTION_CACHE_TTL`; rejects a negative
   `SSE_BOUNDED_DURATION_JITTER` (zero is a valid "no jitter" value,
-  unlike the others).
+  unlike the others); rejects a `SSE_BOUNDED_RETRY_JITTER` equal to or
+  greater than `SSE_BOUNDED_RETRY` and accepts zero, the pair whose
+  asymmetry with the duration jitter is what makes it easy to omit.
 - The detection timer is armed at `EventSource` construction, not in
   `onopen`: a simulated connection that delivers no headers and no body at
   all (the target proxy's behavior) still triggers the switch to bounded
@@ -2124,9 +2543,13 @@ under "What was deferred or rejected".
   happens at most once per page load even across many failures. The case
   that pins the window: an unbounded reconnect into an idle room, whose
   first frame is the `.keepAlive` heartbeat, does **not** trigger a switch,
-  which is what a 5s window would have got wrong. A bounded connection is
-  never armed, so waiting out the full jittered wall-clock cap with an
-  empty delta never triggers one either. The reopened connection sends no
+  which is what a 5s window would have got wrong. The second case that pins
+  it: several `onerror` events inside one window (a connection refused
+  outright, failing in milliseconds) still switch at the original window's
+  expiry, proving the timer is armed once per failing stretch rather than
+  re-armed per error, which would postpone the switch forever. A bounded
+  connection is never armed, so waiting out the full jittered wall-clock cap
+  with an empty delta never triggers one either. The reopened connection sends no
   `Last-Event-ID` and resolves as `Reset` + full resync. Server-side half,
   automatable, and the more valuable of the two since it is the premise the
   window size rests on: an unbounded reconnect resolving to an empty delta
@@ -2212,38 +2635,93 @@ design.
   and Problem C's timer keying, observed rather than unit-asserted.
 - Re-detection: a client connected while the stub is in pass-through mode
   recovers after buffering is switched on mid-session, without a reload.
+- **A solo client backgrounded across several bounded cycles, which is a
+  measurement rather than an assertion.** Whether the tab's reconnects are
+  throttled past `SSE_BOUNDED_GRACE_PERIOD` is the open question behind
+  Problem D part 1's solo residual, and reasoning cannot settle it. If they
+  are, the room is reaped and the client recovers through the one-shot
+  re-join with no user action, landing in a recreated room. If they are not,
+  the client simply stays in the room. Both are passes; what the case exists
+  for is to record which one happens, since that is the input that would
+  justify revisiting room lifetime.
 
 ## Delivery
 
-Five PRs, in order. The split is drawn for reviewability, and the ordering
-is forced by one real dependency rather than chosen for convenience: see
-the `Reset` note under PR 1.
+Five PRs, plus a small one ahead of them that is a gate rather than a step.
+The split is drawn for reviewability, and the ordering is forced by two real
+dependencies rather than chosen for convenience: `Reset` has to precede
+Problem D part 1 (see the `Reset` note under PR 1), and Problem D part 3
+cannot ship without part 1 (see PR 2). Nothing else in the split is
+load-bearing, so a PR can be resized without breaking anything as long as
+those two orderings survive.
+
+**PR 0: proxy probe.** The env-gated route and page from "Validating the
+proxy model", default off, roughly 80 lines and no tests beyond a smoke case.
+It gates PR 3, not PR 1 or PR 2, which are justified without the proxy work
+and keep the schedule busy while a result comes back. Deliberately its own PR
+so that skipping the gate is a visible decision with a date on it rather than
+something that quietly never happens.
+
+If the customer cannot supply two minutes of one person's time in the window
+available, PR 3 proceeds ungated. That is an accepted outcome, not a failure
+of the plan, and the reasoning plus what it does and does not cost is under
+"Proceeding without it" in that section. Take the *Ask* rung either way: it
+needs no user at all and is the only other thing that can move the assumption
+the probe exists for. Whichever way it goes, record the choice and the date in
+the PR 3 description, since the value of a gate that can be waived is entirely
+in the waiver being written down.
 
 **PR 1: reconnect-path correctness.** Section 5's Problems A, B, C and E,
-plus Problem D part 1, plus `Reset` as a plain event with its client
-handler, plus the `MessageType.values` derivation, `joinUser`'s order
-stability, and section 7's proxy headers. Roughly 250 lines of source and
-250 of tests, all in ScalaTest apart from about ten lines in `index.html`.
-Everything here is an already-live bug, independent of sequencing and of
-bounded mode, and valuable whether or not the rest ever ships.
+plus `Reset` as a plain event with its client handler, plus the
+`MessageType.values` derivation, `joinUser`'s order stability, the one-shot
+re-join on a terminal `401` (section 6), and section 7's proxy headers.
+Roughly 220 lines of source and 220 of tests, all in ScalaTest apart from
+about twenty lines in `index.html`. The re-join sits here rather than with
+bounded mode because the dead end it removes is live today, and putting it
+here keeps PR 3 a pure relocation: PR 3 moves it unchanged along with
+everything else that leaves the page. Everything in this PR is an
+already-live bug, independent of sequencing and of bounded mode, cheap, and
+free of any behaviour or security change. That last property is the reason
+Problem D part 1 is not here, and is worth protecting: this is the PR that
+should be reviewable and releasable on its own merits with nothing to weigh
+up.
 
-`Reset` belongs in this PR rather than with delta resync, and this is the
-constraint that shapes the whole split. Problem D part 1 makes a post-grace
-reconnect succeed where it currently `401`s, and that reconnect lands on
-`setupNewUser` with no `Reset` in front of it, which duplicates every
-participant (the first latent gap under "Why full-resync-on-every-reconnect
-isn't safe either"). Shipping D part 1 without `Reset` would trade a dead
-session for a corrupted participant list. `Reset` needs no sequencing to
-work, though: it is a plain event sent ahead of a full-resync burst, and
-only the *id* it carries belongs to section 4's semantics. So the event
-ships here and its id semantics ship in PR 2.
+`Reset` belongs in this PR rather than with delta resync, and it is the
+ordering constraint the rest of the split has to respect. It fixes a live
+gap by itself: a client whose `EventSource` recovers transparently gets a
+second full `setupNewUser` replay against a `ref.users` that was never
+reset, duplicating every participant (the first latent gap under "Why
+full-resync-on-every-reconnect isn't safe either"). It also gates PR 2's
+Problem D part 1, which makes a post-grace reconnect succeed where it
+currently `401`s and lands it on exactly that unguarded replay; shipping
+that without `Reset` already in place would trade a dead session for a
+corrupted participant list. The constraint runs one way only, so `Reset`
+ships here and part 1 ships behind it. `Reset` needs no sequencing to work,
+being a plain event sent ahead of a full-resync burst, and only the *id* it
+carries belongs to section 4's semantics, which ship in PR 2.
 
 **PR 2: sequence ids and delta resync.** Sections 1, 2 and 3, section 4's
-id semantics and `Join` ordering rule, Problem D part 3, and the event-log
-config values with their invariants. Roughly 300 and 300. Server-side only.
+id semantics and `Join` ordering rule, Problem D parts 1 and 3, and the
+event-log config values with their invariants. Roughly 330 and 330.
+Server-side only, and it depends on `Reset` from PR 1 for the reason above.
 It stands alone without bounded mode: any reconnect, including today's
 buffer-overflow path, resumes precisely instead of replaying the whole
-room.
+room, and a reconnect arriving after the grace period has elapsed comes back
+cleanly instead of dying on a `401`.
+
+Problem D parts 1 and 3 ship together here because part 3 is unreachable
+without part 1. Part 3 fires when a connection arrives carrying a
+`Last-Event-ID` for a `userId` no longer in `users`, which requires that
+request to get past `ValidateToken`, which is precisely what part 1 enables.
+Split across two PRs, part 3 would be dead code with a test that cannot
+construct its own precondition. Reviewed together they are one behaviour with
+two halves: part 1 lets a removed user back in, part 3 makes their resync
+correct when they arrive. This is also the right place for part 1's costs to
+be weighed, since the token-lifetime widening, the leave-then-reload
+behaviour change and the silent vote loss on a grace trip are all recorded
+under Problem D part 1 and all belong in front of the reviewer who is
+approving that behaviour, rather than folded into a PR whose stated pitch is
+that it carries no such thing.
 
 **PR 3: extract the client connection logic.** Section 6's "Implementation
 shape" subsection, `package.json`, the static asset route, the CI node
@@ -2253,6 +2731,10 @@ This is the split worth protecting: its diff reads as a relocation and
 reviews in minutes, and keeping it out of PR 4 means PR 4's diff is
 entirely new logic rather than a mixture of moved and new code, which is
 the quickest way to make a large PR unreviewable.
+
+This is where PR 0's gate applies, since it is the first PR whose only
+justification is the proxy work. Either the probe has run and its result is
+cited here, or the waiver and its date are, per PR 0.
 
 **PR 4: bounded mode.** The rest of section 6, server and client, plus
 Problem D part 2, the `Mode` ADT, the remaining config invariants and the
@@ -2270,3 +2752,11 @@ can release as soon as they land. PRs 3, 4 and 5 release together, with the
 Playwright suite passing before that release reaches the customer this spec
 exists for, since that suite is the only thing that exercises the failure
 being fixed.
+
+One caveat on that last clause, so it is not read as more than it is: the
+suite exercises the *modelled* failure. It runs against the stub, which is
+built to Problem's description, so it is exactly as good as PR 0's result and
+no better. Green with the probe run means the design works against the
+customer's proxy. Green with the gate waived means the design works against
+what this spec believes the customer's proxy to be, which is a weaker claim
+and should be reported as one.
