@@ -764,15 +764,45 @@ there is no delta to resolve and no batching to respect.
 
 Client-side (`index.html`'s `doJoin`):
 
-- **Detection cache check, before anything else opens.** Read
-  `localStorage.getItem('sseBoundedUntil')`. If present and not expired, skip
-  detection entirely and open directly with `?bounded=1`. Only the "detected
-  true" outcome is ever cached, never "detected false", so the only way this
-  cache can be wrong is by making a client wait out a redundant bounded cycle
-  it did not need, never by leaving a client on an unbounded connection the
-  proxy will kill. Whether a network path buffers is not a fixed property of
-  the device (a laptop moving between office and home, a VPN toggling, the
-  whitelist request succeeding), hence the TTL and self-heal below.
+- **Detection cache check, after `JoinResponse` and before any `EventSource`
+  opens.** Read `localStorage.getItem('sseBoundedAt')` and compare it against
+  the TTL that response just delivered:
+
+  ```js
+  const at = Number(storage.getItem('sseBoundedAt'));
+  if (at && Date.now() - at < config.detectionCacheTtlMillis) { /* open bounded */ }
+  ```
+
+  If it is inside the window, skip detection entirely and open directly with
+  `?bounded=1`. Only the "detected true" outcome is ever cached, never
+  "detected false", so the only way this cache can be wrong is by making a
+  client wait out a redundant bounded cycle it did not need, never by leaving a
+  client on an unbounded connection the proxy will kill. Whether a network path
+  buffers is not a fixed property of the device (a laptop moving between office
+  and home, a VPN toggling, the whitelist request succeeding), hence the TTL
+  and self-heal below.
+
+  **The entry stores when detection concluded, not when it expires, and the
+  difference is operational rather than cosmetic.** Storing an absolute
+  `Date.now() + TTL` would bake the TTL in at write time, so lowering
+  `SSE_DETECTION_CACHE_TTL` would leave every already-written entry on its old,
+  longer expiry for up to a day. That is exactly the scenario the TTL is
+  justified by: the whitelist request lands, the proxy stops buffering, and the
+  operator wants clients to stop pinning themselves to the bounded path. Under
+  write-time expiry the knob is at its least responsive precisely when it is
+  needed. Evaluating at read time against the value `JoinResponse` just
+  delivered makes the TTL live, applying to every existing entry on that
+  client's next join, and makes `SSE_DETECTION_CACHE_TTL=0` a genuine kill
+  switch for the cache rather than something that only affects future writes.
+  Both schemes read the client's wall clock, so a clock jump misjudges expiry
+  either way; that is bounded and non-critical, the same category as the
+  false-positive cost accepted below.
+
+  This is why the check sits after `JoinResponse` rather than at the very top
+  of `doJoin`. It needs the TTL, where the superseded shape needed nothing at
+  read time. `doJoin` already awaits that response before constructing any
+  `EventSource` (`index.html:384-388`), so this costs no extra round trip and
+  no reordering.
 - Open `EventSource` unbounded by default when no valid cache entry
   short-circuited that step.
 - **Start a detection timer when the `EventSource` is constructed, not in its
@@ -781,11 +811,11 @@ Client-side (`index.html`'s `doJoin`):
   stream that never completes, so `onopen` never fires in exactly the case
   detection exists to catch, and a timer armed there would never start. Any
   message, including a heartbeat, clears it, and clears any stale
-  `sseBoundedUntil` entry, which is the self-heal path. A bounded connection
+  `sseBoundedAt` entry, which is the self-heal path. A bounded connection
   is never timed, since it may legitimately wait out the wall-clock cap.
 - If the timer fires with nothing received: close that connection, mark an
   in-memory `sseBounded = true` for this page instance, write
-  `sseBoundedUntil = Date.now() + SSE_DETECTION_CACHE_TTL`, and manually open
+  `sseBoundedAt = Date.now()`, and manually open
   a new `EventSource` with `?bounded=1`. `sseBounded` is sticky for the page
   instance, so this switch happens at most once per page load. These are the
   only two manually-driven reconnects in this design, both needed because the
@@ -1040,11 +1070,17 @@ Remaining server-side points, unchanged from the superseded design:
   `JoinResponse` carries the derived re-detection window alongside them. The
   TTL is short enough that a whitelist fix self-corrects within a business
   day, long enough that a customer joining several rooms in a day pays the
-  detection window once.
+  detection window once. Because the cache stores when detection concluded
+  rather than when it expires (see the cache-check bullet above), the TTL is
+  applied at read time, so changing it takes effect on every existing entry at
+  that client's next join rather than only on entries written afterwards.
+  `SSE_DETECTION_CACHE_TTL=0` therefore disables the cache outright, which is
+  the lever to reach for the moment the whitelist request lands, ahead of
+  removing any of this code.
 - **`doLeave`'s `localStorage.clear()` becomes targeted removals, or the TTL
   does not do what it says.** `doLeave` (`index.html:511-518`) wipes all of
   `localStorage`, which today means exactly `roomId` and `name`. Adding
-  `sseBoundedUntil` to the same store means the Leave button silently resets
+  `sseBoundedAt` to the same store means the Leave button silently resets
   detection, so a customer running several plannings a day pays the detection
   window after every Leave, which is the flow the TTL was justified by.
   Replace it with `removeItem("roomId")` and `removeItem("name")`:
@@ -1054,7 +1090,7 @@ Remaining server-side points, unchanged from the superseded design:
   escape hatch from a false-positive detection, and afterwards TTL expiry is
   the only reset, so a wrongly-pinned client stays bounded for up to 24h. That
   is the cost already accepted for false positives generally, and the lever is
-  the TTL, which is tunable.
+  the TTL, which is tunable and now applies to entries already written.
 - **Logging at the decision points this design introduces**, plain SLF4J, no
   new dependency, since several constants are explicitly "revisit after
   production feedback" and that revisit is unactionable without observation: a
@@ -1094,7 +1130,13 @@ require(boundedRetryJitterMillis >= 0 && boundedRetryJitterMillis < boundedRetry
   "put a zero or negative value in a frame's retry: hint")
 ```
 
-Plus positivity checks for each new value, in the style the existing ones use.
+Plus positivity checks for each new value, in the style the existing ones use,
+with one deliberate exception: `SSE_DETECTION_CACHE_TTL` is checked
+`>= 0`, not `> 0`, because zero is the meaningful "disable the detection
+cache" setting rather than a misconfiguration, and read-time TTL evaluation is
+what makes it take effect on entries already written.
+`SSE_BOUNDED_DURATION_JITTER` takes `>= 0` for the same reason, zero meaning
+"no jitter".
 
 The third is the one that actually bites. An earlier version checked only
 Pekko's 60s idle timeout, reasoning that the codebase cannot know a customer's
@@ -1283,7 +1325,11 @@ all of this moot. Four things soften that and one does not.
 - The timing values are all env-driven, so a wrong guess about 3, 4 or 6 is a
   configuration change on a running deployment, not a code change.
 - `SSE_DETECTION_CACHE_TTL` bounds how long a client can be wrongly pinned to
-  the bounded path to about a day, and any message self-heals it sooner.
+  the bounded path to about a day, any message self-heals it sooner, and
+  because the TTL is evaluated at read time, lowering or zeroing it clears
+  every existing entry at each client's next join rather than only affecting
+  entries written afterwards. That makes it a usable rollback lever, not just
+  a bound.
 - The failure mode is the one that already exists. A client for whom bounded
   mode does not work is a client that cannot connect today either, so an
   unvalidated model risks wasted effort rather than a regression for anyone.
@@ -1480,7 +1526,9 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
   60s; accepts a fully scaled-down test configuration, which is the case a
   fixed rather than fractional margin would have rejected; rejects a
   `SSE_BOUNDED_RETRY_JITTER` equal to or greater than `SSE_BOUNDED_RETRY` and
-  accepts zero; plus positivity checks.
+  accepts zero; plus positivity checks, including that
+  `SSE_DETECTION_CACHE_TTL` and `SSE_BOUNDED_DURATION_JITTER` accept zero
+  where the rest reject it.
 
 **Client, under `node --test` against `connection.js` and `applySnapshot`,**
 with injected timers and fake `EventSource`/`storage` doubles, no
@@ -1532,11 +1580,19 @@ dependencies. Before the section 6 extraction none of this was testable, since
   several `onerror` events inside one window still switch at the original
   window's expiry, proving the timer is armed once per failing stretch rather
   than re-armed per error.
-- The detection cache: a valid non-expired entry skips detection entirely and
-  opens directly bounded; an expired or absent entry runs detection; a
-  detection timer that clears also clears a stale cache entry; only "detected
-  true" is ever written.
-- `doLeave` removes `roomId` and `name` but preserves `sseBoundedUntil`, and
+- The detection cache: a `sseBoundedAt` inside the TTL skips detection
+  entirely and opens directly bounded; one outside it, or an absent entry,
+  runs detection; a detection timer that clears also clears a stale entry;
+  only "detected true" is ever written.
+- **The TTL is applied at read time, which is the property the stored shape
+  exists for.** One `sseBoundedAt`, evaluated against two different
+  `config.detectionCacheTtlMillis` values, gives two different answers: inside
+  the window under the larger, outside it under the smaller. This is the test
+  that fails against a stored absolute expiry and passes against a stored
+  write time, so it is what pins the choice rather than merely exercising it.
+  Plus the operational case it exists for: `detectionCacheTtlMillis` of 0
+  makes an entry written moments ago already expired, so detection runs.
+- `doLeave` removes `roomId` and `name` but preserves `sseBoundedAt`, and
   `created()`'s `if(this.roomId && this.user.name)` guard still sees both
   cleared so it does not auto-rejoin.
 
