@@ -78,7 +78,8 @@ of rare.
 **1. In-memory log embedded in `Room`'s existing state (chosen).** Extend
 `RoomData` with a monotonic sequence counter and a time-windowed event log,
 alongside the state it already owns (`users`, `currentIssue`,
-`pendingSessions`). No new actor, no new dependency, consistent with the
+`pendingSessions`, renamed `sessions` by section 5's Problem D). No new
+actor, no new dependency, consistent with the
 existing pattern of `Room` owning all of its own state directly, and
 consistent with today's in-memory-only room lifecycle (durability is
 explicitly Phase 2, unscheduled, independent work).
@@ -164,10 +165,9 @@ than making the one side-effecting function in the file also responsible
 for mutating state:
 
 ```scala
-def logEvent(event: RoomEvent, config: RoomConfig): (RoomData, SequencedRoomEvent) =
+def logEvent(event: RoomEvent, now: Instant, config: RoomConfig): (RoomData, SequencedRoomEvent) =
   val id      = this.sequence + 1
   val stamped = SequencedRoomEvent(id, event)
-  val now     = Instant.now()
   val cutoff  = now.minus(config.eventLogRetention)
   val prunedByAge = (this.eventLog :+ (now, stamped))
     .dropWhile { case (ts, _) => ts.isBefore(cutoff) }
@@ -177,46 +177,88 @@ def logEvent(event: RoomEvent, config: RoomConfig): (RoomData, SequencedRoomEven
   (this.copy(sequence = id, eventLog = pruned), stamped)
 ```
 
-`now`/`cutoff` are each captured once and reused, rather than calling
-`Instant.now()` again inside `dropWhile`'s predicate for every element
-scanned, which would recompute (and let drift slightly across the scan)
-the cutoff on each check instead of pruning the whole pass against one
-consistent instant.
+**`now` is a parameter, not an `Instant.now()` call inside the method.**
+Reading the clock in here would make `logEvent` the one impure method on
+`RoomData` and make the "mirrors every other state transition in this file"
+argument above merely nearly-true, which is the argument the whole
+placement decision rests on. Taking the instant as input keeps `RoomData`
+exactly as pure as it is today and puts the clock read in `Room`, which is
+already the effectful layer, via a one-line private helper so the call
+sites don't each repeat it:
 
-Each handler that broadcasts calls `logEvent` first, sends the stamped
-event via `broadcast` unchanged, and threads the returned `RoomData` into
+```scala
+private def logNow(data: RoomData, event: RoomEvent, config: RoomConfig) =
+  data.logEvent(event, Instant.now(), config)
+```
+
+Three things fall out of that, beyond the naming being honest:
+
+- The "one consistent instant for the whole pass" property becomes
+  structural rather than a matter of discipline. An earlier version of this
+  design had to argue that `now`/`cutoff` should each be captured once
+  rather than calling `Instant.now()` again inside `dropWhile`'s predicate
+  for every element scanned, which would recompute and let the cutoff drift
+  across the scan. With `now` supplied from outside, there is no second
+  clock to call and no way to write that bug.
+- Retention becomes testable at its boundaries instead of approximately.
+  A test can pass an explicit `now` and assert exactly what happens to an
+  entry one millisecond inside the window, one exactly at the cutoff, and
+  one outside it. None of that is reliably expressible against the real
+  clock, and it avoids adding another `Thread.sleep` in the style of
+  `RoomSpec.scala:208`.
+- It's a better foundation for the durable event log named under
+  "Approaches considered" as the eventual direction, since replaying
+  persisted entries means supplying their recorded timestamps rather than
+  whatever the clock says at replay time.
+
+Each handler that broadcasts calls `logNow` first, sends the stamped event
+via `broadcast` unchanged, and threads the returned `RoomData` into
 `receiveBehaviour`, e.g.:
 
 ```scala
-case ShowVotes(token) =>
+case ClearVotes(token) =>
   data.users.find(_.token == token) match
     case Some(user) =>
-      val (logged, event) = data.logEvent(RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra), config)
-      broadcast(event, data.users, context)
-      receiveBehaviour(roomId, logged, config, timers)
+      val (logged, event) = logNow(data, RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra), config)
+      val newData         = logged.clear()
+      broadcast(event, newData.users, context)
+      receiveBehaviour(roomId, newData, config, timers)
     case None => Behaviors.same
 ```
 
-`EditIssue` needs one extra step of care, it's the one call site where
-`broadcast`'s data and the handler's own state change both independently
-touch `data` today: it broadcasts using the pre-edit `data.users`, then
-separately applies `data.editIssue(issue, user.id)` to build what's passed
-to `receiveBehaviour`. Now that `logEvent` also returns updated
-`RoomData` (sequence/log), that update has to sit *underneath* `editIssue`,
-not be overwritten by it:
+`EditIssue` and `ShowVotes` need one extra step of care, they're the call
+sites where `broadcast`'s data and the handler's own state change both
+independently touch `data`: `EditIssue` broadcasts using the pre-edit
+`data.users`, then separately applies `data.editIssue(issue, user.id)` to
+build what's passed to `receiveBehaviour`, and `ShowVotes` gains the same
+shape once it starts recording `revealed` (section 5's Problem E). Now that
+`logEvent` also returns updated `RoomData` (sequence/log), that update has
+to sit *underneath* the handler's own transition, not be overwritten by it:
 
 ```scala
 case EditIssue(token, issue) =>
   data.users.find(_.token == token) match
     case Some(user) =>
-      val (logged, event) = data.logEvent(RoomEvent(MessageType.EditIssue, roomId, user.id, issue), config)
+      val (logged, event) = logNow(data, RoomEvent(MessageType.EditIssue, roomId, user.id, issue), config)
       broadcast(event, data.users, context)
       receiveBehaviour(roomId, logged.editIssue(issue, user.id), config, timers)
     case None => Behaviors.same
+
+case ShowVotes(token) =>
+  data.users.find(_.token == token) match
+    case Some(user) =>
+      val (logged, event) = logNow(data, RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra), config)
+      broadcast(event, data.users, context)
+      receiveBehaviour(roomId, logged.reveal(), config, timers)
+    case None => Behaviors.same
 ```
 
-`logged.editIssue(...)`, not `data.editIssue(...)`, so the sequence/log
-update from `logEvent` isn't silently dropped.
+`logged.editIssue(...)` and `logged.reveal()`, not `data.editIssue(...)` /
+`data.reveal()`, so the sequence/log update from `logEvent` isn't silently
+dropped. `ShowVotes` also stops being the file's one handler that returns
+`Behaviors.same` after broadcasting (`Room.scala:173-181`), since it now has
+state to thread; its `foreach` becomes a `match` like every other
+token-resolving handler.
 
 `RoomConfig` groups `gracePeriod` with the two new knobs below, rather
 than adding them as further loose parameters:
@@ -224,13 +266,17 @@ than adding them as further loose parameters:
 ```scala
 final case class RoomConfig(
   gracePeriod: FiniteDuration,
+  boundedGracePeriod: FiniteDuration,
   eventLogRetention: FiniteDuration,
   eventLogMaxEntries: Int
 )
 
 object RoomConfig:
-  val default: RoomConfig = RoomConfig(6.seconds, 5.minutes, 5000)
+  val default: RoomConfig = RoomConfig(6.seconds, 15.seconds, 5.minutes, 5000)
 ```
+
+(`boundedGracePeriod` is section 5's Problem D part 2; it belongs on
+`RoomConfig` for the same reason `gracePeriod` does.)
 
 nested in `object Room` alongside `RoomData`. `gracePeriod` is already
 threaded as a parameter through every recursive `receiveBehaviour` call
@@ -248,15 +294,13 @@ arity exactly where it is today, and replacing `RoomManager`'s standalone
 existing duplication as a side effect, done once instead of twice.
 
 **`sequence = 0` means "nothing logged yet", not "the first event is id
-0".** Worth spelling out since it's easy to misread otherwise: `Room.Join`
-(`Room.scala:124-133`) calls `setupNewUser` (the resync batch, using
-`sequence` as-is) *before* `logEvent` (the only thing that increments
-`sequence`), for every join, including a room's very first. So the first
-person into an empty room gets `Reset(id=0)` + their own resync batch at
-the pre-broadcast baseline, then separately receives their own ordinary
-`Join` broadcast at `id=1`, the room's actual first log entry. This isn't
-special-cased for the bootstrap case, it falls out of the existing call
-order holding for every join, first or hundredth.
+0".** The first `logEvent` in a room's life produces id `1`, so `0` is only
+ever a room's pre-history baseline and is never carried by a real event.
+`Room.Join` logs the arrival before building the resync (section 4's
+ordering rule), so the first person into an empty room gets a baseline of
+`1`, not `0`, and no client ever legitimately holds `0` as a
+`Last-Event-ID`. Spelled out because the off-by-one is easy to misread the
+other way.
 
 **Retention: a time window, plus a count-based ceiling as a pure safety
 backstop, no ack-based compaction.** Considered and rejected as the
@@ -319,7 +363,7 @@ bounded knobs, both are consumed entirely server-side (the prune check in
 `retryMillis`), and `Main.scala`'s existing wiring, which already builds
 `RoomManager.apply(gracePeriod = sseConfig.gracePeriod)`, constructs a
 `RoomConfig` from the same loaded `SseConfig` instead:
-`RoomConfig(sseConfig.gracePeriod, sseConfig.eventLogRetention, sseConfig.eventLogMaxEntries)`,
+`RoomConfig(sseConfig.gracePeriod, sseConfig.boundedGracePeriod, sseConfig.eventLogRetention, sseConfig.eventLogMaxEntries)`,
 passed through in place of the standalone `gracePeriod` argument.
 
 ### 3. Connection-time resolution
@@ -335,7 +379,7 @@ Three cases, resolved against the room's `eventLog`:
   the events after that id, a precise delta. No `Reset`, no full roster
   replay, this is the common case for a bounded client's routine
   reconnects. **Sent as a single `user.ref ! events` push of one
-  `List[SequencedRoomEvent]`** (`newData.eventLog.collect { case (_, seq)
+  `List[SequencedRoomEvent]`** (`finalData.eventLog.collect { case (_, seq)
   if seq.id > lastEventId => seq }`), never a loop of individual sends,
   exactly mirroring how `setupNewUser` already sends a multi-event resync
   burst as one list (`Room.scala:273`). This isn't just a style
@@ -359,17 +403,21 @@ Three cases, resolved against the room's `eventLog`:
 **Precise resolution rule.** The three cases above are stated in prose;
 the actual predicate matters, since "found in the log" and "not found"
 aren't quite the same split as "delta" vs. "full resync." Given
-`lastEventId: Option[Long]`, `currentSequence = newData.sequence`, and
-`newData.eventLog`:
+`lastEventId: Option[Long]`, `currentSequence = finalData.sequence`, and
+`finalData.eventLog`:
 
+- `!isResume` (the `userId` was not already in `users`, so either a genuine
+  first connection or a client whose grace period elapsed and whose entry
+  `ConfirmLeave` removed) -> full resync case, ahead of every check below,
+  whatever `lastEventId` says. See section 5's Problem D part 3 for why a
+  delta is wrong here even when the id resolves cleanly.
 - `lastEventId.isEmpty` -> first-connection case.
 - `lastEventId` contains `id` where `id == currentSequence` -> delta case,
-  trivially empty (the client is already caught up; this is also what
-  keeps a room's very first reconnect, `id = 0` against an empty
-  `eventLog`, see section 2, from spuriously falling through to a full
-  resync).
+  trivially empty: the client is already caught up. This is the common
+  bounded case, since a client that just resynced holds exactly the
+  baseline and nothing has necessarily happened since.
 - `lastEventId` contains `id` where `id < currentSequence` and
-  `newData.eventLog.exists(_._2.id == id)` -> delta case, reply with
+  `finalData.eventLog.exists(_._2.id == id)` -> delta case, reply with
   `eventLog.collect { case (_, seq) if seq.id > id => seq }`.
 - Anything else, including `id > currentSequence` (never legitimately
   issued by this room, e.g. malformed or spoofed) and `id < currentSequence`
@@ -398,10 +446,12 @@ parameter through the same fire-and-forget chain the connection already
 goes through: `SSE.source` takes it and passes it into the
 `RoomManager.ConnectToRoom` message it sends from `mapMaterializedValue`,
 `ConnectToRoom`'s handler passes it into `Room.Join`, and `Join`'s handler
-(`Room.scala:124`) resolves it against `newData.eventLog`/`newData.sequence`
-in place of today's unconditional `setupNewUser` call, sending either the
-delta or the `Reset` + full-resync batch to `user.ref`, before `broadcast`,
-same ordering as today.
+(`Room.scala:124`) resolves it against `finalData.eventLog`/
+`finalData.sequence` in place of today's unconditional `setupNewUser` call,
+sending either the delta or the `Reset` + full-resync batch to `user.ref`.
+Unlike today, that send happens *after* the `Join` broadcast rather than
+before it, so the resolution sees the arrival's own log entry; see section
+4's ordering rule for why, and section 5 for the handler shape.
 
 This deliberately avoids a separate ask-based resolution step (e.g. a
 `Room.ResolveResync(lastEventId, replyTo)` queried before subscribing).
@@ -429,42 +479,196 @@ is nothing new to re-verify from restructuring this design didn't do.
 A new `RoomEvent.MessageType` case, `Reset` (not `Clear`, that name is
 taken by vote clearing and means something different), sent as the first
 element of the batch immediately before any full-resync burst (both cases
-in section 3 that aren't a delta). Client handler: on `Reset`, clear local
-room-participant state (`ref.users = []`) before applying what follows.
-Harmless on a first connection (clearing an empty list). This fixes both
-latent gaps in "Why full-resync-on-every-reconnect isn't safe either"
-above, by construction: starting from empty makes duplication impossible,
-and a departed participant simply isn't re-added, no separate removal
-signal needed. This is a full replacement for defensive/idempotent handler
-guards, not an addition to them, the reconnecting client's own state is
-always rebuilt from an authoritative snapshot, never patched.
+in section 3 that aren't a delta). Client handler: on `Reset`, restore every
+piece of room-derived state to its initial value before applying what
+follows. Harmless on a first connection (it is already at those values).
+This fixes both latent gaps in "Why full-resync-on-every-reconnect isn't
+safe either" above, by construction: starting from empty makes duplication
+impossible, and a departed participant simply isn't re-added, no separate
+removal signal needed. This is a full replacement for defensive/idempotent
+handler guards, not an addition to them, the reconnecting client's own
+state is always rebuilt from an authoritative snapshot, never patched.
 
-**What id `Reset` carries.** The underlying `RoomEvent(MessageType.Reset,
-roomId, ..., RoomEvent.NoExtra)` is not itself a room event in the log
+**What `Reset` clears, exactly.** `ref.users = []` alone is not enough, and
+naming only that would leave the "rebuilt, never patched" claim above
+false: five other fields in the Vue `data` block (`index.html:335-356`) are
+room-derived and would survive a full resync as stale values. The rule is
+that `Reset` restores exactly the initial value of every field the resync
+burst is authoritative over, which is the same thing as "what a
+freshly-loaded page holds before its first message":
+
+| Field | Reset to | Rebuilt by |
+| --- | --- | --- |
+| `users` | `[]` | `Init` + per-user `Join`/`Vote` |
+| `user.estimation` | `""` | own replayed `Vote`, if `u.voted` |
+| `votesSummary` | `[]` | `updateSummary()` from the `join`/`vote` handlers |
+| `votesRevealed` | `false` | replayed `Show`, if `data.revealed` |
+| `ownVoteConfirmed` | `true` | not replayed; see below |
+| `currentIssue` | `""` | replayed `EditIssue`, if `issueLastEditBy` is set |
+
+Connection and UI-local state is deliberately excluded: `inRoom`,
+`showError`/`errorMessage`/`consecutiveErrors`, `connecting`, `creating`/
+`joining`/`editing`, `eventSource`, `roomId`, `user.id`, `user.name`. None
+of those is derived from the event stream, and `inRoom` in particular is set
+`true` by the dispatcher (`index.html:401`) before any handler runs, so
+resetting it would fight the very message carrying the `Reset`.
+
+Three of these need their reasoning stated rather than assumed:
+
+- `user.estimation` is the concrete case that makes this more than tidiness.
+  A client that misses a `clear` during the gap and resolves to full resync
+  gets a correct `users` list (nobody is marked voted) while continuing to
+  display its own stale vote, because `setupNewUser` only emits a `Vote` for
+  users who *are* voted (`Room.scala:267-270`) and so says nothing that
+  would overwrite it. Clearing it is safe precisely because the resync is
+  authoritative in the other direction too: if the server still holds the
+  vote, the replayed own `Vote` restores it via `index.html:431-433`.
+- `ownVoteConfirmed` resets to `true`, not `false`, and this is the one
+  value that isn't simply "empty". It only selects between two styles of
+  the already-selected estimation button (`index.html:231-232`) and only
+  matters when `e === user.estimation`, so with `user.estimation` cleared it
+  is invisible until either the replay restores a vote or the user votes
+  again. If the replay does restore a vote, the server demonstrably holds
+  it, which is exactly what "confirmed" means. `true` is also its initial
+  value, so the "freshly-loaded page" rule and the semantics agree.
+- `currentIssue` resets to `""` because that is genuinely the server's value
+  when no `EditIssue` is replayed: `RoomData.editIssue` always sets
+  `issueLastEditBy` alongside `currentIssue` (`Room.scala:96-97`), so
+  "`issueLastEditBy` is empty" implies "the issue was never set." Not
+  clearing it would preserve a stale issue string with nothing to correct
+  it.
+
+**One thing `Reset` does not fix, recorded so it isn't read as more than it
+is.** `currentIssue` is `v-model`-bound
+to the issue input (`index.html:192`), so a full resync landing while a user
+has the edit form open discards their in-progress typing. That is already
+true of any inbound `edit_issue` broadcast today, but a bounded client's
+resyncs make it likelier. The real fix is to stop applying remote issue
+updates while `editing` is true, which is a pre-existing UI gap and out of
+scope here.
+
+**A cosmetic risk this introduces.** The resync burst leaves `Room` as one
+push, but `.mapConcat(identity)` (`SSE.scala:67`) flattens it into
+individual SSE frames, so the client sees N separate `onmessage` calls, not
+one. Vue batches DOM updates per tick, so a repaint between the `Reset`
+frame and the frames that rebuild the list is possible, showing an empty
+room for a frame. On a first connection this is invisible because `inRoom`
+is still `false` and gates the whole room view; on a *resync* `inRoom` is
+already `true`, so nothing gates it. Accepted rather than engineered around:
+the frames arrive from a single proxy release and land within a fraction of
+a millisecond of each other, there is no burst-end marker the client could
+wait for without inventing one, and the deferred room-skeleton work under
+"What was deferred or rejected" is where a real answer to "the room view
+should not look authoritative while it is being rebuilt" belongs.
+
+**Adding the enum case, and the trap in `MessageType`'s companion.**
+`MessageType` (`RoomEvent.scala:21-55`) hand-maintains two mappings
+alongside the enum itself: `apply(String)` with a throwing default, and
+`unapply` matching every case. Adding `Reset` leaves both stale, and
+neither omission is caught at compile time. `apply`'s `case _ => throw`
+swallows the gap by construction, and `unapply`'s newly non-exhaustive
+match is only a warning, because `build.sbt` sets no `scalacOptions` and
+warnings are not fatal in this project. Both would surface at runtime
+instead, as an `IllegalArgumentException` on `"reset"` and a `MatchError`
+respectively.
+
+Today that trap is latent rather than live, which is the reason to remove
+it rather than carefully step around it: `unapply` has no call sites at all,
+and `apply`'s only caller is `messageTypeDecoder`, which is itself unused
+since nothing derives or invokes a `Decoder[RoomEvent]` anywhere and only
+`roomEventEncoder` is wired up. So adding the case carelessly breaks
+nothing now, and breaks whenever either is first used. Rather than adding
+one more entry to two hand-maintained lists, derive both from the enum's
+own `values`, which makes the entire class of omission unrepresentable:
+
+```scala
+def apply(messageType: String): MessageType =
+  values
+    .find(_.stringRep == messageType)
+    .getOrElse(throw new IllegalArgumentException(s"$messageType is not a valid MessageType"))
+
+def unapply(messageType: MessageType): Option[String] = Some(messageType.stringRep)
+```
+
+Identical behavior, including the exception type and message, in about four
+lines replacing about twenty-four.
+
+**What id `Reset` carries.** The underlying
+`RoomEvent(MessageType.Reset, roomId, user.id, RoomEvent.NoExtra)`, where
+`user.id` is the connecting user's own id for consistency with `Init`
+(`Room.scala:263`) and so the frame is attributable in logs, is not itself
+a room event in the log
 sense: it's generated fresh per-connection at resolution time, never
 passed to `logEvent`, so it never appends to `eventLog` and never consumes
 a new sequence number. It's still wrapped as a `SequencedRoomEvent` like
 everything else sent over the wire (section 1), but the id it's wrapped
-with is a *read* of the room's current `sequence` (e.g.
+with is a *read* of the room's `sequence` at resolution time (e.g.
 `SequencedRoomEvent(12, resetEvent)` if 12 real events have been logged so
 far), establishing the client's new baseline, not an increment of it.
 Every frame in the resync burst that follows (`Reset`, `Init`, replayed
-`Join`/`Vote`, `EditIssue`) is wrapped with that same id, `12`, repeated
-rather than incrementing, since they're a reconstructed view of current
-state, not new log entries. Repeating it on every frame, rather than
-relying on the SSE spec's "the last-event-id buffer carries forward across
-frames that omit `id:`" behavior, keeps the invariant locally obvious on
-each frame instead of depending on that subtler spec detail. The client's
-next reconnect then correctly requests everything after 12, a genuine
-delta from exactly that point.
+`Join`/`Vote`, `EditIssue`, `Show`) is wrapped with that same id, `12`,
+repeated rather than incrementing, since they're a reconstructed view of
+current state, not new log entries. Repeating it on every frame, rather
+than relying on the SSE spec's "the last-event-id buffer carries forward
+across frames that omit `id:`" behavior, keeps the invariant locally
+obvious on each frame instead of depending on that subtler spec detail.
+The client's next reconnect then correctly requests everything after 12, a
+genuine delta from exactly that point.
 
-### 5. Server fix: resuming `Join` must merge, not replace, and must not
-broadcast
+**Which `sequence` gets read, and why the `Join` handler's internal order
+matters.** "The room's `sequence` at resolution time" is ambiguous for a
+genuinely new arrival, because that same `Join` produces a log entry of its
+own. The rule is that the baseline is the sequence *after* any log entry
+this `Join` itself produced, so the handler logs and broadcasts the `Join`
+event first and builds the resync from the resulting `RoomData`, rather than
+resolving at the pre-broadcast baseline and letting the client's own `Join`
+arrive afterwards as a separate push. See section 5 for the resulting
+handler shape.
 
-Two distinct problems share one root cause and one fix, both stemming from
-`Room.Join`'s handler treating every `Join` as a brand-new arrival
-(`Room.scala:124-133`), never asking whether this `userId` was already
-present:
+Resolving pre-broadcast was the earlier design, and it costs a bounded
+client a whole reconnect cycle on the join path. The resync push would carry
+baseline 12, then `broadcast` would send the joining client its own `Join` at
+13 as a *second* push, which `take(1)` discards (section 6). The client's
+next cycle then exists purely to collect event 13, which its own handler
+throws away anyway (`index.html:412` skips a `join` for its own id). So
+joining costs an extra proxy round trip plus an extra `SSE_BOUNDED_RETRY`
+gap, on precisely the path where the connecting spinner is already showing.
+
+Logging first is not just cheaper, it's simpler in three ways:
+
+- The resync burst is already authoritative about the joining user, since
+  `setupNewUser`'s `perUser` list is built from `data.users`, which
+  `joinUser` has already added them to (`Room.scala:267-270`). Delivering
+  their own `Join` again as a live broadcast was always redundant, carried
+  only by the client's own-id guard, which section 4 otherwise makes a point
+  of not relying on.
+- It makes one rule cover both resolution paths: the baseline is always
+  `finalData.sequence` at the moment the resync is built, whether this was a
+  new arrival (post-log) or a resume (no log entry, so unchanged). No
+  ordering wrinkle to special-case.
+- `logEvent` only touches `sequence`/`eventLog`, and `setupNewUser` reads
+  `users`/`currentIssue`/`issueLastEditBy`/`revealed`, so building the
+  resync from the post-log `RoomData` produces byte-identical content. Only
+  the baseline id changes, which keeps the change low-risk.
+
+It also retires a wrinkle this design previously had to explain at length.
+Because the resync was computed before the increment, the first person into
+an empty room received `Reset(id=0)` against an empty `eventLog` and then
+their own `Join` at `id=1`, which needed a paragraph clarifying that
+`sequence = 0` meant "nothing logged yet" rather than "the first event is id
+0", plus a dedicated clause in section 3's resolution rule to stop
+`id = 0` from falling through to a spurious full resync. Under this
+ordering the first joiner's baseline is `1`, the log holds exactly that one
+entry, and their next reconnect resolves as `id == currentSequence`, a
+trivially empty delta, by the ordinary rule.
+
+### 5. Server fixes on the reconnect path
+
+Five problems, all latent today and all made routine by bounded mode's
+reconnect cadence. The first two share one root cause and one fix, both
+stemming from `Room.Join`'s handler treating every `Join` as a brand-new
+arrival (`Room.scala:124-133`), never asking whether this `userId` was
+already present:
 
 **Problem A, vote state loss.** `RoomManager.ConnectToRoom` always builds
 the `User` it sends with `RoomManager.InitialVoteState`/`InitialEstimation`
@@ -509,27 +713,54 @@ def joinUser(user: User): (RoomData, Boolean) =
   this.users.find(_.id == user.id) match
     case Some(existing) =>
       val merged = user.copy(voted = existing.voted, estimation = existing.estimation)
-      (this.copy(users = merged :: this.users.filterNot(_.id == user.id),
-                  pendingSessions = this.pendingSessions - user.token),
-       true)
+      (this.copy(users = this.users.map(u => if u.id == user.id then merged else u)), true)
     case None =>
-      (this.copy(users = user :: this.users,
-                  pendingSessions = this.pendingSessions - user.token),
-       false)
+      (this.copy(users = user :: this.users), false)
 ```
 
+**The resume branch replaces in place rather than removing and prepending.**
+Today's `merged :: users.filterNot(_.id == user.id)` (`Room.scala:71-74`)
+moves the reconnecting user to the head of the list on every resume. That
+is invisible today because reconnects are rare, and invisible to existing
+clients even under this design because a resume no longer broadcasts
+(Problem B). But `setupNewUser` builds its `perUser` frames straight from
+`data.users`, so a bounded client cycling every 20 seconds continuously
+reshuffles the order that any *new* joiner then renders. Replacing in place
+costs nothing, keeps participant order stable for the room's lifetime, and
+reads as what it is. It relies on there being at most one entry per `id`,
+which `joinUser` is itself the sole enforcer of, since it is the only
+insertion point and now either replaces an existing entry or prepends when
+absent.
+
+`joinUser` no longer touches the session store at all, which is Problem D's
+part 1 below, not an omission here. Note also that `merged` carries over
+only `voted`/`estimation`: `bounded` (added in Problem D part 2) comes from
+the incoming `user`, since it describes the new connection, not the old one.
+
 ```scala
-case Join(user) =>
+case Join(user, lastEventId) =>
   val (newData, isResume) = data.joinUser(user)
-  // resolve delta or Reset+full per section 3, send to user.ref, as before
   val finalData =
     if !isResume then
-      val (logged, event) = newData.logEvent(RoomEvent(MessageType.Join, roomId, user.id, user.name), config)
-      broadcast(event, logged.users, context)
+      val (logged, event) = logNow(newData, RoomEvent(MessageType.Join, roomId, user.id, user.name), config)
+      // Bystanders only: the resync below already accounts for the joining user.
+      broadcast(event, logged.users.filterNot(_.id == user.id), context)
       logged
     else newData
+  // Resolve per section 3 against finalData, send to user.ref; !isResume forces
+  // Reset + full resync (Problem D part 3), baseline finalData.sequence (section 4).
+  resolveAndSend(user, roomId, finalData, lastEventId, isResume, context)
   receiveBehaviour(roomId, finalData, config, timers)
 ```
+
+The resolve-and-send now sits *after* the log-and-broadcast rather than
+before it, which is section 4's ordering rule, and the broadcast is scoped
+to bystanders because the resync burst already represents the joining user.
+Note this is still one direct `user.ref ! ...` push made synchronously from
+inside the `Join` handler, so section 3's note on preserving the
+`Room.scala:125-129` connection-establishment race shape still holds:
+what moved is the order of two sends within one handler, not the number of
+actor hops.
 
 Only a genuinely new `userId` broadcasts and gets logged. Suppressing the
 broadcast for a resume is safe in a way it wasn't when first considered
@@ -564,52 +795,282 @@ one-off cost to something that can leave several stale timers alive per
 user at once, each occupying a slot in the Room actor's `TimerScheduler`
 and each still producing a wasted `ConfirmLeave` message later.
 
-**Fix:** re-key the timer on `userId` alone, and have `Join` cancel it
-explicitly:
+**Re-keying on `userId` alone is not sufficient on its own, and is a
+correctness regression without the second half of this fix.** Keying the
+timer on `userId` is required, because `Join` has to be able to cancel a
+pending removal and `timers.cancel(userId)` cannot reach a
+`(userId, ref)`-keyed timer. But `startSingleTimer` *replaces* the timer
+under a key, and a replaced `ConfirmLeave` carries a different `ref` than
+the one it displaced. Since `ConfirmLeave` decides whether to act by
+comparing that `ref` against the currently-registered one, collapsing two
+`Leave`s is not benign: only one `ref` survives into the fired message, and
+it can be the wrong one.
+
+```
+refB is the currently-registered ref for this user.
+Leave(userId, refB) -> timers[userId] = ConfirmLeave(userId, refB)   real final departure
+Leave(userId, refA) -> replaces it:    ConfirmLeave(userId, refA)    stale, arriving late
+fires -> data.users.exists(_.ref == refA) is false -> Behaviors.same
+```
+
+The user is never removed, `newData.users.isEmpty` is never reached, and
+the room actor never stops: a phantom participant in everyone's list for
+the life of the process. Under today's `(userId, ref)` keying the two
+timers are independent and the `refB` one still fires correctly, so this
+would be a regression introduced by the re-key, not a pre-existing gap.
+
+The ordering it needs is reachable, and this design is what makes it so.
+`Room.scala:68-70` already flags overlapping connections as a live concern,
+and section 6 adds a specific instance: the abandoned unbounded detection
+connection is closed client-side at `SSE_DETECTION_TIMEOUT` but the
+buffering proxy holds it open, so the server may not observe its
+termination until the proxy's own timeout, tens of seconds and many bounded
+cycles later. A `Leave` for that long-dead `ref` landing within a grace
+period of the user's real final `Leave` is all it takes.
+
+**Fix:** key the timer on `userId`, have `Join` cancel it, and move the
+staleness check from fire time to `Leave` time, so a superseded `Leave`
+never creates a timer that could displace a live one:
 
 ```scala
 case Leave(userId, ref, replyTo) =>
-  // unchanged reasoning, just the key:
-  timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId, ref, replyTo), delay = config.gracePeriod)
-  Behaviors.same
+  data.users.find(u => u.id == userId && u.ref == ref) match
+    case None =>
+      // Superseded (this user is present under a newer ref) or already removed.
+      // Either way there is nothing this Leave could ever remove.
+      Behaviors.same
+    case Some(user) =>
+      if timers.isTimerActive(userId) then context.log.warn(...) // as today
+      val delay = if user.bounded then config.boundedGracePeriod else config.gracePeriod
+      timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId, ref, replyTo), delay = delay)
+      Behaviors.same
 
-case Join(user) =>
+case Join(user, lastEventId) =>
   timers.cancel(user.id)
   val (newData, isResume) = data.joinUser(user)
   // ... as above
 ```
 
-(`gracePeriod` above is `config.gracePeriod`, `RoomConfig` from section 2,
-`Room.apply`/`receiveBehaviour` take `config: RoomConfig` in place of the
-standalone `gracePeriod` parameter throughout this section.)
+(`config` is `RoomConfig` from section 2; `Room.apply`/`receiveBehaviour`
+take it in place of the standalone `gracePeriod` parameter throughout this
+section. `boundedGracePeriod` and `user.bounded` are Problem D part 2.)
 
-`startSingleTimer` already cancels any existing timer under the same key,
-so keying on `userId` alone means two `Leave` calls for the same user, the
-same connection retrying or two different connections/refs racing, collapse
-to at most one live timer rather than one per `ref`. `timers.cancel(user.id)`
-in `Join` goes further: a fresh `Join` means this user is present again
-right now, so any pending scheduled removal for them is stale immediately,
-not just eventually. Net effect: bounded mode's routine reconnect cycling
-holds at most one live grace timer per user at any instant, actively
-cleared on every rejoin, instead of potentially several stacking up and
-self-clearing only as each individually fires later.
+Dropping on `None` is equivalent-or-better than scheduling in both of the
+cases it covers, which is why it's a safe simplification rather than a new
+policy: if the user is present under a different `ref`, `ConfirmLeave`
+would have compared and no-oped a grace period later anyway; if the user
+isn't present at all, there is nothing to remove. Both outcomes are
+identical, just reached immediately instead of eventually, and neither can
+now displace a pending removal that would have acted.
 
-This doesn't change `ConfirmLeave`'s existing ref-scoped safety check,
-which stays exactly as-is and remains necessary: the unavoidable
-out-of-order case, a `Leave` for an old connection's `ref` arriving *after*
-the room has already processed the new `Join`, has nothing pending to
-cancel at `Leave`-time (the `Join`'s cancel ran too early to catch it), so
-a fresh timer gets scheduled and must still self-discover staleness at fire
-time via that same check, exactly as today. Not a correctness change, only
-a cost one: it changes *when* a stale timer's futility is discovered
-(immediately at rejoin, the common case, vs. eventually at fire-time, the
-residual race case), not what protects against it.
+This also subsumes the cost problem Problem C opened with, more completely
+than re-keying alone would: a stale `Leave` no longer occupies a
+`TimerScheduler` slot for a full grace period or produces a wasted
+`ConfirmLeave` message, because it never schedules anything.
+`timers.cancel(user.id)` in `Join` covers the remaining case, a genuine
+removal pending for a user who has just come back. Net effect: at most one
+live grace timer per user at any instant, created only by a `Leave` that
+could actually act, and cleared on every rejoin.
+
+`ConfirmLeave`'s ref-scoped check stays exactly as-is, but it is now
+belt-and-braces rather than load-bearing, and the spec should say so rather
+than repeat the old justification. With the `Leave`-time check in place,
+the only way a scheduled `ConfirmLeave`'s `ref` stops being current before
+it fires is a `Join`, which cancels the timer, and Pekko's
+`TimerScheduler` discards an already-delivered message for a cancelled
+timer via its generation counter, so the check should be unreachable. It is
+kept because it costs one predicate and its absence would make correctness
+depend on that generation-counter detail holding.
 
 The existing `(userId, ref)`-key comment and its "relies on RoomManager
 calling Leave at most once per connection" caveat (`Room.scala:189-193`)
-go away with this change: keying on `userId` alone no longer depends on
-that assumption, since any two `Leave`s for the same user now collapse via
-the same mechanism regardless of whether they share a `ref`.
+are replaced, not simply dropped. The re-key does remove that dependency,
+but on its own it substitutes a worse one, that `Leave`s arrive in `ref`
+order; the `Leave`-time check is what removes both. The `isTimerActive`
+warning it guarded stays meaningful and stays accurate under the new
+shape: the different-`ref` case now returns before reaching it, so a live
+timer at that point means a second `Leave` for the ref that is still
+current with no intervening `Join`, which is exactly the
+duplicate-`Leave`-per-connection condition the warning was written for.
+
+**Problem D, a reconnect that outlives the grace period is terminal, not a
+flicker.** Problem C above, and the 08-24 grace period it builds on, both
+frame a too-late reconnect as a cosmetic leave-then-rejoin flicker. It
+isn't. Token resolution is derived from presence: `ValidateToken`
+(`Room.scala:236-243`) resolves against `pendingSessions` and then against
+`users`, `joinUser` consumes the `pendingSessions` entry on the first
+connect (`Room.scala:73`), and `ConfirmLeave` removes the `users` entry
+(`Room.scala:209-210`). Once the grace period elapses both stores have
+forgotten the token, so the next reconnect resolves `Unresolved` and
+`/events` answers `401` (`API.scala:129-131`). `EventSource` does not retry
+a non-2xx, so `onerror` takes the CLOSED branch (`index.html:479-480`) and
+the participant is told to reload the page. If they were the room's only
+member, `ConfirmLeave` also stopped the room actor, so even the `401` is
+unavoidable.
+
+This is already live, and it's a gap at the seam between two designs rather
+than an oversight in either:
+`docs/superpowers/specs/2026-08-20-session-identity-design.md:129-134`
+deliberately resolves a reconnect against `users`, which is correct for a
+reconnect arriving while the user is still present, and the 08-24 grace
+period exists precisely to make a late arrival rare. It stays rare only
+while reconnects themselves are rare.
+
+Bounded mode removes that premise twice over. It opens the window hundreds
+of times per session instead of once or twice, and it opens the window
+earlier than the retry cadence suggests: `watchTermination` sits upstream of
+`take(1)` in section 6's source, so `done` completes the instant `take(1)`
+cancels, which is before Pekko has flushed the response and well before the
+buffering proxy has scanned it and released it to the browser. The gap the
+grace period actually has to cover is proxy-scan-and-release plus
+`SSE_BOUNDED_RETRY` plus a fresh connect back through the proxy, not
+`SSE_BOUNDED_RETRY` alone. An earlier version of section 6's config
+invariants proposed `gracePeriod >= 2 * boundedRetryMillis` for this; it
+measures the wrong quantity and would pass comfortably while the real gap
+ran long.
+
+**Fix, part 1: token resolution stops being derived from presence.**
+`pendingSessions` becomes `sessions`, retained for the room actor's lifetime
+instead of consumed on promotion: `joinUser` no longer removes the entry
+(see its snippet above) and `ValidateToken` resolves against `sessions`
+alone, its `users` fallback becoming dead code and going away.
+`PendingSession` is renamed `Session`, since nothing about it is pending any
+more. A reconnect after removal then resolves normally and comes back as a
+full resync with `Reset` (part 3 below), the same self-heal path this design
+already relies on everywhere else, instead of a dead end. `SseConfig` is
+untouched by this part; it's purely a `Room`/`RoomData` change.
+
+Three consequences, stated here rather than discovered later:
+
+- *Memory.* One small entry per `POST /rooms/:roomId/join` per room,
+  unchanged by reconnects (a bounded cycle re-enters through `/events`,
+  which never mints a session), so growth is per page load, not per cycle.
+  The `docs/known-issues.md` entry "A `/join` with no follow-up `/events`
+  leaks a pending session for the room's lifetime" stops describing an
+  accident and starts describing the deliberate retention policy: rewrite
+  it, don't remove it, since the growth is now intended and still wants the
+  same room-level idle-expiry resolution from Phase 2/5.
+- *Behavior.* The session cookie is path-scoped and `httpOnly` and
+  `doLeave` (`index.html:511-518`) never clears it, so today "click Leave,
+  then reload" produces a `401` and the misleading "your session has ended"
+  banner. It will now silently rejoin the same room under the same
+  identity. That's an improvement, and it is a change.
+- *Security.* A token stays valid for the room's lifetime rather than for
+  the presence's, widening the window in which a captured cookie is usable.
+  Accepted for an internal tool behind `SameSite=Strict`, `httpOnly`,
+  path-scoped cookies, and recorded here rather than accepted silently.
+
+**Fix, part 2: bounded connections get their own, longer grace period.**
+Part 1 makes a late reconnect recoverable but not free: every trip still
+removes the user, broadcasts a `Leave` to bystanders (a participant visibly
+vanishing and reappearing in every other client's list), forces the
+returning client through a full resync's clear-and-rebuild, and, for a solo
+participant, reaps the room. So the common case should not reach removal at
+all. `RoomConfig` gains `boundedGracePeriod` (default 15s,
+`SSE_BOUNDED_GRACE_PERIOD`), and `Leave` uses it for a connection that
+arrived with `?bounded=1`, per the snippet above.
+
+`Room` needs to know which it is. `User` gains `bounded: Boolean`, set from
+the query param and threaded exactly the way section 3 threads
+`lastEventId` (`SSE.source` -> `RoomManager.ConnectToRoom` -> `Room.Join`),
+rather than hanging the flag off `ConnectionCompleted`/`ConnectionFailure`/
+`Leave`: the property belongs to the connection, `User.ref` already *is* the
+connection, and `Leave`'s handler is looking the user up by `(id, ref)`
+anyway to pick the delay. It also gives section 6's "how many clients are
+on the bounded path" log line its data for free. Note this differs
+deliberately from `lastEventId`, which rides on the `Join` message rather
+than on `User`: `lastEventId` is consumed once, during resolution, and is
+meaningless afterwards, while `bounded` has to outlive the `Join` to be
+readable at `Leave` time.
+
+15s is not a measured figure, same as every other timing constant here. It
+sits roughly an order of magnitude above the expected per-cycle gap, so a
+whole session's worth of cycles still has a low expected number of trips,
+while a genuine tab close is still announced inside a meeting's attention
+span. It makes `docs/known-issues.md`'s "A deliberate tab close is as slow
+to announce as a transient reconnect" entry worse for bounded clients
+specifically, 6s to 15s, which is the deliberate trade: a slow departure
+notice is cosmetic, and what it buys is not.
+
+**Fix, part 3: `isResume` gates delta versus full resync, not just the
+broadcast.** Once a reconnect after removal can succeed, resolving it as a
+delta is wrong even when its `Last-Event-ID` is comfortably inside the
+retained window. The delta would contain that client's own `Leave` event,
+and `index.html:461-464` applies it by filtering the user out of
+`ref.users`, with no `Init` in a delta to re-add them: the client would
+prune itself from its own participant list and stay that way. So section 3's
+resolution rule gains a guard ahead of every other case: if `joinUser`
+reports this was not a resume, the connection resolves to `Reset` plus full
+resync regardless of what `Last-Event-ID` says. `joinUser` already returns
+that flag for Problem A/B's fix, so this is one more consumer of the same
+single source of truth, not a second lookup that could drift.
+
+**Problem E, a full resync can't say whether votes are currently
+revealed.** `ShowVotes` broadcasts and changes nothing
+(`Room.scala:173-181`), so "revealed" exists only as a client-side flag,
+and `setupNewUser` has no `Show` equivalent to replay. A resyncing client
+therefore falls back to `allVoted()` (`index.html:553-555`), which
+re-derives `votesRevealed` as "everyone has voted". That is the app's own
+auto-reveal rule, so it agrees with the server in every case but one:
+`Show` pressed while a straggler hasn't voted, a legitimate facilitator
+flow. The resyncing client then hides votes everyone else can see.
+
+An earlier version of this design deferred that as pre-existing and "not
+worsened." Worsened is the wrong word, since no state becomes more wrong
+than today, but the frequency and the timing both change materially, which
+amounts to the same thing in practice. Today the only full resync a client
+takes is at join, when nothing is revealed and it has no expectations, since
+buffer overflow is the sole reconnect trigger. Under this design a bounded
+client takes the full-resync path mid-session routinely: first connect of
+every page load, every prune, every grace trip. Mid-session the room may
+well be revealed. Section 2 also makes `Show` a logged event, so the delta
+path now replays it correctly, which leaves the two resolution paths
+disagreeing about the same room rather than being uniformly wrong. Fixing
+it is smaller than this paragraph.
+
+**Fix:** make "revealed" server state and replay it, the same way
+`currentIssue` already is. `RoomData` gains `revealed: Boolean` (initially
+`false`), `reveal()` sets it, and the existing `clear()`/`reVote()` set it
+back to `false` alongside the vote fields they already touch. `setupNewUser`
+then synthesizes a `Show` frame when it's set, exactly as it already
+synthesizes an `EditIssue` frame from `issueLastEditBy`/`currentIssue`
+(`Room.scala:264-266`):
+
+```scala
+val revealed = if data.revealed then List(RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra)) else Nil
+user.ref ! (init ++ editIssue.toList ++ perUser ++ revealed)
+```
+
+No client-side change at all: the `show` handler already exists
+(`index.html:437-440`) and no new `MessageType` is needed, unlike `Reset`.
+
+**The append position is the whole fix, not a detail.** The synthesized
+`Show` must come *last*, after `perUser`, because every replayed `Join` and
+`Vote` calls `allVoted()`, which overwrites `votesRevealed` from the derived
+value. Placed with `init`/`editIssue` at the front, as would be the natural
+symmetry with `editIssue`, it would be silently overwritten by the very next
+frame and the fix would look applied while changing nothing. This is exactly
+the kind of thing that passes a hand test in an all-voted room and fails in
+the straggler room the fix exists for, so the test below pins the ordering
+specifically.
+
+Two consequences elsewhere in this design: section 4's `Reset` table entry
+for `votesRevealed` becomes server-authoritative rather than re-derived,
+though `Reset` still clears it to `false` and lets the burst re-establish
+it; and `ShowVotes`'s handler shape changes as shown in section 2.
+
+The `docs/known-issues.md` entry "Resync doesn't replay whether votes are
+currently revealed" gets removed rather than updated, per that file's own
+convention. It already proposed this shape ("presumably a
+`votesRevealed`-equivalent flag on `RoomData`, included in the resync
+burst") and pointed at Phase 4's server-authoritative auto-reveal in
+`docs/roadmap.md` as the natural home, on the grounds that Phase 4 needs
+reveal state to be real backend state rather than a client-only flag. It now
+is, so Phase 4 inherits that prerequisite already met, which is the same
+motivation this spec's Purpose gives for pulling sequence numbers forward.
+It also removes the observer-mode caveat the entry carried: a passive
+display resyncing into a stale "not revealed" view, with no human in the
+loop to notice, was the sharpest form of this bug.
 
 ### 6. Bounded/long-poll fallback for proxy-detected clients
 
@@ -632,15 +1093,22 @@ Client-side (`index.html`'s `doJoin`):
   when it stops being true; see the TTL and self-heal note below.
 - Open `EventSource` unbounded, as today, by default, when no valid cache
   entry short-circuited the step above.
-- Start a detection timer on open, duration sent from the server (see
-  below), default 5s. This detection only ever runs on this first
-  connection of a fresh page load, which always has no `Last-Event-ID` yet,
-  so per section 3 it always gets an immediate `Reset` + full-resync burst,
-  meaning the timer only has to detect "did the connection open at all,"
-  not "did some arbitrary future event occur." A later bounded reconnect
-  within the same page instance skips detection entirely (see below) and
-  may legitimately wait out an empty delta, so this timer is never armed
-  for those. Any message, including a heartbeat, clears it, and clears any
+- Start a detection timer when the `EventSource` is *constructed*, not in
+  its `onopen` handler, duration sent from the server (see below), default
+  5s. The distinction is the whole mechanism: the proxy this spec targets
+  delivers no headers at all for a stream that never completes (see
+  Problem), so `onopen` never fires in exactly the case detection exists to
+  catch, and a timer armed there would never start. Same for re-detection
+  below, which arms in `onerror` rather than `onopen` for the same reason.
+  On the *first* connection of a fresh page load this
+  window can be short, because that connection always has no
+  `Last-Event-ID` yet and so per section 3 always gets an immediate `Reset`
+  + full-resync burst: the timer only has to detect "did the connection
+  open at all," not "did some arbitrary future event occur." A bounded
+  connection is never timed, since it may legitimately wait out an empty
+  delta for the whole wall-clock cap. An unbounded *reconnect* is timed,
+  but against a longer window, for the reason given under "re-detection"
+  below. Any message, including a heartbeat, clears it, and clears any
   stale `sseBoundedUntil` entry left over from a previous visit, this is
   the self-heal path: if the proxy situation genuinely changed since the
   cache was written (whitelisted, or this device is now on a different
@@ -648,9 +1116,11 @@ Client-side (`index.html`'s `doJoin`):
 - If the timer fires with nothing received: close that connection, mark an
   in-memory `sseBounded = true` for this page instance, write
   `localStorage.setItem('sseBoundedUntil', Date.now() + SSE_DETECTION_CACHE_TTL)`,
-  and manually open a new `EventSource` with `?bounded=1`. This is the
-  *only* manually-driven reconnect in this design, needed because the URL
-  itself changes.
+  and manually open a new `EventSource` with `?bounded=1`. `sseBounded`
+  being sticky for the page instance means this switch happens at most once
+  per page load, whether it was triggered by first-connection detection or
+  by re-detection below. These are the only two manually-driven reconnects
+  in this design, both needed because the URL itself changes.
 - **Connecting spinner.** From the moment `doJoin` starts (whether
   triggered by submitting the join/create form, or by `created()` auto-
   joining a bookmarked room URL with a remembered name from `localStorage`,
@@ -694,18 +1164,78 @@ Client-side (`index.html`'s `doJoin`):
   today's ordinary unbounded reconnects (the buffer-overflow path from the
   08-24 design), which currently shows the banner then clears it on the
   next `onopen`.
-- Every reconnect after that, every scheduled bounded close and any
-  ordinary drop, is handled by the browser's own native `EventSource`
-  auto-reconnect on that same object, not further custom JS: same URL, so
-  `retry`/`Last-Event-ID` are applied automatically per the SSE spec. This
-  matters beyond simplicity: it guarantees at most one connection open per
-  client at any time, so there's never a window where an old,
-  still-closing connection and a newly opened one could overlap and
-  deliver events out of order. The one manual switch above is exempt from
-  that concern for a different reason: by construction nothing was ever
-  received on the unbounded connection it replaces (that's the detection
-  signal itself), so there's no prior `Last-Event-ID` to lose or race
-  against.
+- **Re-detection: the timer is re-armed on every unbounded reconnect, not
+  only on the first connection.** Detection as described so far runs once
+  per page load and only ever caches a positive, which handles a path that
+  stops being proxied (TTL expiry, plus the self-heal on any message) but
+  not a path that *starts* being proxied. That direction is just as real,
+  and the TTL's own rationale above already concedes it: a VPN toggling on,
+  a laptop moving onto the corporate network, a proxy config being pushed
+  mid-meeting. Without re-detection, a client that connected unbounded
+  successfully and then lands behind the proxy is permanently broken.
+  Native `EventSource` retry reopens the same unbounded URL, the proxy
+  swallows it, and the only visible outcome is the error banner appearing
+  after the debounce threshold and never clearing. So: whenever an
+  unbounded connection enters CONNECTING (the non-CLOSED `onerror` branch,
+  and only while `sseBounded` is false), arm the same kind of timer; any
+  message clears it; if it fires, take the same switch as first-connection
+  detection.
+- **The re-detection window has to be longer than the first-connection one,
+  and the reason pins the value.** A first connection is guaranteed an
+  immediate `Reset` + full resync (section 3), so 5s is generous. An
+  unbounded *reconnect* has no such guarantee: with a valid
+  `Last-Event-ID` and nothing new it resolves to a trivially empty delta,
+  which sends nothing at all to `user.ref` (see the `take(1)` note below),
+  so the first frame it legitimately sees is the `.keepAlive` heartbeat.
+  A 5s window would therefore false-positive on every reconnect into an
+  idle room. The window is `heartbeatInterval + SSE_DETECTION_TIMEOUT`
+  (15s + 5s = 20s), computed server-side and delivered in `JoinResponse`
+  alongside the other client-side values. Deliberately derived rather than
+  given its own env var: unlike the other constants here this isn't a free
+  judgment call, it's "one heartbeat interval, plus the same margin a first
+  connection gets", so it stays correct by construction if
+  `heartbeatInterval` (moved to `SseConfig`, see the config invariants)
+  ever changes and can't be
+  misconfigured into a value that fights `.keepAlive`.
+- A timer is the right signal here rather than a count of consecutive
+  `onerror` events, for two reasons. Each failed unbounded attempt behind
+  this proxy costs the proxy's own timeout (45s) before the browser even
+  sees a failure, so a threshold of 3 would mean minutes of a visibly
+  broken room; and a proxy variant that releases headers but buffers the
+  body would fire `onopen` on every attempt, resetting any error counter
+  forever while never delivering a message. "Nothing arrived within a
+  window that `.keepAlive` guarantees a frame inside" catches both.
+- The mid-session switch accepts a full resync, and that's the correct
+  trade rather than a gap. A new `EventSource` object cannot inherit the
+  old one's internal last-event-id, so the reopened bounded connection
+  sends no `Last-Event-ID` and resolves as `Reset` + full resync
+  (section 3). Reconstructing the cursor in script would mean tracking ids
+  client-side, exactly the resume bookkeeping this design avoids by staying
+  on one `EventSource` object, and the payoff would be saving one
+  clear-and-rebuild on a transition that happens at most once per page
+  load. `Reset` makes the full resync correct (section 4), so the cost is
+  cosmetic.
+- Every reconnect other than those two switches, every scheduled bounded
+  close and any ordinary drop, is handled by the browser's own native
+  `EventSource` auto-reconnect on that same object, not further custom JS:
+  same URL, so `retry`/`Last-Event-ID` are applied automatically per the
+  SSE spec. This matters beyond simplicity: it guarantees at most one
+  connection open per client at any time, so there's never a window where
+  an old, still-closing connection and a newly opened one could overlap and
+  deliver events out of order. Both manual switches stay inside that
+  guarantee, for different reasons. `close()` takes effect synchronously,
+  so the old object is CLOSED before the new one is constructed and the
+  browser never reads from both. For the first-connection switch nothing
+  was ever received on the connection being replaced (that is the detection
+  signal itself), so there's no cursor to lose or race against. For the
+  mid-session switch there is a cursor, deliberately discarded per the
+  bullet above, and no ordering hazard on the wire either: once `joinUser`
+  replaces the entry, broadcasts go only to the new `ref`, and anything
+  already queued for the old one is read by nobody. Server-side, the old
+  connection's termination may be observed long after the new `Join`,
+  because the proxy is still holding it; that is precisely the stale-`Leave`
+  ordering section 5's Problem C now checks for at `Leave` time rather than
+  at fire time.
 
 Server-side (`SSE.scala`/`API.scala`):
 
@@ -767,15 +1297,18 @@ Server-side (`SSE.scala`/`API.scala`):
     still self-close before 45s, otherwise it's exactly today's failure,
     the proxy killing an open-ended stream with nothing delivered.
 
-**Implementation shape: a `BoundedConfig` parameter on `SSE.source`, not a
-separate bounded-mode source.** The retry value, the no-`.keepAlive` rule,
-and the adaptive close all have to be decided by the same caller (the
-`/events` route, once it knows `bounded` is present), so they're carried
-together rather than threaded as separate loose parameters the way
-section 1's plain `retryMillis: Int` might suggest in isolation:
+**Implementation shape: one `Mode` parameter on `SSE.source`, not a
+separate bounded-mode source and not a pair of parameters.** The retry
+value, the no-`.keepAlive` rule, and the adaptive close all have to be
+decided by the same caller (the `/events` route, once it knows whether
+`bounded` is present), so they're carried together rather than threaded as
+separate loose parameters the way section 1's plain `retryMillis: Int`
+might suggest in isolation:
 
 ```scala
-final case class BoundedConfig(retryMillis: Int, durationMillis: Int)
+enum Mode:
+  case Unbounded(retryMillis: Int, heartbeatInterval: FiniteDuration)
+  case Bounded(retryMillis: Int, durationMillis: Int)
 
 def source(
     roomManager: ActorRef,
@@ -784,8 +1317,7 @@ def source(
     name: String,
     token: Room.SessionToken,
     lastEventId: Option[Long],
-    retryMillis: Int = defaultRetryMillis,
-    bounded: Option[BoundedConfig] = None
+    mode: Mode
 )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
   val base =
     Source
@@ -802,20 +1334,43 @@ def source(
         user
       }
 
-  bounded match
-    case Some(cfg) =>
+  mode match
+    case Mode.Bounded(retryMillis, durationMillis) =>
       base
         .take(1) // close after the first pushed batch, whatever it contains
-        .takeWithin(cfg.durationMillis.millis) // ...or the wall-clock cap, whichever is first
+        .takeWithin(durationMillis.millis) // ...or the wall-clock cap, whichever is first
         .mapConcat(identity)
-        .map(seq => ServerSentEvent(data = seq.event.asJson.noSpaces, id = Some(seq.id.toString), retry = Some(cfg.retryMillis)))
+        .map(seq => ServerSentEvent(data = seq.event.asJson.noSpaces, id = Some(seq.id.toString), retry = Some(retryMillis)))
         // no .keepAlive: see below, the cap already stays under Pekko's idle-timeout
-    case None =>
+    case Mode.Unbounded(retryMillis, heartbeatInterval) =>
       base
         .mapConcat(identity)
         .map(seq => ServerSentEvent(data = seq.event.asJson.noSpaces, id = Some(seq.id.toString), retry = Some(retryMillis)))
         .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 ```
+
+**Why a `Mode` ADT rather than `retryMillis` plus
+`bounded: Option[BoundedConfig]`.** With both parameters present, a bounded
+connection has two retry values in scope and only one of them is read: the
+standalone `retryMillis` is dead whenever `bounded` is `Some`, since
+`BoundedConfig` carries its own. Nothing prevents a caller passing a
+sensible-looking value that is silently ignored, or omitting one that
+matters. The ADT makes that state unrepresentable, and each case names
+exactly the values its branch consumes. `heartbeatInterval` sits on
+`Unbounded` alone for that reason, which turns the no-`.keepAlive`-for-
+bounded rule from a convention the implementation has to remember into
+something the types do not let it express.
+
+Two smaller things this settles. It removes the default arguments, so the
+positional break at the existing call site (`API.scala:120-127`, which
+passes `sseConfig.retryMillis` positionally and now has to name a mode)
+becomes a compile error rather than something that could bind wrongly if
+the parameter order shifted again. And it puts jitter at the route:
+`SSE.source` receives already-jittered values instead of computing them,
+which keeps it deterministic given its input and lets `SSESpec` assert
+exact `retry:` and cap values. That is the same seam as the `Instant.now()`
+decision in section 2, applied to randomness rather than to time, and for
+the same reason.
 
 `take(1)` operates on the `List[SequencedRoomEvent]` batches, *before*
 `.mapConcat(identity)` flattens them, so it closes after one complete
@@ -844,7 +1399,7 @@ send at all, letting the connection sit open for `take(1)` to catch the
 next real push, live broadcast or otherwise.
 
 - **Bounded connections carry a distinct, smaller `retry:` hint than the
-  unbounded default**, `BoundedConfig.retryMillis` above.
+  unbounded default**, `Mode.Bounded.retryMillis` above.
   `SseConfig.retryMillis` (2000ms) keeps governing unbounded connections
   unchanged, but a bounded connection's frames carry a separate value:
   500ms base with +/-100ms jitter per connection (same
@@ -883,13 +1438,27 @@ next real push, live broadcast or otherwise.
   giving the "0-10s jitter" above a named, tunable value rather than an
   unconfigurable constant; distinct from the retry jitter below, this one
   randomizes when an idle connection force-closes, not how long the
-  browser waits before reopening one), and `SSE_BOUNDED_RETRY` /
-  `SSE_BOUNDED_RETRY_JITTER` (default 500ms +/- 100ms). Made tunable
+  browser waits before reopening one), `SSE_BOUNDED_RETRY` /
+  `SSE_BOUNDED_RETRY_JITTER` (default 500ms +/- 100ms), and
+  `SSE_BOUNDED_GRACE_PERIOD` (default 15s, section 5's Problem D part 2;
+  consumed server-side in `Room`'s `Leave` handler, so no client-delivery
+  mechanism is needed for it), and `SSE_HEARTBEAT_INTERVAL` (default 15s,
+  unchanged from today's hardcoded value; see the config invariants for why
+  it stops being a constant). Made tunable
   deliberately: these values are a judgment call about a real proxy's
   behavior and real users' tolerance for lag, which this design can't
   fully settle ahead of time. The intent is to revisit them with real
   feedback after the first production deployment, not treat the defaults
   above as final.
+- **`SSE_ASSUMED_PROXY_TIMEOUT`** (default 45s) sits in the same config but
+  is not a tuning knob like those: it declares a fact about the deployment
+  environment, the shortest response-completion deadline any proxy in front
+  of this service is believed to enforce. Nothing reads it at runtime. It
+  exists solely so the config invariants below can check the bounded
+  wall-clock cap against the ceiling that actually matters, rather than
+  only against the one the codebase happens to know for itself. 45s is this
+  customer's proxy (see Problem); a deployment behind a stricter one lowers
+  it, one behind no buffering proxy at all can raise it.
 - The client-side detection timeout (above) is configurable the same way,
   `SSE_DETECTION_TIMEOUT`, default 5s, same "judgment call, revisit after
   production feedback" reasoning. It can't reach the client by riding the
@@ -901,7 +1470,11 @@ next real push, live broadcast or otherwise.
   (`doJoin`, `index.html:380-388`) and is a small, finite response, so the
   buffering proxy this spec targets releases it almost immediately
   regardless (it only ever fails to release a response that never
-  completes, see Problem).
+  completes, see Problem). `JoinResponse` carries the re-detection window
+  alongside it, as `heartbeatInterval + SSE_DETECTION_TIMEOUT`, computed
+  server-side rather than exposed as its own env var for the reason given
+  in the re-detection bullet above: it is derived from an existing
+  guarantee, not a free choice.
 - **`SSE_DETECTION_CACHE_TTL`** (default 24h), threaded the same way as
   `SSE_DETECTION_TIMEOUT` above (via `JoinResponse`, it governs client-side
   `localStorage` behavior, nothing that rides the SSE wire protocol), same
@@ -910,6 +1483,31 @@ next real push, live broadcast or otherwise.
   detection-cache-check bullet above) self-corrects within about a
   business day, long enough that a customer joining several rooms across a
   single day only pays the detection window once, on their first join.
+- **`doLeave`'s `localStorage.clear()` has to become targeted removals, or
+  the TTL above doesn't do what it says.** `doLeave` (`index.html:511-518`)
+  wipes all of `localStorage`, which today means exactly `roomId` and
+  `name` (`index.html:336,353,382-383`, the only keys in use). Adding
+  `sseBoundedUntil` to the same store means the Leave button silently
+  resets detection, so a customer running several plannings in a day pays
+  the detection window again after every Leave, which is precisely the flow
+  the 24h TTL was justified by. Replace the bulk `clear()` with
+  `removeItem("roomId")` and `removeItem("name")`: behavior-preserving
+  today, since those are the only two keys, and correct going forward for
+  the right reason rather than by luck. The detection result describes the
+  network path between this browser and this origin, not the room or the
+  session, so leaving a room is not an event that should invalidate it.
+  That is the classification to apply to any future key as well: room and
+  session state is swept by `doLeave`, path state is not.
+- One consequence of fixing that, stated rather than left to be discovered:
+  `doLeave` was an accidental escape hatch from a false-positive detection,
+  and after this fix TTL expiry is the only reset. A client wrongly pinned
+  to the bounded path therefore stays there for up to
+  `SSE_DETECTION_CACHE_TTL`, where before it could be cleared by leaving
+  and rejoining. This is the same cost already accepted for false positives
+  generally (see the deferred entry on distinguishing proxy buffering from
+  transient latency), it is bounded and non-critical, and the lever if it
+  proves too long in practice is the TTL itself, which is already tunable.
+  No separate revalidation mechanism is proposed for it.
 - **Logging at the decision points this design introduces**, plain SLF4J
   log lines, no new dependency, since several constants above are
   explicitly framed as "revisit after production feedback" and that
@@ -938,9 +1536,10 @@ next real push, live broadcast or otherwise.
 **Config invariants.** `SseConfig.load` already enforces
 `gracePeriod >= 2 * retryMillis` specifically so a routine reconnect
 reliably beats the grace period, or Problem C (section 5) reintroduces the
-leave-then-rejoin flicker it exists to prevent. This design adds a second
-retry cadence the same property depends on, `SSE_BOUNDED_RETRY`, without
-extending that check to cover it, plus two proxy-facing values
+leave-then-rejoin flicker it exists to prevent (which section 5's Problem D
+shows is actually a terminal `401`, not a flicker). This design adds a
+second grace period the same property depends on,
+`SSE_BOUNDED_GRACE_PERIOD`, plus two proxy-facing values
 (`SSE_BOUNDED_DURATION`, `SSE_DETECTION_TIMEOUT`) that can silently
 reintroduce the exact failure this whole design exists to fix if
 misconfigured. All of the following extend `SseConfig.load`, same file,
@@ -948,9 +1547,29 @@ same style, alongside the existing checks:
 
 ```scala
 require(
-  gracePeriod.toMillis >= 2 * boundedRetryMillis,
-  s"pointing-poker.sse.grace-period ($gracePeriod) must be at least twice " +
-    s"pointing-poker.sse.bounded-retry ($boundedRetryMillis ms)"
+  boundedGracePeriod >= gracePeriod,
+  s"pointing-poker.sse.bounded-grace-period ($boundedGracePeriod) must be at " +
+    s"least pointing-poker.sse.grace-period ($gracePeriod): a bounded connection " +
+    s"cycles orders of magnitude more often than an unbounded one, so it can " +
+    s"never safely need less slack"
+)
+require(
+  boundedGracePeriod.toMillis >= 4 * boundedRetryMillis,
+  s"pointing-poker.sse.bounded-grace-period ($boundedGracePeriod) must be at " +
+    s"least four times pointing-poker.sse.bounded-retry ($boundedRetryMillis ms): " +
+    s"a bounded cycle pays the proxy's scan-and-release latency before the " +
+    s"browser's retry timer even starts, so the real reconnect gap is a multiple " +
+    s"of the retry value, not equal to it"
+)
+require(
+  boundedDurationMillis + boundedDurationJitterMillis
+    <= assumedProxyTimeoutMillis * (1 - ProxyTimeoutMarginFraction),
+  s"pointing-poker.sse.bounded-duration ($boundedDurationMillis ms) plus " +
+    s"pointing-poker.sse.bounded-duration-jitter ($boundedDurationJitterMillis ms) " +
+    s"must leave ${ProxyTimeoutMarginFraction * 100}% headroom under " +
+    s"pointing-poker.sse.assumed-proxy-timeout ($assumedProxyTimeoutMillis ms), " +
+    s"or a bounded connection can outlive the very proxy timeout this mode " +
+    s"exists to stay under, reintroducing the original zero-bytes failure"
 )
 require(
   boundedDurationMillis + boundedDurationJitterMillis < 60000,
@@ -961,11 +1580,21 @@ require(
     s"scheduled close"
 )
 require(
-  detectionTimeoutMillis < boundedDurationMillis,
-  s"pointing-poker.sse.detection-timeout ($detectionTimeoutMillis ms) must " +
-    s"stay under pointing-poker.sse.bounded-duration ($boundedDurationMillis ms), " +
-    s"or detection can't reliably fire before a slow-enough proxy kills the " +
-    s"connection outright"
+  heartbeatInterval.toMillis + detectionTimeoutMillis
+    <= assumedProxyTimeoutMillis * (1 - ProxyTimeoutMarginFraction),
+  s"the re-detection window (pointing-poker.sse.heartbeat-interval " +
+    s"($heartbeatInterval) plus pointing-poker.sse.detection-timeout " +
+    s"($detectionTimeoutMillis ms)) must leave " +
+    s"${ProxyTimeoutMarginFraction * 100}% headroom under " +
+    s"pointing-poker.sse.assumed-proxy-timeout ($assumedProxyTimeoutMillis ms), " +
+    s"or the proxy kills an unbounded connection before detection can " +
+    s"conclude and the client never switches to bounded mode at all"
+)
+require(
+  heartbeatInterval.toMillis < 60000,
+  s"pointing-poker.sse.heartbeat-interval ($heartbeatInterval) must stay " +
+    s"below Pekko's 60s idle-timeout, or an idle unbounded stream is killed " +
+    s"by the server and read as the participant leaving the room"
 )
 require(
   eventLogRetention.toMillis >= 2 * (boundedDurationMillis + boundedDurationJitterMillis),
@@ -977,6 +1606,8 @@ require(
     s"retained window and be forced back to full resync on every cycle, " +
     s"defeating the point of delta resync"
 )
+require(assumedProxyTimeoutMillis > 0, "...")
+require(boundedGracePeriod.toMillis > 0, "...")
 require(eventLogRetention.toMillis > 0, "...")
 require(eventLogMaxEntries > 0, "...")
 require(boundedDurationMillis > 0, "...")
@@ -986,22 +1617,163 @@ require(detectionTimeoutMillis > 0, "...")
 require(detectionCacheTtlMillis > 0, "...")
 ```
 
-The first three are the important ones. The first is a direct analog of
-the existing check, extended to cover the retry value it didn't
-previously guard, without it a misconfigured `SSE_BOUNDED_RETRY` can
-reintroduce Problem C's flicker for bounded clients specifically even
-with the unbounded check still passing. The next two guard the
-proxy-facing values: this codebase can't know any given customer's
-actual proxy timeout (that's not information that exists here), but it
-can and should catch a value that's unsafe against what it *does* know,
-Pekko's own idle-timeout, and the relationship between the detection
-window and the bounded duration. The fourth guards the delta-resync
+The first seven are the important ones. The first two are analogs of the
+existing check, aimed at the bounded grace period rather than the
+unbounded one: without them a misconfigured `SSE_BOUNDED_GRACE_PERIOD`
+reintroduces Problem D's terminal `401` for bounded clients specifically,
+hundreds of times per session, with the unbounded check still passing.
+The next two guard the two independent ceilings a bounded connection's
+wall-clock cap sits under, and neither implies the other.
+
+The first of them is the one that actually bites. An earlier version of
+this design checked only Pekko's 60s idle-timeout here, reasoning that the
+codebase can't know any given customer's proxy timeout. That's true, and it
+was the wrong conclusion: the codebase can't know it, but the operator
+deploying behind that proxy can, and giving them nowhere to say it means
+the check guards the ceiling that doesn't matter. Any cap safe against a
+45s proxy is automatically safe against a 60s framework timeout, so the
+Pekko check passes for every sane value and also passes for
+`SSE_BOUNDED_DURATION=50s`, which silently reintroduces the exact
+zero-bytes failure this whole design exists to fix. Hence
+`SSE_ASSUMED_PROXY_TIMEOUT`: a declaration about the deployment
+environment rather than a behavioral tuning knob, defaulting to the 45s
+this customer's proxy uses, checked with a `ProxyTimeoutMarginFraction` of
+25% headroom. The margin exists because the cap is not the only thing
+inside the proxy's window: its clock may start at request receipt rather
+than at response start, and establishing the connection through it isn't
+free. A deployment behind a stricter proxy sets the value lower and the
+check follows it down, which is the case nothing in the previous version
+could express at all.
+
+**The margin is a fraction, not the fixed 10s an earlier version of this
+design used, and the reason is worth recording because reasoning alone got
+it wrong.** A fixed margin was chosen to avoid the defaults saturating the
+check, on the assumption that a fraction would leave no room: 30s of cap
+against a 45s proxy is exactly two thirds. 25% turns out to be fine (the
+bound is 33.75s, so the defaults pass with 3.75s to spare) while a fixed
+10s breaks down at the other end of the range. Committing to the
+end-to-end tests below is what exposed that: those tests need the whole
+timing set scaled down by an order of magnitude so a suite doesn't take
+minutes, and with a 10s floor no proxy timeout under about 13s admits any
+valid cap at all. A fraction scales with the value it guards, so one
+invariant covers both the production configuration and a test one.
+
+The Pekko check stays alongside it rather than being replaced, because
+`SSE_ASSUMED_PROXY_TIMEOUT` is operator-supplied and can legitimately be
+set high (a lenient proxy, or none), at which point the framework ceiling
+becomes the binding one again. `.keepAlive` is deliberately not applied to
+bounded connections (see above), so an idle bounded connection sends
+nothing and Pekko's idle-timeout is a real hard limit, not a theoretical
+one.
+
+The fifth guards detection's whole premise, and replaces a check that
+guarded nothing. An earlier version required
+`detectionTimeout < boundedDuration`, justified as making detection "fire
+before a slow-enough proxy kills the connection outright." That reasoning
+names the right hazard and the wrong quantity: the detection timer runs on
+an *unbounded* connection, which has no wall-clock cap, so
+`boundedDuration` has no bearing on it whatsoever. The quantity the hazard
+is actually about is the proxy's timeout, which `SSE_ASSUMED_PROXY_TIMEOUT`
+now makes available. If the detection window reaches past it, the proxy
+kills the connection first, `onerror` fires, re-detection re-arms, and the
+cycle repeats without detection ever concluding: the client stays unbounded
+and permanently broken, which is the failure this mode exists to prevent.
+The check is written against the *re-detection* window
+(`heartbeatInterval + SSE_DETECTION_TIMEOUT`) rather than the raw
+first-connection one, because that window is strictly the larger of the two
+and so is the only one that can fail; one non-vacuous check beats two where
+one is unreachable.
+
+That check needs `heartbeatInterval`, which today is a hardcoded `val` in
+`SSE.scala:29-34`. **Move it into `SseConfig` and make it env-driven,
+`SSE_HEARTBEAT_INTERVAL`, default 15s** (unchanged from today, so
+production behavior is identical). Moving it keeps `config` a leaf package
+instead of making it import the transport module, puts every SSE timing
+value in one place, and gives `SSE.source` and this invariant a single
+source of truth rather than a constant duplicated across packages. Its
+existing doc comment already states the property that it must stay below
+Pekko's 60s idle-timeout, which becomes the sixth `require` for free, in
+the same style as the rest.
+
+Making it configurable rather than merely relocating it is the second thing
+committing to the end-to-end tests forced, alongside the fractional margin
+above. An earlier version of this design fixed the value on the grounds
+that nothing needed to vary it. The re-detection window is derived from it
+(`heartbeatInterval + SSE_DETECTION_TIMEOUT`), so a test configuration that
+scales every other timing down to hundreds of milliseconds cannot satisfy
+the check above while this one alone stays at 15s. The general lesson, and
+the reason both of these are called out rather than quietly amended: a
+value that is genuinely constant in production is not automatically
+constant across every configuration the system has to support, and
+"nothing needs to vary it" is a claim about the deployments you have
+already thought of.
+
+The seventh guards the delta-resync
 mechanism's own reason for existing: retention is what makes the bounded
 path cheap (see "Why bounded reconnects need this"), and nothing else in
 this config would catch a value that quietly turns every bounded cycle
 into a full resync instead of a delta, still functionally correct, just
 silently paying the cost this design exists to avoid. The rest are the
 same basic sanity checks the existing values already get.
+
+**Implementation shape: the connection logic moves out of `index.html` into
+a testable module.** Everything above turns what is today a flat sequence
+of `messageType` checks assigning fields (`index.html:396-471`, 113 lines)
+into a connection state machine: two modes, a construct-time detection
+timer, a re-detection timer with a different window, a `localStorage` cache
+with a TTL and a self-heal path, one manual URL switch, an error-debounce
+counter, a spinner flag, and `Reset` semantics across six fields. That is
+also precisely the code a future framework migration has to port. Leaving
+it inline means it is untestable now and rewritten twice later, so it moves
+to `src/main/resources/pages/connection.js` as an ES module with its
+dependencies injected:
+
+```js
+export function createConnection({
+  roomId, userId, config,        // config: the values JoinResponse carries
+  eventSourceFactory, storage,   // injected so tests supply doubles
+  setTimeout, clearTimeout,      // injected so tests control time
+  onEvent, onState               // outward reporting, see below
+}) { /* ... returns { start, stop } ... */ }
+```
+
+**`onState` emits immutable snapshots, it never mutates a caller-owned
+object.** This is the constraint that decides whether the module survives
+the framework migration or merely survives it under Vue: mutation-based
+reporting works for Vue 2 and Vue 3 reactivity and needs rework for an
+immutable model such as React's, and the target framework is undecided.
+Emitting a snapshot costs nothing here and keeps the module portable to
+whatever is chosen.
+
+`index.html` becomes a `<script type="module">` that imports the module and
+maps emitted state onto Vue's `data`, roughly 25 lines replacing the 113
+that move out. Vue itself stays a CDN global read off `window.Vue`, since
+module scripts are deferred and do not expose globals. Only the connection
+logic moves: the unrelated 67 lines of `methods` (`vote`, `doCopy`,
+`updateSummary`, `allVoted`, and friends) stay exactly where they are, so
+this is not a rewrite of the page.
+
+Serving it needs one small addition, because `API.scala` has no static
+asset route today, only `getFromFile(apiConfig.indexPath)` for `/` and
+`/{uuid}`. Add a route serving `indexPath`'s parent directory rather than
+introducing another config knob, so it follows `INDEX_PATH` wherever
+Docker points it, and `Universal / mappings ++= directory(...)` already
+packages the whole `pages` directory unchanged.
+
+Tests run under `node --test` with **zero dependencies**: Node's built-in
+runner, its built-in timer mocking, and about 70 lines of test doubles (a
+fake `EventSource` exposing `readyState`/`onopen`/`onmessage`/`onerror`
+plus an `emit` helper, and a fake `storage`). `package.json` declares no
+`dependencies` and no `devDependencies`. CI gains a `setup-node` step and a
+gating `node --test` step alongside `sbt qa`. JS coverage is deliberately
+not merged into the existing scoverage/Codecov stream for now; running the
+tests is the point, unifying coverage reporting is not.
+
+This is what moves the client-side cases in Testing from manual steps to
+automated ones. It does not cover the rendered DOM, and deliberately so:
+the assertion of record for the spinner is the `connecting` flag, not the
+template conditional. See "Front-end test tooling" under "What was
+deferred or rejected" for what remains out of scope and why.
 
 ### 7. Bundled fix: buffering-proxy headers
 
@@ -1015,16 +1787,18 @@ path.
 
 ## What was deferred or rejected
 
-- **Shipping Problems A/B/C (section 5) as an isolated hotfix ahead of this
-  design**: rejected. These are already-live correctness gaps independent
-  of the proxy work, and the fix is small and self-contained, so splitting
-  it out was considered. Rejected because their visibility and criticality
-  are directly increased by this design (routine bounded reconnects turn a
-  rare edge case into a routine one), the fix is cheap enough that bundling
-  adds negligible risk to this delivery, and this design is the next
-  priority for this project, splitting would mean a second review/release
-  cycle for bugs that only became consequential because of the feature
-  being shipped next anyway.
+- **Shipping section 5's already-live fixes separately from the proxy
+  work**: originally rejected, now the plan. See "Delivery" below. The
+  original reasoning was that the fixes were cheap enough to bundle at
+  negligible risk, that they only became consequential because of the
+  feature shipping alongside them, and that splitting would cost a second
+  review and release cycle for no benefit. That was sound for the change as
+  it stood then: three problems in section 5 and no front-end work. It no
+  longer holds. Section 5 now carries five problems, the client side gained
+  an extraction plus a test layer, and an end-to-end layer came into scope,
+  so "cheap enough to bundle" stopped being true, and a single PR reviewable
+  in one sitting stopped being achievable. The scope growth is justified on
+  its own terms; the bundling argument is simply a casualty of it.
 - **Ack-based log compaction** (section 2): rejected, negligible benefit at
   this app's scale versus the added per-connection cursor-tracking state.
 - **Durable/persisted event log**: deferred to whenever Phase 2 durable
@@ -1044,6 +1818,54 @@ path.
   Judged not worth engineering around (a version-mismatch banner, forcing
   a hard refresh) for an internal tool with short-lived sessions and no
   long-tail of cached clients.
+- **Front-end unit testing**: no longer deferred, pulled into this
+  delivery. See the extraction described at the end of section 6. The
+  reasoning that moved it: the logic worth testing here is state
+  transitions over `EventSource` lifecycle, timers, `localStorage` and a
+  handful of flags, none of which needs a DOM once the logic is extracted,
+  and Node's built-in test runner and timer mocking mean the floor is zero
+  dependencies rather than the runner-plus-DOM-plus-build-story this entry
+  previously assumed. Doing it inside this delivery rather than after also
+  costs less, because the extraction touches exactly the 113 lines this
+  design already rewrites, and the resulting module is what a future
+  framework migration ports instead of reimplementing.
+- **A component-test layer (jsdom plus a framework test-utils library)**:
+  rejected outright rather than deferred. It sits between the two layers
+  that do earn their place and is squeezed out by both: the module tests
+  above already cover the decision logic as flags, and an end-to-end layer
+  would cover the rendered result. What is left is assertions against
+  framework internals, using a library pinned to the framework line being
+  replaced (`@vue/test-utils@1` is Vue 2 only), for roughly six template
+  conditionals. Short shelf life, no unique coverage.
+- **CI integration for the end-to-end suite**: the only piece of the
+  end-to-end work left out of this delivery. The stub proxy, the harness
+  and the Playwright suite are all in scope (see the end-to-end group in
+  Testing); what is deferred is browser-binary caching, starting the app
+  from the workflow, gating, and the flakiness budget that comes with
+  running a browser in CI.
+
+  The split is drawn here deliberately. The harness is the reusable part
+  and it lands now, so the deferred work is: install browsers, then invoke
+  the same documented command the suite already runs under locally. Section
+  6's front-end unit tests also already add `setup-node` and a gating
+  `node --test` step, so the Node toolchain is in CI regardless. That
+  leaves roughly 15-25 lines of workflow plus caching, with the real
+  remaining cost being flakiness tuning rather than plumbing, which is
+  exactly the part that can block unrelated work while it settles.
+
+  The risk this leaves, stated plainly because it is the failure mode of
+  this kind of deferral: a suite nothing runs automatically rots, and it
+  rots worse than a manual checklist, because "we have end-to-end
+  coverage" is false confidence where a checklist is honestly manual. Two
+  mitigations are part of the in-scope work rather than intentions: the
+  suite is runnable by one documented command, and this gap gets its own
+  `docs/known-issues.md` entry on ship so the deferral stays visible
+  instead of quietly becoming permanent.
+
+  Value note for scheduling it: the suite is independent of the framework
+  decision, and its worth peaks immediately before the framework
+  migration, where it becomes that migration's regression safety net. CI
+  integration should land before then.
 - **Room-skeleton loading experience**: not addressed here beyond the
   connecting spinner (section 6). The spinner is a stopgap: it gives
   feedback that something is happening, but the user still stares at an
@@ -1074,19 +1896,26 @@ path.
   detection-cache-check bullet in section 6), never a connectivity or
   correctness loss. Not worth a more precise signal (e.g. distinguishing
   "no bytes at all" from "slow but arriving") for a failure mode this
-  narrow and this cheap.
-- **Replaying "are votes currently revealed" state on resync**: not
-  addressed here. `setupNewUser` today has no equivalent of a `Show` replay,
-  a resyncing client has no way to know if votes are currently revealed.
-  Pre-existing, unrelated to this design, not worsened by it. Logged in
-  `docs/known-issues.md`. Worth flagging that this gap gets more
-  consequential, not less, if a future passive "observer mode" (a
-  meeting-room display showing room state with no participant driving it)
-  is built on top of this resync mechanism: an active participant who
-  reconnects into a stale "not revealed" view has some chance of noticing
-  something's off from context; a passive display has no human in the loop
-  to catch or correct it. Still out of scope for this design, but worth
-  resolving before an observer-mode display is built on top of it.
+  narrow and this cheap. Re-detection widens the exposure slightly, since
+  it gives the same imprecise signal more chances to fire over a session's
+  life, but it is the more forgiving of the two: its window is 20s rather
+  than 5s, and it only arms while a connection is failing anyway, so what
+  it misreads is a 20-second stall on an already-broken-looking connection
+  rather than a slow-but-healthy start.
+- **Replaying "are votes currently revealed" state on resync**: considered
+  for deferral, then pulled in. See section 5's Problem E. It was originally
+  written up here as pre-existing and out of scope, on the reasoning that
+  this design didn't worsen it. That reasoning was wrong in effect if not in
+  letter: no state becomes more wrong, but a bounded client takes the
+  full-resync path mid-session routinely rather than only at join, so the
+  one case where the client's derived value disagrees with the server
+  (`Show` pressed with a straggler) moves from theoretical to routine. The
+  fix turned out to be a `Boolean` on `RoomData` and one synthesized frame
+  in `setupNewUser`, with no client-side change at all, which is less work
+  than the deferral was worth. It also removes the observer-mode caveat this
+  entry used to carry: a passive display resyncing into a stale "not
+  revealed" view was the sharpest form of the bug, and it's now closed
+  rather than flagged for later.
 
 ## Testing
 
@@ -1099,16 +1928,44 @@ for the established style):
   itself is unaffected (same content, same JSON shape, no `id` field) by
   wrapping. `EditIssue`'s handler applies its own state change on top of
   `logEvent`'s returned data, not `data` directly, a regression test for
-  the ordering subtlety in section 2.
-- Event log append and 5-minute pruning.
+  the ordering subtlety in section 2. Same for `ShowVotes` and
+  `logged.reveal()` (section 5's Problem E).
+- Event log append and age-based pruning, driven by an explicit `now`
+  rather than the real clock, so the boundaries are asserted rather than
+  approximated: an entry one millisecond inside the retention window
+  survives, one exactly at the cutoff and one outside it are dropped. No
+  `Thread.sleep` needed. `logEvent` reads no clock of its own, which this
+  test relies on and therefore also pins.
 - Event log count-based ceiling (`SSE_EVENT_LOG_MAX_ENTRIES`): appending
   past the ceiling drops the oldest entries regardless of age, and a
   client whose `Last-Event-ID` falls before the retained range falls back
   to full resync, same as the time-based case.
 - Delta replay for a valid `Last-Event-ID`.
 - Full-resync fallback (with `Reset`) for a stale or absent `Last-Event-ID`.
-- `Reset` followed by full replay produces no duplicates and correctly
-  drops a participant who left during the gap.
+- The full-resync burst's wire shape, which is the server-side half of the
+  `Reset` cases below: it begins with a `Reset` frame, contains exactly one
+  `Join` per currently-present user, and contains none for a participant who
+  left during the gap.
+- Section 4's ordering rule: a new arrival receives its resync burst and
+  nothing else, one push, with a baseline of the room's sequence *after*
+  its own `Join` log entry, and bystanders still receive the `Join`
+  broadcast. The first joiner into an empty room gets baseline `1`, not
+  `0`, and its immediate reconnect resolves as a trivially empty delta
+  rather than a full resync. Correspondingly, `RoomSpec.scala:368`'s
+  assertion that the joining user also receives a separate `Join` broadcast
+  is removed, which strengthens the `expectNoMessage()` already on the next
+  line into "the replay arrived as exactly one message and nothing else."
+  The batched-replay assertion at `RoomSpec.scala:411-421` is unaffected,
+  since it never asserted that second send.
+- Problem E: `RoomData.revealed` is set by `ShowVotes` and cleared by
+  `clear()`/`reVote()`; `setupNewUser` emits a `Show` frame when it's set
+  and none when it isn't. **The ordering test is the important one:** in a
+  room where `Show` was pressed while one participant hadn't voted, a full
+  resync leaves the client revealed. That case fails if the synthesized
+  frame is placed before `perUser` and passes if it's last, where an
+  all-voted room passes either way because `allVoted()` happens to derive
+  the same answer. Also that `ShowVotes` threads `logged.reveal()`, not
+  `data.reveal()`, the same regression the `EditIssue` test covers.
 - `Join` broadcast suppression on resume: a resuming client's reconnect
   produces no `Join` event for bystanders; a genuinely new participant
   still does.
@@ -1119,6 +1976,49 @@ for the established style):
   both when the reconnect resolves as a delta and when it resolves as a
   full resync (their own replayed `Vote` event is still present, not
   dropped).
+- Problem D part 1: `ValidateToken` still resolves a token whose user has
+  already been removed by `ConfirmLeave` (today's `Unresolved` -> `401`),
+  and `joinUser` no longer consumes the session entry, so two successive
+  connects with the same token both resolve. An `APISpec` case that a
+  post-grace-period reconnect to `/events` gets a stream, not a `401`.
+- Problem D part 3: a reconnect whose user was already removed resolves to
+  `Reset` + full resync even when its `Last-Event-ID` is still inside the
+  retained window, and the returning client's own entry survives (its own
+  replayed `Leave` lands on an already-`Reset`-cleared list rather than
+  pruning the entry `Init` just added). This is the case a delta would get
+  wrong.
+- Problem C, the ghost-user regression this fix exists to prevent: a real
+  final `Leave(userId, refB)` followed, inside the grace period, by a late
+  stale `Leave(userId, refA)` still removes the user when the timer fires,
+  and still stops the room if that was its last member. Asserting removal
+  here is the point; a test that only asserts "one live timer" would pass
+  against the broken version.
+- A `Leave` whose `ref` is not the user's currently-registered one, and a
+  `Leave` for a `userId` no longer present at all, both schedule no timer
+  and produce no `ConfirmLeave`. A `Join` cancels a pending removal for
+  that `userId`.
+- **Three existing `RoomSpec` tests assert expectations this design
+  deliberately inverts, and need updating as part of it, not treating as
+  failures to be worked around.** `"swallow a Leave entirely if the same
+  user reconnects within the grace period"` (`RoomSpec.scala:191`) and
+  `"ignore a stale leave from a ref that already got replaced by a
+  reconnect"` (`RoomSpec.scala:288`) both assert that a reconnect produces
+  a `Join` broadcast to bystanders, which Problem B suppresses: both
+  assertions invert to `expectNoMessage`. The latter's comment ("wait past
+  the grace period so `ConfirmLeave` actually fires and exercises the
+  stale-ref guard") also stops being true, since the stale `Leave` is now
+  dropped without scheduling; the observable outcome is unchanged, but the
+  test no longer covers what it says it covers and should say so.
+  `"reset the grace period if Leave is called twice for the same
+  connection before it elapses"` (`RoomSpec.scala:201-206`) still passes,
+  but its comment documents the `(userId, ref)` keying and the
+  "RoomManager calls Leave at most once per connection" assumption, both
+  of which this section replaces.
+- Problem D part 2: `Leave` for a connection whose `User.bounded` is true
+  schedules at `boundedGracePeriod`, an unbounded one at `gracePeriod`; a
+  resume carries the incoming connection's `bounded` flag, not the replaced
+  entry's, so switching to bounded mid-session takes effect on the next
+  `Leave`.
 - The bounded path's adaptive completion: closes immediately after sending
   whatever a single push contains (a delta, a full resync, or a live
   broadcast), and closes at the wall-clock cap when nothing happened.
@@ -1134,7 +2034,16 @@ for the established style):
   unbounded connection still receives heartbeats unchanged.
 - Bounded connections carry the smaller, jittered `SSE_BOUNDED_RETRY`
   value (not `SseConfig.retryMillis`) on their frames; unbounded
-  connections are unaffected.
+  connections are unaffected. Asserted on exact values, since jitter is
+  applied at the route and `SSE.source` receives a fully-determined
+  `Mode`.
+- `MessageType.apply`/`unapply` derived from `values` handle every case
+  including `Reset`, and a round-trip over `MessageType.values` proves no
+  case can go unmapped, which is what the previous hand-maintained lists
+  could not guarantee at compile time.
+- `joinUser` on a resume leaves participant order unchanged: a user who
+  reconnects stays in the same position, and a subsequent full resync for a
+  new joiner lists participants in that same stable order.
 - An end-to-end case (mirroring `BackpressureReconnectSpec`) proving a vote
   landing exactly in a bounded client's reconnect gap is delivered via the
   next delta, not lost, closing the "vote4" question raised during this
@@ -1149,6 +2058,24 @@ for the established style):
   `id > currentSequence` branch, not a distinct code path, confirming
   restart recovery falls out of the general rule rather than needing its
   own handling.
+
+**Client-side cases, run under `node --test` against `connection.js`.**
+Everything above runs in ScalaTest. Everything below is behavior extracted
+out of `index.html` into the module described at the end of section 6, and
+is automated: Node's built-in runner, injected timers, and fake
+`EventSource`/`storage` doubles, with no new dependencies. Before that
+extraction none of these were testable at all, since `index.html` is a
+single CDN-loaded page with no runner, DOM environment, or build step
+anywhere in the repo.
+
+Two boundaries on what this layer covers. Where a client-side case has a
+server-side half, that half belongs in ScalaTest rather than here, and
+those splits are noted per case. And nothing here asserts rendered DOM: the
+assertion of record for the spinner is the `connecting` flag, not the
+template conditional it drives. Rendered behavior is what an end-to-end
+layer would cover, which remains out of scope, see "Front-end test tooling"
+under "What was deferred or rejected".
+
 - The connecting spinner (section 6) clears on both the success path
   (first real SSE message, `inRoom` becomes true) and the hard-failure
   path (`onerror` with a closed `readyState`), and is not shown for a
@@ -1160,17 +2087,51 @@ for the established style):
   shows the banner; the CLOSED branch still shows it immediately, no
   debounce. Covers both bounded and unbounded reconnects.
 - `SseConfig.load`'s new invariants (section 6): rejects a
-  `SSE_BOUNDED_RETRY` that leaves `gracePeriod` under twice its value;
-  rejects a `SSE_BOUNDED_DURATION` plus `SSE_BOUNDED_DURATION_JITTER` that
-  doesn't stay safely under Pekko's 60s idle-timeout; rejects a
-  `SSE_DETECTION_TIMEOUT` that isn't strictly under `SSE_BOUNDED_DURATION`;
+  `SSE_BOUNDED_GRACE_PERIOD` below `SSE_GRACE_PERIOD`, and one below four
+  times `SSE_BOUNDED_RETRY`; rejects a `SSE_BOUNDED_DURATION` plus
+  `SSE_BOUNDED_DURATION_JITTER` that doesn't leave `ProxyTimeoutMargin` of
+  headroom under `SSE_ASSUMED_PROXY_TIMEOUT`, including the case that
+  motivates it, a 50s cap that the Pekko-idle-timeout check alone would
+  wave through; rejects the same pair when it doesn't stay under Pekko's
+  60s idle-timeout, which is a distinct case reachable only by raising
+  `SSE_ASSUMED_PROXY_TIMEOUT`, so both checks need their own test; rejects a
+  `SSE_DETECTION_TIMEOUT` large enough that the derived re-detection window
+  (`heartbeatInterval` plus it) reaches within `ProxyTimeoutMargin` of
+  `SSE_ASSUMED_PROXY_TIMEOUT`, and accepts the defaults, which is the check
+  replacing the removed `detectionTimeout < boundedDuration`; rejects a
+  `SSE_HEARTBEAT_INTERVAL` at or above Pekko's 60s idle-timeout; accepts a
+  fully scaled-down test configuration (every timing an order of magnitude
+  smaller, as the end-to-end harness uses), which is the case a fixed
+  rather than fractional proxy-timeout margin would have rejected;
   rejects a `SSE_EVENT_LOG_RETENTION` under twice `SSE_BOUNDED_DURATION`
   plus `SSE_BOUNDED_DURATION_JITTER`; rejects non-positive values for
   `SSE_EVENT_LOG_RETENTION`, `SSE_EVENT_LOG_MAX_ENTRIES`,
-  `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`, `SSE_DETECTION_TIMEOUT`,
-  and `SSE_DETECTION_CACHE_TTL`; rejects a negative
+  `SSE_BOUNDED_DURATION`, `SSE_BOUNDED_RETRY`, `SSE_BOUNDED_GRACE_PERIOD`,
+  `SSE_ASSUMED_PROXY_TIMEOUT`, `SSE_DETECTION_TIMEOUT`, and
+  `SSE_DETECTION_CACHE_TTL`; rejects a negative
   `SSE_BOUNDED_DURATION_JITTER` (zero is a valid "no jitter" value,
   unlike the others).
+- The detection timer is armed at `EventSource` construction, not in
+  `onopen`: a simulated connection that delivers no headers and no body at
+  all (the target proxy's behavior) still triggers the switch to bounded
+  mode. A timer armed in `onopen` would pass a test that merely withholds
+  *messages* while allowing the connection to open, so the test has to
+  withhold the open event too or it proves nothing. Server-side half,
+  automatable: `JoinResponse` carries both the detection timeout and the
+  derived re-detection window.
+- Re-detection (section 6): an unbounded reconnect that receives nothing
+  inside the re-detection window switches to `?bounded=1`, and the switch
+  happens at most once per page load even across many failures. The case
+  that pins the window: an unbounded reconnect into an idle room, whose
+  first frame is the `.keepAlive` heartbeat, does **not** trigger a switch,
+  which is what a 5s window would have got wrong. A bounded connection is
+  never armed, so waiting out the full jittered wall-clock cap with an
+  empty delta never triggers one either. The reopened connection sends no
+  `Last-Event-ID` and resolves as `Reset` + full resync. Server-side half,
+  automatable, and the more valuable of the two since it is the premise the
+  window size rests on: an unbounded reconnect resolving to an empty delta
+  sends nothing at all, so its first frame really is the `.keepAlive`
+  heartbeat rather than anything sooner.
 - The detection cache (section 6): a valid, non-expired `sseBoundedUntil`
   entry skips detection entirely and opens directly with `?bounded=1`, no
   unbounded connection attempted; an expired or absent entry runs
@@ -1179,3 +2140,133 @@ for the established style):
   than leaving it in place, the self-heal path; only the "detected true"
   outcome is ever written to `localStorage`, a successful unbounded
   connection never writes a "detected false" entry.
+- `doLeave` removes `roomId` and `name` but preserves `sseBoundedUntil`, so
+  a leave-then-rejoin in the same browser skips detection while still not
+  auto-rejoining the room it left (`created()`'s
+  `if(this.roomId && this.user.name)` guard still sees both cleared).
+- `Reset` followed by a full replay produces no duplicates and drops a
+  participant who left during the gap. The wire-shape half of this is
+  automated server-side (see above); what is manual is that applying the
+  burst to a populated `ref.users` yields the same list as applying it to an
+  empty one.
+- `Reset` clears every field in section 4's table and none of the excluded
+  ones. The case that motivates it: a client holding a vote, a `clear` it
+  never received, then a full resync, ends with `user.estimation` empty
+  rather than still displaying the stale vote. Plus the inverse, that a
+  client whose vote the server still holds gets it restored from the
+  replayed own `Vote` rather than lost to the clear, so the reset is not
+  simply destructive. And that `inRoom` survives a `Reset`, since resetting
+  it would blank the room view mid-resync.
+
+**End-to-end cases, run in a real browser through a stub buffering
+proxy.** This layer exists because nothing in ScalaTest or in the module
+tests can reproduce the failure the whole design is built around: it needs
+a proxy that withholds a response until it completes and then kills the
+connection at its own deadline. Piece one is that stub plus a harness;
+piece two is the Playwright suite over it. Both are in scope here. CI
+integration is not, see "Front-end test tooling" under "What was deferred
+or rejected".
+
+The stub is a plain Node HTTP server, no TLS and no `CONNECT`, roughly
+60-100 lines:
+
+- Forwards every request upstream to the app and buffers the *complete*
+  upstream response, headers included, releasing nothing downstream until
+  the response ends.
+- On completion, writes headers then body.
+- If the upstream response has not completed within a configured deadline,
+  destroys the downstream connection having sent nothing at all. Default
+  matches the customer's 45s; tests set it to a couple of seconds.
+- Buffers every method uniformly, `POST`s included. Simpler, and more
+  faithful: a response that completes immediately is released immediately,
+  which is exactly why `JoinResponse` works as a delivery channel for the
+  detection windows and is worth exercising rather than assuming.
+- Exposes a small control endpoint to switch buffering on and off at
+  runtime. This is what makes re-detection testable end to end, since a
+  browser cannot change origin mid-session: the stub starts in pass-through
+  mode and the test flips it to buffering while a client is connected.
+
+The harness starts app and stub together with a test-tuned `SseConfig`
+(every timing scaled down an order of magnitude) and exposes one documented
+command that runs the suite. That command is deliberately the same entry
+point CI will later call, so deferring CI defers plumbing rather than
+design.
+
+- **Stub fidelity, asserted without the app's client at all.** Requesting
+  `/rooms/:id/events` through the stub yields zero bytes for the full
+  deadline and then a destroyed connection. This is the test that proves
+  the stub reproduces the customer's report, and it has to come first:
+  every case below is only meaningful if this one holds.
+- **The premise.** Loading the page through the stub and joining a room
+  reaches the room view: detection fires, bounded mode engages, the resync
+  arrives. This single case is what bounded mode exists for, and it is
+  currently verified by reasoning alone.
+- Two browsers through the stub: one votes, the other sees the vote within
+  a bounded cycle. Exercises delta resync and the adaptive close over a
+  real buffered path.
+- Reveal with a straggler still unvoted, then a third client joins and
+  sees votes revealed. Section 5's Problem E through the real path, in the
+  one configuration where `allVoted()` cannot mask the bug.
+- A client left idle across several bounded cycles stays in the room, with
+  no participant flicker in the other browsers. Problem D's grace period
+  and Problem C's timer keying, observed rather than unit-asserted.
+- Re-detection: a client connected while the stub is in pass-through mode
+  recovers after buffering is switched on mid-session, without a reload.
+
+## Delivery
+
+Five PRs, in order. The split is drawn for reviewability, and the ordering
+is forced by one real dependency rather than chosen for convenience: see
+the `Reset` note under PR 1.
+
+**PR 1: reconnect-path correctness.** Section 5's Problems A, B, C and E,
+plus Problem D part 1, plus `Reset` as a plain event with its client
+handler, plus the `MessageType.values` derivation, `joinUser`'s order
+stability, and section 7's proxy headers. Roughly 250 lines of source and
+250 of tests, all in ScalaTest apart from about ten lines in `index.html`.
+Everything here is an already-live bug, independent of sequencing and of
+bounded mode, and valuable whether or not the rest ever ships.
+
+`Reset` belongs in this PR rather than with delta resync, and this is the
+constraint that shapes the whole split. Problem D part 1 makes a post-grace
+reconnect succeed where it currently `401`s, and that reconnect lands on
+`setupNewUser` with no `Reset` in front of it, which duplicates every
+participant (the first latent gap under "Why full-resync-on-every-reconnect
+isn't safe either"). Shipping D part 1 without `Reset` would trade a dead
+session for a corrupted participant list. `Reset` needs no sequencing to
+work, though: it is a plain event sent ahead of a full-resync burst, and
+only the *id* it carries belongs to section 4's semantics. So the event
+ships here and its id semantics ship in PR 2.
+
+**PR 2: sequence ids and delta resync.** Sections 1, 2 and 3, section 4's
+id semantics and `Join` ordering rule, Problem D part 3, and the event-log
+config values with their invariants. Roughly 300 and 300. Server-side only.
+It stands alone without bounded mode: any reconnect, including today's
+buffer-overflow path, resumes precisely instead of replaying the whole
+room.
+
+**PR 3: extract the client connection logic.** Section 6's "Implementation
+shape" subsection, `package.json`, the static asset route, the CI node
+step, and module tests covering the behaviour that exists after PR 1.
+Roughly 250 lines moved and 220 of tests, with no behaviour change at all.
+This is the split worth protecting: its diff reads as a relocation and
+reviews in minutes, and keeping it out of PR 4 means PR 4's diff is
+entirely new logic rather than a mixture of moved and new code, which is
+the quickest way to make a large PR unreviewable.
+
+**PR 4: bounded mode.** The rest of section 6, server and client, plus
+Problem D part 2, the `Mode` ADT, the remaining config invariants and the
+logging. Roughly 350 and 350. If this still reads too large in practice it
+has a clean internal seam: server-side bounded mode first, verifiable in
+ScalaTest by requesting `?bounded=1` directly, then client detection and
+mode switching over it.
+
+**PR 5: end-to-end layer.** Stub buffering proxy, harness, and the
+Playwright suite, per the end-to-end group in Testing. Roughly 180 and 200.
+CI integration is deliberately not here, see "Front-end test tooling".
+
+**PRs are not releases.** PRs 1 and 2 are independent of the proxy work and
+can release as soon as they land. PRs 3, 4 and 5 release together, with the
+Playwright suite passing before that release reaches the customer this spec
+exists for, since that suite is the only thing that exercises the failure
+being fixed.
