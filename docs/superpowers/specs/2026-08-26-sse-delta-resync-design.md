@@ -1,7 +1,34 @@
 # SSE Delta Resync and Buffering-Proxy Fallback
 
 Date: 2026-08-26
-Status: Proposed
+Status: Superseded by
+`docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`
+
+## Why this was superseded
+
+This design's central premise, stated under "Why bounded reconnects need
+this", is that a full room-state replay on every bounded reconnect is too
+expensive, which is what makes delta resync a prerequisite for the fallback
+rather than an enhancement next to it. That premise was asserted rather than
+measured, and measurement reverses it: with SSE framing included, a full state
+snapshot is roughly one third the size of the synthetic-event replay burst it
+would replace (1,129 B against 3,456 B at ten participants), because every
+synthetic event repeats both the `roomId` and the `userId` and pays its own
+frame overhead.
+
+The successor design replaces the incremental event protocol with a state
+snapshot, which removes the event log, sequence ids, `Last-Event-ID` delta
+resolution, the `Reset` message type, retention windows and their config and
+invariants, and makes Problems B and D part 3 below unreachable rather than
+fixed.
+
+**This file is kept unchanged below, and is worth reading for two things.**
+Its analysis of the room-lifecycle bugs (Problems A, C, D part 1 and D part 2
+in section 5) is where those bugs were found, and they carry over to the
+successor essentially unaltered. Its section 6 bounded-mode client design, its
+config invariants, and its "Validating the proxy model" ladder also carry over,
+and the reasoning for each value is recorded here at more length than the
+successor repeats.
 
 ## Purpose
 

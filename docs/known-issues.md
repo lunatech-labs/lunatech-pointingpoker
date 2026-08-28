@@ -125,16 +125,16 @@ roadmap item instead of leaving it here as stale history.
   equivalent of a `Show` replay: whether votes are currently revealed isn't
   part of the resync. A client that reconnects mid-session (a dropped
   connection, a page reload, or the bounded-mode reconnect proposed in
-  `docs/superpowers/specs/2026-08-26-sse-delta-resync-design.md`) has no way
-  to know votes are already shown until, if ever, a subsequent `Show`/`Clear`
-  happens to arrive live.
-- **Resolution:** Unscheduled. Flagged during the 2026-08-26 SSE delta
-  resync design as pre-existing and unrelated to that work, not worsened by
-  it. Fix is presumably a `votesRevealed`-equivalent flag on `RoomData`,
-  included in the resync burst, natural to bundle with Phase 4's
-  "server-authoritative auto-reveal" item in `docs/roadmap.md`, since that
-  work already needs reveal state to become real backend logic rather than
-  client-only.
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`) has no
+  way to know votes are already shown until, if ever, a subsequent
+  `Show`/`Clear` happens to arrive live.
+- **Resolution:** Scheduled as Problem E of
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 1),
+  which adds a `revealed` flag to `RoomData` and carries it in the room
+  snapshot. Remove this entry when that lands. Phase 4's
+  "server-authoritative auto-reveal" item in `docs/roadmap.md` then inherits
+  reveal state as real backend logic rather than a client-only derivation,
+  which it needs anyway.
 
 ### No rate limiting on mutating room endpoints
 
@@ -143,18 +143,16 @@ roadmap item instead of leaving it here as stale history.
   `edit-issue`).
 - **Issue:** Every mutating endpoint is unthrottled beyond session-token
   resolution, a client can call any of them in a tight loop at no cost.
-  Today this mostly wastes CPU/bandwidth; the 2026-08-26 SSE delta resync
-  design adds a per-room retained `eventLog` (`Room.scala`,
-  `RoomData.eventLog`), so the same behavior now also grows server memory
-  and per-append prune cost, bounded only by a count-based safety ceiling
-  (`SSE_EVENT_LOG_MAX_ENTRIES`) added specifically for that risk, not by
-  anything at the API layer itself.
-- **Resolution:** Unscheduled. The event-log-specific symptom has a cheap
-  backstop in place (see the delta-resync design), but the underlying gap,
-  no per-user/per-endpoint rate limiting anywhere in this API, is broader
-  than that one log and should be addressed as its own piece of work if
-  abuse becomes a real concern, not patched endpoint-by-endpoint as new
-  symptoms show up.
+  Today this wastes CPU/bandwidth. The superseded 2026-08-26 SSE delta resync
+  design would have added a per-room retained `eventLog` that the same
+  behavior could grow without bound; its replacement,
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`, holds
+  no per-room log, so that specific amplification does not arise and needs no
+  backstop.
+- **Resolution:** Unscheduled. The underlying gap, no per-user/per-endpoint
+  rate limiting anywhere in this API, is broader than any one symptom and
+  should be addressed as its own piece of work if abuse becomes a real
+  concern, not patched endpoint-by-endpoint as new symptoms show up.
 
 ## Traceability note
 
