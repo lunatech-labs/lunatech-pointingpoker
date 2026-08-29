@@ -719,6 +719,18 @@ seconds. Whether `EventSource`'s reconnect timer is throttled the way
 case in Testing measures it, and that measurement is the one input that would
 justify revisiting room lifetime.
 
+**This residual and section 6's detection false positives are the same
+scenario, not two.** A backgrounded tab is both the likeliest way to arrive in
+bounded mode by mistake (its silence is indistinguishable from a buffering
+path, so re-detection fires) and the trigger for this residual once there.
+Left unguarded they compound: a healthy solo user backgrounds a tab, is
+misdetected into bounded mode, and then loses the room to a reaping that could
+only happen in the mode they should never have entered. Section 6 therefore
+refuses to arm either detection timer while the document is hidden, which
+severs the link and confines this residual to clients that are in bounded mode
+for a real reason. It does not remove the residual for those clients, which is
+what the end-to-end measurement is for.
+
 Four consequences, stated rather than discovered later:
 
 - *Memory.* One small entry per `POST /rooms/:roomId/join` per room, unchanged
@@ -855,6 +867,43 @@ Client-side (`index.html`'s `doJoin`):
   message, including a heartbeat, clears it, and clears any stale
   `sseBoundedAt` entry, which is the self-heal path. A bounded connection
   is never timed, since it may legitimately wait out the wall-clock cap.
+- **Neither detection timer is armed while the document is hidden, and this is
+  the guard that keeps false positives rare enough to accept.** Both timers
+  infer "the path is buffering" from "nothing arrived within a window", and
+  that inference is only valid while the browser was actually willing to
+  deliver. Browsers throttle timers and eventually suspend connections in
+  background tabs, so a backgrounded tab produces the detection signal for a
+  reason that has nothing to do with the network:
+
+  ```js
+  if (document.visibilityState === 'hidden') return;   // do not arm
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearDetection(); });
+  ```
+
+  This is not hypothetical on either timer. `created()` auto-joins a
+  bookmarked room (`index.html:560-574`), so opening a room link in a
+  background tab constructs the `EventSource` in a throttled tab and arms the
+  5s timer against a browser that was never going to deliver promptly. And
+  re-detection arms on any `onerror` while unbounded, which is exactly what a
+  backgrounded tab produces when the browser drops its idle connection, after
+  which the tab stays silent because it is backgrounded rather than because
+  the path is broken.
+
+  The second case is the one that compounds, and it is why this guard is worth
+  more than its size suggests. Problem D part 1's solo residual is a lone
+  participant whose backgrounded tab fails to reconnect inside
+  `boundedGracePeriod` and has their room reaped, a failure that only exists
+  in bounded mode, since an unbounded connection simply stays open and is
+  heartbeated. Without this guard, the most likely false-positive trigger is a
+  backgrounded tab, and it deposits the client into precisely the mode whose
+  known residual is a backgrounded tab losing its room. Those two would
+  otherwise be filed as independent open questions while being the same
+  scenario.
+
+  A genuinely proxied user who opens in a background tab simply detects when
+  they focus it. That is the correct outcome rather than a missed detection:
+  they cannot see the broken room until then anyway, and the cost of waiting
+  is zero.
 - If the timer fires with nothing received: close that connection, mark an
   in-memory `sseBounded = true` for this page instance, write
   `sseBoundedAt = Date.now()`, and manually open
@@ -1458,6 +1507,21 @@ Take the *Ask* rung even when the probe is skipped.
   correctness loss. Re-detection widens the exposure slightly but is the more
   forgiving of the two: its window is 20s rather than 5s, and it only arms
   while a connection is already failing.
+- **A kill switch for bounded mode** (`SSE_BOUNDED_ENABLED`, surfaced to the
+  client so it skips detection): considered and rejected, recorded because it
+  is the obvious thing to reach for and the reasoning against it is not
+  obvious. A flag would protect against two things. The first, bounded mode
+  failing for the customers it targets, is not a risk at all: those clients
+  cannot connect today either, so a bounded mode that does not work leaves
+  them exactly where they are. Spending a config value and a `JoinResponse`
+  field to be able to revert to an identical outcome buys nothing. The second,
+  a healthy client misdetected into bounded mode, is real, but a
+  feature-wide switch is the wrong instrument for it: it can only be thrown by
+  an operator who has noticed, it disables the fix for everyone including the
+  clients that need it, and it does nothing about the trigger. The visibility
+  guard in section 6 addresses that trigger directly and at the source, which
+  is where the effort belongs. If bounded mode ever does need disabling
+  wholesale, reverting PR 4 is the honest way to do it.
 - **Rate limiting on mutating endpoints**: still unaddressed, and no longer
   has an event-log-specific symptom to work around. See
   `docs/known-issues.md`.
@@ -1650,6 +1714,15 @@ dependencies. Before the section 6 extraction none of this was testable, since
   several `onerror` events inside one window still switch at the original
   window's expiry, proving the timer is armed once per failing stretch rather
   than re-armed per error.
+- **The visibility guard, on both timers.** A first connection constructed
+  while `document.visibilityState` is `hidden` arms no timer and never
+  switches, however long it receives nothing; the same connection arms
+  normally once the document becomes visible. An unbounded `onerror` while
+  hidden arms no re-detection timer. And a timer already armed on a visible
+  document is cleared when the document becomes hidden, rather than left to
+  fire against a browser that stopped delivering. That third case is the one
+  a naive implementation misses, since guarding only at arming time still
+  lets a tab backgrounded one second later switch on a stale timer.
 - The detection cache: a `sseBoundedAt` inside the TTL skips detection
   entirely and opens directly bounded; one outside it, or an absent entry,
   runs detection; a detection timer that clears also clears a stale entry;
@@ -1705,10 +1778,19 @@ documented command, deliberately the same entry point CI will later call.
   Problem C's timer keying, observed rather than unit-asserted.
 - Re-detection: a client connected while the stub is in pass-through mode
   recovers after buffering is switched on mid-session, without a reload.
+- **A healthy client backgrounded through a connection drop stays unbounded**,
+  which is the visibility guard end to end and an assertion rather than a
+  measurement. With the stub in pass-through mode, backgrounding the tab and
+  dropping its connection must not produce a `?bounded=1` request, however
+  long the tab stays hidden. This is the false positive that would otherwise
+  feed the residual measured in the next case, so it is worth proving through
+  a real browser's own throttling rather than against injected timers alone.
 - **A solo client backgrounded across several bounded cycles, a measurement
-  rather than an assertion.** Whether the tab's reconnects are throttled past
-  `SSE_BOUNDED_GRACE_PERIOD` is the open question behind Problem D part 1's
-  solo residual, and reasoning cannot settle it. If they are, the room is
+  rather than an assertion.** This one puts the client in bounded mode
+  deliberately (stub buffering on) rather than by misdetection. Whether the
+  tab's reconnects are throttled past `SSE_BOUNDED_GRACE_PERIOD` is the open
+  question behind Problem D part 1's solo residual, and reasoning cannot
+  settle it. If they are, the room is
   reaped and the client recovers through the one-shot re-join with no user
   action. If they are not, the client simply stays. Both are passes; the case
   exists to record which happens, since that is the input that would justify
