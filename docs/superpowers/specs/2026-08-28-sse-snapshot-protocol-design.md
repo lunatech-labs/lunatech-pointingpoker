@@ -238,6 +238,25 @@ That is what makes the browser's `EventSource` send `Last-Event-ID`
 automatically on any reconnect, with no custom header, no query parameter, and
 no log behind it.
 
+**Heartbeats carry no `id:`, and section 3 depends on it.** `.keepAlive` emits
+`ServerSentEvent.heartbeat`, which has neither data nor an id. Per the SSE
+specification, a frame that omits the `id:` field leaves the browser's
+last-event-id buffer unmodified, rather than clearing it. That is what lets an
+unbounded connection sit idle through many heartbeats and still reconnect
+carrying the last snapshot's version, which is the precondition for section
+3's "caught-up reconnect sends nothing" case and, through it, for the
+re-detection window being sized at `heartbeatInterval + SSE_DETECTION_TIMEOUT`
+rather than shorter. If heartbeats did carry an id, every idle reconnect would
+resolve as behind and publish a redundant snapshot. Stated because it is a
+property of the SSE specification the design relies on rather than anything
+this code enforces, so it is invisible in the diff and easy to break by
+"helpfully" stamping every frame with a version.
+
+**The client must still ignore heartbeats**, as `index.html:398` does today
+with `if (!event.data) return;`. That guard moves into `connection.js` with
+the rest of the connection logic (section 6); without it `JSON.parse("")`
+throws on every heartbeat on every idle unbounded connection.
+
 The stream's element type becomes `RoomSnapshot` rather than
 `List[RoomEvent]`, so `.mapConcat(identity)` (`SSE.scala:67`) is removed. A
 snapshot is atomic by construction: there is nothing to batch, so there is no
@@ -486,6 +505,29 @@ flattens into N separate `onmessage` calls, so Vue could repaint an empty room
 between the `Reset` frame and the frames rebuilding the list. One message
 means one handler call and one Vue tick, so no intermediate state is
 observable. This is better than today as well as better than that design.
+
+**`applySnapshot` deliberately does not compare versions, and that is a
+decision rather than an omission.** A protocol that puts a monotonic version
+on every message and then ignores it on receipt invites the question, so the
+reasoning belongs here rather than being inferred. Two guarantees make an
+out-of-order snapshot unreachable. Within a connection, SSE delivers in order,
+and a snapshot is one frame, so there is no interleaving. Across connections,
+section 6 establishes that at most one is ever open per client: native
+`EventSource` reconnection replaces the connection on the same object, and
+both manual switches call `close()`, which takes effect synchronously, so the
+old object is CLOSED before the new one is constructed. Server-side the same
+holds from the other end, since `joinUser` replaces the entry and `publish`
+then writes only to the new `ref`, leaving anything queued for the old one to
+be read by nobody.
+
+Adding a `if (s.version < lastApplied) return;` guard would cost two lines and
+is tempting, but it would assert a hazard the design says cannot occur, and a
+reader would then reasonably conclude the ordering argument above is not
+trusted. If that argument is ever weakened, most plausibly by something that
+opens a second connection deliberately, the guard is the right response and
+this paragraph is the thing to come back to. The version's purpose here is
+server-side resolution (section 3) and the SSE `id:` cursor, not client-side
+ordering.
 
 ### 5. Server fixes on the reconnect path
 
@@ -1491,6 +1533,23 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
   (`RoomSpec.scala:201-206`) still passes, but its comment documents the
   `(userId, ref)` keying and the "RoomManager calls Leave at most once per
   connection" assumption, both replaced.
+- **`RoomManagerSpec` needs updating too, and it is the easiest of these to
+  miss because nothing about it is behavioural.** `ConnectToRoom` gains
+  `lastKnownVersion` and `bounded` (sections 3 and 5), and that message has six
+  references in `RoomManagerSpec`: two direct sends
+  (`RoomManagerSpec.scala:49-50`), one more at line 70, and two `expectMsgPF`
+  patterns that destructure it positionally
+  (`RoomManagerSpec.scala:159,184`, e.g.
+  `case RoomManager.ConnectToRoom(rId, uId, name, tok, _)`). All of them stop
+  compiling. The two patterns should assert the new fields rather than widen
+  to `_`, since `SSE.source` passing the parsed `Last-Event-ID` and the mode's
+  `bounded` flag through to `ConnectToRoom` is exactly the wiring section 3
+  and Problem D part 2 depend on, and nothing else covers it end to end.
+- A heartbeat carries no `id:`, so an unbounded connection idle across several
+  heartbeats still reconnects with the last snapshot's version and resolves as
+  caught up rather than being published a redundant snapshot. This is the SSE
+  specification's behaviour rather than this code's, which is precisely why it
+  is worth pinning: nothing in the diff would show it breaking.
 - The bounded path's adaptive completion: closes immediately after sending a
   snapshot, and closes at the jittered wall-clock cap when nothing was sent.
 - A caught-up bounded connection sends nothing rather than an empty payload,
@@ -1555,6 +1614,17 @@ dependencies. Before the section 6 extraction none of this was testable, since
   This is the regression that snapshot-only introduces and the test that pins
   the fix.
 - `inRoom` is set by the first snapshot and is not reset by later ones.
+- A heartbeat frame (empty `data`) is ignored rather than parsed, so an idle
+  unbounded connection does not throw on `JSON.parse("")` every
+  `heartbeatInterval`. This replaces `index.html:398`'s guard, which moves
+  into the module, and it is worth its own case because the failure is silent
+  in the sense that matters: it happens only when nothing is going on, so it
+  would not show up in any test that exercises the room.
+- Applying a snapshot with a lower version than one already applied still
+  overwrites, confirming there is no version guard. This is a
+  characterization test, pinning the decision recorded in section 4 rather
+  than asserting desirable behaviour, so it should say so in its name; if a
+  guard is ever added, this is the test that is meant to fail and be replaced.
 - The connecting spinner clears on both the success path (first snapshot) and
   the hard-failure path (`onerror` with a closed `readyState`), and is not
   shown for a bounded reconnect legitimately waiting out its cap.
