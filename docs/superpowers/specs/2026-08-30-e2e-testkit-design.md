@@ -72,6 +72,20 @@ gate every push to a heavy browser toolchain and cost the zero-dependency
 property those tests currently have. Two runners, two commands, one
 dependency, and it sits on only half the tree.
 
+**Run the browser cases in Chromium and Firefox, not just Playwright's
+default.** PR 0's probe was run in Firefox 140 and Chromium 150 against
+production and the engines disagreed on the row that matters most here: given a
+response whose headers arrive and whose body never does, Chromium surfaces it
+immediately while Firefox surfaces nothing until the first body byte. That is
+`fetch` rather than `EventSource`, so it does not touch the app, but it is
+direct evidence that engines diverge precisely on the streaming edge cases this
+design lives in. Assumption 7, that a completed chunked `text/event-stream` is
+still treated as a stream and still auto-reconnects, is confirmed in both
+engines only against a server that streams progressively; through the stub the
+whole response lands at once, which is a different input and the one bounded
+mode actually produces. Two projects in the Playwright config, and the
+reproduction plus the reconnect case run in both.
+
 ## Design
 
 ### 1. The stub
