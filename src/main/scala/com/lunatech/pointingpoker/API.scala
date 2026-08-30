@@ -18,15 +18,20 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
-import com.lunatech.pointingpoker.config.{ApiConfig, SseConfig}
+import com.lunatech.pointingpoker.config.{ApiConfig, ProbeConfig, SseConfig}
+import com.lunatech.pointingpoker.probe.ProbeRoutes
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
-class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseConfig: SseConfig)(
-    using actorSystem: ActorSystem[SpawnProtocol.Command]
-) extends EventStreamMarshalling:
+class API(
+    roomManager: ActorRef[RoomManager.Command],
+    apiConfig: ApiConfig,
+    sseConfig: SseConfig,
+    probeConfig: ProbeConfig
+)(using actorSystem: ActorSystem[SpawnProtocol.Command])
+    extends EventStreamMarshalling:
 
   private given timeout: Timeout                      = Timeout(apiConfig.timeout)
   private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
@@ -50,6 +55,7 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseC
 
   val route: Route =
     concat(
+      ProbeRoutes(probeConfig).route,
       pathEndOrSingleSlash {
         get {
           log.debug("Index call [{}]", apiConfig.indexPath)
@@ -194,7 +200,10 @@ class API(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseC
 end API
 
 object API:
-  def apply(roomManager: ActorRef[RoomManager.Command], apiConfig: ApiConfig, sseConfig: SseConfig)(
-      using actorSystem: ActorSystem[SpawnProtocol.Command]
-  ): API =
-    new API(roomManager, apiConfig, sseConfig)
+  def apply(
+      roomManager: ActorRef[RoomManager.Command],
+      apiConfig: ApiConfig,
+      sseConfig: SseConfig,
+      probeConfig: ProbeConfig
+  )(using actorSystem: ActorSystem[SpawnProtocol.Command]): API =
+    new API(roomManager, apiConfig, sseConfig, probeConfig)
