@@ -2,9 +2,9 @@ package com.lunatech.pointingpoker.config
 
 import com.typesafe.config.Config
 
-/** Gate for the proxy probe in
-  * docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md, "Validating the proxy model".
-  * Off everywhere by default; turned on only for as long as a measurement takes.
+/** Gate for the proxy probe in docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md,
+  * "Validating the proxy model". Off everywhere by default; turned on only for as long as a
+  * measurement takes.
   */
 final case class ProbeConfig(enabled: Boolean, pagePath: String)
 

@@ -22,6 +22,14 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
 
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
 
+  // Pekko injects Timeout-Access itself; left in, it reads as a header the appliance added.
+  private def inboundHeaders(req: HttpRequest): String =
+    req.headers
+      .filterNot(_.lowercaseName() == "timeout-access")
+      .map(h => s"${h.lowercaseName()}: ${h.value}")
+      .sorted
+      .mkString("\n")
+
   private def payload(seq: Int, lastEventId: String, size: Int): String =
     s"seq=$seq;lastEventId=$lastEventId;pad=" + "x".repeat(size)
 
@@ -37,6 +45,7 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
       if withId then event.copy(id = Some(s"probe-$seq")) else event
     }
     if interval > Duration.Zero then frames.throttle(1, interval) else frames
+  end emitted
 
   // `Source.maybe` never completes, which is how B, G and H hold a response open; `takeWithin`
   // is what ends A, C, F and I at their close time.
@@ -56,6 +65,15 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
             getFromFile(probeConfig.pagePath)
           }
         },
+        path("probe" / "request-headers") {
+          get {
+            extractRequest { req =>
+              val lines = inboundHeaders(req)
+              log.info("Probe request headers as received:\n{}", lines)
+              complete(HttpEntity(ContentTypes.`text/plain(UTF-8)`, lines))
+            }
+          }
+        },
         path("probe" / "echo") {
           post {
             entity(as[String]) { _ =>
@@ -73,7 +91,7 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
               "close".as[Long].?,
               "id".as[Boolean].?
             ) { (kind, frames, interval, size, close, withId) =>
-              optionalHeaderValueByName("Last-Event-ID") { lastEventId =>
+              (optionalHeaderValueByName("Last-Event-ID") & extractRequest) { (lastEventId, req) =>
                 val count      = frames.getOrElse(1).max(0)
                 val gap        = interval.getOrElse(0L).millis
                 val padding    = size.getOrElse(0).max(0)
@@ -89,6 +107,8 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
                   closeAfter.map(_.toMillis.toString).getOrElse("never"),
                   cursor
                 )
+                // Logged as well as returned, so a lossy copy-paste does not lose the run.
+                log.info("Probe stream request headers:\n{}", inboundHeaders(req))
 
                 val events = emitted(count, gap, padding, withId.getOrElse(false), cursor)
 
@@ -102,6 +122,7 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
                       )
                     )
                   case _ => complete(held(events, closeAfter))
+                end match
               }
             }
           }

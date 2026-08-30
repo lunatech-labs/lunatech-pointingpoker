@@ -40,7 +40,8 @@
       <thead>
         <tr>
           <th>Probe</th><th>TTFB ms</th><th>Close ms</th><th>Bytes</th>
-          <th>Frames</th><th>Conns</th><th>Status</th><th>Content-Type</th><th>Last-Event-ID</th>
+          <th>Frames</th><th>Conns</th><th>Status</th><th>Content-Type</th>
+          <th>Proto</th><th>Last-Event-ID</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -73,15 +74,38 @@
       ];
 
       const STORE = 'probe-results-v1';
-      const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } };
-      const save = (r) => { try { localStorage.setItem(STORE, JSON.stringify(r)); } catch (e) {} };
+      const META_STORE = 'probe-meta-v1';
+      const read = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+      const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+      const load = () => read(STORE);
+      const save = (r) => write(STORE, r);
       let results = load();
+      let meta = read(META_STORE);
 
       const statusEl = document.getElementById('status');
       const tbody = document.querySelector('#results tbody');
       const out = document.getElementById('out');
 
-      const COLS = ['ttfb', 'close', 'bytes', 'frames', 'conns', 'status', 'ctype', 'lastEventId'];
+      const COLS = ['ttfb', 'close', 'bytes', 'frames', 'conns', 'status', 'ctype', 'proto', 'lastEventId'];
+
+      // responseStart against responseEnd is the browser's own verdict on buffered versus
+      // streamed, independent of the reader timings above it.
+      function timingOf(url) {
+        try {
+          if (!performance.getEntriesByType) return null;
+          const es = performance.getEntriesByType('resource').filter(e => e.name.indexOf(url) !== -1);
+          return es.length ? es[es.length - 1] : null;
+        } catch (e) { return null; }
+      }
+
+      function applyTiming(r, url) {
+        const t = timingOf(url);
+        if (!t) return;
+        r.proto = t.nextHopProtocol || '';
+        r.respStart = Math.round(t.responseStart);
+        r.respEnd = Math.round(t.responseEnd);
+        r.transfer = t.transferSize;
+      }
 
       // A blank TTFB means no byte ever arrived, which is the run's most important single result;
       // it must not read as an empty cell.
@@ -107,7 +131,7 @@
       // Fixed-width inside a fenced block: Slack and Teams both render this as monospace with
       // the columns intact, where a Markdown table would collapse.
       function asText() {
-        const head = ['Probe'].concat(['TTFB', 'Close', 'Bytes', 'Frames', 'Conns', 'Status', 'Content-Type', 'Last-Event-ID']);
+        const head = ['Probe'].concat(['TTFB', 'Close', 'Bytes', 'Frames', 'Conns', 'Status', 'Content-Type', 'Proto', 'Last-Event-ID']);
         const rows = [head];
         for (const p of PROBES) {
           const r = results[p.id];
@@ -116,7 +140,36 @@
         const width = head.map((_, i) => Math.max(...rows.map(row => row[i].length)));
         const lines = rows.map(row => row.map((v, i) => v.padEnd(width[i])).join('  ').trimEnd());
         lines.splice(1, 0, width.map(w => '-'.repeat(w)).join('  '));
-        return '```\n' + lines.join('\n') + '\n' + headersText() + '```';
+        return '```\n' + lines.join('\n') + '\n' + detailText() + headersText() + envText() + '```';
+      }
+
+      function detailText() {
+        const rows = [];
+        for (const p of PROBES) {
+          const r = results[p.id];
+          if (!r) continue;
+          const bits = [];
+          if (r.startedAt) bits.push('started ' + r.startedAt);
+          if (r.respStart !== '') bits.push('responseStart ' + r.respStart + 'ms, responseEnd ' + r.respEnd + 'ms');
+          if (r.transfer !== '' && r.transfer != null) bits.push('transferSize ' + r.transfer);
+          if (r.gaps && r.gaps.length) bits.push('reconnect gaps ' + r.gaps.join(', ') + 'ms');
+          if (bits.length) rows.push('  ' + p.id + ': ' + bits.join('; '));
+        }
+        if (rows.length === 0) return '';
+        return '\nPer connection detail. responseStart close to responseEnd means the body arrived\nall at once rather than progressively:\n\n' + rows.join('\n') + '\n';
+      }
+
+      function envText() {
+        const bits = [];
+        if (meta.runStarted) bits.push('  run started: ' + meta.runStarted);
+        if (meta.origin) bits.push('  origin: ' + meta.origin);
+        if (meta.userAgent) bits.push('  user agent: ' + meta.userAgent);
+        let s = bits.length ? '\nEnvironment:\n\n' + bits.join('\n') + '\n' : '';
+        if (meta.requestHeaders) {
+          s += '\nRequest headers as the server received them:\n\n' +
+            meta.requestHeaders.split('\n').map(l => '  ' + l).join('\n') + '\n';
+        }
+        return s;
       }
 
       // Grouped rather than per row: identical header sets are the common case, and a set that
@@ -139,7 +192,8 @@
         return s;
       }
 
-      const blank = () => ({ ttfb: '', close: '', bytes: 0, frames: 0, conns: 0, status: '', ctype: '', lastEventId: '', headers: [] });
+      const blank = () => ({ ttfb: '', close: '', bytes: 0, frames: 0, conns: 0, status: '', ctype: '',
+        proto: '', lastEventId: '', headers: [], startedAt: '', respStart: '', respEnd: '', transfer: '', gaps: [] });
 
       // Same-origin, so every response header is readable. Appliances usually name themselves in
       // one of these, which is the part of the run an administrator would otherwise have to answer.
@@ -152,6 +206,7 @@
 
       async function runPost() {
         const r = blank();
+        r.startedAt = new Date().toISOString();
         const t0 = performance.now();
         try {
           const res = await fetch('/probe/echo', { method: 'POST', body: 'probe', cache: 'no-store' });
@@ -165,16 +220,19 @@
           r.status = 'error';
         }
         r.close = Math.round(performance.now() - t0);
+        applyTiming(r, '/probe/echo');
         return r;
       }
 
       async function runFetch(probe) {
         const r = blank();
+        r.startedAt = new Date().toISOString();
+        const url = '/probe/stream?' + probe.q;
         const t0 = performance.now();
         const ctrl = new AbortController();
         const giveUp = setTimeout(() => ctrl.abort(), probe.budget);
         try {
-          const res = await fetch('/probe/stream?' + probe.q, { signal: ctrl.signal, cache: 'no-store' });
+          const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
           r.conns = 1;
           r.status = res.status;
           r.ctype = res.headers.get('content-type') || '';
@@ -198,6 +256,7 @@
         }
         clearTimeout(giveUp);
         r.close = Math.round(performance.now() - t0);
+        applyTiming(r, url);
         return r;
       }
 
@@ -206,9 +265,17 @@
           const r = blank();
           r.status = 'n/a';
           r.ctype = 'n/a';
+          r.startedAt = new Date().toISOString();
           const t0 = performance.now();
+          let lastOpen = null;
           const es = new EventSource('/probe/stream?' + probe.q);
-          es.onopen = () => { r.conns += 1; };
+          // Gaps between opens are the direct evidence for whether the retry: hint was honoured.
+          es.onopen = () => {
+            const at = Math.round(performance.now() - t0);
+            if (lastOpen !== null) r.gaps.push(at - lastOpen);
+            lastOpen = at;
+            r.conns += 1;
+          };
           es.onmessage = (ev) => {
             if (r.ttfb === '') r.ttfb = Math.round(performance.now() - t0);
             r.frames += 1;
@@ -240,6 +307,19 @@
 
       async function run() {
         document.getElementById('start').disabled = true;
+        meta.runStarted = meta.runStarted || new Date().toISOString();
+        meta.origin = location.origin;
+        meta.userAgent = navigator.userAgent;
+        if (!meta.requestHeaders) {
+          try {
+            const res = await fetch('/probe/request-headers', { cache: 'no-store' });
+            meta.requestHeaders = await res.text();
+          } catch (e) {
+            meta.requestHeaders = '(could not be read: ' + e + ')';
+          }
+        }
+        write(META_STORE, meta);
+        render();
         let remaining = PROBES.reduce((s, p) => s + (results[p.id] ? 0 : p.budget), 0);
         for (let i = 0; i < PROBES.length; i++) {
           const probe = PROBES[i];
@@ -261,7 +341,9 @@
       document.getElementById('start').addEventListener('click', run);
       document.getElementById('reset').addEventListener('click', () => {
         results = {};
+        meta = {};
         save(results);
+        write(META_STORE, meta);
         render();
         statusEl.textContent = 'Cleared. The next run starts from the first test.';
       });
