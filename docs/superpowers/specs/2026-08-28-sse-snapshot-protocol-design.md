@@ -68,9 +68,9 @@ rooms, with SSE framing included:
 
 | participants | snapshot | today's resync burst | wire |
 | --- | --- | --- | --- |
-| 3 | 418 B | 1,156 B in 8 frames | 1,300 B -> 436 B (34%) |
-| 10 | 1,111 B | 3,060 B in 22 frames | 3,456 B -> 1,129 B (33%) |
-| 20 | 2,108 B | 5,787 B in 42 frames | 6,543 B -> 2,126 B (32%) |
+| 3 | 466 B | 1,156 B in 8 frames | 1,300 B -> 484 B (37%) |
+| 10 | 1,159 B | 3,060 B in 22 frames | 3,456 B -> 1,177 B (34%) |
+| 20 | 2,160 B | 5,787 B in 42 frames | 6,543 B -> 2,178 B (33%) |
 
 Every synthetic event repeats both the `roomId` and the `userId` (72 bytes of
 a ~140-byte event) and pays its own frame overhead. A snapshot is one third
@@ -137,7 +137,10 @@ to grow; the broader rate-limiting gap stands unchanged.
 
 The prior design asked where an event log should live, taking for granted
 that there is one. The question that actually decides this design's size is
-whether the wire should carry events or state.
+whether the wire should carry events or state. Measurement disposes of the
+superseded design's premise, but that is a reason to reject that particular
+design rather than to abandon events, so the event-based family is broken into
+the three shapes that are actually distinct instead of being treated as one.
 
 **1. Snapshot-only (chosen).** Every push on every connection is the room's
 complete state. One message type, one client handler, one publish path. The
@@ -145,22 +148,78 @@ correctness gaps above become unreachable rather than fixed, and the
 resynchronization cost that motivates the whole delta apparatus disappears,
 because a reconnecting client and a live client receive the same thing.
 
-**2. Snapshots for resync, incremental events for live push.** Smaller
-per-event pushes on healthy connections (148 B against 1,129 B at ten
-participants). Rejected: it keeps both codepaths, so it keeps the 75-line
-client handler block, keeps `RoomEvent`/`MessageType`, keeps two ways for
-client and server state to disagree, and doubles the test surface, all to
-save bandwidth that does not matter here. A ten-person room voting a full
-round costs 113 KB across all clients under snapshot-only against 15 KB under
-this option. The superseded design already dismissed a figure twenty times
-larger as negligible at this scale.
+**2. Events for live push, plus `Reset` and a synthetic full replay on every
+reconnect.** This is the minimal event-based fix, and it is what remains of the
+superseded design once the event log, sequence ids and delta resolution are
+deleted along with the premise that justified them. It is a real option and it
+works: `Reset` makes duplication impossible and lets a departed participant
+simply not be re-added, `RoomData.revealed` plus a synthesized `Show` frame
+closes Problem E, and bounded mode rides on top paying a full replay per cycle
+rather than a delta. Worth naming explicitly because it is what a reader who
+accepts the measurement will propose next, and because the superseded design's
+own machinery obscures how small it is.
 
-**3. Keep the event protocol, add the event log (the superseded design).**
+Its specific weakness among the event options is resync cost, the one axis
+where it is worse than both neighbours: roughly 3,600 B in 23 frames against
+1,177 B in one, paid on every bounded cycle. That is affordable. It is rejected
+on maintenance surface instead, see below.
+
+**3. Events for live push, snapshot for resync.** The only option that is best
+on both bandwidth axes: 148 B per live push, and the same single-frame resync
+as snapshot-only. What it actually costs is being the largest of the three in
+code, because it needs the event vocabulary and the snapshot, so it keeps the
+75-line client handler block and `RoomEvent`/`MessageType` and adds
+`RoomSnapshot` beside them, with two ways for client and server state to
+disagree and both to test. Note this makes it larger than option 2, not
+smaller: buying back the resync cost is what the extra vocabulary pays for.
+
+**4. Keep the event protocol, add the event log (the superseded design).**
 Rejected for the reasons in the table above. Its premise does not survive
 measurement, and roughly a third of the code it proposed exists only to serve
-that premise.
+that premise. What is left of it once that is removed is option 2.
 
-**4. Short polling instead of an SSE fallback.** A `GET /rooms/:roomId/state`
+**Why the state-shaped option wins, and why it is not a bandwidth argument.**
+On bandwidth alone option 3 beats snapshot-only, so the case has to rest
+elsewhere, and it does.
+
+*Maintenance surface, which is decisive.* Under any event protocol the client
+is a reducer kept in sync with a server it cannot see, and correctness depends
+on three independent things all staying right: every handler, the completeness
+of the `Reset` clearing table, and the ordering of the synthetic replay. All
+three have already produced live bugs here. The superseded design needed a
+six-row clearing table of which three rows required a paragraph of
+justification each, and its Problem E fix turned on frame *position*, passing
+in an all-voted room and failing in exactly the straggler room the fix existed
+for. Options 2 and 3 inherit every one of those burdens. Snapshot-only has no
+client state machine to get wrong, which is why the gaps in Problem become
+unreachable rather than fixed.
+
+*Two robustness properties only snapshots have.* `OverflowStrategy.dropHead`
+becomes correct, since a superseded snapshot is safe to discard, which retires
+the buffer-overflow reconnect path that is today's only reconnect trigger;
+under events a dropped event is unrecoverable, so `fail` and its reconnect must
+stay. And client state becomes self-correcting with respect to server state: a
+dropped push, a gap, a handler bug, or an optimistic update the server rejected
+all heal on the next publish. To be precise about the limit of that, it does
+not make *server* state right, so it does nothing for the command-ordering
+entry in `docs/known-issues.md`, which is about the server processing a user's
+POSTs out of order.
+
+*The asymmetry that makes this low-regret.* Snapshot-only to option 3 is
+additive: keep the snapshot as the resync mechanism, add incremental pushes for
+live updates, and the snapshot stays the source of truth. Going the other way,
+option 2 or 3 to snapshot-only, is a client rewrite. So the escape is cheap if
+live bandwidth ever bites, while starting event-based forecloses nothing and
+pays the maintenance surface immediately.
+
+*When this flips.* The live-push ratio is 8x at ten participants, 14.7x at
+twenty and 35x at fifty, because aggregate cost per voting round is cubic in
+room size for snapshots against quadratic for events. Above roughly 20 to 30
+participants option 3 is the right answer. A planning poker room is a team, so
+this sits outside the range by a comfortable margin, but it is the condition to
+watch rather than a reason the question never arises.
+
+**5. Short polling instead of an SSE fallback.** A `GET /rooms/:roomId/state`
 returning the snapshot, polled every second or so by detected clients, passes
 a buffering proxy trivially. Still rejected, and for the reason the superseded
 design gave: ten clients at one request per second is 36,000 fixed-interval
@@ -1403,7 +1462,7 @@ proof or refutation of the premise.
 differently-measured deadline, set the value and let the invariants follow it
 down, no design change. A large scan-and-release latency in A, revisit
 `SSE_BOUNDED_GRACE_PERIOD` and re-run the latency comparison against polling.
-C or D failing, bounded mode's premise is gone and the fallback is option 4
+C or D failing, bounded mode's premise is gone and the fallback is option 5
 under "Approaches considered", which under this design is a transport swap
 over the same snapshot payload rather than a redesign.
 
@@ -1434,8 +1493,13 @@ Take the *Ask* rung even when the probe is skipped.
 ## What was deferred or rejected
 
 - **Snapshots for resync plus incremental events for live push**: rejected,
-  see approach 2. Keeps both codepaths to save bandwidth that does not matter
-  at this scale.
+  see approach 3. It is the best of the options on bandwidth and the largest of
+  them in code, needing the event vocabulary and the snapshot side by side. It
+  is also the option to revisit first if room sizes ever grow, since reaching
+  it from snapshot-only is additive rather than a rewrite.
+- **Events with `Reset` and a synthetic full replay, no log**: rejected, see
+  approach 2. The minimal event-based fix and a genuine option, rejected on the
+  maintenance surface every event protocol carries rather than on cost.
 - **A `since` parameter or any form of partial snapshot**: rejected. It is the
   event log by another name, and the measurement in Problem shows the full
   snapshot is already smaller than what the app sends today.
@@ -1445,7 +1509,7 @@ Take the *Ask* rung even when the probe is skipped.
 - **Durable/persisted room state**: deferred to Phase 2. The wire protocol
   here does not need revisiting when that lands, and `version` is a natural
   fit for an optimistic-concurrency column if it ever becomes one.
-- **Short polling instead of an SSE fallback**: rejected, see approach 4.
+- **Short polling instead of an SSE fallback**: rejected, see approach 5.
   Recorded in full because it is the fallback if the proxy model is wrong, and
   because this design makes it much cheaper to reach for.
 - **Handling an old cached client against a new server during rollout**: not
