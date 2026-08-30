@@ -2159,6 +2159,33 @@ is the only answer to assumption 5's fatal case, and its premise is currently
 reasoning alone, so without them the moment you need long polling measured is
 the moment you have just spent your credibility on bounded mode failing.
 
+**The direct-connection baseline**, measured locally on 2026-08-30 with no proxy
+in the path, so the customer's table is read against a known-good run rather
+than against expectations. Firefox 140, localhost.
+
+| Row | Baseline | What a departure means |
+| --- | --- | --- |
+| E1 to E5 | TTFB 4-23ms, 2 bytes | Seconds here is command latency, not event delivery |
+| A1, A2 | close ~2020ms, browser wait <60ms, body over ~2015ms | Wait rising to the close time means buffered |
+| I1, I2 | as A, 6,234 bytes | Materially worse than A means scan cost scales with body |
+| C | close ~20020ms, body over ~20018ms | Body collapsing to ~0ms is the buffered signature |
+| F | close ~20040ms, `application/json` | A withheld JSON body kills the option 6 fallback too |
+| B1, B2 | close 75000ms, 38 frames, still open | Closing earlier is the deadline, and is the number to take |
+| H | close 75002ms, 0 bytes, gave up | Closing earlier than B means an idle timeout, not an absolute one |
+| G | close 75000ms, 34 bytes | Closing while F succeeds makes the deadline content-type-specific |
+| D | 5 connections, gaps ~20529ms | Gaps at 20s + browser default rather than + 500ms means `retry:` is ignored |
+
+Two properties of the baseline are worth naming because they are the actual
+discriminators. Every streaming row shows a short wait followed by a body
+delivered over the full duration, which is what "streamed" looks like; buffered
+inverts that into a long wait and a body over roughly zero. And the response
+headers group into exactly two sets, the five POSTs without
+`transfer-encoding: chunked` and the nine streaming rows with it, so a
+rewritten transfer encoding shows up without reading a single timing.
+
+D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
+probe now sends, which is the direct evidence that the hint is honoured.
+
 **What each outcome means.** Confirmed, proceed and set
 `SSE_ASSUMED_PROXY_TIMEOUT` from B rather than from the default, taking the
 smaller of B's two runs. A shorter or differently-measured deadline, set the

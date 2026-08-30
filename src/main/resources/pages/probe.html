@@ -73,8 +73,9 @@
         { id: 'D',  what: 'A real EventSource for 90s: does the browser reconnect, is retry: honoured, does Last-Event-ID survive?', kind: 'eventsource', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true&retry=500', budget: 90000 }
       ];
 
-      const STORE = 'probe-results-v1';
-      const META_STORE = 'probe-meta-v1';
+      // Bumped whenever a row's shape changes, so a resumed run cannot mix old and new fields.
+      const STORE = 'probe-results-v2';
+      const META_STORE = 'probe-meta-v2';
       const read = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
       const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
       const load = () => read(STORE);
@@ -94,11 +95,14 @@
         try { return performance.getEntriesByType('resource').length; } catch (e) { return 0; }
       };
 
-      function applyTiming(r, url, mark) {
+      // An aborted request's entry is recorded asynchronously and can land after the next probe
+      // has taken its mark, so the start time is checked too: a row must never show its
+      // predecessor's numbers.
+      function applyTiming(r, url, mark, since) {
         try {
           if (!performance.getEntriesByType) return;
           const es = performance.getEntriesByType('resource').slice(mark)
-            .filter(e => e.name.indexOf(url) !== -1);
+            .filter(e => e.name.indexOf(url) !== -1 && e.startTime >= since - 5);
           if (es.length === 0) return;
           const t = es[es.length - 1];
           r.proto = t.nextHopProtocol || '';
@@ -112,7 +116,8 @@
 
       // A blank TTFB means no byte ever arrived, which is the run's most important single result;
       // it must not read as an empty cell.
-      const cell = (r, c) => (r[c] === '' || r[c] == null) ? 'none' : String(r[c]);
+      const has = (v) => v !== '' && v != null;
+      const cell = (r, c) => has(r[c]) ? String(r[c]) : 'none';
 
       function render() {
         tbody.innerHTML = '';
@@ -143,7 +148,16 @@
         const width = head.map((_, i) => Math.max(...rows.map(row => row[i].length)));
         const lines = rows.map(row => row.map((v, i) => v.padEnd(width[i])).join('  ').trimEnd());
         lines.splice(1, 0, width.map(w => '-'.repeat(w)).join('  '));
-        return '```\n' + lines.join('\n') + '\n' + detailText() + headersText() + envText() + '```';
+        return '```\n' + lines.join('\n') + '\n' + legendText() + detailText() + headersText() + envText() + '```';
+      }
+
+      // The table is read by someone who was not here when it ran, possibly months later.
+      function legendText() {
+        return '\nReading this table:\n\n' +
+          '  Conns 0 on a fetch row means no response headers ever arrived, not that no\n' +
+          '    connection was made. Conns on row D counts EventSource reconnects.\n' +
+          '  TTFB none means no byte ever arrived before the client gave up.\n' +
+          '  "gave up" is the client stopping at its own budget, not the server closing.\n';
       }
 
       function detailText() {
@@ -153,8 +167,8 @@
           if (!r) continue;
           const bits = [];
           if (r.startedAt) bits.push('started ' + r.startedAt);
-          if (r.browserTtfb !== '') bits.push('browser wait ' + r.browserTtfb + 'ms, then body over ' + r.bodyMs + 'ms');
-          if (r.transfer !== '' && r.transfer != null) bits.push('transferSize ' + r.transfer);
+          if (has(r.browserTtfb)) bits.push('browser wait ' + r.browserTtfb + 'ms, then body over ' + r.bodyMs + 'ms');
+          if (has(r.transfer)) bits.push('transferSize ' + r.transfer);
           if (r.gaps && r.gaps.length) bits.push('reconnect gaps ' + r.gaps.join(', ') + 'ms');
           if (bits.length) rows.push('  ' + p.id + ': ' + bits.join('; '));
         }
@@ -224,7 +238,7 @@
           r.status = 'error';
         }
         r.close = Math.round(performance.now() - t0);
-        applyTiming(r, '/probe/echo', mark);
+        applyTiming(r, '/probe/echo', mark, t0);
         return r;
       }
 
@@ -261,7 +275,7 @@
         }
         clearTimeout(giveUp);
         r.close = Math.round(performance.now() - t0);
-        applyTiming(r, url, mark);
+        applyTiming(r, url, mark, t0);
         return r;
       }
 
