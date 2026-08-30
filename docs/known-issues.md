@@ -56,10 +56,14 @@ roadmap item instead of leaving it here as stale history.
   `pendingSessions` for as long as the room actor lives, even if that room
   already has active, joined members and would otherwise stay alive
   indefinitely.
-- **Resolution:** No separate fix needed beyond whatever resolves the room-level
-  GC issue above; a room-level idle-expiry or durable-session policy (Phase 2/5)
-  should sweep unpromoted pending sessions too, not just reap the room actor
-  itself.
+- **Resolution:** Scheduled as part of Problem D part 1 of
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 2).
+  That design deliberately retains sessions past promotion rather than
+  consuming them, which would make this worse, and bounds them with
+  `SSE_SESSION_TTL` evaluated at resolution, which closes it: an unpromoted
+  session expires on its own. Remove this entry when that lands. The
+  room-level idle-expiry it previously deferred to is still wanted for rooms
+  themselves, which is the entry above.
 
 ### SSE reverse-proxy buffering is undocumented
 
@@ -85,6 +89,14 @@ roadmap item instead of leaving it here as stale history.
   good" - both arrive as the SSE stream simply ending, so both wait out the same
   grace period before the rest of the room is told. A participant closing their tab
   mid-meeting still shows as present for up to 6 seconds afterward.
+
+  The form users actually report is a reload rather than a tab close.
+  `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
+  a reload is a new participant to the room and the previous one lingers for
+  the grace period: the user watches their own name sit in the participant list
+  twice. `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`
+  makes this worse for clients on its bounded path specifically, 6 seconds to
+  15, which is a deliberate trade recorded there.
 - **Resolution:** Unscheduled. This app's sessions run 30 minutes to an hour, so a
   6-second lingering presence after a genuine departure is proportionally small,
   which lowers the urgency here rather than removing it: still worth confirming with
@@ -115,6 +127,50 @@ roadmap item instead of leaving it here as stale history.
   problems in practice. If it does, the fix likely pairs with the Phase 1 identity
   work: a per-user monotonic sequence number attached to each command, with `Room`
   rejecting or ignoring one that arrives out of order.
+
+### Resync doesn't replay whether votes are currently revealed
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`setupNewUser`); `src/main/resources/pages/index.html` (`votesRevealed`).
+- **Issue:** `setupNewUser`'s catch-up replay reconstructs participants,
+  votes, and the current issue for a (re)connecting client, but has no
+  equivalent of a `Show` replay: whether votes are currently revealed isn't
+  part of the resync. A client that reconnects mid-session (a dropped
+  connection, a page reload, or the bounded-mode reconnect proposed in
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`) has no
+  way to know votes are already shown until, if ever, a subsequent
+  `Show`/`Clear` happens to arrive live.
+- **Resolution:** Scheduled as Problem E of
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 1),
+  which adds a `revealed` flag to `RoomData` and carries it in the room
+  snapshot. Remove this entry when that lands. Phase 4's
+  "server-authoritative auto-reveal" item in `docs/roadmap.md` then inherits
+  reveal state as real backend logic rather than a client-only derivation,
+  which it needs anyway.
+
+### No rate limiting on mutating room endpoints
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all
+  mutating `POST` endpoints (`vote`, `show`, `clear`, `revote`,
+  `edit-issue`).
+- **Issue:** Every mutating endpoint is unthrottled beyond session-token
+  resolution, a client can call any of them in a tight loop at no cost.
+  Today this wastes CPU/bandwidth. The superseded 2026-08-26 SSE delta resync
+  design would have added a per-room retained `eventLog` that the same
+  behavior could grow without bound; its replacement,
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`, holds
+  no per-room log, so that memory amplification does not arise. It does not
+  follow that the amplification is gone, only that it changed shape: under
+  that design's bounded mode every version bump closes and reopens each
+  bounded client's connection, so an unthrottled `POST` loop becomes a
+  request amplifier of degree N, aimed at the one network already known to be
+  running an inspecting appliance. That specific form is backstopped by the
+  no-op publish guard in section 2 of the same spec, which skips a publish no
+  client would see a difference from.
+- **Resolution:** Unscheduled. The underlying gap, no per-user/per-endpoint
+  rate limiting anywhere in this API, is broader than any one symptom and
+  should be addressed as its own piece of work if abuse becomes a real
+  concern, not patched endpoint-by-endpoint as new symptoms show up.
 
 ## Traceability note
 
