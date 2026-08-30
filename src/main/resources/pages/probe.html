@@ -157,7 +157,10 @@
           '  Conns 0 on a fetch row means no response headers ever arrived, not that no\n' +
           '    connection was made. Conns on row D counts EventSource reconnects.\n' +
           '  TTFB none means no byte ever arrived before the client gave up.\n' +
-          '  "gave up" is the client stopping at its own budget, not the server closing.\n';
+          '  "gave up" is the client stopping at its own budget, not the server closing.\n' +
+          '  Rows the client abandoned carry no browser timing detail and no Proto, because\n' +
+          '    browsers record neither for an aborted request. Their TTFB, Close and Bytes\n' +
+          '    are measured directly and are unaffected.\n';
       }
 
       function detailText() {

@@ -2186,6 +2186,13 @@ rewritten transfer encoding shows up without reading a single timing.
 D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
 probe now sends, which is the direct evidence that the hint is honoured.
 
+Rows B, G and H carry no browser timing and no protocol in the baseline, and
+will not in the customer's run either: browsers record no Resource Timing entry
+for a request the client aborted, and those three are aborted by design. Their
+time to first byte, close time and byte count are measured directly and are
+unaffected, which are the figures those rows exist for. A missing detail line
+on exactly those three is the expected shape, not a failed probe.
+
 **What each outcome means.** Confirmed, proceed and set
 `SSE_ASSUMED_PROXY_TIMEOUT` from B rather than from the default, taking the
 smaller of B's two runs. A shorter or differently-measured deadline, set the
