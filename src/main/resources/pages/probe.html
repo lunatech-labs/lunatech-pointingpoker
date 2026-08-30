@@ -173,6 +173,7 @@
           if (has(r.browserTtfb)) bits.push('browser wait ' + r.browserTtfb + 'ms, then body over ' + r.bodyMs + 'ms');
           if (has(r.transfer)) bits.push('transferSize ' + r.transfer);
           if (r.gaps && r.gaps.length) bits.push('reconnect gaps ' + r.gaps.join(', ') + 'ms');
+          if (has(r.esErrors)) bits.push(r.esErrors + ' EventSource errors');
           if (bits.length) rows.push('  ' + p.id + ': ' + bits.join('; '));
         }
         if (rows.length === 0) return '';
@@ -300,12 +301,15 @@
       function runEventSource(probe) {
         return new Promise(resolve => {
           const r = blank();
-          r.status = 'n/a';
           r.ctype = 'n/a';
           r.startedAt = new Date().toISOString();
           const t0 = performance.now();
           let lastOpen = null;
+          let errors = 0;
           const es = new EventSource('/probe/stream?' + probe.q);
+          // A few are normal, one per cycle. Many with no opens is the appliance refusing it
+          // outright, which would otherwise be indistinguishable from a broken probe.
+          es.onerror = () => { errors += 1; };
           // Gaps between opens are the direct evidence for whether the retry: hint was honoured.
           es.onopen = () => {
             const at = Math.round(performance.now() - t0);
@@ -323,6 +327,8 @@
           setTimeout(() => {
             es.close();
             r.close = Math.round(performance.now() - t0);
+            r.status = r.conns === 0 ? 'never opened' : 'n/a';
+            r.esErrors = errors;
             resolve(r);
           }, probe.budget);
         });

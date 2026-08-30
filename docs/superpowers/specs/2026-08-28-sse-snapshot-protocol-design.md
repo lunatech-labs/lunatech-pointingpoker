@@ -2175,13 +2175,27 @@ than against expectations. Firefox 140, localhost.
 | G | close 75000ms, 34 bytes | Closing while F succeeds makes the deadline content-type-specific |
 | D | 5 connections, gaps ~20529ms | Gaps at 20s + browser default rather than + 500ms means `retry:` is ignored |
 
-Two properties of the baseline are worth naming because they are the actual
-discriminators. Every streaming row shows a short wait followed by a body
-delivered over the full duration, which is what "streamed" looks like; buffered
-inverts that into a long wait and a body over roughly zero. And the response
-headers group into exactly two sets, the five POSTs without
-`transfer-encoding: chunked` and the nine streaming rows with it, so a
-rewritten transfer encoding shows up without reading a single timing.
+The discriminator that matters is the timing shape: every streaming row shows a
+short wait followed by a body delivered over the full duration, which is what
+"streamed" looks like, and buffered inverts that into a long wait and a body
+over roughly zero. That reading holds in any browser.
+
+A second signal is present but must not be leaned on. The response headers
+group into two sets, the five POSTs without `transfer-encoding: chunked` and
+the nine streaming rows with it, which would show a rewritten transfer encoding
+without reading a timing at all. It is browser-dependent: this baseline is
+Firefox 140, and Chrome and Edge strip hop-by-hop headers from `fetch` more
+aggressively, so the split may be absent there with nothing wrong. Its absence
+is therefore not evidence of anything.
+
+**The baseline is Firefox and the customer's desktop probably is not.** A
+corporate machine behind this appliance is most likely Edge or Chrome, and
+three of the things recorded here differ by engine: the default `EventSource`
+reconnect delay when `retry:` is absent, whether an aborted request produces a
+Resource Timing entry at all, and the hop-by-hop header question above. The run
+records the user agent for exactly this reason. Comparing a Chrome result
+against these Firefox numbers requires a Chrome baseline first, which costs one
+local run and is worth taking before the customer's run rather than after.
 
 D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
 probe now sends, which is the direct evidence that the hint is honoured.
