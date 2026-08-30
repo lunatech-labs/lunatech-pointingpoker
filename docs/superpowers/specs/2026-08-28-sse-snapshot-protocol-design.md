@@ -2175,16 +2175,65 @@ than against expectations. Firefox 140, localhost.
 | G | close 75000ms, 34 bytes | Closing while F succeeds makes the deadline content-type-specific |
 | D | 5 connections, gaps ~20529ms | Gaps at 20s + browser default rather than + 500ms means `retry:` is ignored |
 
-Two properties of the baseline are worth naming because they are the actual
-discriminators. Every streaming row shows a short wait followed by a body
-delivered over the full duration, which is what "streamed" looks like; buffered
-inverts that into a long wait and a body over roughly zero. And the response
-headers group into exactly two sets, the five POSTs without
-`transfer-encoding: chunked` and the nine streaming rows with it, so a
-rewritten transfer encoding shows up without reading a single timing.
+The discriminator that matters is the timing shape: every streaming row shows a
+short wait followed by a body delivered over the full duration, which is what
+"streamed" looks like, and buffered inverts that into a long wait and a body
+over roughly zero. That reading holds in any browser.
+
+A second signal supports it. The response headers group into two sets, the five
+POSTs without `transfer-encoding: chunked` and the nine streaming rows with it,
+so a rewritten transfer encoding shows without reading a timing at all. Both
+Firefox 140 and Chromium 150 expose it against production, so it is not the
+engine-specific quirk an earlier draft of this section assumed.
+
+**The run was taken in both engines, and one row differs in a way that decides
+which browser to ask for.** Everything else matches: `http/1.1` on every
+completing row in both, so Sozu is not offering HTTP/2 and the per-origin
+connection ceiling is real; D's gaps at ~20530ms in both, so `retry:` is
+honoured regardless of engine; and no Resource Timing for aborted requests in
+either.
+
+Probe H is the exception, and it is the probe about delivering nothing at all:
+
+| | Firefox 140 | Chromium 150 |
+| --- | --- | --- |
+| H | `conns 0`, gave up, no content type | `conns 1`, `200 no body`, `text/event-stream` |
+
+Same server, same 75s, same zero bytes. Chromium surfaces a response as soon as
+headers arrive; Firefox does not surface one until the first body byte, which
+the pair of runs demonstrates directly, since Firefox surfaced G (34 bytes sent
+immediately) and not H (nothing sent).
+
+**Ask for Chrome or Edge.** In Chromium "headers arrived, body withheld" and
+"nothing arrived" are different rows; in Firefox they are the same row. Those
+are assumptions 2 and 5, and separating them is a large part of why the probe
+exists. A corporate desktop behind this appliance most likely defaults to Edge
+anyway. If a Firefox result does come back, read `conns 0` as "no response was
+surfaced" rather than as proof that headers were withheld.
 
 D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
 probe now sends, which is the direct evidence that the hint is honoured.
+
+**The same run against production, on 2026-08-30 and without the customer's
+network in the path, reproduces the baseline**: streamed on every row, B, G and
+H holding their full 75s, D reconnecting at ~20548ms. So nothing in our own
+hosting buffers, and a departure in the customer's run is theirs rather than
+ours. That is worth having measured rather than assumed, since otherwise the
+first buffered result would have two candidate causes.
+
+It also fixes our own edge's fingerprint, which the customer's result has to be
+read against. Clever Cloud's Sozu proxy stamps `sozu-id` on every response,
+with a different value each time, and adds `forwarded`, `x-forwarded-for`,
+`x-forwarded-port`, `x-forwarded-proto` and its own `sozu-id` to the request.
+Everything in that list is ours. Any header beyond it in the customer's run
+came from their side, which is the whole discriminator for identifying the
+appliance from the table alone.
+
+The per-request `sozu-id` is also why the page groups response headers by name
+rather than by name and value: grouped by value, that one header put all
+fifteen connections in separate blocks and buried the only real difference,
+which is `transfer-encoding: chunked` on the streaming rows and not on the
+POSTs.
 
 Rows B, G and H carry no browser timing and no protocol in the baseline, and
 will not in the customer's run either: browsers record no Resource Timing entry
