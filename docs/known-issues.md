@@ -56,10 +56,14 @@ roadmap item instead of leaving it here as stale history.
   `pendingSessions` for as long as the room actor lives, even if that room
   already has active, joined members and would otherwise stay alive
   indefinitely.
-- **Resolution:** No separate fix needed beyond whatever resolves the room-level
-  GC issue above; a room-level idle-expiry or durable-session policy (Phase 2/5)
-  should sweep unpromoted pending sessions too, not just reap the room actor
-  itself.
+- **Resolution:** Scheduled as part of Problem D part 1 of
+  `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 2).
+  That design deliberately retains sessions past promotion rather than
+  consuming them, which would make this worse, and bounds them with
+  `SSE_SESSION_TTL` evaluated at resolution, which closes it: an unpromoted
+  session expires on its own. Remove this entry when that lands. The
+  room-level idle-expiry it previously deferred to is still wanted for rooms
+  themselves, which is the entry above.
 
 ### SSE reverse-proxy buffering is undocumented
 
@@ -85,6 +89,14 @@ roadmap item instead of leaving it here as stale history.
   good" - both arrive as the SSE stream simply ending, so both wait out the same
   grace period before the rest of the room is told. A participant closing their tab
   mid-meeting still shows as present for up to 6 seconds afterward.
+
+  The form users actually report is a reload rather than a tab close.
+  `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
+  a reload is a new participant to the room and the previous one lingers for
+  the grace period: the user watches their own name sit in the participant list
+  twice. `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`
+  makes this worse for clients on its bounded path specifically, 6 seconds to
+  15, which is a deliberate trade recorded there.
 - **Resolution:** Unscheduled. This app's sessions run 30 minutes to an hour, so a
   6-second lingering presence after a genuine departure is proportionally small,
   which lowers the urgency here rather than removing it: still worth confirming with
@@ -147,8 +159,14 @@ roadmap item instead of leaving it here as stale history.
   design would have added a per-room retained `eventLog` that the same
   behavior could grow without bound; its replacement,
   `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`, holds
-  no per-room log, so that specific amplification does not arise and needs no
-  backstop.
+  no per-room log, so that memory amplification does not arise. It does not
+  follow that the amplification is gone, only that it changed shape: under
+  that design's bounded mode every version bump closes and reopens each
+  bounded client's connection, so an unthrottled `POST` loop becomes a
+  request amplifier of degree N, aimed at the one network already known to be
+  running an inspecting appliance. That specific form is backstopped by the
+  no-op publish guard in section 2 of the same spec, which skips a publish no
+  client would see a difference from.
 - **Resolution:** Unscheduled. The underlying gap, no per-user/per-endpoint
   rate limiting anywhere in this API, is broader than any one symptom and
   should be addressed as its own piece of work if abuse becomes a real

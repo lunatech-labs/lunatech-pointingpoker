@@ -61,20 +61,25 @@ being re-examined. Two facts make it the wrong shape now.
 **Nothing on the client is event-shaped.** All eight message handlers are
 `state = f(state, event)`. There is no animation, no toast, no sound, no
 history. `updateSummary()` and `allVoted()` are pure re-derivations run after
-each handler. The client wants state; the protocol gives it events.
+each handler. The client wants state; the protocol gives it events. Note that
+`allVoted()` being a derivation does not make it disposable: it is where
+auto-reveal actually lives today, which section 5's Problem E moves to the
+server rather than deletes.
 
 **The replay is bigger than the state it describes.** Measured on realistic
 rooms, with SSE framing included:
 
 | participants | snapshot | today's resync burst | wire |
 | --- | --- | --- | --- |
-| 3 | 466 B | 1,156 B in 8 frames | 1,300 B -> 484 B (37%) |
-| 10 | 1,159 B | 3,060 B in 22 frames | 3,456 B -> 1,177 B (34%) |
-| 20 | 2,160 B | 5,787 B in 42 frames | 6,543 B -> 2,178 B (33%) |
+| 3 | 418 B | 1,156 B in 8 frames | 1,300 B -> 436 B (34%) |
+| 10 | 1,111 B | 3,060 B in 22 frames | 3,456 B -> 1,129 B (33%) |
+| 20 | 2,112 B | 5,787 B in 42 frames | 6,543 B -> 2,130 B (33%) |
 
 Every synthetic event repeats both the `roomId` and the `userId` (72 bytes of
 a ~140-byte event) and pays its own frame overhead. A snapshot is one third
-the size of the burst it replaces.
+the size of the burst it replaces. The snapshot figures are a revealed room,
+which is the worst case: before reveal, section 1's redaction empties every
+estimation but the recipient's, so the payload is smaller still.
 
 The superseded design's central premise was that "a full room-state replay on
 every such cycle is not viable at that frequency," which is what made a delta
@@ -111,9 +116,10 @@ size all of it. It is kept in the repository unchanged, and its analysis of
 the room-lifecycle bugs is where those bugs were actually found.
 
 What carries over from it, essentially unaltered: Problems A, C, D part 1 and
-D part 2 (section 5 here), the entire bounded-mode client design and its
-config invariants (section 6), the proxy-model validation ladder, and the
-`connection.js` extraction.
+D part 2 (section 5 here), the bounded-mode client design and its config
+invariants (section 6), the proxy-model validation ladder, and the
+`connection.js` extraction. The one part of section 6 not carried over is the
+`localStorage` detection cache, dropped for the reasons in that section.
 
 What this design removes, and why:
 
@@ -127,11 +133,27 @@ What this design removes, and why:
 | §5 Problem D part 3 (`isResume` gates delta vs full) | No delta to get wrong |
 | §5 Problem E (revealed not replayed) | One `Boolean` field, no synthesized frame |
 
-Two known-issues entries change as a result. "Resync doesn't replay whether
-votes are currently revealed" is closed by section 5's Problem E. The
-event-log paragraph added to "No rate limiting on mutating room endpoints"
-becomes obsolete, since there is no per-room log for an unthrottled endpoint
-to grow; the broader rate-limiting gap stands unchanged.
+Four known-issues entries change as a result, three of them closed:
+
+- "Resync doesn't replay whether votes are currently revealed" is closed by
+  section 5's Problem E.
+- "A `/join` with no follow-up `/events` leaks a pending session for the
+  room's lifetime" is closed by Problem D part 1's session TTL.
+- "SSE reverse-proxy buffering is undocumented" is closed by section 7.
+- "No rate limiting on mutating room endpoints" needs rewriting rather than
+  either closing or leaving alone. Its event-log paragraph is obsolete, since
+  there is no per-room log for an unthrottled endpoint to grow, but the
+  amplification did not disappear so much as change shape: under bounded mode
+  a version bump costs a reconnect per client, so a `POST` loop becomes
+  request amplification aimed at the customer's own scanning proxy. Section
+  2's no-op publish guard is the backstop for that specific form; the broader
+  rate-limiting gap stands unchanged.
+
+Two entries gain material rather than losing it: "A deliberate tab close is as
+slow to announce as a transient reconnect" picks up the reload case and the
+bounded 15s figure (Problem D part 2), and two new entries land on ship, the
+room-recreation spawn race and the two-tab identity collision, both under
+"What was deferred or rejected".
 
 ## Approaches considered
 
@@ -161,7 +183,7 @@ own machinery obscures how small it is.
 
 Its specific weakness among the event options is resync cost, the one axis
 where it is worse than both neighbours: roughly 3,600 B in 23 frames against
-1,177 B in one, paid on every bounded cycle. That is affordable. It is rejected
+1,129 B in one, paid on every bounded cycle. That is affordable. It is rejected
 on maintenance surface instead, see below.
 
 **3. Events for live push, snapshot for resync.** The only option that is best
@@ -236,6 +258,38 @@ not in state handling or client code. If the proxy model in "Validating the
 proxy model" turns out to be wrong, switching is a transport swap rather than
 a redesign.
 
+**6. Long polling instead of a bounded SSE fallback.** Not the same option as
+5, and the argument that disposes of 5 does not touch it.
+`GET /rooms/:roomId/state?since=<version>` held open server-side until the
+version changes or a cap elapses, then answering with the snapshot as
+`application/json`, has the same request rate as bounded mode, the same
+jitter, and the same version cursor. The beaconing signature that rejects
+one-second short polling is a property of the interval, not of the transport,
+so it does not apply here.
+
+What it would buy is the one risk this design cannot hedge. Assumption 5's
+fatal case under "Validating the proxy model" is an appliance that will not
+release a streaming content type at all, completed or not; a long poll returns
+a finite `application/json` body with a `Content-Length`, which is the shape
+those appliances are built to pass. It also retires assumption 7 outright, and
+it deletes the `Mode` ADT, the `take(1)`/`takeWithin` shaping, the
+no-`.keepAlive` rule, the `retry:` and retry-jitter config with its invariant,
+and the `Last-Event-ID` plumbing, since the cursor becomes an ordinary query
+parameter.
+
+Not chosen now, for two reasons. It needs a server-side wait primitive the
+room actor does not have (a registration that completes a `Promise` on the
+next publish, rather than a stream the connection already owns), where bounded
+mode is `take(1).takeWithin(cap)` over the source that exists. And it gives up
+the browser's native reconnect and cursor tracking, which is real code the
+design currently gets for free, even granting that `connection.js` is already
+a state machine and a `fetch` loop would not obviously be larger.
+
+The reason to write it down rather than leave it implicit is that it is the
+right fallback, not option 5. It is named again under "What each outcome
+means" and in "What was deferred or rejected", because a probe C or D failure
+is the moment to reach for it.
+
 ## Final design
 
 ### 1. Wire format: the snapshot
@@ -247,7 +301,6 @@ hand-maintained `apply`/`unapply` companion, and the decoders. A new
 ```scala
 final case class RoomSnapshot(
     version: Long,
-    roomId: UUID,
     currentIssue: String,
     revealed: Boolean,
     users: List[RoomSnapshot.Participant]
@@ -256,13 +309,21 @@ final case class RoomSnapshot(
 object RoomSnapshot:
   final case class Participant(id: UUID, name: String, voted: Boolean, estimation: String)
 
-  def of(roomId: UUID, data: Room.RoomData): RoomSnapshot =
+  // One snapshot per recipient: another participant's estimation is withheld until reveal.
+  def of(data: Room.RoomData, forUser: UUID): RoomSnapshot =
+    val revealed = data.isRevealed
     RoomSnapshot(
       version = data.version,
-      roomId = roomId,
       currentIssue = data.currentIssue,
-      revealed = data.revealed,
-      users = data.users.map(u => Participant(u.id, u.name, u.voted, u.estimation))
+      revealed = revealed,
+      users = data.users.map(u =>
+        Participant(
+          u.id,
+          u.name,
+          u.voted,
+          if revealed || u.id == forUser then u.estimation else ""
+        )
+      )
     )
 
   given Encoder[Participant]  = deriveEncoder[Participant]
@@ -277,6 +338,25 @@ the room. Today's `RoomEvent` never carries a token, so this is a new way to
 leak one that only exists once state is serialized directly. The projection
 makes the leak unrepresentable rather than merely absent, which is why it is a
 separate type rather than a hand-written `User` encoder.
+
+**The snapshot is built per recipient, and that closes a leak the event
+protocol also has.** Today's `Vote` broadcast carries the estimation to every
+participant the moment it is cast (`Room.scala:144-148`), so anyone with
+devtools open sees the room's votes before reveal. The client hides them
+(`showUserEstimation`, and `v-if="votesRevealed"` on the table), but the data
+is already on the wire. Serializing state directly would carry that leak over
+unchanged, and having just argued that a token must be unrepresentable rather
+than merely unrendered, stopping short here would be inconsistent. Redaction
+costs nothing at runtime: `asJson` already runs once per connection in
+`SSE.source`'s `.map`, so N recipient-specific snapshots serialize exactly as
+many times as N identical ones would. The recipient always sees their own
+estimation, which is what section 4's `ownVoteConfirmed` derivation needs, and
+once `revealed` is true every estimation travels, which is what
+`votesSummary` needs.
+
+`roomId` is not in the snapshot. The client opened the connection and already
+holds the id; nothing in the template or the handlers reads it back off a
+message. It is dropped for the same reason `issueLastEditBy` is, below.
 
 `issueLastEditBy` is not in the snapshot. It exists only so `setupNewUser` can
 decide whether to synthesize an `EditIssue` frame, and nothing on the client
@@ -338,24 +418,74 @@ final case class RoomData(
 )
 ```
 
-`revealed` is section 5's Problem E. `sessions` is section 5's Problem D part
-1 (renamed from `pendingSessions`).
+`revealed` is section 5's Problem E, where it means "Show was pressed" and is
+joined by a derived `isRevealed` that also covers auto-reveal. `sessions` is
+section 5's Problem D part 1 (renamed from `pendingSessions`, and gaining a
+`createdAt` for its TTL).
 
 Both `broadcast` and `setupNewUser` are replaced by a single helper:
 
 ```scala
-private def publish(
-    roomId: UUID,
-    data: RoomData,
-    context: ActorContext[Command]
-): RoomData =
-  val next = data.copy(version = data.version + 1)
-  val snapshot = RoomSnapshot.of(roomId, next)
-  context.log.debug("Publishing version {} to {} users", next.version, next.users.size)
-  next.users.foreach(_.ref ! snapshot)
-  next
+private def publish(prev: RoomData, next: RoomData, context: ActorContext[Command]): RoomData =
+  // Nothing to say if no client would see a difference; see the no-op note below.
+  if visibleState(next) == visibleState(prev) then prev
+  else
+    val bumped = next.copy(version = prev.version + 1)
+    context.log.debug("Publishing version {} to {} users", bumped.version, bumped.users.size)
+    bumped.users.foreach(u => u.ref ! RoomSnapshot.of(bumped, u.id))
+    bumped
 end publish
+
+// Everything a snapshot can carry to anyone, minus the version publish is about to set,
+// plus stored `revealed`, which is latent rather than visible; see below.
+private def visibleState(data: RoomData) =
+  (
+    data.users.map(u => (u.id, u.name, u.voted, u.estimation)),
+    data.currentIssue,
+    data.isRevealed,
+    data.revealed
+  )
 ```
+
+`visibleState` is written out rather than expressed as "the snapshot with the
+version zeroed", and the difference matters. A snapshot is redacted for one
+recipient, so comparing two redacted-for-nobody snapshots would call a room
+where someone changed their vote from 3 to 5 before reveal unchanged, both
+estimations having been blanked, and the voter's own client would never learn
+its new value. The comparison has to be against what any recipient could see,
+which is the unredacted state. `ref` and `token` are excluded because they are
+per connection and never travel; `sessions` and `issueLastEditBy` because
+nothing renders them.
+
+**Stored `revealed` is in the tuple even though it never travels, and leaving
+it out is a trap worth naming.** `isRevealed` is a disjunction (section 5's
+Problem E), so a room where everyone has voted already reports revealed with
+`revealed` still false. A facilitator pressing Show at that moment changes
+`revealed` to true and changes nothing anyone can see, so a guard comparing
+only what travels would discard the whole `RoomData` and lose the flag. The
+loss is silent until the next participant joins, at which point `allVoted`
+goes false, the disjunction collapses, and the votes hide even though Show was
+pressed. Comparing the stored flag as well costs one redundant publish in that
+one case and removes a bug that would surface minutes later somewhere
+unrelated. The general rule, since this will recur: a change that is currently
+invisible but can become visible without a further command is a change. This
+term exists only because reveal is derived; the latched-reveal item in
+`docs/roadmap.md` would make `revealed` the whole answer and let it go.
+
+**A publish that changes nothing is skipped, and under bounded mode that is not
+a micro-optimization.** `ShowVotes` on an already-revealed room, `ClearVotes`
+on a cleared one, and a re-vote for the same estimation all reach `publish`
+today and would all bump the version. Every version bump closes and reopens
+every bounded client's connection (section 6), so one unthrottled `POST /show`
+loop turns into N HTTP round trips per iteration through the customer's
+scanning proxy. `docs/known-issues.md`'s "No rate limiting on mutating room
+endpoints" entry currently says this design removes the event log's
+amplification and needs no backstop. The first half is true and the second is
+not: the amplification changed shape from memory growth into request
+amplification, aimed at the one network already known to be running an
+inspecting appliance. This guard is the backstop, and the entry should be
+rewritten to say so rather than to claim the problem is gone. The broader
+rate-limiting gap still stands unchanged.
 
 **One place increments the version, so no call site can forget to.** This is
 worth stating because the superseded design had the opposite property and had
@@ -369,23 +499,23 @@ whole class of mistake is gone. Handlers reduce to one line each:
 case Vote(token, estimation) =>
   data.users.find(_.token == token) match
     case Some(user) =>
-      receiveBehaviour(roomId, publish(roomId, data.vote(user.id, estimation), context), config, timers)
+      receiveBehaviour(roomId, publish(data, data.vote(user.id, estimation), context), config, timers)
     case None => Behaviors.same
 
 case ClearVotes(token) =>
   data.users.find(_.token == token) match
-    case Some(user) => receiveBehaviour(roomId, publish(roomId, data.clear(), context), config, timers)
+    case Some(user) => receiveBehaviour(roomId, publish(data, data.clear(), context), config, timers)
     case None       => Behaviors.same
 
 case ShowVotes(token) =>
   data.users.find(_.token == token) match
-    case Some(user) => receiveBehaviour(roomId, publish(roomId, data.reveal(), context), config, timers)
+    case Some(user) => receiveBehaviour(roomId, publish(data, data.reveal(), context), config, timers)
     case None       => Behaviors.same
 
 case EditIssue(token, issue) =>
   data.users.find(_.token == token) match
     case Some(user) =>
-      receiveBehaviour(roomId, publish(roomId, data.editIssue(issue, user.id), context), config, timers)
+      receiveBehaviour(roomId, publish(data, data.editIssue(issue, user.id), context), config, timers)
     case None => Behaviors.same
 ```
 
@@ -399,7 +529,7 @@ stop:
 ```scala
 case ConfirmLeave(userId, ref, replyTo) =>
   if data.users.exists(u => u.id == userId && u.ref == ref) then
-    val next = publish(roomId, data.leave(userId, ref), context)
+    val next = publish(data, data.leave(userId, ref), context)
     if next.users.isEmpty then
       replyTo ! Stopped(roomId)
       Behaviors.stopped
@@ -409,10 +539,21 @@ case ConfirmLeave(userId, ref, replyTo) =>
   else Behaviors.same
 ```
 
-`publish` sends to `next.users`, which already excludes the departing user, so
-the remaining participants see the departure and the departing connection is
-not written to. When the room empties there is nobody to publish to and the
-send is a no-op, which is correct rather than a special case.
+`publish` sends to the post-departure user list, which already excludes the
+departing user, so the remaining participants see the departure and the
+departing connection is not written to. When the room empties there is nobody
+to publish to and the send is a no-op, which is correct rather than a special
+case. A departure always changes the participant list, so the no-op guard
+never suppresses it.
+
+**No snapshot ever carries version 0, and section 3 depends on it.** `publish`
+bumps before it sends, so the lowest version on the wire is 1. A room actor
+that restarts, or one recreated under a bookmarked id, therefore sits at 0
+holding state no client has ever been told about, and cannot be mistaken for
+"caught up" by a client whose `Last-Event-ID` is necessarily 1 or higher.
+Stated because it is what makes section 3's single equality comparison safe in
+the restart case, and it would be quietly broken by anything that sends a
+snapshot without going through `publish` on a room that has never published.
 
 `RoomConfig` groups the timing values rather than widening every recursive
 call:
@@ -420,19 +561,23 @@ call:
 ```scala
 final case class RoomConfig(
     gracePeriod: FiniteDuration,
-    boundedGracePeriod: FiniteDuration
+    boundedGracePeriod: FiniteDuration,
+    sessionTtl: FiniteDuration
 )
 
 object RoomConfig:
-  val default: RoomConfig = RoomConfig(6.seconds, 15.seconds)
+  val default: RoomConfig = RoomConfig(6.seconds, 15.seconds, 2.hours)
 ```
 
 `gracePeriod` is already threaded through every `receiveBehaviour` call and
 through `RoomManager.apply`/`createRoom`/`receiveBehaviour` as its own
 parameter with its own duplicated default. Replacing both with `RoomConfig`
 closes that duplication as a side effect and keeps arity where it is when
-`boundedGracePeriod` arrives. Unlike the superseded design, there are no
-event-log knobs to carry.
+`boundedGracePeriod` and `sessionTtl` arrive. Unlike the superseded design,
+there are no event-log knobs to carry. `sessionTtl` lands with PR 2 and the
+other two with PR 4, so the case class is introduced in PR 1 with only
+`gracePeriod` in it and grows twice; that is the point of introducing it
+before either of them needs it.
 
 ### 3. Connection-time resolution
 
@@ -454,11 +599,11 @@ case Join(user, lastKnownVersion) =>
   val (joined, isResume) = data.joinUser(user)
   if !isResume then
     // A new participant changes room state, so everyone including them gets the publish.
-    receiveBehaviour(roomId, publish(roomId, joined, context), config, timers)
+    receiveBehaviour(roomId, publish(data, joined, context), config, timers)
   else
     // A resume changes nothing others can see; send only if this client is behind.
     if !lastKnownVersion.contains(joined.version) then
-      user.ref ! RoomSnapshot.of(roomId, joined)
+      user.ref ! RoomSnapshot.of(joined, user.id)
     receiveBehaviour(roomId, joined, config, timers)
 ```
 
@@ -478,7 +623,18 @@ paragraph each now fall out of that one condition:
   version is treated as behind, and the client gets the current snapshot. A
   room actor restart resets `version` to 0 while a browser may hold a much
   higher value; that is simply a mismatch, handled by the same line, with no
-  special-casing and nothing to verify separately.
+  special-casing and nothing to verify separately. The converse, a restarted
+  room at 0 that a client's stale 0 could match, is unreachable rather than
+  guarded: no snapshot ever carries 0 (section 2), so no client can be holding
+  it.
+
+The version is not an optimization, and section 6 is why. A caught-up bounded
+connection has to send *nothing* in order to stay open and wait for the next
+real publish. Remove the version and every connect answers with a snapshot,
+`take(1)` fires immediately, and bounded mode degrades into a reconnect every
+`SSE_BOUNDED_RETRY`, which is the fixed-interval polling profile "Approaches
+considered" rejects. Worth stating here because PR 1 ships the version without
+bounded mode, so its justification arrives a PR later than the code.
 
 **A resume deliberately does not publish.** Room state genuinely has not
 changed, so `version` is not bumped and bystanders are not written to. Under
@@ -517,7 +673,7 @@ function applySnapshot(ref, s) {
   ref.ownVoteConfirmed = !me || me.voted || !me.estimation;
 
   const tally = {};
-  for (const u of s.users) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
+  for (const u of s.users) if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   ref.votesSummary = Object.entries(tally).sort((a, b) => b[1] - a[1]);
 }
 ```
@@ -527,6 +683,20 @@ Every template consumer of room-derived state is reachable from the snapshot.
 `votesSummary` and `showUserEstimation(u)` are derived as they already are
 today; `inRoom` is connection state and is set here for the same reason
 `index.html:401` sets it today.
+
+**The tally counts only participants who have voted, which is a deliberate
+change, and it forces a one-line template guard.** Today `updateSummary`
+(`index.html:546-552`) tallies `u.estimation` for every user, so a non-voter's
+empty string becomes a summary row with its own count, and in a revealed room
+with stragglers it can win the count and render as the "Most voted estimation"
+(`index.html:265`). That is plainly unintended, and this design is rewriting
+the function anyway, so it is fixed here rather than carried over. The
+consequence is that the tally can now be empty where before it always had at
+least the empty-string bucket, and `votesSummary[0][0]` would throw on an
+empty array. `Show` pressed in a room where nobody has voted reaches exactly
+that state, so the summary block's condition becomes
+`v-if="votesRevealed && votesSummary.length"`. The guard is not optional and
+is not defensive: it is reachable by two clicks.
 
 **`ownVoteConfirmed` is derived, not carried.** It is the one field whose
 value is not simply "what the server holds", so its derivation needs
@@ -571,13 +741,20 @@ on every message and then ignores it on receipt invites the question, so the
 reasoning belongs here rather than being inferred. Two guarantees make an
 out-of-order snapshot unreachable. Within a connection, SSE delivers in order,
 and a snapshot is one frame, so there is no interleaving. Across connections,
-section 6 establishes that at most one is ever open per client: native
+section 6 establishes that at most one is ever open per page instance: native
 `EventSource` reconnection replaces the connection on the same object, and
 both manual switches call `close()`, which takes effect synchronously, so the
 old object is CLOSED before the new one is constructed. Server-side the same
 holds from the other end, since `joinUser` replaces the entry and `publish`
 then writes only to the new `ref`, leaving anything queued for the old one to
 be read by nobody.
+
+"Per page instance" rather than "per client" is deliberate. A second tab on
+the same room shares the path-scoped session cookie, so it resumes as the same
+`userId` and evicts the first tab's `ref`. That is pre-existing and is
+recorded under "What was deferred or rejected", but it does not weaken the
+argument here: each tab is its own JS context applying its own snapshots in
+its own order, and neither can observe the other's.
 
 Adding a `if (s.version < lastApplied) return;` guard would cost two lines and
 is tempting, but it would assert a hazard the design says cannot occur, and a
@@ -744,12 +921,60 @@ period must cover is proxy-scan-and-release plus `SSE_BOUNDED_RETRY` plus a
 fresh connect back through the proxy, not `SSE_BOUNDED_RETRY` alone.
 
 **Fix, part 1: token resolution stops being derived from presence.**
-`pendingSessions` becomes `sessions`, retained for the room actor's lifetime
-instead of consumed on promotion: `joinUser` no longer removes the entry, and
-`ValidateToken` resolves against `sessions` alone, its `users` fallback
-becoming dead code. `PendingSession` is renamed `Session`, since nothing about
-it is pending any more. A reconnect after removal then resolves normally and
-comes back as an ordinary snapshot, instead of a dead end.
+`pendingSessions` becomes `sessions`, retained past promotion instead of
+consumed by it: `joinUser` no longer removes the entry. `PendingSession` is
+renamed `Session`, since nothing about it is pending any more, and gains a
+`createdAt`. A reconnect after removal then resolves normally and comes back
+as an ordinary snapshot, instead of a dead end.
+
+**Retention is bounded by a TTL, and `ValidateToken` keeps its `users`
+fallback, which is what makes the TTL safe.** The obvious shape here is
+"retain for the room actor's lifetime and resolve against `sessions` alone,
+its `users` fallback becoming dead code." That shape is what turns the two
+consequences below into open-ended ones rather than merely widened ones: the
+map grows for as long as the room lives, and so does every token in it. Both
+are avoidable in the same PR that creates them, rather than deferred to
+whatever eventually gives `sessions` an idle expiry:
+
+```scala
+case ValidateToken(token, replyTo) =>
+  val resolution = data.sessions.get(token).filter(_.isFresh(config.sessionTtl)) match
+    case Some(session) => Resolved(session.userId, session.name)
+    case None          =>
+      // A present participant always resolves, whatever the TTL says.
+      data.users.find(_.token == token) match
+        case Some(user) => Resolved(user.id, user.name)
+        case None       => Unresolved
+```
+
+Keeping the `users` branch is the whole trick. It is what stops a TTL from
+being able to lock out someone who is sitting in the room with an open
+connection, so `SSE_SESSION_TTL` can be set from "how long after leaving
+should a rejoin still be free" rather than from "how long might a meeting
+run". A default of 2 hours follows the shape of the work: a planning runs one
+to two hours, and a busy day is one in the morning and one in the afternoon,
+so 2 hours covers a whole session's worth of leaving and coming back while
+guaranteeing the morning's tokens are dead before the afternoon's meeting
+starts. Expiry is evaluated at resolution rather than swept by a timer, so
+there is no scheduled work and no second place for the two stores to disagree.
+
+**Measured from when the session was minted, not from last use.** A sliding
+window would be more forgiving, and it would also mean an entry that is
+touched often never expires, which gives back the bound the TTL exists for. It
+would buy nothing anyway: the case a sliding window protects, a participant
+who has been active all along, is exactly the case the `users` branch already
+resolves. Measuring from the mint keeps the security window an absolute
+`SSE_SESSION_TTL` from the moment the cookie was issued, which is the property
+worth being able to state plainly.
+
+Reclaiming the memory needs one more thing than the snippet shows: a
+`ValidateToken` that finds an expired entry drops it and threads the pruned
+data, so the handler returns `receiveBehaviour(...)` instead of today's
+`Behaviors.same` on that branch alone. Without it the TTL bounds token
+validity but not map size, which is half the point. A room nobody ever
+reconnects to keeps its expired entries until it stops, which is acceptable:
+the entries are small, and a room with no traffic at all is the case the
+room-level idle expiry in Phase 2/5 exists for.
 
 **This does not cover the solo case.** Retained sessions live in the room
 actor, so they only outlive a removal the actor itself outlives. When the
@@ -794,21 +1019,24 @@ Four consequences, stated rather than discovered later:
 
 - *Memory.* One small entry per `POST /rooms/:roomId/join` per room, unchanged
   by reconnects (a bounded cycle re-enters through `/events`, which never
-  mints a session), so growth is per page load, not per cycle. The
-  `docs/known-issues.md` entry "A `/join` with no follow-up `/events` leaks a
-  pending session for the room's lifetime" stops describing an accident and
-  starts describing a deliberate retention policy: rewrite it rather than
-  remove it, since it still wants the same room-level idle expiry from Phase
-  2/5.
+  mints a session), so growth is per page load, not per cycle, and the TTL
+  bounds it at "page loads within `SSE_SESSION_TTL`" rather than "page loads
+  for the room's lifetime". The `docs/known-issues.md` entry "A `/join` with
+  no follow-up `/events` leaks a pending session for the room's lifetime" is
+  closed by that TTL rather than rewritten: an unpromoted session now expires
+  on its own. The room-level idle expiry it pointed at for Phase 2/5 is still
+  wanted for rooms themselves, which is a separate entry.
 - *Behavior.* The session cookie is path-scoped and `httpOnly` and `doLeave`
   (`index.html:511-518`) never clears it, so today "click Leave, then reload"
   produces a `401` and a misleading "your session has ended" banner. It will
   now silently rejoin the same room under the same identity. That is an
   improvement, and it is a change.
-- *Security.* A token stays valid for the room's lifetime rather than for the
-  presence's, widening the window in which a captured cookie is usable.
-  Accepted for an internal tool behind `SameSite=Strict`, `httpOnly`,
-  path-scoped cookies, and recorded rather than accepted silently.
+- *Security.* A token stays valid for `SSE_SESSION_TTL` past its presence
+  rather than ending with it, widening the window in which a captured cookie
+  is usable. Bounded rather than open-ended is the point of the TTL: without
+  it the window is the room's whole lifetime. Accepted for an internal tool
+  behind `SameSite=Strict`, `httpOnly`, path-scoped cookies, and recorded
+  rather than accepted silently.
 - *A grace trip loses the returning user's vote silently, where before it
   announced itself.* Problem A carries `voted`/`estimation` across a resume,
   but a user whom `ConfirmLeave` already removed is not a resume: `joinUser`
@@ -820,6 +1048,18 @@ Four consequences, stated rather than discovered later:
   longer exists in room state by then; part 2 keeps the common case away from
   this path, and the residual belongs with whatever gives `sessions` an idle
   expiry.
+
+**What this is still worth once PR 4 lands, stated because the overlap is
+easy to miss.** Section 6's one-shot automatic re-join already recovers a
+terminal `401` with no user action, so after PR 4 a late reconnect is no
+longer a dead end even without retained sessions. What retention adds on top
+is that the returning participant keeps their `userId` and their place in the
+room rather than arriving as a new person beside their own six-second ghost.
+The vote is lost either way (see the fourth consequence above). Before PR 4 it
+is the difference between recovering and not, which is why it ships on its own
+and first; after PR 4 it is the difference between a seamless return and a
+visibly disruptive one. Both are worth having, and the second is the one the
+security consequence above is being traded against.
 
 **Fix, part 2: bounded connections get their own, longer grace period.** Part
 1 makes a late reconnect recoverable but not free: every trip still removes
@@ -846,28 +1086,111 @@ makes `docs/known-issues.md`'s "A deliberate tab close is as slow to announce
 as a transient reconnect" worse for bounded clients specifically, 6s to 15s,
 which is the deliberate trade.
 
+**That entry's most visible form is a reload, not a tab close, and it should
+say so.** `POST /rooms/:roomId/join` mints a fresh `userId` and token on every
+call, so a page reload is a new participant to the room and the previous one
+lingers for the grace period. The user therefore watches their own name sit in
+the participant list twice, for 6 seconds today and 15 under bounded mode.
+Naming that case in the entry matters because it is the one a user actually
+reports, and because the `sendBeacon` fix the entry already proposes covers it
+too.
+
+**A single 15s grace period for everyone was considered.** It would delete
+`User.bounded` and its threading through `SSE.source`/`ConnectToRoom`/`Join`,
+`Mode.bounded`, one config value, one invariant and several tests, which is a
+real amount of surface for one number. Rejected because the trade is paid by
+the wrong people: it would make every unbounded client's departure, meaning
+everyone not behind the proxy, two and a half times slower to announce in
+order to simplify a path only proxied clients take. Two periods keep the cost
+where the benefit is.
+
 **Problem D part 3 does not arise.** Under the superseded design, resolving a
 removed-then-returning user as a delta would have replayed that client's own
 `Leave` and made it prune itself from its own participant list. A snapshot
 contains the returning user, so there is nothing to guard.
 
-**Problem E, reveal state is client-derived.** `ShowVotes` broadcasts and
-changes nothing (`Room.scala:173-181`), so "revealed" exists only as a
-client-side flag, and a resyncing client falls back to `allVoted()`
-(`index.html:553-555`), re-deriving it as "everyone has voted". That agrees
-with the server in every case but one: `Show` pressed while a straggler has
-not voted, a legitimate facilitator flow. The resyncing client then hides
-votes everyone else can see, and an observer-mode display would do so with no
-human in the loop to notice.
+**Problem E, reveal state is client-derived, and one half of it is a feature
+rather than a fallback.** `ShowVotes` broadcasts and changes nothing
+(`Room.scala:173-181`), so "revealed" exists only as a client-side flag. The
+client keeps it up to date with `allVoted()` (`index.html:553-555`), which
+re-derives it as "everyone has voted".
 
-**Fix:** `RoomData` gains `revealed: Boolean` (initially `false`), `reveal()`
-sets it, and the existing `clear()`/`reVote()` set it back alongside the vote
-fields they already touch. It is a field in the snapshot, so there is nothing
-further to do: no synthesized frame, and none of the superseded design's
-reasoning about where in a replay burst that frame has to sit in order not to
-be overwritten by the next one. `docs/known-issues.md`'s "Resync doesn't
-replay whether votes are currently revealed" is removed per that file's
-convention, and Phase 4 inherits reveal state as real backend state.
+`allVoted()` is easy to read as resync machinery and is not. It is called from
+the `join`, `vote` and `leave` handlers, so it runs on every message on every
+client, and the `vote` call is what makes votes reveal automatically once the
+last participant has voted, with nobody pressing Show. That is a shipped
+behaviour, and `docs/roadmap.md`'s Phase 4 entry names it as such: "Today
+'everyone voted' is computed client-side only and never told to the server or
+other clients; it needs to become real backend logic." Deleting the derivation
+along with the handler block, and setting `votesRevealed` from a flag that
+only `Show` sets, would silently remove auto-reveal from the product until
+Phase 4 lands. This has to be a decision, not a side effect of the rewrite.
+
+The client-side derivation is wrong in one way that a server-side one is not,
+and surprising in two more that a server-side one reproduces:
+
+1. Wrong: `Show` pressed while a straggler has not voted, a legitimate
+   facilitator flow, does not survive a resync. The reconnecting client
+   re-derives "not everyone voted" and hides votes everyone else can see. An
+   observer-mode display would do so with no human in the loop to notice. This
+   is the one the fix below closes.
+2. Surprising: the `join` handler calls `allVoted()`, so a participant
+   arriving in an auto-revealed room hides the votes for the whole room again.
+3. Surprising: the `leave` handler calls it too, so the last non-voter leaving
+   reveals the votes with no facilitator action.
+
+2 and 3 are not bugs in the derivation, they are the derivation. "Revealed
+means every present participant has voted" says exactly that the set changing
+can flip the answer either way, and moving the rule to the server changes
+where it is computed, not what it computes. They are recorded here so that the
+fix below is not read as closing them, and because closing them is a product
+change rather than a protocol one. Deliberately kept as they are, and filed in
+`docs/roadmap.md` under Phase 4; see "Derived rather than latched" at the end
+of this problem.
+
+**Fix, and it delivers Phase 4's roadmap item as a side effect.** `RoomData`
+gains `revealed: Boolean` (initially `false`) meaning "Show was pressed";
+`reveal()` sets it and the existing `clear()`/`reVote()` clear it alongside
+the vote fields they already touch. The answer clients actually get is derived
+next to it:
+
+```scala
+def isRevealed: Boolean = revealed || (users.nonEmpty && users.forall(_.voted))
+```
+
+`RoomSnapshot.of` carries `isRevealed`, so the client assigns
+`ref.votesRevealed = s.revealed` and derives nothing. Auto-reveal is preserved
+exactly, the straggler case is fixed because the stored flag wins, and every
+client now agrees because one place computes it. Deriving rather than storing
+the union means there is no second flag to keep consistent with `voted`: a
+`reVote()` clears `voted`, so `isRevealed` goes false with no extra bookkeeping.
+
+No extra publish is needed for the auto-reveal transition, since the vote that
+completes the round already publishes. `docs/known-issues.md`'s "Resync
+doesn't replay whether votes are currently revealed" is removed per that
+file's convention, and Phase 4 inherits reveal as real backend state rather
+than a client-only derivation it has to replace.
+
+**Derived rather than latched, decided.** The disjunction above preserves
+today's semantics exactly, points 2 and 3 included. That is the point of it:
+this design moves where the rule is computed without changing what it computes,
+so nothing about reveal behaves differently after PR 1 except the straggler
+case, which was the bug.
+
+The alternative is to latch, having `vote()` set `revealed = true` once every
+participant has voted, so reveal becomes a one-way door until `clear()` or
+`reVote()` reopens it. That closes point 2 and changes point 3, and it is
+probably the better product behaviour, since a departure silently exposing
+votes is the more alarming of the two. It is also a change to what the product
+does rather than to how state reaches the client, so it belongs with whoever
+owns the voting workflow rather than on a connectivity fix. It is filed in
+`docs/roadmap.md` under Phase 4, next to the auto-reveal item this design
+closes, with the shape it would take and the two tests it would invert.
+
+The cost of deferring is one term: section 2's `visibleState` has to compare
+stored `revealed` as well, because under a disjunction a `Show` can change the
+flag without changing anything visible. Latching would make that term
+unnecessary, which is noted there rather than only here.
 
 ### 6. Bounded/long-poll fallback for proxy-detected clients
 
@@ -877,55 +1200,40 @@ there is no delta to resolve and no batching to respect.
 
 Client-side (`index.html`'s `doJoin`):
 
-- **Detection cache check, after `JoinResponse` and before any `EventSource`
-  opens.** Read `localStorage.getItem('sseBoundedAt')` and compare it against
-  the TTL that response just delivered:
+- **No detection cache: every page load detects afresh.** The superseded
+  design cached a "this path buffers" verdict in `localStorage` under a TTL, so
+  a proxied client paid the detection window once a day rather than once per
+  join. That is dropped, deliberately and with the 5-second cost accepted, on
+  the principle that this first version should be as simple as it can be while
+  still working. It is the single largest simplification in this section:
+  it removes a `localStorage` key, an env var, the write-time against read-time
+  expiry argument the TTL needed, a change to `doLeave`, the `storage`
+  injection in `connection.js`, and five test cases.
 
-  ```js
-  const at = Number(storage.getItem('sseBoundedAt'));
-  if (at && Date.now() - at < config.detectionCacheTtlMillis) { /* open bounded */ }
-  ```
+  What it buys back is a residual with no recovery path. A cached verdict is
+  consulted *before* any unbounded connection is attempted, so a client inside
+  the window never runs detection and nothing it receives can correct the
+  entry: the "any message self-heals it" property that applies to a detecting
+  client is unreachable for exactly the clients that are wrongly pinned, and
+  the TTL is the only lever. It also removes the reason that lever existed. The
+  scenario the TTL was justified by is the whitelist request landing and the
+  operator wanting clients off the bounded path; with no cache they simply
+  detect correctly on their next join, so there is nothing to expire and no
+  knob to reach for.
 
-  If it is inside the window, skip detection entirely and open directly with
-  `?bounded=1`. Only the "detected true" outcome is ever cached, never
-  "detected false", so the only way this cache can be wrong is by making a
-  client wait out a redundant bounded cycle it did not need, never by leaving a
-  client on an unbounded connection the proxy will kill. Whether a network path
-  buffers is not a fixed property of the device (a laptop moving between office
-  and home, a VPN toggling, the whitelist request succeeding), hence the TTL
-  and self-heal below.
-
-  **The entry stores when detection concluded, not when it expires, and the
-  difference is operational rather than cosmetic.** Storing an absolute
-  `Date.now() + TTL` would bake the TTL in at write time, so lowering
-  `SSE_DETECTION_CACHE_TTL` would leave every already-written entry on its old,
-  longer expiry for up to a day. That is exactly the scenario the TTL is
-  justified by: the whitelist request lands, the proxy stops buffering, and the
-  operator wants clients to stop pinning themselves to the bounded path. Under
-  write-time expiry the knob is at its least responsive precisely when it is
-  needed. Evaluating at read time against the value `JoinResponse` just
-  delivered makes the TTL live, applying to every existing entry on that
-  client's next join, and makes `SSE_DETECTION_CACHE_TTL=0` a genuine kill
-  switch for the cache rather than something that only affects future writes.
-  Both schemes read the client's wall clock, so a clock jump misjudges expiry
-  either way; that is bounded and non-critical, the same category as the
-  false-positive cost accepted below.
-
-  This is why the check sits after `JoinResponse` rather than at the very top
-  of `doJoin`. It needs the TTL, where the superseded shape needed nothing at
-  read time. `doJoin` already awaits that response before constructing any
-  `EventSource` (`index.html:384-388`), so this costs no extra round trip and
-  no reordering.
-- Open `EventSource` unbounded by default when no valid cache entry
-  short-circuited that step.
+  The cost is 5 seconds behind the connecting spinner on each join for a
+  genuinely proxied client, including `created()`'s auto-join of a bookmarked
+  room. That is paid by users who cannot connect at all today. Re-adding the
+  cache later is purely additive if the wait turns out to grate, and the shape
+  to re-add is the read-time-TTL one, for the reason above.
+- Open `EventSource` unbounded, always.
 - **Start a detection timer when the `EventSource` is constructed, not in its
   `onopen` handler**, duration delivered from the server, default 5s. This is
   the whole mechanism: the target proxy delivers no headers at all for a
   stream that never completes, so `onopen` never fires in exactly the case
   detection exists to catch, and a timer armed there would never start. Any
-  message, including a heartbeat, clears it, and clears any stale
-  `sseBoundedAt` entry, which is the self-heal path. A bounded connection
-  is never timed, since it may legitimately wait out the wall-clock cap.
+  message, including a heartbeat, clears it. A bounded connection is never
+  timed, since it may legitimately wait out the wall-clock cap.
 - **Neither detection timer is armed while the document is hidden, and this is
   the guard that keeps false positives rare enough to accept.** Both timers
   infer "the path is buffering" from "nothing arrived within a window", and
@@ -964,12 +1272,11 @@ Client-side (`index.html`'s `doJoin`):
   they cannot see the broken room until then anyway, and the cost of waiting
   is zero.
 - If the timer fires with nothing received: close that connection, mark an
-  in-memory `sseBounded = true` for this page instance, write
-  `sseBoundedAt = Date.now()`, and manually open
-  a new `EventSource` with `?bounded=1`. `sseBounded` is sticky for the page
-  instance, so this switch happens at most once per page load. These are the
-  only two manually-driven reconnects in this design, both needed because the
-  URL itself changes.
+  in-memory `sseBounded = true` for this page instance, and manually open a new
+  `EventSource` with `?bounded=1`. `sseBounded` is sticky for the page
+  instance, so this switch happens at most once per page load, and nothing
+  outlives the page instance. These are the only two manually-driven
+  reconnects in this design, both needed because the URL itself changes.
 - **Connecting spinner.** From the moment `doJoin` starts (form submission, or
   `created()` auto-joining a bookmarked room, `index.html:560-574`) until the
   first snapshot arrives or the connection definitively fails, show a spinner
@@ -1091,19 +1398,10 @@ the same caller once it knows whether `bounded` is present, so they travel
 together:
 
 ```scala
-enum Mode:
-  case Unbounded(retryMillis: Int, heartbeatInterval: FiniteDuration)
-  case Bounded(retryMillis: Int, durationMillis: Int)
-
-  // Both accessors are explicit: an enum case's parameters are not exposed on the parent type.
-  def retryMillis: Int = this match
-    case Unbounded(r, _) => r
-    case Bounded(r, _)   => r
-
-  // Section 5's User.bounded, which must outlive the Join to be readable at Leave time.
-  def bounded: Boolean = this match
-    case _: Bounded => true
-    case _          => false
+// bounded is section 5's User.bounded, which must outlive the Join to be readable at Leave time.
+enum Mode(val retryMillis: Int, val bounded: Boolean):
+  case Unbounded(retry: Int, heartbeatInterval: FiniteDuration) extends Mode(retry, false)
+  case Bounded(retry: Int, durationMillis: Int)                 extends Mode(retry, true)
 
 def source(
     roomManager: ActorRef,
@@ -1137,6 +1435,12 @@ def source(
     case Mode.Unbounded(_, heartbeatInterval) =>
       base.keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 ```
+
+Parameterising the enum itself, rather than adding `retryMillis`/`bounded`
+accessors that `match` on the case, is what keeps this to four lines: an enum
+case's own parameters are not visible on the parent type, but a parameterised
+enum's are, so the two shared values are declared once and the cases only say
+what they contribute.
 
 **Why a `Mode` ADT rather than `retryMillis` plus `bounded: Option[...]`.**
 With both present, a bounded connection has two retry values in scope and only
@@ -1190,6 +1494,24 @@ Remaining server-side points, unchanged from the superseded design:
   `retry:` value) and would break native `Last-Event-ID` tracking. The
   trade-off is that a sustained outage is met with a fixed ~500ms cadence
   rather than a growing one, acceptable at this app's scale.
+
+  **The retry jitter is not the same anti-lockstep measure as the duration
+  jitter, and its own reason is the stronger one.** `SSE_BOUNDED_DURATION_JITTER`
+  spreads out clients that are idling to their wall-clock cap independently. The
+  retry jitter covers the case that is not independent at all: a single publish
+  closes every bounded connection in the room at once, so without it the whole
+  room reconnects through the same proxy in the same tick, and the busier the
+  room the more synchronized the herd. Jitter is applied per connection at the
+  route, so two clients closed by the same publish come back at different times.
+- **`retry:` rides only on data frames, so the 500ms cadence depends on each
+  new `EventSource` object's first cycle carrying a snapshot.** A bounded cycle
+  that closes at its wall-clock cap with nothing to send emits no frame at all,
+  and therefore no `retry:` hint; the browser keeps applying whatever value it
+  last received. Every path does deliver one on the first cycle (a new
+  `EventSource` sends no `Last-Event-ID`, which section 3 resolves as behind),
+  so the only connection ever made at the browser's own default is the very
+  first one after a manual switch. That is fine and it is also invisible, which
+  is why it gets an `SSESpec` case rather than a note alone.
 - **The 15-second `.keepAlive` heartbeat is not applied to bounded
   connections.** Its only purpose is keeping a connection alive under Pekko's
   60-second idle timeout, and a bounded connection's own cap (20-30s) stays
@@ -1201,10 +1523,11 @@ Remaining server-side points, unchanged from the superseded design:
 - The timing constants are configurable via env var following the existing
   `SseConfig` pattern: `SSE_BOUNDED_DURATION` (20s), `SSE_BOUNDED_DURATION_JITTER`
   (10s), `SSE_BOUNDED_RETRY`/`SSE_BOUNDED_RETRY_JITTER` (500ms +/-100ms),
-  `SSE_BOUNDED_GRACE_PERIOD` (15s), and `SSE_HEARTBEAT_INTERVAL` (15s,
-  unchanged from today's hardcoded value; see the invariants for why it stops
-  being a constant). These are judgment calls about a real proxy's behaviour
-  and real users' tolerance for lag, to be revisited with production feedback.
+  `SSE_BOUNDED_GRACE_PERIOD` (15s), `SSE_SESSION_TTL` (2h, Problem D part 1),
+  and `SSE_HEARTBEAT_INTERVAL` (15s, unchanged from today's hardcoded value;
+  see the invariants for why it stops being a constant). These are judgment
+  calls about a real proxy's behaviour and real users' tolerance for lag, to be
+  revisited with production feedback.
 - **`SSE_ASSUMED_PROXY_TIMEOUT`** (45s) sits in the same config but is not a
   tuning knob: it declares a fact about the deployment environment, the
   shortest response-completion deadline any proxy in front of this service is
@@ -1212,35 +1535,20 @@ Remaining server-side points, unchanged from the superseded design:
   invariants can check the cap against the ceiling that actually matters. A
   deployment behind a stricter proxy lowers it; one behind no buffering proxy
   raises it.
-- **`SSE_DETECTION_TIMEOUT`** (5s) and **`SSE_DETECTION_CACHE_TTL`** (24h)
-  cannot reach the client on the SSE wire, since detection times the absence
-  of any frame. They ride the existing `POST /rooms/:roomId/join` response
-  (`JoinResponse`, `API.scala:76-95`), which already precedes `EventSource`
-  creation and is a small finite response the proxy releases immediately.
-  `JoinResponse` carries the derived re-detection window alongside them. The
-  TTL is short enough that a whitelist fix self-corrects within a business
-  day, long enough that a customer joining several rooms in a day pays the
-  detection window once. Because the cache stores when detection concluded
-  rather than when it expires (see the cache-check bullet above), the TTL is
-  applied at read time, so changing it takes effect on every existing entry at
-  that client's next join rather than only on entries written afterwards.
-  `SSE_DETECTION_CACHE_TTL=0` therefore disables the cache outright, which is
-  the lever to reach for the moment the whitelist request lands, ahead of
-  removing any of this code.
-- **`doLeave`'s `localStorage.clear()` becomes targeted removals, or the TTL
-  does not do what it says.** `doLeave` (`index.html:511-518`) wipes all of
-  `localStorage`, which today means exactly `roomId` and `name`. Adding
-  `sseBoundedAt` to the same store means the Leave button silently resets
-  detection, so a customer running several plannings a day pays the detection
-  window after every Leave, which is the flow the TTL was justified by.
-  Replace it with `removeItem("roomId")` and `removeItem("name")`:
-  behavior-preserving today and correct going forward. The classification to
-  apply to any future key is that room and session state is swept by
-  `doLeave`, path state is not. One consequence: `doLeave` was an accidental
-  escape hatch from a false-positive detection, and afterwards TTL expiry is
-  the only reset, so a wrongly-pinned client stays bounded for up to 24h. That
-  is the cost already accepted for false positives generally, and the lever is
-  the TTL, which is tunable and now applies to entries already written.
+- **`SSE_DETECTION_TIMEOUT`** (5s) cannot reach the client on the SSE wire,
+  since detection times the absence of any frame. It rides the existing
+  `POST /rooms/:roomId/join` response (`JoinResponse`, `API.scala:76-95`),
+  which already precedes `EventSource` creation and is a small finite response
+  the proxy releases immediately. `JoinResponse` carries the derived
+  re-detection window alongside it. Nothing else needs to reach the client
+  before its first frame, and with no detection cache there is no client-side
+  persistence at all: a wrongly detected client is corrected by its next page
+  load rather than by an operator lowering a TTL.
+- **`doLeave`'s `localStorage.clear()` stays as it is.** It wipes exactly
+  `roomId` and `name`, which is what it is for. This is worth a line only
+  because the superseded shape had to change it: a detection cache would have
+  put a path-state key in the same store, making the Leave button silently
+  reset detection. With no such key, the classification never comes up.
 - **Logging at the decision points this design introduces**, plain SLF4J, no
   new dependency, since several constants are explicitly "revisit after
   production feedback" and that revisit is unactionable without observation: a
@@ -1281,12 +1589,9 @@ require(boundedRetryJitterMillis >= 0 && boundedRetryJitterMillis < boundedRetry
 ```
 
 Plus positivity checks for each new value, in the style the existing ones use,
-with one deliberate exception: `SSE_DETECTION_CACHE_TTL` is checked
-`>= 0`, not `> 0`, because zero is the meaningful "disable the detection
-cache" setting rather than a misconfiguration, and read-time TTL evaluation is
-what makes it take effect on entries already written.
-`SSE_BOUNDED_DURATION_JITTER` takes `>= 0` for the same reason, zero meaning
-"no jitter".
+with one deliberate exception: `SSE_BOUNDED_DURATION_JITTER` is checked
+`>= 0`, not `> 0`, because zero is the meaningful "no jitter" setting rather
+than a misconfiguration.
 
 The third is the one that actually bites. An earlier version checked only
 Pekko's 60s idle timeout, reasoning that the codebase cannot know a customer's
@@ -1333,22 +1638,26 @@ across every configuration the system has to support.
 **Implementation shape: the connection logic moves out of `index.html` into a
 testable module.** Everything above turns what is today a flat sequence of
 handlers into a connection state machine: two modes, a construct-time
-detection timer, a re-detection timer with a different window, a
-`localStorage` cache with a TTL and a self-heal path, one manual URL switch,
-an error-debounce counter, a one-shot re-join on a terminal `401`, and a
-spinner flag. That is also precisely the code a future framework migration has
-to port. Leaving it inline means it is untestable now and rewritten twice
-later, so it moves to `src/main/resources/pages/connection.js` as an ES module
-with its dependencies injected:
+detection timer, a re-detection timer with a different window, a visibility
+guard on both, one manual URL switch, an error-debounce counter, a one-shot
+re-join on a terminal `401`, and a spinner flag. That is also precisely the
+code a future framework migration has to port. Leaving it inline means it is
+untestable now and rewritten twice later, so it moves to
+`src/main/resources/pages/connection.js` as an ES module with its dependencies
+injected:
 
 ```js
 export function createConnection({
   roomId, userId, config,        // config: the values JoinResponse carries
-  eventSourceFactory, storage,   // injected so tests supply doubles
+  eventSourceFactory,            // injected so tests supply doubles
   setTimeout, clearTimeout,      // injected so tests control time
   onSnapshot, onState            // outward reporting, see below
 }) { /* ... returns { start, stop } ... */ }
 ```
+
+No `storage` is injected: with the detection cache dropped, the module holds
+no persistent state, and `localStorage` stays entirely in `index.html`'s
+`doJoin`/`doLeave` where `roomId` and `name` already live.
 
 `onState` emits immutable snapshots of connection state, it never mutates a
 caller-owned object. This decides whether the module survives the framework
@@ -1371,9 +1680,10 @@ route today, only `getFromFile(apiConfig.indexPath)`. Add a route serving
 already packages the whole `pages` directory.
 
 Tests run under `node --test` with zero dependencies: Node's built-in runner,
-its built-in timer mocking, and about 70 lines of test doubles (a fake
+its built-in timer mocking, and about 60 lines of test doubles (a fake
 `EventSource` exposing `readyState`/`onopen`/`onmessage`/`onerror` plus an
-`emit` helper, and a fake `storage`). `package.json` declares no dependencies.
+`emit` helper, and a settable `document.visibilityState`). `package.json`
+declares no dependencies.
 CI gains a `setup-node` step and a gating `node --test` step alongside
 `sbt qa`. JS coverage is deliberately not merged into the existing
 scoverage/Codecov stream for now.
@@ -1431,6 +1741,18 @@ mode's per-event cost into something worse than the polling option, while
 eating the grace budget from both ends. Assumption 6 feeds
 `boundedGracePeriod` directly, which is currently a guess resting on a guess.
 
+**What it looks like from the user's seat if assumption 5 is false**, recorded
+so it is recognisable in the field rather than debugged from first principles.
+Detection concludes normally, since detection only measures that nothing
+arrived, and the client switches to bounded mode. The bounded connection is
+then never timed (section 6), so the user watches the connecting spinner for
+the proxy's full deadline, roughly 45 seconds, before the first `onerror`.
+That error is debounced, so it takes three failing cycles, another minute and
+a half or so, before the banner appears. The signature is therefore a long
+silent spinner followed by a late banner, with `?bounded=1` requests visible
+server-side that never deliver anything, rather than the immediate failure
+today's unbounded path produces.
+
 **The blast radius is PRs 3 to 5.** PRs 1 and 2 are live bug fixes plus the
 protocol replacement, and are justified without any of this.
 
@@ -1462,9 +1784,13 @@ proof or refutation of the premise.
 differently-measured deadline, set the value and let the invariants follow it
 down, no design change. A large scan-and-release latency in A, revisit
 `SSE_BOUNDED_GRACE_PERIOD` and re-run the latency comparison against polling.
-C or D failing, bounded mode's premise is gone and the fallback is option 5
-under "Approaches considered", which under this design is a transport swap
-over the same snapshot payload rather than a redesign.
+C or D failing, bounded mode's premise is gone and the fallback is option 6
+under "Approaches considered", long polling over the same snapshot payload,
+which is a transport swap rather than a redesign. Option 6 rather than option
+5 specifically: a C or D failure is most likely an appliance that will not
+release a streaming content type, and a finite `application/json` response is
+what answers that, whereas short polling would answer it at a request rate the
+same security team is likely to flag.
 
 **Proceeding without it is a legitimate choice, recorded as one rather than
 reached by drift.** The probe needs a person on that network for two minutes,
@@ -1474,17 +1800,16 @@ all of this moot. Four things soften that and one does not.
 
 - The timing values are all env-driven, so a wrong guess about 3, 4 or 6 is a
   configuration change on a running deployment, not a code change.
-- `SSE_DETECTION_CACHE_TTL` bounds how long a client can be wrongly pinned to
-  the bounded path to about a day, any message self-heals it sooner, and
-  because the TTL is evaluated at read time, lowering or zeroing it clears
-  every existing entry at each client's next join rather than only affecting
-  entries written afterwards. That makes it a usable rollback lever, not just
-  a bound.
+- A wrongly detected client is wrong for one page load, not for a cached
+  window. With no detection cache, `sseBounded` dies with the page instance,
+  so the blast radius of a false positive is bounded by a reload rather than
+  by an operator noticing and turning a knob.
 - The failure mode is the one that already exists. A client for whom bounded
   mode does not work is a client that cannot connect today either, so an
   unvalidated model risks wasted effort rather than a regression for anyone.
-- Polling stays available as the fallback, and is cheaper under this design
-  than it was under the superseded one.
+- Long polling stays available as the fallback (option 6), and is cheaper
+  under this design than it was under the superseded one, since it reuses the
+  snapshot payload and the version cursor unchanged.
 
 What none of that changes: assumption 5 stays unverified until it meets the
 real proxy, and the first place that happens is the customer's own deployment.
@@ -1509,9 +1834,33 @@ Take the *Ask* rung even when the probe is skipped.
 - **Durable/persisted room state**: deferred to Phase 2. The wire protocol
   here does not need revisiting when that lands, and `version` is a natural
   fit for an optimistic-concurrency column if it ever becomes one.
-- **Short polling instead of an SSE fallback**: rejected, see approach 5.
-  Recorded in full because it is the fallback if the proxy model is wrong, and
-  because this design makes it much cheaper to reach for.
+- **Short polling instead of an SSE fallback**: rejected, see approach 5. Its
+  request rate is the objection, and that objection is specific to the
+  interval rather than to polling as such.
+- **Long polling instead of a bounded SSE fallback**: deferred, not rejected,
+  see approach 6. This is the fallback if the proxy model turns out to be
+  wrong, replacing short polling in that role, and it is the one option that
+  answers assumption 5's fatal case rather than hedging it. This design makes
+  it cheap to reach for: same snapshot payload, same version cursor, different
+  transport.
+- **The detection cache** (`sseBoundedAt` in `localStorage` under
+  `SSE_DETECTION_CACHE_TTL`): dropped from the superseded design, see section
+  6. It saved a proxied client 5 seconds per join and cost a residual with no
+  recovery path, since a cached verdict is consulted before any connection is
+  attempted and therefore cannot be corrected by anything received. Re-adding
+  it is additive if the wait grates in practice; the shape to re-add is
+  read-time TTL evaluation against a stored conclusion time, not a stored
+  expiry, so that lowering the knob takes effect on entries already written.
+- **Two tabs on the same room resume as the same participant**: recorded, not
+  fixed. The session cookie is path-scoped to the room, so a second tab sends
+  the same token, resolves to the same `userId`, and `joinUser` replaces the
+  first tab's `ref`. Today the displaced tab goes silently stale for good;
+  under bounded mode the two alternate, each showing state up to one cycle
+  old, because every reconnect re-registers and displaces the other. Neither
+  is caused by this design and neither weakens section 4's ordering argument
+  (each tab is its own JS context), but bounded mode changes the symptom
+  enough to be worth an entry. The fix is identity per connection rather than
+  per session token, which is a session-model change well outside this scope.
 - **Handling an old cached client against a new server during rollout**: not
   addressed, and it is worse here than under the superseded design. An old
   page dispatches on `message.messageType`, which a snapshot does not carry,
@@ -1579,13 +1928,14 @@ Take the *Ask* rung even when the probe is skipped.
   cannot connect today either, so a bounded mode that does not work leaves
   them exactly where they are. Spending a config value and a `JoinResponse`
   field to be able to revert to an identical outcome buys nothing. The second,
-  a healthy client misdetected into bounded mode, is real, but a
-  feature-wide switch is the wrong instrument for it: it can only be thrown by
-  an operator who has noticed, it disables the fix for everyone including the
-  clients that need it, and it does nothing about the trigger. The visibility
-  guard in section 6 addresses that trigger directly and at the source, which
-  is where the effort belongs. If bounded mode ever does need disabling
-  wholesale, reverting PR 4 is the honest way to do it.
+  a healthy client misdetected into bounded mode, is real but small and
+  self-limiting: with no detection cache the misdetection lasts one page load.
+  A feature-wide switch is the wrong instrument for it anyway, since it can
+  only be thrown by an operator who has noticed, it disables the fix for
+  everyone including the clients that need it, and it does nothing about the
+  trigger. The visibility guard in section 6 addresses that trigger directly
+  and at the source, which is where the effort belongs. If bounded mode ever
+  does need disabling wholesale, reverting PR 4 is the honest way to do it.
 - **Rate limiting on mutating endpoints**: still unaddressed, and no longer
   has an event-log-specific symptom to work around. See
   `docs/known-issues.md`.
@@ -1599,10 +1949,29 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
 
 - `publish` increments `version` exactly once per state change and sends to
   every current user. Successive publishes produce strictly increasing
-  versions.
+  versions. No snapshot ever carries version 0, on any path.
+- The no-op guard: `ShowVotes` on an already-revealed room, `ClearVotes` on a
+  cleared one, and a `Vote` repeating the voter's current estimation each
+  leave `version` untouched and send nothing, while the same commands against
+  a room they do change publish normally. This is the property bounded mode's
+  request amplification depends on, so it is asserted on the version rather
+  than only on the absence of a message.
+- The no-op guard's own failure case, which is the one an implementation is
+  most likely to get wrong: a participant changing their vote from one value
+  to another *before* reveal does publish. `voted` is already true and both
+  estimations are redacted out of every other participant's snapshot, so a
+  guard comparing redacted snapshots would call this unchanged and the voter's
+  own client would never see its new value.
 - `RoomSnapshot.of` never serializes a session token or an `ActorRef`. Asserted
   against the encoded JSON rather than the case class, since the risk is a
   future `deriveEncoder[User]`, and this is the test that catches it.
+- Redaction: in an unrevealed room, each recipient's snapshot carries their own
+  estimation and an empty string for everyone else, while `voted` stays true
+  for all of them; once revealed, every estimation travels to everyone. The
+  negative case is the one worth writing carefully, since a snapshot built for
+  the wrong recipient would still look plausible: assert against the encoded
+  JSON that another participant's estimation string does not appear anywhere in
+  it.
 - Each of the seven state transitions (`Join`, `Vote`, `ClearVotes`, `ReVote`,
   `ShowVotes`, `EditIssue`, `ConfirmLeave`) publishes exactly one snapshot
   reflecting the transition, and no handler returns without threading the
@@ -1640,14 +2009,41 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
   stream, not a `401`. Plus the residual, asserted rather than left implicit:
   when the removed user was the room's only member, `ConfirmLeave` still stops
   the actor and that reconnect still gets a `401`.
+- Problem D part 1's TTL, and specifically the interaction that makes it safe:
+  a session past `SSE_SESSION_TTL` whose user has been removed resolves
+  `Unresolved` and is dropped from the map, while a session past the TTL whose
+  user is still present resolves through the `users` branch. The second case is
+  the point of keeping that branch and is the one a "resolve against `sessions`
+  alone" implementation would fail, so it needs to be written as its own case
+  rather than folded into the first.
 - Problem D part 2: `Leave` for a connection whose `User.bounded` is true
   schedules at `boundedGracePeriod`, an unbounded one at `gracePeriod`; a
   resume carries the incoming connection's flag, not the replaced entry's.
 - Problem E: `revealed` is set by `ShowVotes` and cleared by `clear()` and
-  `reVote()`, and appears in the snapshot. The case that matters: a room where
-  `Show` was pressed while one participant had not voted reports
-  `revealed: true`, which is the case a client-side `allVoted()` derivation
-  gets wrong.
+  `reVote()`, and `isRevealed` appears in the snapshot. Four cases, and the
+  first two are the ones that would otherwise be lost silently:
+  - Auto-reveal is preserved: the last participant to vote makes the snapshot
+    report `revealed: true` with nobody having pressed Show, and every
+    estimation travels on that same snapshot because redaction keys off the
+    same value.
+  - A participant joining a room revealed by `Show` does not un-reveal it,
+    which is the case the stored flag exists for. Its neighbour is a
+    characterization test rather than an assertion of desirable behaviour and
+    should say so in its name: a participant joining an *auto*-revealed room
+    does un-reveal it, and the last non-voter leaving does reveal, both
+    preserving today's semantics. These are the two cases the latched-reveal
+    item in `docs/roadmap.md` would change, so they are the tests that are
+    meant to fail and be rewritten when it is picked up, and their names
+    should point at it.
+  - A `Show` pressed while the room is already auto-revealed still publishes
+    and still records the flag, so a later joiner does not hide the votes.
+    This is the case section 2's `visibleState` carries its stored-flag term
+    for, and it fails against a guard that compares only what travels.
+  - `Show` pressed while one participant had not voted reports
+    `revealed: true`, which is the case a client-side `allVoted()` derivation
+    gets wrong.
+  - `reVote()` on a room that auto-revealed reports `revealed: false` again,
+    since `voted` is cleared and nothing stored says otherwise.
 - **Three existing `RoomSpec` tests assert expectations this design
   deliberately inverts** and need updating as part of it, not treating as
   failures to work around. `"swallow a Leave entirely if the same user
@@ -1689,6 +2085,12 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
 - Bounded connections carry the smaller, jittered `SSE_BOUNDED_RETRY` value on
   their frames; unbounded connections are unaffected. Asserted on exact
   values, since jitter is applied at the route.
+- A bounded cycle that closes at its wall-clock cap with nothing to send emits
+  no frame at all, and therefore carries no `retry:` hint. Paired with the
+  case that makes that harmless: a connection carrying no `Last-Event-ID`
+  always receives a snapshot, so every new `EventSource` object gets the
+  `retry:` value on its first cycle. Two cases rather than one, because the
+  first alone reads as a defect and the second is what makes it not one.
 - **`OverflowStrategy.dropHead` and `bufferSize`, as measurements rather than
   assertions of intended behaviour.** A slow unbounded consumer receiving
   several publishes must end up with the newest state and must not fail the
@@ -1714,13 +2116,14 @@ Extends the existing `RoomSpec`/`SSESpec`/`BackpressureReconnectSpec` pattern
   fixed rather than fractional margin would have rejected; rejects a
   `SSE_BOUNDED_RETRY_JITTER` equal to or greater than `SSE_BOUNDED_RETRY` and
   accepts zero; plus positivity checks, including that
-  `SSE_DETECTION_CACHE_TTL` and `SSE_BOUNDED_DURATION_JITTER` accept zero
-  where the rest reject it.
+  `SSE_BOUNDED_DURATION_JITTER` accepts zero where the rest, `SSE_SESSION_TTL`
+  included, reject it.
 
 **Client, under `node --test` against `connection.js` and `applySnapshot`,**
-with injected timers and fake `EventSource`/`storage` doubles, no
-dependencies. Before the section 6 extraction none of this was testable, since
-`index.html` is a single CDN-loaded page with no runner or build step.
+with injected timers, a fake `EventSource` and a settable
+`document.visibilityState`, no dependencies. Before the section 6 extraction
+none of this was testable, since `index.html` is a single CDN-loaded page with
+no runner or build step.
 
 - `ownVoteConfirmed` reproduces all four transitions the old handlers encoded:
   `true` initially, `true` after own vote, `false` after a revote (where the
@@ -1734,9 +2137,19 @@ dependencies. Before the section 6 extraction none of this was testable, since
 - A client holding a vote, then a snapshot in which the server no longer holds
   it, ends with `user.estimation` empty rather than displaying a stale vote;
   and the inverse, a client whose vote the server still holds keeps it.
-- `votesSummary` is derived and ordered by descending count; `votesRevealed`
-  comes from the snapshot rather than from an `allVoted()` derivation, so a
-  revealed room with an unvoted straggler renders revealed.
+- `votesSummary` is derived and ordered by descending count, and counts only
+  participants the server reports as having voted, so a room revealed with two
+  stragglers has no empty-string bucket and cannot report `""` as the most
+  voted estimation. Paired with the case that makes the change safe: a room
+  revealed with nobody having voted produces an empty `votesSummary` and the
+  template's `votesRevealed && votesSummary.length` guard keeps
+  `votesSummary[0][0]` from being evaluated.
+- `votesRevealed` comes from the snapshot rather than from an `allVoted()`
+  derivation, so a revealed room with an unvoted straggler renders revealed,
+  and a room where the last participant has just voted renders revealed
+  without anyone having pressed Show. The second is auto-reveal end to end
+  through the client and is the case that would silently disappear if the
+  server-side derivation were dropped.
 - **The `editing` guard**: a snapshot arriving while `editing` is true leaves
   `currentIssue` untouched, and one arriving while it is false applies it.
   This is the regression that snapshot-only introduces and the test that pins
@@ -1787,21 +2200,10 @@ dependencies. Before the section 6 extraction none of this was testable, since
   fire against a browser that stopped delivering. That third case is the one
   a naive implementation misses, since guarding only at arming time still
   lets a tab backgrounded one second later switch on a stale timer.
-- The detection cache: a `sseBoundedAt` inside the TTL skips detection
-  entirely and opens directly bounded; one outside it, or an absent entry,
-  runs detection; a detection timer that clears also clears a stale entry;
-  only "detected true" is ever written.
-- **The TTL is applied at read time, which is the property the stored shape
-  exists for.** One `sseBoundedAt`, evaluated against two different
-  `config.detectionCacheTtlMillis` values, gives two different answers: inside
-  the window under the larger, outside it under the smaller. This is the test
-  that fails against a stored absolute expiry and passes against a stored
-  write time, so it is what pins the choice rather than merely exercising it.
-  Plus the operational case it exists for: `detectionCacheTtlMillis` of 0
-  makes an entry written moments ago already expired, so detection runs.
-- `doLeave` removes `roomId` and `name` but preserves `sseBoundedAt`, and
-  `created()`'s `if(this.roomId && this.user.name)` guard still sees both
-  cleared so it does not auto-rejoin.
+- The module writes nothing to `localStorage` and reads nothing from it, so
+  `createConnection` runs with no `storage` at all. Worth one assertion rather
+  than being left to the absence of other tests, since it is what keeps
+  `doLeave`'s `localStorage.clear()` correct without a classification rule.
 
 **End-to-end, in a real browser through a stub buffering proxy.** This layer
 exists because nothing above can reproduce the failure the design is built
@@ -1809,25 +2211,44 @@ around: it needs a proxy that withholds a response until it completes and then
 kills the connection at its own deadline. The stub, the harness and the
 Playwright suite are all in scope; CI integration is not.
 
-The stub is a plain Node HTTP server, no TLS and no `CONNECT`, roughly 60-100
-lines: forwards every request upstream and buffers the complete response,
-headers included, releasing nothing until it ends; on completion writes
-headers then body; if the upstream response has not completed within a
-configured deadline, destroys the downstream connection having sent nothing.
-It buffers every method uniformly, `POST`s included, which is simpler and more
-faithful, and is worth exercising rather than assuming since `JoinResponse` is
-the delivery channel for the detection windows. It exposes a small control
-endpoint to switch buffering on and off at runtime, which is what makes
-re-detection testable end to end, since a browser cannot change origin
-mid-session. The harness starts app and stub together with a test-tuned
-`SseConfig` (every timing scaled down an order of magnitude) and exposes one
-documented command, deliberately the same entry point CI will later call.
+**The stub and the harness land first, in PR 0b, ahead of the design work
+rather than after it.** Neither depends on anything this spec changes: the stub
+forwards and buffers HTTP, and today's unbounded SSE stream is already what
+makes it fail. So the first case below can be written and run against the
+current code, which turns the customer's report into a local reproduction
+before any fix exists. The remaining cases assert behaviour that does not exist
+yet and stay in PR 5.
+
+The stub, the harness and the fixtures are designed in
+`docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` and delivered by
+PR 0b. In outline: the stub is a plain Node reverse proxy, no TLS and no
+`CONNECT`, that forwards every request upstream and buffers the complete
+response, headers included, releasing nothing until it ends, and destroys the
+downstream connection having sent nothing if the response has not completed
+within a deadline read from `SSE_ASSUMED_PROXY_TIMEOUT`. A control endpoint
+switches buffering at runtime, which is what makes re-detection testable end
+to end, since a browser cannot change origin mid-session. The harness runs the
+staged app under a test profile whose timings are scaled roughly seven times
+down, not the order of magnitude assumed here, because
+`SSE_DETECTION_TIMEOUT` at 500ms would false-positive on machine jitter.
+
+Two corrections to what this section previously said, both made there. The
+reusable piece is the *harness*, not the stub: "start this app with a known
+configuration and drive it in a real browser" is what the Phase 3 migration
+inherits, while the stub simulates one hostile network condition that only
+bounded mode cares about and has no second use if bounded mode is ever
+removed. So the stub is a fixture a case opts into rather than something the
+harness assumes. And the reproduction needs no browser at all: it is an
+`http.request` through the stub, so it runs under `node --test` in about a
+second and gates every CI push, while only the browser cases need Playwright.
 
 - **Stub fidelity, asserted without the app's client at all.** Requesting
   `/rooms/:id/events` through the stub yields zero bytes for the full deadline
   and then a destroyed connection. This proves the stub reproduces the
   customer's report, and it has to come first: every case below is only
-  meaningful if it holds.
+  meaningful if it holds. It is also the only case here that passes against
+  today's code, which is why it ships in PR 0b as a reproduction rather than in
+  PR 5 as a test.
 - **The premise.** Loading the page through the stub and joining a room
   reaches the room view: detection fires, bounded mode engages, the snapshot
   arrives. This single case is what bounded mode exists for, and it is
@@ -1836,7 +2257,14 @@ documented command, deliberately the same entry point CI will later call.
   bounded cycle.
 - Reveal with a straggler still unvoted, then a third client joins and sees
   votes revealed. Problem E through the real path, in the one configuration
-  where a client-side derivation cannot mask the bug.
+  where a client-side derivation cannot mask the bug. The joiner arriving
+  without un-revealing the room for the other two is the second half of the
+  same case and is asserted in the same test, and it holds because `Show` was
+  pressed rather than because the room auto-revealed.
+- Two browsers, both vote, and both see the votes reveal with neither pressing
+  Show. Auto-reveal through the real path, which is the behaviour most at risk
+  of being lost in this rewrite and the one no unit test can confirm is still
+  wired to the screen.
 - A client left idle across several bounded cycles stays in the room, with no
   participant flicker in the other browsers. Problem D's grace period and
   Problem C's timer keying, observed rather than unit-asserted.
@@ -1862,9 +2290,10 @@ documented command, deliberately the same entry point CI will later call.
 
 ## Delivery
 
-Five PRs, plus a small one ahead of them that is a gate rather than a step.
-Unlike the superseded design, there is no internal ordering constraint beyond
-PR 1 coming first, since `Reset` and Problem D part 3, the two things that
+Seven PRs, two of which come ahead of the design work: one is a gate rather
+than a step, the other is a reproduction rather than a fix. Unlike the
+superseded design, there is no internal ordering constraint beyond PR 1 coming
+before 1b, 1c and 4, since `Reset` and Problem D part 3, the two things that
 forced an ordering there, no longer exist.
 
 **PR 0: proxy probe.** The env-gated route and page from "Validating the proxy
@@ -1881,45 +2310,100 @@ rung either way. Whichever way it goes, record the choice and the date in the
 PR 3 description, since the value of a gate that can be waived is entirely in
 the waiver being written down.
 
+**PR 0b: the stub buffering proxy and the end-to-end harness, with the
+customer's failure reproduced and nothing else.** Designed in full in
+`docs/superpowers/specs/2026-08-30-e2e-testkit-design.md`: the stub, the
+harness, the Playwright fixtures, `package.json`, the `node --test` plumbing
+and the CI node step (all of which PR 3 previously carried), plus the stub's
+own unit tests, the browser-free reproduction of the customer's failure, and
+one pass-through browser smoke case. Roughly 220 lines and 110 of tests.
+
+This is carved out of PR 5 and moved to the front deliberately. Today the
+customer's failure exists only as a report; the first case above turns it into
+something that fails locally on demand, which is the thing you normally want
+before writing a fix rather than after. It also has no dependency on any of
+the work below: the stub forwards and buffers HTTP, and today's unbounded SSE
+stream is already the input that makes it fail. Leaving it inside PR 5 puts
+the only reproduction of the target bug in the last PR of the set, which is
+also the one most likely to be squeezed.
+
+It does not substitute for PR 0 and does not weaken it. The stub is built to
+Problem's description, so it demonstrates that the design answers the modelled
+failure, not that the model matches the customer. The two are complementary in
+a specific way: PR 0's measurements are the stub's parameters, so a probe
+result lands as a configuration change here rather than a rewrite.
+
 **PR 1: the snapshot protocol, plus Problems A, C and E.** Sections 1, 2, 3, 4
-and 7, and the three `RoomSpec` updates. Roughly 190 lines of source added and
+and 7, and the three `RoomSpec` updates. Roughly 185 lines of source added and
 about 150 deleted (`RoomEvent.scala` in full, `setupNewUser`, and the 75-line
-client handler block), with roughly 200 of tests. This is the PR that replaces
-the protocol, so it is the largest behavioural change in the set and the one
-worth reviewing most carefully, but its diff is unusually readable for its
-size because most of it is deletion. It is independent of bounded mode and
+client handler block), with roughly 210 of tests. Two pieces inside it are
+easy to mistake for polish and are not: the server-side `isRevealed`
+derivation, without which auto-reveal silently disappears from the product,
+and the no-op publish guard, which stays here rather than moving to PR 4
+because it is a property of `publish` itself and deferring it would mean
+editing all seven call sites twice for three lines. This is the PR that
+replaces the protocol, so it is the largest behavioural change in the set and
+the one worth reviewing most carefully, but its diff is unusually readable for
+its size because most of it is deletion. It is independent of bounded mode and
 releasable on its own: it fixes two live correctness gaps, removes the
 `MessageType` companion trap, and gives Phase 4 real reveal state.
 
-**PR 2: retained sessions.** Problem D part 1. Roughly 40 lines of source and
-80 of tests. Server-side only, and deliberately its own PR: the token-lifetime
+**PR 1b: pre-reveal vote confidentiality.** Section 1's per-recipient
+redaction: `RoomSnapshot.of(data, forUser)` withholding other participants'
+estimations until the room reveals, and `publish` building one snapshot per
+recipient. Roughly 15 lines of source and 40 of tests. Split out of PR 1
+because it is a confidentiality fix rather than a protocol change, it is
+pre-existing rather than introduced here (today's `Vote` broadcast leaks the
+same way), and it wants a reviewer thinking about what is on the wire rather
+than about how state is shaped. Server-side only.
+
+**PR 1c: vote summary correction.** Section 4's voted-only tally and the
+`votesRevealed && votesSummary.length` template guard. Roughly 5 lines of
+source and 25 of tests. Client-side only, independent of 1b, and its own PR
+because it is the one change in this set a user would notice as a *different
+answer* rather than as better plumbing: the summary stops counting people who
+have not voted, so a revealed room with stragglers no longer offers an empty
+estimation as its most voted one.
+
+**PR 2: retained sessions.** Problem D part 1, including its TTL and the
+retained `users` fallback in `ValidateToken`. Roughly 55 lines of source and
+100 of tests. Server-side only, and deliberately its own PR: the token-lifetime
 widening, the leave-then-reload behaviour change and the silent vote loss on a
 grace trip all belong in front of the reviewer approving that behaviour,
 rather than folded into a PR whose pitch is that it carries no such thing.
 
 **PR 3: extract the client connection logic.** Section 6's "Implementation
-shape", `package.json`, the static asset route, the CI node step, and module
-tests covering the behaviour that exists after PRs 1 and 2. Roughly 200 lines
-moved and 180 of tests, with no behaviour change. Worth protecting as its own
+shape", the static asset route, and module tests covering the behaviour that
+exists after PRs 1 and 2. Roughly 200 lines moved and 180 of tests, with no
+behaviour change. `package.json` and the CI node step are no longer here:
+PR 0b needs them for the harness and introduces them, so this PR adds
+`node --test` cases to a runner that already exists. Worth protecting as its own
 PR: its diff reads as a relocation and reviews in minutes, and keeping it out
 of PR 4 means PR 4 is entirely new logic rather than a mixture of moved and
 new code. This is where PR 0's gate applies, since it is the first PR whose
 only justification is the proxy work.
 
 **PR 4: bounded mode.** The rest of section 6, server and client, plus Problem
-D part 2, the `Mode` ADT, the config invariants and the logging. Roughly 290
-and 300. If this reads too large in practice it has a clean internal seam:
+D part 2, the `Mode` ADT, the config invariants and the logging. Roughly 250
+and 260, down from the superseded design's shape because the detection cache
+and its TTL are gone. If this reads too large in practice it has a clean
+internal seam:
 server-side bounded mode first, verifiable in ScalaTest by requesting
 `?bounded=1` directly, then client detection and mode switching over it.
 
-**PR 5: end-to-end layer.** Stub buffering proxy, harness, and the Playwright
-suite. Roughly 180 and 200. CI integration is deliberately not here.
+**PR 5: end-to-end behaviour cases.** The rest of the Playwright suite, on the
+stub and harness PR 0b already delivered: bounded mode engaging, two browsers
+exchanging votes across cycles, reveal with a straggler, auto-reveal, idle
+survival across cycles, re-detection after buffering is switched on
+mid-session, the visibility guard, and the backgrounded-solo measurement.
+Roughly 60 lines and 170 of tests, down from the original shape because the
+infrastructure landed first. CI integration is deliberately not here.
 
-**PRs are not releases.** PRs 1 and 2 are independent of the proxy work and
-can release as soon as they land. PRs 3, 4 and 5 release together, with the
-Playwright suite passing before that release reaches the customer this spec
-exists for, since that suite is the only thing exercising the failure being
-fixed.
+**PRs are not releases.** PRs 0b, 1, 1b, 1c and 2 are independent of the proxy
+work and can release as soon as they land. PRs 3, 4 and 5 release together,
+with the Playwright suite passing before that release reaches the customer
+this spec exists for, since that suite is the only thing exercising the
+failure being fixed.
 
 One caveat on that last clause, so it is not read as more than it is: the
 suite exercises the modelled failure. It runs against the stub, which is built

@@ -69,7 +69,24 @@ directly in the new frontend.
       observers from vote counts and status indicators.
 - [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
-      become real backend logic.
+      become real backend logic. Scheduled as Problem E of
+      `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 1),
+      which moves the rule to `RoomData.isRevealed` and carries the result in the
+      room snapshot. Check this off when that lands.
+- [ ] Latched reveal, deliberately separated from the item above. That change
+      moves "everyone voted" to the server without altering what it means, so
+      reveal stays a live derivation over the current participant set and can flip
+      either way when that set changes mid-round: a participant joining an
+      auto-revealed room hides the votes again, and the last non-voter leaving
+      reveals them with no facilitator action. Both are today's behaviour, kept
+      deliberately so a connectivity fix does not smuggle in a product change.
+      Latching means `vote()` setting `revealed = true` once every participant has
+      voted, so reveal becomes a one-way door until `clear()` or `reVote()` reopens
+      it. It is roughly one line plus dropping the stored-flag term from that
+      spec's `visibleState`, and the two characterization tests it would invert are
+      already named there. Worth doing on its own so the behaviour change is
+      reviewed as one, and a natural companion to the re-vote refinement and
+      timer-based fallback reveal items below, which both touch the same rule.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
       replay now goes out as a single batched message instead of one send per
