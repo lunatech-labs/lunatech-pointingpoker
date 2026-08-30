@@ -6,12 +6,13 @@ Supersedes: `docs/superpowers/specs/2026-08-26-sse-delta-resync-design.md`
 
 ## Purpose
 
-Fixes SSE connectivity for a customer whose network path includes an
-antivirus-scanning proxy that buffers the entire HTTP response before
-releasing anything, times out after 45 seconds, and delivers nothing (not
-even headers) to the browser for a stream that never completes. A whitelist
-request is in progress with that customer's administrators but may take time
-or be rejected, so this is a code-side mitigation to run in parallel.
+Fixes SSE connectivity for a customer whose network path includes a Netskope
+content-scanning appliance that buffers the entire HTTP response before
+releasing anything, and delivers nothing (not even headers) to the browser for
+a stream that never completes. Its kill deadline is not yet measured; see
+"What is established about the path". A whitelist request is in progress with
+that customer's administrators but may take time or be rejected, so this is a
+code-side mitigation to run in parallel.
 
 It also replaces the app's incremental event protocol with a state-snapshot
 protocol. That is not scope creep bolted onto a connectivity fix. The
@@ -23,14 +24,38 @@ problem instead of building machinery to work around it.
 
 ### The proxy issue
 
-The proxy in front of this customer's network buffers the complete response
-body before forwarding anything (this is how antivirus content scanning
-generally works: it cannot clear partial content, it needs the whole file).
-Since today's SSE stream never completes, the proxy never releases anything,
-and kills the connection at its own 45-second timeout with zero bytes
-delivered, no headers, no data, no heartbeats. The existing 15-second
+The appliance in front of this customer's network buffers the complete response
+body before forwarding anything (this is how content scanning generally works:
+it cannot clear partial content, it needs the whole file). Since today's SSE
+stream never completes, it never releases anything, and the browser sees zero
+bytes: no headers, no data, no heartbeats. The existing 15-second
 `ServerSentEvent.heartbeat` (`sse/SSE.scala:29-34`) is irrelevant here, it
 never reaches the browser either.
+
+### What is established about the path
+
+A `curl -v` against `pointingpoker.lunatech.com` from inside that network
+returns a certificate for the right host re-signed by the customer's own
+Netskope tenant CA:
+
+```
+issuer: emailAddress=certadmin@netskope.com; CN=ca.darva.de.goskope.com;
+        O=DARVA; L=NIORT; ST=FR; C=FR
+```
+
+So three things are facts rather than inferences. The vendor is Netskope. TLS
+is terminated and the body inspected mid-path, which is the mechanism behind
+the buffering rather than an analogy to how scanners usually behave. And the
+same trace reports `ALPN: server did not agree on a protocol` followed by
+`using HTTP/1.x` despite curl offering h2, so the appliance forces HTTP/1.1,
+which makes the roughly six connections per origin a real ceiling.
+
+**The 45-second figure that earlier drafts stated as the proxy's timeout is
+withdrawn.** It came from a `curl --max-time 45` run, so it recorded when the
+client gave up, not when the appliance did. No browser observation has ever
+established the real deadline. Everything downstream that reads as a measured
+constant is therefore a placeholder until probe B supplies a number, and the
+places that depend on it say so.
 
 ### Why the fallback needs cheap resynchronization
 
@@ -1543,8 +1568,9 @@ Server-side (`SSE.scala`/`API.scala`):
     case it closes with no data and the client reconnects with the same
     version.
   - The cap is required even though every other cycle closes on a publish,
-    since a genuinely idle room must still self-close before 45s, otherwise it
-    is exactly today's failure.
+    since a genuinely idle room must still self-close before the appliance's
+    deadline, whatever probe B measures it to be, otherwise it is exactly
+    today's failure.
 
 An earlier design held the connection open for a fixed window after sending,
 to probabilistically catch independent events landing close together.
@@ -1703,7 +1729,10 @@ Remaining server-side points, unchanged from the superseded design:
   believed to enforce. Nothing reads it at runtime. It exists so the
   invariants can check the cap against the ceiling that actually matters. A
   deployment behind a stricter proxy lowers it; one behind no buffering proxy
-  raises it.
+  raises it. **The 45s default is a placeholder, not a measurement**, and must
+  be set from probe B before PR 4 ships. Until then the invariants check the
+  cap against a number no one has observed, which is a check that passes
+  rather than a check that holds.
 - **`SSE_DETECTION_TIMEOUT`** (5s) cannot reach the client on the SSE wire,
   since detection times the absence of any frame. It rides the existing
   `POST /rooms/:roomId/join` response (`JoinResponse`, `API.scala:76-95`),
@@ -1784,8 +1813,8 @@ Pekko's 60s idle timeout, reasoning that the codebase cannot know a customer's
 proxy timeout. That is true and was the wrong conclusion: the codebase cannot
 know it, but the operator deploying behind that proxy can, and giving them
 nowhere to say it means the check guards the ceiling that does not matter. Any
-cap safe against a 45s proxy is automatically safe against a 60s framework
-timeout, so the Pekko check passes for every sane value and also passes for
+cap safe against a proxy stricter than 60s is automatically safe against a 60s
+framework timeout, so the Pekko check passes for every sane value and also passes for
 `SSE_BOUNDED_DURATION=50s`, which silently reintroduces the exact failure this
 design exists to fix. The Pekko check stays alongside it, because
 `SSE_ASSUMED_PROXY_TIMEOUT` is operator-supplied and can legitimately be set
@@ -1954,7 +1983,8 @@ the design leans on four more it never states:
 
 1. The proxy buffers the complete response body before forwarding anything.
 2. It delivers no headers either, not only no body.
-3. It kills the connection at 45 seconds.
+3. It kills the connection at some deadline, currently unmeasured. The 45
+   seconds earlier drafts asserted was a `curl --max-time 45` artifact.
 4. That deadline is measured against response completion, which is what
    `SSE_ASSUMED_PROXY_TIMEOUT` encodes.
 5. A response that does complete is released promptly.
@@ -1964,16 +1994,27 @@ the design leans on four more it never states:
 8. The `Last-Event-ID` request header the browser sends on that reconnect
    reaches the server, rather than being stripped on the way through.
 
-**Three are already hedged and need no test.** Assumption 2 does not matter,
+**One is already hedged and needs no test.** Assumption 2 does not matter,
 because the detection timer arms at construction rather than in `onopen`
-precisely so it works whether or not headers arrive. Assumptions 3 and 4 are
-expressible: a stricter or differently-measured deadline is what
-`SSE_ASSUMED_PROXY_TIMEOUT` exists for, and the fractional margin follows it
-down. But that hedge only works if someone supplies the real number. If the
-true deadline is 20 seconds, the defaults produce a 20 to 30 second cap, the
-`require` passes because the assumed value still says 45, and bounded mode
-fails exactly as today does. The knob exists; the input to it is the
-assumption.
+precisely so it works whether or not headers arrive. It is also the one
+assumption the curl trace above supports directly, since no response headers
+arrived there either.
+
+**Assumptions 3 and 4 are expressible but currently unfed.** A stricter or
+differently-measured deadline is what `SSE_ASSUMED_PROXY_TIMEOUT` exists for,
+and the fractional margin follows it down. But that hedge only works if
+someone supplies the real number, and nobody has: the 45 was the client's own
+timeout read back as the appliance's. If the true deadline is 20 seconds, the
+defaults produce a 20 to 30 second cap, the `require` passes because the
+assumed value still says 45, and bounded mode fails exactly as today does.
+The knob exists; nothing has ever fed it.
+
+Note which direction is dangerous. A deadline longer than assumed, or no
+deadline at all, costs nothing: bounded mode closes first by design. Only a
+deadline shorter than the cap breaks it. That is why probe B's 75-second
+give-up is sufficient even though it may return a lower bound rather than a
+value, and why a B result of "still open at 75s" is a pass rather than an
+inconclusive run.
 
 **Assumption 5 is neither hedged nor recoverable.** Every mechanism in section
 6 takes for granted that ending the response makes the proxy release it. There
@@ -2075,7 +2116,7 @@ protocol replacement, and are justified without any of this.
 | I | Same as A but with a realistic snapshot-sized body, roughly 2KB. Run twice | ~10s | Whether scan-and-release latency scales with body size. Assumption 6 is stated for "a tiny or empty body", but every bounded cycle that delivers carries a snapshot, 1.1KB at ten participants and 2.1KB at twenty, so this is the per-cycle cost of the actual design rather than of its idle case. |
 | C | One frame at 1s carrying an `id:`, close at 20s | ~25s | Bounded mode's exact shape, proven without building bounded mode. |
 | F | `application/json`, held open, completed at 20s | ~25s | Option 6's premise: is a finite, `Content-Length`-delimited body released on completion where a stream is not? |
-| B | SSE heartbeat every 2s, never close; client gives up at 75s. Run twice | ~150s | The real kill deadline, and whether zero bytes truly arrive. Replaces the assumed 45 with a measured value. Twice, because this one number sizes every cap and invariant in section 6, and a single sample cannot tell a fixed deadline from a variable one. |
+| B | SSE heartbeat every 2s, never close; client gives up at 75s. Run twice | ~150s | The kill deadline, measured for the first time, and whether zero bytes truly arrive. There is no prior value to replace: the 45 was a curl artifact. A run still open at 75s is a pass, not a failure, since only a deadline shorter than the cap threatens the design. Twice, because this number sizes every cap and invariant in section 6, and a single sample cannot tell a fixed deadline from a variable one. |
 | H | Never close and send *nothing*, not even heartbeats; client gives up at 75s | ~75s | Assumption 4: is the deadline absolute from request start, or an idle timeout upstream? B is killed while actively receiving; H is killed while silent. The same figure from both means absolute, which is what `SSE_ASSUMED_PROXY_TIMEOUT` encodes. A shorter figure from H means an idle timeout, at which point the heartbeat interval becomes load-bearing in a way this design does not currently model. |
 | G | `application/json`, held open, never completed; client gives up at 75s | ~75s | Whether the deadline is a property of the connection or of the content type, which is what sizes a long poll's hold if option 6 is ever reached. |
 | D | Run C through a real `EventSource` for 90s | ~90s | Content type survives, the browser reconnects, `retry:` is honoured, and `Last-Event-ID` arrives upstream. Assumptions 7 and 8. |
