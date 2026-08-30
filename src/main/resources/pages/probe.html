@@ -154,8 +154,10 @@
       // The table is read by someone who was not here when it ran, possibly months later.
       function legendText() {
         return '\nReading this table:\n\n' +
-          '  Conns 0 on a fetch row means no response headers ever arrived, not that no\n' +
-          '    connection was made. Conns on row D counts EventSource reconnects.\n' +
+          '  Conns 0 on a fetch row means the browser never surfaced a response. Chromium\n' +
+          '    surfaces one as soon as headers arrive, so 0 there means no headers came.\n' +
+          '    Firefox waits for the first body byte, so 0 there proves less. Conns on row\n' +
+          '    D counts EventSource reconnects.\n' +
           '  TTFB none means no byte ever arrived before the client gave up.\n' +
           '  "gave up" is the client stopping at its own budget, not the server closing.\n' +
           '  Rows the client abandoned carry no browser timing detail and no Proto, because\n' +

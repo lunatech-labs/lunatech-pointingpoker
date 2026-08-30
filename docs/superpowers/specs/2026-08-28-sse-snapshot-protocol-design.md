@@ -2180,22 +2180,36 @@ short wait followed by a body delivered over the full duration, which is what
 "streamed" looks like, and buffered inverts that into a long wait and a body
 over roughly zero. That reading holds in any browser.
 
-A second signal is present but must not be leaned on. The response headers
-group into two sets, the five POSTs without `transfer-encoding: chunked` and
-the nine streaming rows with it, which would show a rewritten transfer encoding
-without reading a timing at all. It is browser-dependent: this baseline is
-Firefox 140, and Chrome and Edge strip hop-by-hop headers from `fetch` more
-aggressively, so the split may be absent there with nothing wrong. Its absence
-is therefore not evidence of anything.
+A second signal supports it. The response headers group into two sets, the five
+POSTs without `transfer-encoding: chunked` and the nine streaming rows with it,
+so a rewritten transfer encoding shows without reading a timing at all. Both
+Firefox 140 and Chromium 150 expose it against production, so it is not the
+engine-specific quirk an earlier draft of this section assumed.
 
-**The baseline is Firefox and the customer's desktop probably is not.** A
-corporate machine behind this appliance is most likely Edge or Chrome, and
-three of the things recorded here differ by engine: the default `EventSource`
-reconnect delay when `retry:` is absent, whether an aborted request produces a
-Resource Timing entry at all, and the hop-by-hop header question above. The run
-records the user agent for exactly this reason. Comparing a Chrome result
-against these Firefox numbers requires a Chrome baseline first, which costs one
-local run and is worth taking before the customer's run rather than after.
+**The run was taken in both engines, and one row differs in a way that decides
+which browser to ask for.** Everything else matches: `http/1.1` on every
+completing row in both, so Sozu is not offering HTTP/2 and the per-origin
+connection ceiling is real; D's gaps at ~20530ms in both, so `retry:` is
+honoured regardless of engine; and no Resource Timing for aborted requests in
+either.
+
+Probe H is the exception, and it is the probe about delivering nothing at all:
+
+| | Firefox 140 | Chromium 150 |
+| --- | --- | --- |
+| H | `conns 0`, gave up, no content type | `conns 1`, `200 no body`, `text/event-stream` |
+
+Same server, same 75s, same zero bytes. Chromium surfaces a response as soon as
+headers arrive; Firefox does not surface one until the first body byte, which
+the pair of runs demonstrates directly, since Firefox surfaced G (34 bytes sent
+immediately) and not H (nothing sent).
+
+**Ask for Chrome or Edge.** In Chromium "headers arrived, body withheld" and
+"nothing arrived" are different rows; in Firefox they are the same row. Those
+are assumptions 2 and 5, and separating them is a large part of why the probe
+exists. A corporate desktop behind this appliance most likely defaults to Edge
+anyway. If a Firefox result does come back, read `conns 0` as "no response was
+surfaced" rather than as proof that headers were withheld.
 
 D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
 probe now sends, which is the direct evidence that the hint is honoured.
