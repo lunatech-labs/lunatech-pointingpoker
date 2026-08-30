@@ -9,6 +9,7 @@ import org.apache.pekko.http.scaladsl.model.*
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
 import org.apache.pekko.http.scaladsl.server.Route
+import org.apache.pekko.http.scaladsl.settings.ServerSettings
 import org.apache.pekko.actor.typed.scaladsl.AskPattern.*
 import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
@@ -196,7 +197,18 @@ class API(
 
   def run(): Future[Http.ServerBinding] =
     log.info("Starting API on host port {}:{}", apiConfig.host, apiConfig.port)
-    Http().newServerAt(apiConfig.host, apiConfig.port).bind(route)
+    val server = Http().newServerAt(apiConfig.host, apiConfig.port)
+    // Probes B, G and H are deliberately silent and outlive Pekko's 60s idle timeout.
+    if probeConfig.enabled then
+      log.warn("Probe enabled: raising server idle timeout to {}", probeConfig.idleTimeout)
+      val settings = ServerSettings(actorSystem)
+      server
+        .withSettings(
+          settings.withTimeouts(settings.timeouts.withIdleTimeout(probeConfig.idleTimeout))
+        )
+        .bind(route)
+    else server.bind(route)
+  end run
 end API
 
 object API:

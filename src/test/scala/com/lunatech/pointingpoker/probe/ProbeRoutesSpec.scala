@@ -15,9 +15,11 @@ class ProbeRoutesSpec extends AnyWordSpec with must.Matchers with ScalatestRoute
   implicit val routeTimeout: RouteTestTimeout = RouteTestTimeout(10.seconds)
 
   private val enabled: Route =
-    ProbeRoutes(ProbeConfig(enabled = true, "src/main/resources/pages/probe.html")).route
+    ProbeRoutes(ProbeConfig(enabled = true, "src/main/resources/pages/probe.html", 3.minutes)).route
   private val disabled: Route =
-    ProbeRoutes(ProbeConfig(enabled = false, "src/main/resources/pages/probe.html")).route
+    ProbeRoutes(
+      ProbeConfig(enabled = false, "src/main/resources/pages/probe.html", 3.minutes)
+    ).route
 
   "ProbeRoutes" should {
     "not serve the page when the probe is disabled" in
@@ -63,6 +65,12 @@ class ProbeRoutesSpec extends AnyWordSpec with must.Matchers with ScalatestRoute
       Get("/probe/stream?kind=json&frames=1&interval=0&close=0") ~> enabled ~> check {
         status mustBe StatusCodes.OK
         contentType.mediaType.toString mustBe "application/json"
+      }
+
+    // Probe D cannot tell whether retry: is honoured unless the stream actually sends one.
+    "emit a retry hint when asked, so probe D can tell whether it is honoured" in
+      Get("/probe/stream?kind=sse&frames=1&interval=0&close=0&retry=500") ~> enabled ~> check {
+        responseAs[String] must include("retry:500")
       }
 
     // Only the server can report the request side, which is where a stripped Last-Event-ID or an

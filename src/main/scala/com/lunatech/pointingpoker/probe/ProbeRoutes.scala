@@ -38,11 +38,13 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
       interval: FiniteDuration,
       size: Int,
       withId: Boolean,
-      lastEventId: String
+      lastEventId: String,
+      retry: Option[Int]
   ): Source[ServerSentEvent, NotUsed] =
     val frames = Source(0 until count).map { seq =>
-      val event = ServerSentEvent(payload(seq, lastEventId, size))
-      if withId then event.copy(id = Some(s"probe-$seq")) else event
+      val base  = ServerSentEvent(payload(seq, lastEventId, size))
+      val event = if withId then base.copy(id = Some(s"probe-$seq")) else base
+      retry.fold(event)(ms => event.copy(retry = Some(ms)))
     }
     if interval > Duration.Zero then frames.throttle(1, interval) else frames
   end emitted
@@ -89,8 +91,9 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
               "interval".as[Long].?,
               "size".as[Int].?,
               "close".as[Long].?,
-              "id".as[Boolean].?
-            ) { (kind, frames, interval, size, close, withId) =>
+              "id".as[Boolean].?,
+              "retry".as[Int].?
+            ) { (kind, frames, interval, size, close, withId, retry) =>
               (optionalHeaderValueByName("Last-Event-ID") & extractRequest) { (lastEventId, req) =>
                 val count      = frames.getOrElse(1).max(0)
                 val gap        = interval.getOrElse(0L).millis
@@ -110,7 +113,7 @@ class ProbeRoutes(probeConfig: ProbeConfig) extends EventStreamMarshalling:
                 // Logged as well as returned, so a lossy copy-paste does not lose the run.
                 log.info("Probe stream request headers:\n{}", inboundHeaders(req))
 
-                val events = emitted(count, gap, padding, withId.getOrElse(false), cursor)
+                val events = emitted(count, gap, padding, withId.getOrElse(false), cursor, retry)
 
                 kind match
                   case Some("json") =>

@@ -64,13 +64,13 @@
         { id: 'A2', what: 'Same as A1, run 2 of 2: does a second request get a cached scan verdict?', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000', budget: 5000 },
         { id: 'I1', what: 'As A but with a 2KB body, run 1 of 2: does scan latency scale with body size?', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000&size=2048', budget: 5000 },
         { id: 'I2', what: 'Same as I1, run 2 of 2', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000&size=2048', budget: 5000 },
-        { id: 'C',  what: 'One frame at 1s, close at 20s: the exact shape of the proposed fix', kind: 'fetch', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true', budget: 25000 },
+        { id: 'C',  what: 'One frame at 1s, close at 20s: the exact shape of the proposed fix', kind: 'fetch', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true&retry=500', budget: 25000 },
         { id: 'F',  what: 'JSON held open, completed at 20s: is a finite body released where a stream is not?', kind: 'fetch', q: 'kind=json&frames=1&interval=0&close=20000', budget: 25000 },
         { id: 'B1', what: 'SSE heartbeat every 2s, never closed, run 1 of 2: the real kill deadline', kind: 'fetch', q: 'kind=sse&frames=100&interval=2000', budget: 75000 },
         { id: 'B2', what: 'Same as B1, run 2 of 2: is that deadline fixed or variable?', kind: 'fetch', q: 'kind=sse&frames=100&interval=2000', budget: 75000 },
         { id: 'H',  what: 'Held open sending nothing at all: absolute deadline or idle timeout?', kind: 'fetch', q: 'kind=sse&frames=0', budget: 75000 },
         { id: 'G',  what: 'JSON held open and never completed: is the deadline about the content type?', kind: 'fetch', q: 'kind=json&frames=1&interval=0', budget: 75000 },
-        { id: 'D',  what: 'A real EventSource for 90s: does the browser reconnect and does Last-Event-ID survive?', kind: 'eventsource', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true', budget: 90000 }
+        { id: 'D',  what: 'A real EventSource for 90s: does the browser reconnect, is retry: honoured, does Last-Event-ID survive?', kind: 'eventsource', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true&retry=500', budget: 90000 }
       ];
 
       const STORE = 'probe-results-v1';
@@ -88,23 +88,26 @@
 
       const COLS = ['ttfb', 'close', 'bytes', 'frames', 'conns', 'status', 'ctype', 'proto', 'lastEventId'];
 
-      // responseStart against responseEnd is the browser's own verdict on buffered versus
-      // streamed, independent of the reader timings above it.
-      function timingOf(url) {
-        try {
-          if (!performance.getEntriesByType) return null;
-          const es = performance.getEntriesByType('resource').filter(e => e.name.indexOf(url) !== -1);
-          return es.length ? es[es.length - 1] : null;
-        } catch (e) { return null; }
-      }
+      // A repeated probe reuses its predecessor's URL on purpose (that is how A and I test for a
+      // cached scan verdict), so entries are selected by position, not by name alone.
+      const timingMark = () => {
+        try { return performance.getEntriesByType('resource').length; } catch (e) { return 0; }
+      };
 
-      function applyTiming(r, url) {
-        const t = timingOf(url);
-        if (!t) return;
-        r.proto = t.nextHopProtocol || '';
-        r.respStart = Math.round(t.responseStart);
-        r.respEnd = Math.round(t.responseEnd);
-        r.transfer = t.transferSize;
+      function applyTiming(r, url, mark) {
+        try {
+          if (!performance.getEntriesByType) return;
+          const es = performance.getEntriesByType('resource').slice(mark)
+            .filter(e => e.name.indexOf(url) !== -1);
+          if (es.length === 0) return;
+          const t = es[es.length - 1];
+          r.proto = t.nextHopProtocol || '';
+          // Deltas, not raw marks: the raw values are milliseconds since page load and mean
+          // nothing on their own. Body near zero with a real wait before it means buffered.
+          r.browserTtfb = Math.round(t.responseStart - t.requestStart);
+          r.bodyMs = Math.round(t.responseEnd - t.responseStart);
+          r.transfer = t.transferSize;
+        } catch (e) {}
       }
 
       // A blank TTFB means no byte ever arrived, which is the run's most important single result;
@@ -150,13 +153,13 @@
           if (!r) continue;
           const bits = [];
           if (r.startedAt) bits.push('started ' + r.startedAt);
-          if (r.respStart !== '') bits.push('responseStart ' + r.respStart + 'ms, responseEnd ' + r.respEnd + 'ms');
+          if (r.browserTtfb !== '') bits.push('browser wait ' + r.browserTtfb + 'ms, then body over ' + r.bodyMs + 'ms');
           if (r.transfer !== '' && r.transfer != null) bits.push('transferSize ' + r.transfer);
           if (r.gaps && r.gaps.length) bits.push('reconnect gaps ' + r.gaps.join(', ') + 'ms');
           if (bits.length) rows.push('  ' + p.id + ': ' + bits.join('; '));
         }
         if (rows.length === 0) return '';
-        return '\nPer connection detail. responseStart close to responseEnd means the body arrived\nall at once rather than progressively:\n\n' + rows.join('\n') + '\n';
+        return '\nPer connection detail. A long browser wait followed by a body over ~0ms means\nthe response arrived all at once rather than progressively:\n\n' + rows.join('\n') + '\n';
       }
 
       function envText() {
@@ -193,7 +196,7 @@
       }
 
       const blank = () => ({ ttfb: '', close: '', bytes: 0, frames: 0, conns: 0, status: '', ctype: '',
-        proto: '', lastEventId: '', headers: [], startedAt: '', respStart: '', respEnd: '', transfer: '', gaps: [] });
+        proto: '', lastEventId: '', headers: [], startedAt: '', browserTtfb: '', bodyMs: '', transfer: '', gaps: [] });
 
       // Same-origin, so every response header is readable. Appliances usually name themselves in
       // one of these, which is the part of the run an administrator would otherwise have to answer.
@@ -207,6 +210,7 @@
       async function runPost() {
         const r = blank();
         r.startedAt = new Date().toISOString();
+        const mark = timingMark();
         const t0 = performance.now();
         try {
           const res = await fetch('/probe/echo', { method: 'POST', body: 'probe', cache: 'no-store' });
@@ -214,13 +218,13 @@
           r.status = res.status;
           r.ctype = res.headers.get('content-type') || '';
           r.headers = headersOf(res);
-          await res.text();
+          r.bytes = (await res.text()).length;
           r.ttfb = Math.round(performance.now() - t0);
         } catch (e) {
           r.status = 'error';
         }
         r.close = Math.round(performance.now() - t0);
-        applyTiming(r, '/probe/echo');
+        applyTiming(r, '/probe/echo', mark);
         return r;
       }
 
@@ -228,6 +232,7 @@
         const r = blank();
         r.startedAt = new Date().toISOString();
         const url = '/probe/stream?' + probe.q;
+        const mark = timingMark();
         const t0 = performance.now();
         const ctrl = new AbortController();
         const giveUp = setTimeout(() => ctrl.abort(), probe.budget);
@@ -256,7 +261,7 @@
         }
         clearTimeout(giveUp);
         r.close = Math.round(performance.now() - t0);
-        applyTiming(r, url);
+        applyTiming(r, url, mark);
         return r;
       }
 
