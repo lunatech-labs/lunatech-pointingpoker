@@ -192,14 +192,25 @@
         return s;
       }
 
-      // Grouped rather than per row: identical header sets are the common case, and a set that
-      // differs on one probe is itself the interesting result.
+      // Grouped by header NAME, not by name and value. A proxy that stamps a unique id on every
+      // response would otherwise put each probe in a group of its own and bury the one thing this
+      // section exists to show, which is where the sets actually differ.
       function headersText() {
         const groups = new Map();
+        const values = new Map();
         for (const p of PROBES) {
           const r = results[p.id];
           if (!r || !r.headers || r.headers.length === 0) continue;
-          const key = r.headers.join('\n');
+          const names = [];
+          for (const h of r.headers) {
+            const i = h.indexOf(':');
+            const name = h.slice(0, i);
+            const value = h.slice(i + 1).trim();
+            names.push(name);
+            if (!values.has(name)) values.set(name, new Set());
+            values.get(name).add(value);
+          }
+          const key = names.sort().join('\n');
           if (!groups.has(key)) groups.set(key, []);
           groups.get(key).push(p.id);
         }
@@ -207,7 +218,11 @@
         let s = '\nResponse headers as received:\n';
         for (const [key, ids] of groups) {
           s += '\n  seen on ' + ids.join(', ') + ':\n';
-          s += key.split('\n').map(l => '    ' + l).join('\n') + '\n';
+          for (const name of key.split('\n')) {
+            const seen = Array.from(values.get(name));
+            s += '    ' + name + ': ' +
+              (seen.length === 1 ? seen[0] : '(varies per request, e.g. ' + seen[0] + ')') + '\n';
+          }
         }
         return s;
       }

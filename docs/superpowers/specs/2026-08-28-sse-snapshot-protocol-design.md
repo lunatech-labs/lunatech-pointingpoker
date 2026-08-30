@@ -2186,6 +2186,27 @@ rewritten transfer encoding shows up without reading a single timing.
 D's baseline gaps of ~20529ms are 20s of stream plus the 500ms `retry:` the
 probe now sends, which is the direct evidence that the hint is honoured.
 
+**The same run against production, on 2026-08-30 and without the customer's
+network in the path, reproduces the baseline**: streamed on every row, B, G and
+H holding their full 75s, D reconnecting at ~20548ms. So nothing in our own
+hosting buffers, and a departure in the customer's run is theirs rather than
+ours. That is worth having measured rather than assumed, since otherwise the
+first buffered result would have two candidate causes.
+
+It also fixes our own edge's fingerprint, which the customer's result has to be
+read against. Clever Cloud's Sozu proxy stamps `sozu-id` on every response,
+with a different value each time, and adds `forwarded`, `x-forwarded-for`,
+`x-forwarded-port`, `x-forwarded-proto` and its own `sozu-id` to the request.
+Everything in that list is ours. Any header beyond it in the customer's run
+came from their side, which is the whole discriminator for identifying the
+appliance from the table alone.
+
+The per-request `sozu-id` is also why the page groups response headers by name
+rather than by name and value: grouped by value, that one header put all
+fifteen connections in separate blocks and buried the only real difference,
+which is `transfer-encoding: chunked` on the streaming rows and not on the
+POSTs.
+
 Rows B, G and H carry no browser timing and no protocol in the baseline, and
 will not in the customer's run either: browsers record no Resource Timing entry
 for a request the client aborted, and those three are aborted by design. Their
