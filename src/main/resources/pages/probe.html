@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Connectivity probe</title>
+    <!-- Deliberately no CDN assets: an external fetch crosses the same appliance and would
+         contaminate the very latencies this page exists to measure. -->
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; color: #222; }
+      h1 { font-size: 1.4rem; }
+      button { font-size: 1rem; padding: 0.5rem 1rem; margin-right: 0.5rem; cursor: pointer; }
+      #status { background: #f4f4f4; border-left: 4px solid #AB0D1F; padding: 0.75rem 1rem; margin: 1rem 0; }
+      #status .what { color: #555; font-size: 0.9rem; }
+      table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+      th, td { border: 1px solid #ddd; padding: 0.3rem 0.5rem; text-align: right; }
+      th:first-child, td:first-child { text-align: left; }
+      th { background: #f4f4f4; }
+      td.pending { color: #999; }
+      #out { width: 100%; height: 12rem; font-family: monospace; font-size: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Connectivity probe</h1>
+    <p>
+      This runs about eight minutes of small connection tests against this server, one at a time,
+      then produces a table to copy back to us. Please leave the tab open and in the foreground
+      until it finishes.
+    </p>
+    <p>
+      The result contains timings, byte and frame counts, and the HTTP response headers your
+      browser received. All of it is visible in the box at the bottom before you send it.
+    </p>
+
+    <div id="status">Ready. The run takes about eight minutes.</div>
+
+    <button id="start">Start</button>
+    <button id="reset">Clear saved results</button>
+
+    <table id="results">
+      <thead>
+        <tr>
+          <th>Probe</th><th>TTFB ms</th><th>Close ms</th><th>Bytes</th>
+          <th>Frames</th><th>Conns</th><th>Status</th><th>Content-Type</th>
+          <th>Proto</th><th>Last-Event-ID</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2 style="font-size:1.1rem">Result to send back</h2>
+    <button id="copy">Copy for Slack or Teams</button>
+    <textarea id="out" readonly></textarea>
+
+    <script>
+      // Each row is one connection. A, B and I repeat because one sample cannot tell a fixed
+      // deadline from a variable one, nor a cached scan verdict from a cheap path.
+      const PROBES = [
+        { id: 'E1', what: 'Small POST, 1 of 5: command latency and detection’s own channel', kind: 'post', budget: 1000 },
+        { id: 'E2', what: 'Small POST, 2 of 5', kind: 'post', budget: 1000 },
+        { id: 'E3', what: 'Small POST, 3 of 5', kind: 'post', budget: 1000 },
+        { id: 'E4', what: 'Small POST, 4 of 5', kind: 'post', budget: 1000 },
+        { id: 'E5', what: 'Small POST, 5 of 5', kind: 'post', budget: 1000 },
+        { id: 'A1', what: 'Three SSE frames over 2s then close, run 1 of 2: is a completed stream released?', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000', budget: 5000 },
+        { id: 'A2', what: 'Same as A1, run 2 of 2: does a second request get a cached scan verdict?', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000', budget: 5000 },
+        { id: 'I1', what: 'As A but with a 2KB body, run 1 of 2: does scan latency scale with body size?', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000&size=2048', budget: 5000 },
+        { id: 'I2', what: 'Same as I1, run 2 of 2', kind: 'fetch', q: 'kind=sse&frames=3&interval=600&close=2000&size=2048', budget: 5000 },
+        { id: 'C',  what: 'One frame at 1s, close at 20s: the exact shape of the proposed fix', kind: 'fetch', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true&retry=500', budget: 25000 },
+        { id: 'F',  what: 'JSON held open, completed at 20s: is a finite body released where a stream is not?', kind: 'fetch', q: 'kind=json&frames=1&interval=0&close=20000', budget: 25000 },
+        { id: 'B1', what: 'SSE heartbeat every 2s, never closed, run 1 of 2: the real kill deadline', kind: 'fetch', q: 'kind=sse&frames=100&interval=2000', budget: 75000 },
+        { id: 'B2', what: 'Same as B1, run 2 of 2: is that deadline fixed or variable?', kind: 'fetch', q: 'kind=sse&frames=100&interval=2000', budget: 75000 },
+        { id: 'H',  what: 'Held open sending nothing at all: absolute deadline or idle timeout?', kind: 'fetch', q: 'kind=sse&frames=0', budget: 75000 },
+        { id: 'G',  what: 'JSON held open and never completed: is the deadline about the content type?', kind: 'fetch', q: 'kind=json&frames=1&interval=0', budget: 75000 },
+        { id: 'D',  what: 'A real EventSource for 90s: does the browser reconnect, is retry: honoured, does Last-Event-ID survive?', kind: 'eventsource', q: 'kind=sse&frames=1&interval=1000&close=20000&id=true&retry=500', budget: 90000 }
+      ];
+
+      // Bumped whenever a row's shape changes, so a resumed run cannot mix old and new fields.
+      const STORE = 'probe-results-v2';
+      const META_STORE = 'probe-meta-v2';
+      const read = (k) => { try { return JSON.parse(localStorage.getItem(k)) || {}; } catch (e) { return {}; } };
+      const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+      const load = () => read(STORE);
+      const save = (r) => write(STORE, r);
+      let results = load();
+      let meta = read(META_STORE);
+
+      const statusEl = document.getElementById('status');
+      const tbody = document.querySelector('#results tbody');
+      const out = document.getElementById('out');
+
+      const COLS = ['ttfb', 'close', 'bytes', 'frames', 'conns', 'status', 'ctype', 'proto', 'lastEventId'];
+
+      // A repeated probe reuses its predecessor's URL on purpose (that is how A and I test for a
+      // cached scan verdict), so entries are selected by position, not by name alone.
+      const timingMark = () => {
+        try { return performance.getEntriesByType('resource').length; } catch (e) { return 0; }
+      };
+
+      // An aborted request's entry is recorded asynchronously and can land after the next probe
+      // has taken its mark, so the start time is checked too: a row must never show its
+      // predecessor's numbers.
+      function applyTiming(r, url, mark, since) {
+        try {
+          if (!performance.getEntriesByType) return;
+          const es = performance.getEntriesByType('resource').slice(mark)
+            .filter(e => e.name.indexOf(url) !== -1 && e.startTime >= since - 5);
+          if (es.length === 0) return;
+          const t = es[es.length - 1];
+          r.proto = t.nextHopProtocol || '';
+          // Deltas, not raw marks: the raw values are milliseconds since page load and mean
+          // nothing on their own. Body near zero with a real wait before it means buffered.
+          r.browserTtfb = Math.round(t.responseStart - t.requestStart);
+          r.bodyMs = Math.round(t.responseEnd - t.responseStart);
+          r.transfer = t.transferSize;
+        } catch (e) {}
+      }
+
+      // A blank TTFB means no byte ever arrived, which is the run's most important single result;
+      // it must not read as an empty cell.
+      const has = (v) => v !== '' && v != null;
+      const cell = (r, c) => has(r[c]) ? String(r[c]) : 'none';
+
+      function render() {
+        tbody.innerHTML = '';
+        for (const p of PROBES) {
+          const r = results[p.id];
+          const tr = document.createElement('tr');
+          const cells = [p.id].concat(COLS.map(c => (r ? cell(r, c) : '')));
+          cells.forEach((v, i) => {
+            const td = document.createElement('td');
+            td.textContent = r ? v : (i === 0 ? v : '-');
+            if (!r && i > 0) td.className = 'pending';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        }
+        out.value = asText();
+      }
+
+      // Fixed-width inside a fenced block: Slack and Teams both render this as monospace with
+      // the columns intact, where a Markdown table would collapse.
+      function asText() {
+        const head = ['Probe'].concat(['TTFB', 'Close', 'Bytes', 'Frames', 'Conns', 'Status', 'Content-Type', 'Proto', 'Last-Event-ID']);
+        const rows = [head];
+        for (const p of PROBES) {
+          const r = results[p.id];
+          rows.push([p.id].concat(COLS.map(c => (r ? cell(r, c) : 'not run'))));
+        }
+        const width = head.map((_, i) => Math.max(...rows.map(row => row[i].length)));
+        const lines = rows.map(row => row.map((v, i) => v.padEnd(width[i])).join('  ').trimEnd());
+        lines.splice(1, 0, width.map(w => '-'.repeat(w)).join('  '));
+        return '```\n' + lines.join('\n') + '\n' + legendText() + detailText() + headersText() + envText() + '```';
+      }
+
+      // The table is read by someone who was not here when it ran, possibly months later.
+      function legendText() {
+        return '\nReading this table:\n\n' +
+          '  Conns 0 on a fetch row means no response headers ever arrived, not that no\n' +
+          '    connection was made. Conns on row D counts EventSource reconnects.\n' +
+          '  TTFB none means no byte ever arrived before the client gave up.\n' +
+          '  "gave up" is the client stopping at its own budget, not the server closing.\n' +
+          '  Rows the client abandoned carry no browser timing detail and no Proto, because\n' +
+          '    browsers record neither for an aborted request. Their TTFB, Close and Bytes\n' +
+          '    are measured directly and are unaffected.\n';
+      }
+
+      function detailText() {
+        const rows = [];
+        for (const p of PROBES) {
+          const r = results[p.id];
+          if (!r) continue;
+          const bits = [];
+          if (r.startedAt) bits.push('started ' + r.startedAt);
+          if (has(r.browserTtfb)) bits.push('browser wait ' + r.browserTtfb + 'ms, then body over ' + r.bodyMs + 'ms');
+          if (has(r.transfer)) bits.push('transferSize ' + r.transfer);
+          if (r.gaps && r.gaps.length) bits.push('reconnect gaps ' + r.gaps.join(', ') + 'ms');
+          if (bits.length) rows.push('  ' + p.id + ': ' + bits.join('; '));
+        }
+        if (rows.length === 0) return '';
+        return '\nPer connection detail. A long browser wait followed by a body over ~0ms means\nthe response arrived all at once rather than progressively:\n\n' + rows.join('\n') + '\n';
+      }
+
+      function envText() {
+        const bits = [];
+        if (meta.runStarted) bits.push('  run started: ' + meta.runStarted);
+        if (meta.origin) bits.push('  origin: ' + meta.origin);
+        if (meta.userAgent) bits.push('  user agent: ' + meta.userAgent);
+        let s = bits.length ? '\nEnvironment:\n\n' + bits.join('\n') + '\n' : '';
+        if (meta.requestHeaders) {
+          s += '\nRequest headers as the server received them:\n\n' +
+            meta.requestHeaders.split('\n').map(l => '  ' + l).join('\n') + '\n';
+        }
+        return s;
+      }
+
+      // Grouped rather than per row: identical header sets are the common case, and a set that
+      // differs on one probe is itself the interesting result.
+      function headersText() {
+        const groups = new Map();
+        for (const p of PROBES) {
+          const r = results[p.id];
+          if (!r || !r.headers || r.headers.length === 0) continue;
+          const key = r.headers.join('\n');
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(p.id);
+        }
+        if (groups.size === 0) return '';
+        let s = '\nResponse headers as received:\n';
+        for (const [key, ids] of groups) {
+          s += '\n  seen on ' + ids.join(', ') + ':\n';
+          s += key.split('\n').map(l => '    ' + l).join('\n') + '\n';
+        }
+        return s;
+      }
+
+      const blank = () => ({ ttfb: '', close: '', bytes: 0, frames: 0, conns: 0, status: '', ctype: '',
+        proto: '', lastEventId: '', headers: [], startedAt: '', browserTtfb: '', bodyMs: '', transfer: '', gaps: [] });
+
+      // Same-origin, so every response header is readable. Appliances usually name themselves in
+      // one of these, which is the part of the run an administrator would otherwise have to answer.
+      const SKIP_HEADERS = new Set(['date', 'content-length', 'content-type']);
+      const headersOf = (res) => {
+        const out = [];
+        res.headers.forEach((v, k) => { if (!SKIP_HEADERS.has(k.toLowerCase())) out.push(k.toLowerCase() + ': ' + v); });
+        return out.sort();
+      };
+
+      async function runPost() {
+        const r = blank();
+        r.startedAt = new Date().toISOString();
+        const mark = timingMark();
+        const t0 = performance.now();
+        try {
+          const res = await fetch('/probe/echo', { method: 'POST', body: 'probe', cache: 'no-store' });
+          r.conns = 1;
+          r.status = res.status;
+          r.ctype = res.headers.get('content-type') || '';
+          r.headers = headersOf(res);
+          r.bytes = (await res.text()).length;
+          r.ttfb = Math.round(performance.now() - t0);
+        } catch (e) {
+          r.status = 'error';
+        }
+        r.close = Math.round(performance.now() - t0);
+        applyTiming(r, '/probe/echo', mark, t0);
+        return r;
+      }
+
+      async function runFetch(probe) {
+        const r = blank();
+        r.startedAt = new Date().toISOString();
+        const url = '/probe/stream?' + probe.q;
+        const mark = timingMark();
+        const t0 = performance.now();
+        const ctrl = new AbortController();
+        const giveUp = setTimeout(() => ctrl.abort(), probe.budget);
+        try {
+          const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+          r.conns = 1;
+          r.status = res.status;
+          r.ctype = res.headers.get('content-type') || '';
+          r.headers = headersOf(res);
+          const reader = res.body.getReader();
+          const dec = new TextDecoder();
+          let buf = '';
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (r.ttfb === '') r.ttfb = Math.round(performance.now() - t0);
+            r.bytes += value.length;
+            buf += dec.decode(value, { stream: true });
+            r.frames = (buf.match(/\n\n/g) || []).length;
+            const m = buf.match(/lastEventId=([^;]*)/);
+            if (m) r.lastEventId = m[1] || '(empty)';
+          }
+        } catch (e) {
+          if (r.status === '') r.status = (e.name === 'AbortError') ? 'gave up' : 'error';
+          else if (r.ttfb === '') r.status = r.status + ' no body';
+        }
+        clearTimeout(giveUp);
+        r.close = Math.round(performance.now() - t0);
+        applyTiming(r, url, mark, t0);
+        return r;
+      }
+
+      function runEventSource(probe) {
+        return new Promise(resolve => {
+          const r = blank();
+          r.status = 'n/a';
+          r.ctype = 'n/a';
+          r.startedAt = new Date().toISOString();
+          const t0 = performance.now();
+          let lastOpen = null;
+          const es = new EventSource('/probe/stream?' + probe.q);
+          // Gaps between opens are the direct evidence for whether the retry: hint was honoured.
+          es.onopen = () => {
+            const at = Math.round(performance.now() - t0);
+            if (lastOpen !== null) r.gaps.push(at - lastOpen);
+            lastOpen = at;
+            r.conns += 1;
+          };
+          es.onmessage = (ev) => {
+            if (r.ttfb === '') r.ttfb = Math.round(performance.now() - t0);
+            r.frames += 1;
+            r.bytes += ev.data.length;
+            const m = ev.data.match(/lastEventId=([^;]*)/);
+            if (m) r.lastEventId = m[1] || '(empty)';
+          };
+          setTimeout(() => {
+            es.close();
+            r.close = Math.round(performance.now() - t0);
+            resolve(r);
+          }, probe.budget);
+        });
+      }
+
+      let ticker = null;
+      function countdown(probe, index, remainingTotal) {
+        let left = Math.ceil(probe.budget / 1000);
+        const paint = () => {
+          statusEl.innerHTML =
+            '<strong>Running ' + probe.id + '</strong> (' + (index + 1) + ' of ' + PROBES.length + '), ' +
+            'up to ' + left + 's left on this test, about ' + Math.ceil(remainingTotal / 1000) + 's for the run.' +
+            '<div class="what">' + probe.what + '</div>';
+        };
+        paint();
+        clearInterval(ticker);
+        ticker = setInterval(() => { left = Math.max(0, left - 1); remainingTotal = Math.max(0, remainingTotal - 1000); paint(); }, 1000);
+      }
+
+      async function run() {
+        document.getElementById('start').disabled = true;
+        meta.runStarted = meta.runStarted || new Date().toISOString();
+        meta.origin = location.origin;
+        meta.userAgent = navigator.userAgent;
+        if (!meta.requestHeaders) {
+          try {
+            const res = await fetch('/probe/request-headers', { cache: 'no-store' });
+            meta.requestHeaders = await res.text();
+          } catch (e) {
+            meta.requestHeaders = '(could not be read: ' + e + ')';
+          }
+        }
+        write(META_STORE, meta);
+        render();
+        let remaining = PROBES.reduce((s, p) => s + (results[p.id] ? 0 : p.budget), 0);
+        for (let i = 0; i < PROBES.length; i++) {
+          const probe = PROBES[i];
+          if (results[probe.id]) continue;
+          countdown(probe, i, remaining);
+          const r = probe.kind === 'post' ? await runPost()
+                  : probe.kind === 'eventsource' ? await runEventSource(probe)
+                  : await runFetch(probe);
+          results[probe.id] = r;
+          save(results);
+          render();
+          remaining -= probe.budget;
+        }
+        clearInterval(ticker);
+        statusEl.innerHTML = '<strong>Done.</strong> Please copy the result below and send it back to us.';
+        document.getElementById('start').disabled = false;
+      }
+
+      document.getElementById('start').addEventListener('click', run);
+      document.getElementById('reset').addEventListener('click', () => {
+        results = {};
+        meta = {};
+        save(results);
+        write(META_STORE, meta);
+        render();
+        statusEl.textContent = 'Cleared. The next run starts from the first test.';
+      });
+      document.getElementById('copy').addEventListener('click', () => {
+        out.select();
+        navigator.clipboard.writeText(out.value).catch(() => document.execCommand('copy'));
+      });
+
+      render();
+      if (Object.keys(results).length > 0) {
+        statusEl.textContent = 'Found saved results from an interrupted run. Start will resume from the first test that has no result.';
+      }
+    </script>
+  </body>
+</html>
