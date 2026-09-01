@@ -226,16 +226,16 @@ The 08-20 design examined two tabs on *different* rooms, where path scoping work
 correctly, and the same-room case fell in the gap beside it. Section 4 restores
 the original behaviour.
 
-WebSocket would return two things this design buys back by hand: command
-ordering and instant leave detection, paid for in section 4's sequence number
-and explicit leave endpoint, roughly 45 lines between them. A socket would also
-carry a per-connection identity for free, where a cookie needs its path scoped to
-get one; section 4's `:tabId` is that scoping, and it lands the same outcome,
-including two tabs being two participants.
+WebSocket would return one thing this design buys back by hand: instant leave
+detection, paid for in section 4's explicit leave endpoint at roughly 25 lines.
+It would also carry command ordering, which this design declines to guarantee at
+all and defers instead, and a per-connection identity for free, where a cookie
+needs its path scoped to get one; section 4's `:tabId` is that scoping, and it
+lands the same outcome, including two tabs being two participants.
 
-Forty-five lines is still cheaper than reversing the transport, and the read side
-is one-way fan-out while the write side wants ordinary HTTP semantics, which is
-what the ask pattern needs. **Reverses if** we ever need low-latency bidirectional
+Twenty-five lines is cheaper than reversing the transport, and the read side is
+one-way fan-out while the write side wants ordinary HTTP semantics, which is what
+the ask pattern needs. **Reverses if** we ever need low-latency bidirectional
 interaction at many events per second, and that reversal is a real option rather
 than a formality: the snapshot protocol is transport-agnostic, so `publish`,
 `RoomSnapshot` and `applySnapshot` all survive it. What is SSE-specific is
@@ -384,12 +384,27 @@ the live SSE connection, which is the one part of the current design that cannot
 carry forward. It splits three ways:
 
 ```
-RoomState   slug, createdAt, currentIssue, round: Round, history: List[RoundRecord]
-Round       id, estimates: Map[UUID, Estimate], revealed
+RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
+Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
-members     Map[UUID, Member]     // Member(name, token, lastSeq); lastSeq arrives at step 6
-connections Map[UUID, ActorRef]   // the only place a connection handle lives
+sessions    Map[SessionToken, Session]  // Session(userId, name); TTL at resolution
+members     Map[UUID, Member]          // Member(name)
+connections Map[UUID, ActorRef]        // the only place a connection handle lives
 ```
+
+**`sessions` is the single authority for resolving a token to an identity**,
+which is what lets `ValidateToken` become one map lookup. Today it takes two
+(`Room.scala:236-243`): a lookup in `pendingSessions`, then a linear scan of
+`users` by token, the scan existing only because `joinUser` consumes the pending
+entry on promotion so the token's last record is on the `User`. Retaining
+sessions past promotion removes that reason, so the scan goes and `Member` needs
+no token. It also makes a disagreement unrepresentable, where today the same
+token could sit in both maps against different user ids with the pending one
+silently winning.
+
+The name is deliberately in both `Session` and `Member`: a session exists before
+there is a member, which is why 08-20 put it on `PendingSession`. Idempotent
+`/join` updates both.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
@@ -407,9 +422,12 @@ changes which rows show the shield icon. So `voted` on the wire is
 half of what the client does client-side today and has to move with the
 derivation.
 
-`history` is the within-session round record, specified under "Round history"
-below. The rule forbids a connection handle anywhere in this group, which is why
-`connections` is separate and why nothing here is a `List[User]`. It survives the
+`RoomData` keeps its name as the actor's state container and holds all four
+groups; `RoomState` is the room's own data within it, which is what the `publish`
+snippet below reaches through. `history` is the within-session round record,
+specified under "Round history" below. The rule forbids a connection handle
+anywhere in this group, which is why `connections` is separate and why nothing
+here is a `List[User]`. It survives the
 absence of a store: the reason to keep connection handles out of the room's state
 is that they are the one thing that cannot be reconstructed or reasoned about
 independently, not that something is going to be written to disk.
@@ -435,6 +453,25 @@ dead ref is a no-op anyway, and `emptySince` has to reflect reality. A `members`
 entry goes at grace expiry, or immediately on the explicit leave in section 4.
 Estimates are never removed by a departure at all, only by `clear`, `reVote` or
 the round ending.
+
+**The grace period stops making a delayed decision.** Today the timer is keyed on
+`(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
+relevant, scanning for a user still holding that exact ref and doing nothing if a
+reconnect replaced it (`Room.scala:182-225`). With connections in their own map
+the same question is answerable at the moment of the event: on `Leave(userId,
+ref)`, if `connections(userId)` is not this ref then the connection was already
+replaced, the user is connected, and no timer is scheduled at all. Otherwise the
+entry is dropped and a timer keyed on `userId` alone starts, which
+`ConnectToRoom` cancels if they come back. `ConfirmLeave` then removes the member
+unconditionally, because a stale teardown scheduled nothing and a resume
+cancelled what existed.
+
+That deletes the ref from the timer key, the post-delay staleness check and the
+duplicate-`Leave` warning, and it makes **Problem C unrepresentable** rather than
+fixed: there is no stale timer left to accumulate. The comparison has to be
+against `connections` rather than against membership, though, because a racing
+reconnect delivers the old stream's termination after the new connection is
+established and only the ref distinguishes them.
 
 Two consequences follow. **A transient drop produces no wire traffic**, since
 removing a `connections` entry changes no snapshot and there is nothing to
@@ -697,31 +734,28 @@ is the same move as `Participant` being a projection: the thing that could go
 wrong stops being expressible rather than being checked for.
 
 That removes a shared mutable slot which would otherwise have needed guarding on
-every write. Two failure modes go with it, both silent: a leave beacon carrying
-whichever token was written last would evict the *other* tab's participant while
-it sat there connected, and two tabs' independent command counters would race
-against one `Member.lastSeq`, dropping votes unpredictably as each overtook the
-other. Neither is reachable when the tabs cannot share a token.
+every write. The failure it prevents is silent: a leave beacon carrying whichever
+token was written last would evict the *other* tab's participant while it sat
+there connected. Not reachable when the tabs cannot share a token.
 
-Four additions, each closing something documented:
+Three additions, each closing something documented:
 
-- **Retained sessions with a TTL.** Sessions are kept past promotion rather than
-  consumed, and bounded by a TTL evaluated at resolution, so an unpromoted
-  session expires on its own. Closes the pending-session leak, and it is also
-  what keeps a tab's token resolvable for the idempotent `/join` below.
+- **Retained sessions with a TTL**, kept past promotion rather than consumed and
+  bounded by a TTL evaluated at resolution. **What this mainly fixes is
+  recovery from an outage longer than the grace period**, which today forces a
+  manual reload. The member is removed at grace expiry, and because `joinUser`
+  consumes the session on promotion the token's only record went with it, so
+  `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
+  Please reload the page to rejoin." (`index.html:472-485`). The retry interval
+  is 2 seconds, so a blip inside the grace period recovers silently and a slept
+  laptop does not. With retention the token still resolves, the retry succeeds,
+  and the same identity comes back. It is also what keeps a tab's token
+  resolvable for the idempotent `/join` below, what lets `sessions` be the single
+  authority for resolution in section 3, and, least of all, what closes the
+  pending-session leak.
 - **Ask-pattern commands**, so a client can distinguish rejected from lost.
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
-- **A per-tab command sequence number.** The client sends a counter, starting at
-  1 and incremented per command; the room ignores one whose sequence is not
-  strictly greater than `Member.lastSeq`, which starts at 0. A member is a tab,
-  so there is exactly one counter per member and no cross-tab interference to
-  guard against. An ignored command answers with a distinct superseded result
-  rather than silence, since the whole point of the ask pattern here is that a
-  client can tell rejected from lost, and a dropped-as-stale command that times
-  out reports the one thing that did not happen. Closes the HTTP
-  command-ordering regression, which is one of the two reasons this design can
-  recommend against returning to WebSocket.
 - **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`,
   mapping to an immediate departure that bypasses the grace period. That is the
   other reason, and it reduces the grace period to what it should be: cover for
@@ -738,8 +772,8 @@ instead of minting a new one. Tab scoping is what makes this safe: the cookie
 unambiguously belongs to the tab asking, so there is no question of resuming
 somebody else. A reload therefore keeps its `tabId` from `sessionStorage`, its
 cookie, its token and its `userId`, the member entry is replaced rather than
-duplicated, and the old connection's ref-scoped teardown cannot evict the new
-one.
+duplicated, and the old connection's teardown cannot evict the new one because it
+is scoped to the connection rather than the user (`Room.scala:91-94`).
 
 It does take the `name` from the request rather than ignoring it, so a reload
 with a different name renames the participant instead of silently keeping the old
@@ -751,14 +785,6 @@ report: today `/join` mints a fresh identity on every call, so someone reloading
 watches their own name sit in the participant list twice until the old entry's
 grace period expires. This closes it structurally, rather than by hoping a
 `sendBeacon` wins a race against the new page's join.
-
-**One coupling comes with it, and it is the kind that bites silently.** A member
-now survives a reload, so `Member.lastSeq` survives with it, while the tab's
-JavaScript counter restarts at 1. Every command from the reloaded tab would then
-be below the stored value and be dropped as stale. So **`/join` resets
-`Member.lastSeq` to 0**. A reload is a fresh heap and restarting the count is
-correct; the only commands this could re-admit are in flight from a page that no
-longer exists.
 
 **Two tabs on one room are two participants**, each with its own cookie, member
 entry and vote. That is a restoration rather than a change: it is what the
@@ -919,6 +945,7 @@ arrives.
 | Durable auth sessions | Wanting identity to survive a browser close. `localStorage` already covers name pre-fill. |
 | Multi-instance operation | Out of scope by decision; single process throughout. |
 | Event-sourcing the room | Never, on the same grounds that pick snapshots for the wire. Round history is a product feature with its own shape, not a projection anyone needs to rebuild. |
+| Per-command sequence numbers | Someone actually observing a reordered command. Under snapshots a reordering is visible rather than silent, since the client converges on what the server holds: the wrong card stays highlighted, or a vote outlives a clear, in front of everyone. `lastSeq` is live state re-derived per session, so it is free to add then and would otherwise need `/join` to reset it, a coupling that bites silently. |
 | Rate limiting | Unscheduled and broader than any one symptom. |
 
 **Two caveats on the long-poll row**, since it is the only deferred item this
@@ -1012,8 +1039,9 @@ deregistration path, which it has to be anyway, since it is the only one that ca
 observe a self-initiated stop.
 
 Flag for its reviewer rather than let them find it: this **deletes** step 1's
-Problem A fix, because the split makes vote loss on reconnect unrepresentable.
-Writing a fix and then removing it is deliberate. Folding the split into step 1
+fixes for Problems A and C, because the split makes vote loss on reconnect and
+stale grace-period timers both unrepresentable. Writing a fix and then removing
+it is deliberate. Folding the split into step 1
 would produce one PR changing both the wire format and the shape of state, and
 step 1's diff is readable at its size only because most of it is deletion.
 
@@ -1022,17 +1050,15 @@ any time after. About 55 and 100. Closes the pending-session leak.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the
 ask pattern replacing the unconditional `204`, tab-scoped cookies with the
-`:tabId` path segment, idempotent `/join`, per-tab command sequence numbers, and
-the explicit leave endpoint. Wants step 4 first so handlers are not rewritten
-twice. About 225 and 200.
+`:tabId` path segment, idempotent `/join`, and the explicit leave endpoint. Wants
+step 4 first so handlers are not rewritten twice. About 200 and 175.
 
 tapir and the `:tabId` segment both land here rather than later, and for the same
 reason: this step already rewrites all five command endpoints plus `/join` and
 `/events`, so describing them once with tapir and adding a path segment once
 costs less than doing either twice. Closes Phase 1's outstanding item, the
-command-ordering regression, the slow-departure issue and the same-room two-tab
-regression, and it closes the reload duplicate structurally rather than by
-beacon timing.
+slow-departure issue and the same-room two-tab regression, and it closes the
+reload duplicate structurally rather than by beacon timing.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
@@ -1104,12 +1130,13 @@ says why.
   convenience beside it.
 - Latched reveal stays where it is and gains a note that it should ship with the
   backlog's undo/re-hide, since latching removes today's accidental un-reveal.
-- The backlog's per-user command sequencing item becomes step 6.
+- The backlog's per-user command sequencing item stays in the backlog, with the
+  reasoning under "Deferred, with triggers".
 - The backlog's client-side connection-liveness watchdog stays in the backlog.
 
 ## Known issues disposition
 
-Six of the eight open entries close on this path.
+Five of the eight open entries close on this path.
 
 | Entry | Closed by |
 | --- | --- |
@@ -1118,7 +1145,7 @@ Six of the eight open entries close on this path.
 | A `/join` with no follow-up `/events` leaks a pending session | Step 5 |
 | SSE reverse-proxy buffering is undocumented | Step 1 |
 | A deliberate tab close is as slow to announce as a transient reconnect | Step 6 |
-| HTTP command ordering is not guaranteed | Step 6 |
+| HTTP command ordering is not guaranteed | Stays open. Snapshots downgrade it from silent divergence to a visible wrong-but-true state, and it has never been observed; see "Deferred, with triggers". |
 | Resync doesn't replay whether votes are revealed | Step 1 |
 | No rate limiting on mutating room endpoints | Stays open |
 
@@ -1127,9 +1154,10 @@ bounded-mode request-amplification paragraph describes a mode this design
 cancels, and the no-op publish guard it names as the backstop is also dropped.
 The underlying gap is unchanged.
 
-Four issues need **adding** to `docs/known-issues.md`. Three are recorded only
-inside a spec about to be marked superseded; the fourth is recorded nowhere at
-all:
+Five issues need **adding** to `docs/known-issues.md`. Three are recorded only
+inside a spec about to be marked superseded; the other two are recorded nowhere
+at all, and one of those is a live bug rather than anything this design
+introduces:
 
 - A transparently reconnecting client duplicates every known participant.
   Closed by step 1.
@@ -1137,6 +1165,10 @@ all:
   step 1.
 - Pre-reveal estimations are broadcast to every participant and only hidden
   client-side. Closed by step 2.
+- A disconnection outlasting the grace period forces a page reload. The member is
+  removed, the consumed session leaves nothing to resolve the token, and the
+  retry gets a 401. Sleeping a laptop for more than six seconds in an occupied
+  room is enough. Live today and unrelated to this design; closed by step 5.
 - Two tabs on the same room share one identity, so one tab's clicks are silently
   credited to the other. A regression from the WebSocket swap that was never
   recorded: the 08-20 design examined two tabs on *different* rooms, where path
