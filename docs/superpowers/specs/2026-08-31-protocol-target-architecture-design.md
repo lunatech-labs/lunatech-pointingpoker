@@ -285,7 +285,7 @@ final case class RoomSnapshot(
     currentIssue: String,
     votesRevealed: Boolean,
     users: List[RoomSnapshot.Participant],
-    history: List[RoundRecord] // arrives at step 9; empty until then
+    history: List[RoundRecord] // added at step 9; not on the wire until then
 )
 
 object RoomSnapshot:
@@ -547,9 +547,9 @@ is unspecified and clients must not depend on it.** Ordering is a display
 decision: alphabetical, voted-first and by-vote are all client-side sorts over
 `name`, `voted` and `estimation`, which the snapshot already carries, so the
 client gains the freedom and the server takes on no rendering concern. The
-server still emits a deterministic order, sorted by user id, purely so snapshots
-stay comparable in tests and readable in logs. That determinism is not a
-guarantee to build on.
+server still emits a deterministic order, sorted by user id from step 1, purely
+so snapshots stay comparable in tests and readable in logs. That determinism is
+not a guarantee to build on.
 
 Two things this replaces are worth recording. There is no cross-client order
 today either: a joiner's list is built from `setupNewUser`'s replay, which walks
@@ -1009,10 +1009,12 @@ lost on the way.
 ### 6. Testing
 
 `RoomSpec`'s existing cases remain the behaviour specification. Its reconnect
-tests hand-construct the reconnecting user via `user.copy(ref = ...)`, which
-preserves vote state by construction and therefore never exercised the real
-`ConnectToRoom` path; they should go through `ConnectToRoom` so they would catch
-a regression.
+tests hand-construct the reconnecting user via `user.copy(ref = ...)`
+(`RoomSpec.scala:185`, `:280`), which preserves vote state by construction and
+therefore never exercised the real `ConnectToRoom` path; they should go through
+`ConnectToRoom` so they would catch a regression. That lands at step 1, beside
+Problem A's fix, since vote loss on reconnect is the regression they would have
+caught.
 
 Added, each with the step it lands at so nothing here is unassigned:
 
@@ -1051,10 +1053,11 @@ Added, each with the step it lands at so nothing here is unassigned:
 
 ## Accepted costs
 
-- **Two toolchains** once the frontend gains a build at step 8. The node
-  toolchain arrives regardless (Phase 3 needs a build, and the e2e harness needs
-  Playwright), so the marginal cost is keeping an sbt setup that already works
-  and is already maintained by Scala Steward.
+- **Two toolchains**, from step 0 rather than step 8, since gating the e2e
+  suite puts `npm ci` and a browser install on CI before any protocol work
+  lands. The node toolchain arrives regardless (Phase 3 needs a build, and the
+  harness needs Playwright), so the marginal cost is keeping an sbt setup that
+  already works and is already maintained by Scala Steward.
 - **A slower test fixture for anything spanning both halves.** A Playwright or
   integration test must boot a packaged server rather than importing it, which
   the 08-30 harness already designs, at roughly 80 lines written once.
@@ -1128,7 +1131,7 @@ About 220 lines and 200 of tests.
 Front-loaded for a different reason than the 08-30 design gave. Its original
 justification was reproducing the proxy failure; the surviving one is that there
 are no end-to-end tests today and step 1 is the largest behavioural change in
-the set. Two caveats belong in it.
+the set. Three caveats belong in it.
 
 **Cases covering behaviour that is currently buggy** (the non-voter tally, the
 duplicate participants) characterize the *intended* behaviour, so they would
@@ -1142,16 +1145,85 @@ a small ledger of known-broken-until-step-N that will drift from the known-issue
 table; the annotation is the authority, being the one that fails the build when
 it goes stale.
 
+**The browser suite is gated in CI from this step**, which is a change to the
+08-30 design rather than a restatement of it, and the sentence above depends on
+it: an annotation nobody's build reads is a note, not a ledger. The 08-30 design
+deferred CI integration on 08-28's schedule, where the suite's worth "peaks
+immediately before the Phase 3 framework migration". Phase 3 is step 8 here,
+while the suite is the regression net for steps 1 to 3, so the deferral is seven
+steps too late for the job it was front-loaded to do, against 08-28's own
+warning that a suite nothing runs automatically rots worse than a manual
+checklist. The cost is `npm ci` and a cached `playwright install --with-deps
+chromium firefox` on the job that already stages the app, both engines because
+08-30 measured them disagreeing on exactly this streaming edge and runs the
+reconnect case in both. Its app and stub fixtures are worker-scoped, so the
+suite parallelizes rather than paying a JVM per case. The
+`docs/known-issues.md` entry 08-30 promised for the ungated gap is therefore
+never written.
+
 **Step 8 will revisit selectors**, so prefer accessible ones.
 
 **Step 1. Snapshot protocol.** The wire format, `publish`, pure
 `applySnapshot`, `dropHead`, the anti-buffering headers and README note, plus
-Problems A, C and E. Deletes `RoomEvent.scala`, `broadcast`, `setupNewUser`, 89
+Problems A and E. Deletes `RoomEvent.scala`, `broadcast`, `setupNewUser`, 89
 client lines, and `ConnectionFailure`'s now-unreachable `BufferOverflowException`
 branch. Waits on nothing, though much safer after step 0. About 170
 added, 190 deleted, 200 of tests. Independently releasable, and it closes four
 things: both reconnect bugs, the reveal-on-resync issue and the
 proxy-buffering documentation issue.
+
+**Everything in this step is built against today's `RoomData`**, since
+`RoomState`, `Round`, `members` and `connections` arrive at step 4 and section 3
+is written entirely in their terms. `publish` is one pass over `users`, sending
+`RoomSnapshot.of(data, u.id)` to that user's own `ref`; the per-member set of
+refs, and one snapshot shared across a member's connections, arrive with step 4.
+Here a user has exactly one ref, since `joinUser` replaces the whole entry on a
+reconnect rather than accumulating. `voted` on the wire is `User.voted`,
+already the confirmed flag since `reVote()` keeps `estimation`
+(`Room.scala:85-89`), and step 2's `hasEstimation` is `estimation.nonEmpty`
+rather than an entry existing in a map.
+
+**The stored `revealed` flag does not exist today and this step adds it**, which
+is the mapping worth stating outright. `ShowVotes` broadcasts and returns
+`Behaviors.same` (`Room.scala:173-181`), so reveal lives only as a client-side
+flag. Section 3's `round.revealed || everyMemberHasVoted` can therefore be
+satisfied by its second term alone, which silently drops a Show pressed while a
+straggler has not voted. `RoomData` gains `revealed: Boolean`, `ShowVotes` sets
+it, and `clear()`/`reVote()` clear it beside the vote fields they already touch.
+That flag and the derivation over `users` are Problem E.
+
+**Problem A is fixed here too.** `RoomManager.ConnectToRoom` builds the `User`
+it sends with `InitialVoteState`/`InitialEstimation` (`RoomManager.scala:81-84`)
+and `RoomData.joinUser` (`Room.scala:66-74`) replaces the existing entry
+wholesale, so a reconnect resets that participant's vote in the room's own
+state. Under events the loss was quiet; under snapshots it is immediately
+republished to everyone. The fix is one call site (`Room.scala:130`):
+`joinUser` keeps `voted` and `estimation` from the existing entry and takes
+everything else from the incoming user. Taking the rest is safe because only
+`ref` actually differs on a reconnect, there being no rename feature and
+`EventSource`'s retry reusing the existing session cookie rather than calling
+`/join`.
+
+**Problem C is not in this step**, and moves to step 4. Its urgency came from
+bounded mode's reconnect cadence, which left several stale timers alive per user
+at once; without it a superseded timer is one wasted `ConfirmLeave` per
+reconnect, which is today's behaviour and has never been observed to hurt.
+Fixing it here means re-keying the timer on `userId` alone plus moving the
+staleness check to `Leave` time, where getting only the first half produces a
+phantom participant for the life of the process, and step 4 then deletes all of
+it. Step 4 makes it unrepresentable instead.
+
+The deterministic sort by user id lands here, as part of the wire format. That
+is also what keeps participant order stable across the reconnect above, so
+`joinUser` may keep prepending and order stops depending on it at all.
+
+One caveat to carry rather than delete with the code it annotates. The comment
+at `Room.scala:125-130` is the code's only pointer to 08-24's empirical finding
+on the connection-establishment race, and that finding asks for a re-check if
+the hop chain is ever restructured. Deleting `setupNewUser` takes the pointer
+with it. The chain is unchanged here and the send gets smaller, one snapshot in
+place of a batched replay, so restate the caveat on `publish` rather than
+re-running the trials.
 
 **Step 2. Pre-reveal vote confidentiality.** Per-recipient redaction,
 `hasEstimation`, and the `showUserEstimation` change. Waits on step 1. About 20
@@ -1163,9 +1235,9 @@ Waits on step 1, independent of step 2. About 5 and 25. Separate because it is
 the one change a user notices as a different answer rather than better plumbing.
 
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
-`Round`, `members` and `connections`, and replacing the room actor's
-stop-when-empty with an idle timeout. Waits on steps 1 and 5. About 140 changed
-and 100 of tests.
+`Round`, `members` and `connections`, replacing the room actor's
+stop-when-empty with an idle timeout, and Problem C. Waits on steps 1 and 5.
+About 140 changed and 100 of tests.
 
 **It waits on step 5 because `Member` carries no token.** Resolution moves
 entirely to `sessions`, and sessions are only resolvable past promotion once step
@@ -1173,9 +1245,10 @@ entirely to `sessions`, and sessions are only resolvable past promotion once ste
 resolving to nothing and turn every reconnect into an immediate 401.
 
 The split itself is a pure refactor; **the idle timeout is the one behaviour
-change in this step**. `connections` is a set per member from the start, but it
-holds at most one ref until step 6 makes `/join` idempotent, so nothing observable
-turns on it here. It stops a room dying the moment its last member's grace
+change in this step**. `connections` is a set per member from the start, but
+until step 6 makes `/join` idempotent it holds a second ref only transiently,
+across the racing reconnect section 3 describes, so nothing observable turns on
+it here. The timeout stops a room dying the moment its last member's grace
 period expires, six seconds into a coffee break, taking the session's round
 history with it, and it closes the abandoned-room GC issue. Section 3 has the
 reasoning, including what "idle" means and why message silence is not it.
@@ -1189,9 +1262,10 @@ deregistration path, which it has to be anyway, since it is the only one that ca
 observe a self-initiated stop.
 
 Flag for its reviewer rather than let them find it: this **deletes** step 1's
-fixes for Problems A and C, because the split makes vote loss on reconnect and
-stale grace-period timers both unrepresentable. Writing a fix and then removing
-it is deliberate. Folding the split into step 1
+fix for Problem A, because the split makes vote loss on reconnect
+unrepresentable. Writing a fix and then removing it is deliberate, and it is
+also why Problem C is closed here for the first time rather than fixed twice:
+step 1 says why. Folding the split into step 1
 would produce one PR changing both the wire format and the shape of state, and
 step 1's diff is readable at its size only because most of it is deletion.
 
