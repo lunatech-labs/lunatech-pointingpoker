@@ -1,7 +1,12 @@
 # Session/Identity Mechanism (closes the userId spoofing gap)
 
 Date: 2026-08-20
-Status: Proposed, pending review
+Status: Implemented and current. The cookie-lifetime question is reaffirmed
+rather than reopened by
+`docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`:
+it stays a session cookie. That design does change the cookie's *scope* to
+`/rooms/:slug/:tabId`, one per tab, closing a same-room two-tab collision this
+design did not examine.
 
 ## Purpose
 

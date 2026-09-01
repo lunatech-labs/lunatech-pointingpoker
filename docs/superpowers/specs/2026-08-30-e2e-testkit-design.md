@@ -1,9 +1,13 @@
 # End-to-End Testkit: Stub Buffering Proxy and Browser Harness
 
 Date: 2026-08-30
-Status: Proposed
-Delivers: PR 0b of
-`docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md`
+Status: Proposed, amended rather than superseded by
+`docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
+Delivers: step 0 of that design. The stub and harness survive unchanged, the
+bounded-mode cases go with bounded mode, and characterization cases arrive.
+Cases covering behaviour that is currently buggy are marked `test.fail()` with
+the step that fixes each, so the suite is green from the start and Playwright
+reports a stale annotation when a fix lands.
 
 ## Purpose
 
