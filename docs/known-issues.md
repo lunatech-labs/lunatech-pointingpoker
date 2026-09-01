@@ -107,9 +107,11 @@ roadmap item instead of leaving it here as stale history.
   `navigator.sendBeacon` on `pagehide` to an explicit leave endpoint that
   bypasses the grace period, so the grace period covers only what it should,
   transient drops. The reload is closed structurally rather than by beacon
-  timing: with the cookie scoped per tab and `/join` idempotent, a reload keeps
-  its own identity and replaces its member entry instead of adding a second one.
-  Remove this entry when that lands.
+  timing: `/join` becomes idempotent against the room cookie, so a reload resumes
+  the same identity and the same vote instead of adding a second participant.
+  What remains on a reload is a sub-second gap where the member is absent, since
+  `pagehide` fires there too and nothing distinguishes it from a close, accepted
+  deliberately in that design. Remove this entry when that lands.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
@@ -203,24 +205,28 @@ roadmap item instead of leaving it here as stale history.
   the token stays resolvable and the retry succeeds with the same identity.
   Remove this entry when that lands.
 
-### Two tabs on the same room share one identity
+### A second tab on the same room displaces the first tab's identity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`
-  (`sessionCookie`'s `Path=/rooms/$roomId`).
+  (the `/join` route's unconditional `RequestSession` and `setCookie`, with
+  `sessionCookie`'s `Path=/rooms/$roomId` being why the slot is shared at all).
 - **Issue:** The session cookie is scoped to the room, so every tab on that room
-  shares one slot and each `POST /join` overwrites it. A second tab therefore
-  resumes as whichever identity was minted last, and the first tab's votes and
-  edits are silently credited to the second. Under the old WebSocket transport
-  each tab held its own socket with its own server-minted `userId`, so two tabs
-  were two participants; the SSE swap changed this without recording it. The
-  2026-08-20 session identity design examined two tabs on *different* rooms,
-  where path scoping works correctly, and the same-room case fell in the gap
-  beside it.
+  shares one slot and each `POST /join` overwrites it. The sharing is not the
+  problem; the overwrite is. A second tab does not join the first tab's identity,
+  it mints a new one and replaces it, so the first tab's votes and edits are
+  silently credited to the second participant while the first sits there
+  connected. The 2026-08-20 session identity design examined two tabs on
+  *different* rooms, where path scoping works correctly, and the same-room case
+  fell in the gap beside it.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which scopes the cookie to `/rooms/:slug/:tabId` with the id held in
-  `sessionStorage`, restoring two tabs to two participants. Remove this entry
-  when that lands.
+  which makes `POST /join` idempotent: a request whose cookie already resolves
+  returns that `userId` instead of minting over it, so both tabs are one
+  participant with one vote and either can be closed without evicting the other.
+  Two tabs as two participants was considered and rejected there, since no
+  browser primitive gives a per-tab id that both survives reload and resists a
+  duplicated tab, and an extra non-voting member would block server-side
+  auto-reveal for the whole room. Remove this entry when that lands.
 
 ### A transparently reconnecting client duplicates every known participant
 

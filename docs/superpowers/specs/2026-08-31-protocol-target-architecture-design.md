@@ -218,20 +218,22 @@ this design is still paying for two of them. The 08-18 note records the first,
 that `userId` travelled in the query string of every request into access logs and
 browser history, which the cookie work then fixed.
 
-The second was never recorded anywhere. Under WebSocket each tab held its own
-socket with its own server-minted `userId`, so two tabs on one room were two
-participants. Under a cookie scoped to the room they collapse onto whichever
-token was written last, so one tab's clicks are silently credited to the other.
-The 08-20 design examined two tabs on *different* rooms, where path scoping works
-correctly, and the same-room case fell in the gap beside it. Section 4 restores
-the original behaviour.
+The second was never recorded anywhere. Under a cookie scoped to the room every
+tab shares one slot and each `/join` overwrites it, so a second tab silently takes
+over the first tab's identity and the first tab's clicks land as the second's. The
+08-20 design examined two tabs on *different* rooms, where path scoping works
+correctly, and the same-room case fell in the gap beside it. Section 4 closes it,
+though not by restoring what WebSocket did: each socket minted its own `userId`,
+so two tabs were two participants there, and section 4 argues that outcome was an
+artifact of the transport rather than a behaviour worth keeping.
 
 WebSocket would return one thing this design buys back by hand: instant leave
 detection, paid for in section 4's explicit leave endpoint at roughly 25 lines.
 It would also carry command ordering, which this design declines to guarantee at
-all and defers instead, and a per-connection identity for free, where a cookie
-needs its path scoped to get one; section 4's `:tabId` is that scoping, and it
-lands the same outcome, including two tabs being two participants.
+all and defers instead, and a per-connection identity for free. That last one has
+stopped being a benefit forgone: section 4 makes a person one participant however
+many connections they hold, so a per-connection identity is the thing being
+avoided.
 
 Twenty-five lines is cheaper than reversing the transport, and the read side is
 one-way fan-out while the write side wants ordinary HTTP semantics, which is what
@@ -246,18 +248,18 @@ than a formality: the snapshot protocol is transport-agnostic, so `publish`,
 
 ### 1. Transport
 
-SSE for server-to-client push on `GET /rooms/:slug/:tabId/events`, one connection
-per participant, authorized by the tab-scoped session cookie described in section
-4. HTTP POST for commands, on the ask pattern, returning real results rather than
-an unconditional `204`.
+SSE for server-to-client push on `GET /rooms/:slug/events`, authorized by the
+room-scoped session cookie described in section 4. A participant may hold more
+than one connection at a time; section 3 says what that means for state. HTTP POST
+for commands, on the ask pattern, returning real results rather than an
+unconditional `204`, under `/rooms/:slug/` as `join`, `leave`, `vote`, `show`,
+`clear`, `revote` and `edit-issue`. `POST /create-room` and the page route
+`GET /:slug` read no cookie.
 
-**The `tabId` in the path is not a return to the 08-20 exposure**, which is worth
-saying because it looks like one. That was `userId`, the identity itself,
-travelling in navigable URLs into browser history and access logs. A `tabId` is a
-path discriminator with no authority: it never reaches the address bar, since the
-page is served at `/:slug` and the id is generated after load, so only XHR and
-`EventSource` requests carry it. Forge someone else's and you still lack their
-cookie, so the answer is 401.
+**Nothing in a path identifies a tab or a connection.** An earlier draft added a
+`:tabId` segment so the cookie's path could be scoped per tab; section 4 records
+why that was dropped. The consequence here is that every route keeps the shape it
+has today, with the slug replacing the UUID at step 7 and nothing else moving.
 
 The SSE response carries `Cache-Control: no-cache` and `X-Accel-Buffering: no`,
 and `README.md` gains a deployment note on proxy buffering. This closes the
@@ -295,7 +297,8 @@ room reveals; the recipient always sees their own, which is what
 `ownVoteConfirmed` needs. The number of `asJson` calls is unchanged, since it
 already runs once per connection, though each one now serializes a whole snapshot
 rather than one event: a single vote goes from N frames of roughly 140 bytes to N
-of 418 to 2,112. Construction becomes O(N^2) per publish against O(N) today. All
+of 418 to 2,112. Construction becomes O(N^2) per publish against O(N) today, N
+being members rather than connections, since a snapshot is per identity. All
 of it is noise at a team's size, and the O(N^2) term is the one that would grow
 first if very large rooms ever arrived.
 
@@ -389,8 +392,15 @@ Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); TTL at resolution
 members     Map[UUID, Member]          // Member(name)
-connections Map[UUID, ActorRef]        // the only place a connection handle lives
+connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
 ```
+
+**`connections` maps a member to a set because one person can hold several
+connections at once**: a second tab, or a replacement opened because the first
+froze. They are the same participant with the same vote, and the set is what makes
+that expressible. Section 4 argues the requirement. A member's entry is dropped
+from the map when its set empties rather than left holding an empty one, so
+"`connections` is empty" below means what it says.
 
 **`sessions` is the single authority for resolving a token to an identity**,
 which is what lets `ValidateToken` become one map lookup. Today it takes two
@@ -443,11 +453,11 @@ estimate comes from the round.
 reconnect exists today because `RoomManager.ConnectToRoom`
 (`RoomManager.scala:82-84`) always builds a fresh `User` with
 `InitialVoteState`, and `joinUser` replaces the entry wholesale. Under the split
-a reconnect replaces a `connections` entry and touches neither `members` nor
+a reconnect adds a ref to `connections` and touches neither `members` nor
 `round.estimates`, so there is nothing to carry over and nothing to forget.
 
 **Each of the three is removed at a different moment, and the differences are the
-design rather than an accident.** A `connections` entry goes the instant its
+design rather than an accident.** A ref leaves its member's set the instant its
 stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
 dead ref is a no-op anyway, and `emptySince` has to reflect reality. A `members`
 entry goes at grace expiry, or immediately on the explicit leave in section 4.
@@ -459,22 +469,22 @@ the round ending.
 relevant, scanning for a user still holding that exact ref and doing nothing if a
 reconnect replaced it (`Room.scala:182-225`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
-ref)`, if `connections(userId)` is not this ref then the connection was already
-replaced, the user is connected, and no timer is scheduled at all. Otherwise the
-entry is dropped and a timer keyed on `userId` alone starts, which
-`ConnectToRoom` cancels if they come back. `ConfirmLeave` then removes the member
-unconditionally, because a stale teardown scheduled nothing and a resume
-cancelled what existed.
+ref)` the ref is removed from that member's set, and a timer keyed on `userId`
+alone starts only if the set is now empty. A member still holding another
+connection schedules nothing. `ConnectToRoom` adds a ref and cancels any pending
+timer, so `ConfirmLeave` removes the member unconditionally: it only ever runs for
+a member who had no connections left and gained none since.
 
 That deletes the ref from the timer key, the post-delay staleness check and the
 duplicate-`Leave` warning, and it makes **Problem C unrepresentable** rather than
-fixed: there is no stale timer left to accumulate. The comparison has to be
-against `connections` rather than against membership, though, because a racing
-reconnect delivers the old stream's termination after the new connection is
-established and only the ref distinguishes them.
+fixed: there is no stale timer left to accumulate. The racing reconnect that
+forced today's staleness check needs no special handling either. The new stream
+is established before the old one's termination arrives, so the set briefly holds
+two refs and removing the old one leaves a non-empty set, which is the ordinary
+no-timer case rather than a distinguishable one.
 
 Two consequences follow. **A transient drop produces no wire traffic**, since
-removing a `connections` entry changes no snapshot and there is nothing to
+removing a ref from `connections` changes no snapshot and there is nothing to
 publish; only grace expiry does, and it publishes once. Today every reconnect is
 instead a potential leave-then-rejoin broadcast that the grace period exists to
 suppress. And **Problem A's guarantee holds without a time bound**: because
@@ -515,10 +525,16 @@ Publishing reduces to:
 
 ```scala
 private def publish(next: RoomData, context: ActorContext[Command]): RoomData =
-  context.log.debug("Publishing to {} connections", next.connections.size)
-  next.connections.foreach((id, ref) => ref ! RoomSnapshot.of(next, id))
+  context.log.debug("Publishing to {} connected members", next.connections.size)
+  next.connections.foreach { (id, refs) =>
+    val snapshot = RoomSnapshot.of(next, id)
+    refs.foreach(_ ! snapshot)
+  }
   next
 ```
+
+One snapshot is built per member and shared by that member's connections, since
+redaction is per recipient identity rather than per connection.
 
 Reveal stays a server-side derivation, `round.revealed || everyMemberHasVoted`,
 which is where auto-reveal moves from its current client-only home. Latched
@@ -721,22 +737,46 @@ worth deciding before step 9 rather than during it.
 
 ### 4. Identity and the write path
 
-The 08-20 cookie design carries over with one change: `HttpOnly`,
-`SameSite=Strict`, `Secure` behind `apiConfig.secureCookies`, no `Max-Age`, and
-**`Path=/rooms/:slug/:tabId`** rather than `/rooms/:slug`.
+The 08-20 cookie design carries over unchanged: `HttpOnly`, `SameSite=Strict`,
+`Secure` behind `apiConfig.secureCookies`, no `Max-Age`, and `Path=/rooms/:slug`.
 
-**One cookie per tab, and the browser does the enforcing.** The `tabId` comes
-from `sessionStorage`, which is the native per-tab primitive: unique per tab,
-surviving reload within that tab, gone when the tab closes. Because the cookie's
-path carries it, tab A's cookie is simply never sent to tab B's endpoints. A
-token therefore identifies a tab by construction rather than by convention, which
-is the same move as `Participant` being a projection: the thing that could go
-wrong stops being expressible rather than being checked for.
+**A person is one participant in a room, however many connections they hold.**
+The cookie is the identity, it is shared by every tab on that room, and that
+sharing is the design rather than the defect. What was broken is narrower: `/join`
+mints a fresh `userId` and overwrites the cookie on every call, so a second tab
+does not join the first tab's identity, it *replaces* it, and the first tab's
+clicks then land as the second participant's. Idempotent `/join` below fixes that
+by resolving the existing cookie instead of minting over it.
 
-That removes a shared mutable slot which would otherwise have needed guarding on
-every write. The failure it prevents is silent: a leave beacon carrying whichever
-token was written last would evict the *other* tab's participant while it sat
-there connected. Not reachable when the tabs cannot share a token.
+**An earlier draft made two tabs two participants**, via a `tabId` from
+`sessionStorage` carried in the cookie's path so the browser would keep them
+apart. It is dropped, for three reasons in increasing order of weight.
+
+It does not work. `sessionStorage` is per browsing context, and the HTML standard
+makes a context cloned from another start with a copy of it, which is what Chrome
+and Edge do on "Duplicate tab". Two tabs can therefore hold one `tabId`, one
+cookie and one token, and the mechanism's central claim, that a collision is
+unrepresentable rather than merely unlikely, is false. A guaranteed per-tab id is
+still reachable through the Web Locks API, so this alone would be an argument for
+repair rather than removal.
+
+It is not the requirement. Nobody is expected to open two tabs on a room. The one
+case that occurs is a tab freezing and the user opening a replacement, and two
+participants is the wrong answer to it: the replacement arrives with no vote and
+the frozen one lingers as a phantom. One participant with two connections gives
+that user their identity, their vote and their state back, and the frozen
+connection costs only a few wasted sends until its stream fails to write and drops
+out, which "Two lifetimes" covers.
+
+And it is actively harmful once reveal moves server-side at step 1. Reveal is
+`round.revealed || everyMemberHasVoted` over `members`, so an extra tab is a
+member who never votes, and one person opening a second view would block
+auto-reveal for the whole room until they voted in both. The earlier text called
+two votes for one person "harmless"; the blocked reveal is not, and it postdates
+that sentence.
+
+The cost accepted in exchange is that two tabs on a room share one vote and see
+each other's, which is what a second view of the same participant should do.
 
 Three additions, each closing something documented:
 
@@ -756,43 +796,53 @@ Three additions, each closing something documented:
 - **Ask-pattern commands**, so a client can distinguish rejected from lost.
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
-- **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`,
-  mapping to an immediate departure that bypasses the grace period. That is the
-  other reason, and it reduces the grace period to what it should be: cover for
-  transient drops only. `sendBeacon` is the right primitive because a normal
-  POST is not reliably delivered from an unload-adjacent handler. Its response
-  also carries `Set-Cookie: …; Max-Age=0` for that tab's path, so the message
-  that announces a departure also clears the cookie behind it. Without that a
-  long-lived browser accumulates one session cookie per tab ever opened; with
-  it, only tabs that die without firing a beacon leak one.
+- **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`. It
+  drops that connection's ref, and if it was the member's last, removes the member
+  at once rather than waiting out the grace period. That is the other reason, and
+  it reduces the grace period to what it should be: cover for transient drops
+  only. `sendBeacon` is the right primitive because a normal POST is not reliably
+  delivered from an unload-adjacent handler.
 
-**`/join` becomes idempotent per tab**, which is what closes the reload symptom.
-If the tab's cookie already resolves to a live session it returns that `userId`
-instead of minting a new one. Tab scoping is what makes this safe: the cookie
-unambiguously belongs to the tab asking, so there is no question of resuming
-somebody else. A reload therefore keeps its `tabId` from `sessionStorage`, its
-cookie, its token and its `userId`, the member entry is replaced rather than
-duplicated, and the old connection's teardown cannot evict the new one because it
-is scoped to the connection rather than the user (`Room.scala:91-94`).
+  **It clears no cookie, and that is deliberate.** `pagehide` fires on reload as
+  well as on close and nothing on the event tells the two apart, so a leave
+  response carrying `Set-Cookie: …; Max-Age=0` would delete the identity of a tab
+  that is about to come back. `sendBeacon` is fire-and-forget besides, so that
+  response could land after the reloaded page had already called `/join`,
+  deleting the cookie it just received and dropping the tab into the terminal
+  "Your session has ended" state (`index.html:472-485`). What clearing would buy
+  is a session cookie of roughly fifty bytes per tab ever opened, discarded when
+  the browser closes, which does not pay for the reload path.
 
-It does take the `name` from the request rather than ignoring it, so a reload
-with a different name renames the participant instead of silently keeping the old
-one. That is today's effective behaviour, which reaches the same place by
-creating a second participant, and it is the nearest this app has to a rename.
+  **The cost is a brief flicker on reload**, since the beacon fires there too and
+  a reload's tab is usually the member's last connection: the member is removed
+  and comes back across a page load, so the room sees a departure and a return a
+  few hundred milliseconds apart. Accepted deliberately. The user loses nothing,
+  keeping their identity through the cookie and their vote through
+  `round.estimates`, and the alternative is a short grace period of the endpoint's
+  own, which puts a second duration constant on the one path built to avoid a
+  timer. Reconsider that if the flicker turns out to annoy anyone.
+
+**`/join` becomes idempotent**, and it is the whole of the fix above. If the
+request's cookie already resolves to a live session it returns that `userId`
+instead of minting a new one and overwriting the cookie. A reload therefore keeps
+its cookie, its token, its `userId` and its vote, and a second tab joins the
+existing participant rather than displacing it. There is no question of resuming
+somebody else, since the cookie is path-scoped to the room and arrives only from
+a browser that was already given it.
+
+It does take the `name` from the request rather than ignoring it, so joining again
+under a different name renames the participant instead of silently keeping the old
+one. That is today's effective behaviour, which reaches the same place by creating
+a second participant, and it is the nearest this app has to a rename. The
+consequence to know is that a second tab opened with a different name renames the
+person in both.
 
 That matters because the reload, not the tab close, is the form users actually
 report: today `/join` mints a fresh identity on every call, so someone reloading
 watches their own name sit in the participant list twice until the old entry's
-grace period expires. This closes it structurally, rather than by hoping a
-`sendBeacon` wins a race against the new page's join.
-
-**Two tabs on one room are two participants**, each with its own cookie, member
-entry and vote. That is a restoration rather than a change: it is what the
-WebSocket transport did, since each socket minted its own `userId`, and the SSE
-swap silently replaced it with the shared-cookie collision. One person can hold
-two votes this way, which is visible in the participant list and harmless for a
-team tool, where the honour system already covers voting twice from two
-browsers.
+grace period expires. Idempotence removes the second entry structurally, rather
+than by hoping a `sendBeacon` wins a race against the new page's join. What is
+left is the brief gap recorded with the leave endpoint above.
 
 ### 5. Client
 
@@ -857,13 +907,21 @@ only.
 
 No client-side version comparison, because out-of-order snapshots are
 unreachable: SSE delivers in order within a connection, and a snapshot is one
-frame. The stronger claim, that at most one connection is open per page instance,
-rests on the server rather than the client: a rejoin replaces the `connections`
-entry and publishes only to the new ref, so a superseded stream receives nothing
-further. It is not true of today's client, where `doJoin` assigns a new
-`EventSource` without closing the previous one (`index.html:388`) and only
-`doLeave` closes; step 8's connection module is where that becomes true on both
-ends.
+frame. What that argument needs is one connection per page instance, and **that
+guarantee now rests on the client alone.** The server used to supply it as a side
+effect of `connections` being keyed by user, where a rejoin replaced the entry and
+the superseded stream received nothing further. With a set of refs per member both
+streams are fed, which is the point when the second is another tab and a hazard
+when it is the same page instance holding a stream it forgot to close: two live
+streams can interleave, so a delayed frame from the older one may apply after a
+newer frame from the other and leave the view stale until the next publish.
+Today's client does forget, since `doJoin` assigns a new `EventSource` without
+closing the previous one (`index.html:388`) and only `doLeave` closes. Step 8's
+connection module closing the old stream before opening a new one is therefore
+load-bearing rather than tidy. The exposure before then is small, because nothing
+in today's flow reaches `doJoin` twice without a reload, but this is the one
+guarantee the design moves from the server to the client and it should not be
+lost on the way.
 
 ### 6. Testing
 
@@ -886,9 +944,11 @@ Added, each with the step it lands at so nothing here is unassigned:
 - **Playwright end-to-end cases** (step 0, extended at each later step): two
   browsers exchanging votes, reveal with a straggler, reconnect survival,
   participant list on join and leave, and the issue-input guard. Step 6 adds two
-  that need one browser context rather than two, since they are about cookie
-  scoping: two tabs on the same room staying independent, and a reload keeping
-  its identity instead of duplicating its participant.
+  that need one browser context rather than two, since they are about the shared
+  room cookie: two tabs on the same room resolving to one participant, with a vote
+  in either showing in both and closing one leaving the other connected and
+  present; and a reload keeping its identity and its vote instead of duplicating
+  its participant.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -1048,17 +1108,19 @@ step 1's diff is readable at its size only because most of it is deletion.
 **Step 5. Retained sessions with a TTL.** Waits on step 1 only, so it can land
 any time after. About 55 and 100. Closes the pending-session leak.
 
-**Step 6. The write path becomes real.** Endpoints described with tapir, the
-ask pattern replacing the unconditional `204`, tab-scoped cookies with the
-`:tabId` path segment, idempotent `/join`, and the explicit leave endpoint. Wants
-step 4 first so handlers are not rewritten twice. About 200 and 175.
+**Step 6. The write path becomes real.** Endpoints described with tapir, the ask
+pattern replacing the unconditional `204`, idempotent `/join`, and the explicit
+leave endpoint. Wants step 4 first, both so handlers are not rewritten twice and
+because the leave endpoint drops a ref from a member's connection set. About 185
+and 165.
 
-tapir and the `:tabId` segment both land here rather than later, and for the same
-reason: this step already rewrites all five command endpoints plus `/join` and
-`/events`, so describing them once with tapir and adding a path segment once
-costs less than doing either twice. Closes Phase 1's outstanding item, the
-slow-departure issue and the same-room two-tab regression, and it closes the
-reload duplicate structurally rather than by beacon timing.
+tapir lands here rather than later because this step already rewrites all five
+command endpoints plus `/join` and `/events`, so describing them once costs less
+than describing them twice. Closes Phase 1's outstanding item, the slow-departure
+issue and the same-room two-tab collision, and it closes the reload duplicate
+structurally rather than by beacon timing. The routes themselves do not move:
+there is no `:tabId` segment, and the cookie keeps the `/rooms/:slug` path 08-20
+gave it.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
@@ -1070,9 +1132,9 @@ route matcher from `path("rooms" / JavaUUID / ...)` to a segment, so landing thi
 first means step 6 re-describes endpoints this step just re-typed, where the
 other order changes a path type in a tapir description and nothing else.
 
-One consequence worth stating: **the cookie path becomes
-`/rooms/:slug/:tabId`**, which orphans any cookie minted before the cutover, at
-no cost since they are session cookies.
+One consequence worth stating: **the cookie path becomes `/rooms/:slug`** with a
+slug where a UUID was, which orphans any cookie minted before the cutover, at no
+cost since they are session cookies.
 
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
@@ -1169,10 +1231,13 @@ introduces:
   removed, the consumed session leaves nothing to resolve the token, and the
   retry gets a 401. Sleeping a laptop for more than six seconds in an occupied
   room is enough. Live today and unrelated to this design; closed by step 5.
-- Two tabs on the same room share one identity, so one tab's clicks are silently
-  credited to the other. A regression from the WebSocket swap that was never
-  recorded: the 08-20 design examined two tabs on *different* rooms, where path
-  scoping works, and this case fell in the gap beside it. Closed by step 6.
+- A second tab on the same room displaces the first tab's identity, so its clicks
+  are silently credited to the other. Never recorded: the 08-20 design examined
+  two tabs on *different* rooms, where path scoping works, and this case fell in
+  the gap beside it. Closed by step 6, by making `/join` resolve the existing
+  cookie rather than mint over it, so the second tab joins the same participant
+  instead of displacing it. Sharing the identity is the intended outcome;
+  displacing it was the defect.
 
 ## Open questions
 

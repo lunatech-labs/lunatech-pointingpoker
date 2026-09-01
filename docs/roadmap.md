@@ -38,8 +38,8 @@ inside a long-lived socket payload.
       room not found / not a member) instead of the API always answering `204`
       regardless of what happened. Natural to build alongside the identity
       validation above, since both need the same request/response plumbing.
-      **Becomes step 6**, alongside tab-scoped cookies, idempotent `/join` and
-      the explicit leave endpoint.
+      **Becomes step 6**, alongside idempotent `/join` and the explicit leave
+      endpoint.
 
 ## Phase 2: Room identity
 
