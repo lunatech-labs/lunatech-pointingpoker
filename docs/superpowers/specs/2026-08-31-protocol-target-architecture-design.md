@@ -68,8 +68,8 @@ reader of the 08-28 design does not go looking for it.
 
 What survives on independent merit: the snapshot wire format, the single
 `publish` path, the pure `applySnapshot`, Problems A, C and E, the pre-reveal
-vote confidentiality fix, the vote-summary correction, retained sessions with a
-TTL, and the anti-buffering headers.
+vote confidentiality fix, the vote-summary correction, retained sessions, and the
+anti-buffering headers.
 
 ## Why the snapshot migration still stands
 
@@ -390,7 +390,7 @@ carry forward. It splits three ways:
 RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
 Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
-sessions    Map[SessionToken, Session]  // Session(userId, name); TTL at resolution
+sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
 ```
@@ -410,7 +410,8 @@ entry on promotion so the token's last record is on the `User`. Retaining
 sessions past promotion removes that reason, so the scan goes and `Member` needs
 no token. It also makes a disagreement unrepresentable, where today the same
 token could sit in both maps against different user ids with the pending one
-silently winning.
+silently winning. Retention is a precondition for this shape rather than a
+companion to it, which is why step 4 waits on step 5.
 
 The name is deliberately in both `Session` and `Member`: a session exists before
 there is a member, which is why 08-20 put it on `PendingSession`. Idempotent
@@ -780,19 +781,28 @@ each other's, which is what a second view of the same participant should do.
 
 Three additions, each closing something documented:
 
-- **Retained sessions with a TTL**, kept past promotion rather than consumed and
-  bounded by a TTL evaluated at resolution. **What this mainly fixes is
-  recovery from an outage longer than the grace period**, which today forces a
-  manual reload. The member is removed at grace expiry, and because `joinUser`
+- **Retained sessions**, kept past promotion rather than consumed. **What this
+  mainly fixes is recovery from an outage longer than the grace period**, which
+  today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
   Please reload the page to rejoin." (`index.html:472-485`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
-  resolvable for the idempotent `/join` below, what lets `sessions` be the single
-  authority for resolution in section 3, and, least of all, what closes the
-  pending-session leak.
+  resolvable for the idempotent `/join` below, and what lets `sessions` be the
+  single authority for resolution in section 3.
+
+  **They carry no TTL of their own**, and the earlier draft's one is dropped. A
+  session lives as long as the actor, which step 4 already bounds at two to four
+  hours after a room empties, so a TTL would bound something already bounded: its
+  useful range is squeezed below by needing to outlast a realistic in-meeting
+  outage and above by the idle stop, leaving about an hour, to reclaim a hundred
+  bytes per abandoned session. That is the same test this design applies to
+  `version` and `scale`. What it leaves is a room occupied for many hours with
+  heavy tab churn, which is abuse-shaped and belongs to the rate-limiting entry
+  in `docs/known-issues.md` rather than here. The pending-session leak therefore
+  closes at step 4 rather than step 5.
 - **Ask-pattern commands**, so a client can distinguish rejected from lost.
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
@@ -1081,8 +1091,13 @@ the one change a user notices as a different answer rather than better plumbing.
 
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, and replacing the room actor's
-stop-when-empty with an idle timeout. Waits on step 1. About 140 changed and 100
-of tests.
+stop-when-empty with an idle timeout. Waits on steps 1 and 5. About 140 changed
+and 100 of tests.
+
+**It waits on step 5 because `Member` carries no token.** Resolution moves
+entirely to `sessions`, and sessions are only resolvable past promotion once step
+5 retains them, so landing this first would leave a connected client's token
+resolving to nothing and turn every reconnect into an immediate 401.
 
 The split itself is a pure refactor; **the idle timeout is the one behaviour
 change in this step**. It stops a room dying the moment its last member's grace
@@ -1105,8 +1120,10 @@ it is deliberate. Folding the split into step 1
 would produce one PR changing both the wire format and the shape of state, and
 step 1's diff is readable at its size only because most of it is deletion.
 
-**Step 5. Retained sessions with a TTL.** Waits on step 1 only, so it can land
-any time after. About 55 and 100. Closes the pending-session leak.
+**Step 5. Retained sessions.** Waits on step 1 only, and step 4 waits on it.
+About 40 and 90, having lost the TTL and its expiry check. Closes the
+outage-recovery reload; the pending-session leak closes at step 4 instead, once a
+room's lifetime is bounded.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, and the explicit
@@ -1204,7 +1221,7 @@ Five of the eight open entries close on this path.
 | --- | --- |
 | Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it costs is telling someone they mistyped a slug. |
 | No GC for abandoned or never-joined rooms | Step 4 |
-| A `/join` with no follow-up `/events` leaks a pending session | Step 5 |
+| A `/join` with no follow-up `/events` leaks a pending session | Step 4, which bounds a room's lifetime. Step 5's retained sessions remove the pending/promoted distinction the entry is phrased around, and deliberately add no TTL. |
 | SSE reverse-proxy buffering is undocumented | Step 1 |
 | A deliberate tab close is as slow to announce as a transient reconnect | Step 6 |
 | HTTP command ordering is not guaranteed | Stays open. Snapshots downgrade it from silent divergence to a visible wrong-but-true state, and it has never been observed; see "Deferred, with triggers". |

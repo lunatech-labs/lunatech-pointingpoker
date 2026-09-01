@@ -60,13 +60,14 @@ roadmap item instead of leaving it here as stale history.
   `pendingSessions` for as long as the room actor lives, even if that room
   already has active, joined members and would otherwise stay alive
   indefinitely.
-- **Resolution:** Scheduled as step 5 of
+- **Resolution:** Scheduled as step 4 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which retains sessions past promotion rather than consuming them and bounds
-  them with a TTL evaluated at resolution, so an unpromoted session expires on
-  its own. Note that retention is wanted mainly for the reload and outage
-  recovery it enables, not for this leak, which is a few dozen bytes per
-  abandoned tab. Remove this entry when that lands.
+  which replaces stop-when-empty with stop-after-idle, so a room's sessions go
+  with it two to four hours after its last connection instead of living for the
+  process. Step 5 retains sessions past promotion rather than consuming them,
+  which removes the pending/promoted distinction this entry is phrased around,
+  and it deliberately adds no TTL: the leak is a hundred bytes per abandoned tab
+  in a room whose lifetime is now bounded. Remove this entry when step 4 lands.
 
 ### SSE reverse-proxy buffering is undocumented
 
@@ -201,8 +202,8 @@ roadmap item instead of leaving it here as stale history.
   been reaped, which is a different and rarer cause.
 - **Resolution:** Scheduled as step 5 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which retains sessions past promotion under a TTL evaluated at resolution, so
-  the token stays resolvable and the retry succeeds with the same identity.
+  which retains sessions past promotion instead of consuming them, so the token
+  stays resolvable and the retry succeeds with the same identity.
   Remove this entry when that lands.
 
 ### A second tab on the same room displaces the first tab's identity
