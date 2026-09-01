@@ -94,18 +94,28 @@ Every argument below was checked against the code rather than carried over.
    known issue.
 5. **The pre-reveal vote leak is real and orthogonal to the proxy.**
    `Room.scala:144-148` broadcasts an estimation to every participant the moment
-   it is cast; the client merely hides it. Under snapshots the fix is one
-   redaction point rather than a per-event audit.
+   it is cast; the client merely hides it. It reaches the wire in two places,
+   there and `setupNewUser`'s replay, so the event protocol could fix it too.
+   What snapshots add is that there is one place where state becomes wire, so
+   redaction sits at a choke point a field added in a year cannot forget. Under
+   events the audit is not two places once, it is two places per feature. See
+   the projection argument in section 2, which is the same property applied to
+   the session token.
 6. **It is net deletion.** `RoomEvent.scala` in full, `broadcast`,
    `setupNewUser` and 89 lines of client handlers go; about 15 lines of
    `applySnapshot` arrive. Since the protocol lands before the frontend rewrite,
    that is 89 lines of Vue 2 the rewrite never has to port.
-7. **Every roadmap feature becomes a field.** Observer roles, latched reveal,
-   idle flags and voting scale are all state. Under a snapshot each is a field
-   and `applySnapshot` grows no branch. Under events each is a message type plus
-   a replay slot plus a handler plus a row in a reset table. This is the
-   strongest argument for settling the protocol first and the 08-28 design never
-   had room to make it.
+7. **Every roadmap feature becomes a field on the client.** Observer roles,
+   latched reveal, a recorded outcome, an idle flag and voting scale are all
+   state, so each is a field and `applySnapshot` grows no branch, without
+   exception. Under events each is instead a message type plus a replay slot
+   plus a handler plus a row in a reset table. Server-side most are a field plus
+   a predicate, with two exceptions worth naming so the rule is credible: the
+   idle indicator and the timer-based reveal also need a timer and publish on a
+   transition nobody commanded. That does not favour events, which would need
+   the timer as well as the message type. This is the strongest argument for
+   settling the protocol first, and it holds in proportion to the roadmap it
+   draws on, which is projections rather than commitments.
 
 ## Approaches considered
 
@@ -169,9 +179,14 @@ hardest on the AI-assisted-maintenance premise while being the ecosystem that
 premise supports least, and is the least recoverable position if that premise
 proves optimistic.
 
-**Chosen: Scala 3 and Pekko, rewritten in place.** The decisive property is that
-this is a protocol-centric application and Scala 3's type system is the best
-match for it: exhaustive matching on a command ADT is a compile error, and
+**Chosen: Scala 3 and Pekko, rewritten in place.** The decisive property is
+where being wrong is silent. The protocol is 11% of the source, as measured
+above, and close to all of the code whose defects do not announce themselves: a
+missed command case, a credential reaching the wire, an unredacted estimate, a
+field that means two things. The frontend is most of the lines and almost none
+of that risk, because a mistake there is visible on the screen. So the type
+system is bought for the small part, and Scala 3's is the better match for it:
+exhaustive matching on a command ADT is a compile error, and
 `opaque type SessionToken = UUID` (`Room.scala:14`) makes swapping a token for a
 user id unrepresentable rather than merely unlikely. TypeScript's equivalents
 are a discriminated union with an explicit `never` assertion people forget and a
@@ -204,13 +219,23 @@ note records that it then travelled there on every request into access logs and
 browser history, and the cookie work fixed a problem the swap created rather
 than one the old transport left behind.
 
-WebSocket would also return the command-ordering guarantee for free and make
-leave detection instant. Both are addressed independently inside step 6 below,
-for about 30 lines between them, which is cheaper than reversing the transport
-even though step 6 as a whole is larger. The read
-side is one-way fan-out and the write side wants ordinary HTTP semantics, which
-is what Phase 1's outstanding ask-pattern item needs. **Reverses if** we ever
-need low-latency bidirectional interaction at many events per second.
+WebSocket would return three things this design buys back by hand: command
+ordering, instant leave detection, and a per-socket server-minted identity that
+no client sends, which is what the cookie's single mutable slot cannot give.
+Section 4 pays for those in the sequence number, the explicit leave endpoint and
+the `userId` assertion, roughly 60 lines between them. It would not remove the
+two-tab collision, only change its symptom: two sockets means two identities, so
+you appear in the participant list twice instead of having your clicks credited
+to the other tab. Visible and harmless rather than silent, but not a fix.
+
+Sixty lines is still cheaper than reversing the transport, and the read side is
+one-way fan-out while the write side wants ordinary HTTP semantics, which is what
+the ask pattern needs. **Reverses if** we ever need low-latency bidirectional
+interaction at many events per second, and that reversal is a real option rather
+than a formality: the snapshot protocol is transport-agnostic, so `publish`,
+`RoomSnapshot` and `applySnapshot` all survive it. What is SSE-specific is
+`Source.actorRef` with `dropHead`, the anti-buffering headers and the
+`EventSource` client code.
 
 ## Target architecture
 
@@ -905,10 +930,21 @@ About 220 lines and 200 of tests.
 Front-loaded for a different reason than the 08-30 design gave. Its original
 justification was reproducing the proxy failure; the surviving one is that there
 are no end-to-end tests today and step 1 is the largest behavioural change in
-the set. Two caveats belong in it: cases covering behaviour that is currently
-buggy (the non-voter tally, the duplicate participants) characterize the
-*intended* behaviour and are expected to go red until step 1 or 3 fixes them;
-and step 8 will revisit selectors, so prefer accessible ones.
+the set. Two caveats belong in it.
+
+**Cases covering behaviour that is currently buggy** (the non-voter tally, the
+duplicate participants) characterize the *intended* behaviour, so they would
+arrive red, and a suite that is red on arrival cannot answer "did I break
+something" during exactly the steps it was built for. They are marked
+`test.fail()` instead, annotated with the step that fixes each. Playwright fails
+the run when such a test *passes*, so the suite is green from step 0, a
+regression during steps 1 to 3 still shows, and the moment a fix lands CI reports
+the stale annotation rather than leaving anyone to notice. Those annotations are
+a small ledger of known-broken-until-step-N that will drift from the known-issues
+table; the annotation is the authority, being the one that fails the build when
+it goes stale.
+
+**Step 8 will revisit selectors**, so prefer accessible ones.
 
 **Step 1. Snapshot protocol.** The wire format, `publish`, pure
 `applySnapshot`, `dropHead`, the anti-buffering headers and README note, plus
