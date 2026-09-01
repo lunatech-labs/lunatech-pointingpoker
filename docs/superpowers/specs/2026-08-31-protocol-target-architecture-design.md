@@ -213,24 +213,29 @@ each outgoing frame), `WS.sink` parsed the frame straight into
 the minted value. The two transports were equally spoofable, so the claim that
 the security fix wanted discrete calls with per-request validation stands.
 
-What is fair criticism is narrower: per-request validation did not require
-putting `userId` in the query string. The 08-18 design's own post-implementation
-note records that it then travelled there on every request into access logs and
-browser history, and the cookie work fixed a problem the swap created rather
-than one the old transport left behind.
+What is fair criticism is narrower: the swap created problems of its own, and
+this design is still paying for two of them. The 08-18 note records the first,
+that `userId` travelled in the query string of every request into access logs and
+browser history, which the cookie work then fixed.
 
-WebSocket would return three things this design buys back by hand: command
-ordering, instant leave detection, and a per-socket server-minted identity that
-no client sends, which is what the cookie's single mutable slot cannot give.
-Section 4 pays for those in the sequence number, the explicit leave endpoint and
-the `userId` assertion, roughly 60 lines between them. It would not remove the
-two-tab collision, only change its symptom: two sockets means two identities, so
-you appear in the participant list twice instead of having your clicks credited
-to the other tab. Visible and harmless rather than silent, but not a fix.
+The second was never recorded anywhere. Under WebSocket each tab held its own
+socket with its own server-minted `userId`, so two tabs on one room were two
+participants. Under a cookie scoped to the room they collapse onto whichever
+token was written last, so one tab's clicks are silently credited to the other.
+The 08-20 design examined two tabs on *different* rooms, where path scoping works
+correctly, and the same-room case fell in the gap beside it. Section 4 restores
+the original behaviour.
 
-Sixty lines is still cheaper than reversing the transport, and the read side is
-one-way fan-out while the write side wants ordinary HTTP semantics, which is what
-the ask pattern needs. **Reverses if** we ever need low-latency bidirectional
+WebSocket would return two things this design buys back by hand: command
+ordering and instant leave detection, paid for in section 4's sequence number
+and explicit leave endpoint, roughly 45 lines between them. A socket would also
+carry a per-connection identity for free, where a cookie needs its path scoped to
+get one; section 4's `:tabId` is that scoping, and it lands the same outcome,
+including two tabs being two participants.
+
+Forty-five lines is still cheaper than reversing the transport, and the read side
+is one-way fan-out while the write side wants ordinary HTTP semantics, which is
+what the ask pattern needs. **Reverses if** we ever need low-latency bidirectional
 interaction at many events per second, and that reversal is a real option rather
 than a formality: the snapshot protocol is transport-agnostic, so `publish`,
 `RoomSnapshot` and `applySnapshot` all survive it. What is SSE-specific is
@@ -241,10 +246,18 @@ than a formality: the snapshot protocol is transport-agnostic, so `publish`,
 
 ### 1. Transport
 
-SSE for server-to-client push on `GET /rooms/:slug/events`, one connection per
-participant, authorized by the room-scoped session cookie. HTTP POST for
-commands, on the ask pattern, returning real results rather than an
-unconditional `204`.
+SSE for server-to-client push on `GET /rooms/:slug/:tabId/events`, one connection
+per participant, authorized by the tab-scoped session cookie described in section
+4. HTTP POST for commands, on the ask pattern, returning real results rather than
+an unconditional `204`.
+
+**The `tabId` in the path is not a return to the 08-20 exposure**, which is worth
+saying because it looks like one. That was `userId`, the identity itself,
+travelling in navigable URLs into browser history and access logs. A `tabId` is a
+path discriminator with no authority: it never reaches the address bar, since the
+page is served at `/:slug` and the id is generated after load, so only XHR and
+`EventSource` requests carry it. Forge someone else's and you still lack their
+cookie, so the answer is 401.
 
 The SSE response carries `Cache-Control: no-cache` and `X-Accel-Buffering: no`,
 and `README.md` gains a deployment note on proxy buffering. This closes the
@@ -671,77 +684,89 @@ worth deciding before step 9 rather than during it.
 
 ### 4. Identity and the write path
 
-The 08-20 cookie design carries over unchanged: `HttpOnly`, `SameSite=Strict`,
-`Path=/rooms/:slug`, `Secure` behind `apiConfig.secureCookies`, no `Max-Age`.
+The 08-20 cookie design carries over with one change: `HttpOnly`,
+`SameSite=Strict`, `Secure` behind `apiConfig.secureCookies`, no `Max-Age`, and
+**`Path=/rooms/:slug/:tabId`** rather than `/rooms/:slug`.
+
+**One cookie per tab, and the browser does the enforcing.** The `tabId` comes
+from `sessionStorage`, which is the native per-tab primitive: unique per tab,
+surviving reload within that tab, gone when the tab closes. Because the cookie's
+path carries it, tab A's cookie is simply never sent to tab B's endpoints. A
+token therefore identifies a tab by construction rather than by convention, which
+is the same move as `Participant` being a projection: the thing that could go
+wrong stops being expressible rather than being checked for.
+
+That removes a shared mutable slot which would otherwise have needed guarding on
+every write. Two failure modes go with it, both silent: a leave beacon carrying
+whichever token was written last would evict the *other* tab's participant while
+it sat there connected, and two tabs' independent command counters would race
+against one `Member.lastSeq`, dropping votes unpredictably as each overtook the
+other. Neither is reachable when the tabs cannot share a token.
 
 Four additions, each closing something documented:
 
 - **Retained sessions with a TTL.** Sessions are kept past promotion rather than
   consumed, and bounded by a TTL evaluated at resolution, so an unpromoted
-  session expires on its own. Closes the pending-session leak.
+  session expires on its own. Closes the pending-session leak, and it is also
+  what keeps a tab's token resolvable for the idempotent `/join` below.
 - **Ask-pattern commands**, so a client can distinguish rejected from lost.
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
-- **A per-user command sequence number.** The client sends a counter, starting
-  at 1 and incremented per command; the room ignores one whose sequence is not
-  strictly greater than `Member.lastSeq`, which starts at 0. An ignored command
-  answers with a distinct superseded result rather than silence, since the whole
-  point of the ask pattern here is that a client can tell rejected from lost, and
-  a dropped-as-stale command that times out reports the one thing that did not
-  happen. Closes the HTTP command-ordering regression, which is one of the two
-  reasons this design can recommend against returning to WebSocket.
+- **A per-tab command sequence number.** The client sends a counter, starting at
+  1 and incremented per command; the room ignores one whose sequence is not
+  strictly greater than `Member.lastSeq`, which starts at 0. A member is a tab,
+  so there is exactly one counter per member and no cross-tab interference to
+  guard against. An ignored command answers with a distinct superseded result
+  rather than silence, since the whole point of the ask pattern here is that a
+  client can tell rejected from lost, and a dropped-as-stale command that times
+  out reports the one thing that did not happen. Closes the HTTP
+  command-ordering regression, which is one of the two reasons this design can
+  recommend against returning to WebSocket.
 - **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`,
   mapping to an immediate departure that bypasses the grace period. That is the
   other reason, and it reduces the grace period to what it should be: cover for
   transient drops only. `sendBeacon` is the right primitive because a normal
-  POST is not reliably delivered from an unload-adjacent handler.
+  POST is not reliably delivered from an unload-adjacent handler. Its response
+  also carries `Set-Cookie: …; Max-Age=0` for that tab's path, so the message
+  that announces a departure also clears the cookie behind it. Without that a
+  long-lived browser accumulates one session cookie per tab ever opened; with
+  it, only tabs that die without firing a beacon leak one.
 
-**Every write that already has an identity asserts its own `userId` in the body,
-and the room honours it only if the cookie's token resolves to that same
-`userId`.** That is the five command endpoints plus the leave beacon;
-`create-room` and `/join` are excluded, since `/join` is where the identity comes
-from. The client has the value from its `/join` response, so this is one body
-field and one comparison, and it is an assertion checked against the cookie
-rather than a credential, so it adds no spoofing surface and stays out of the
-URL, which is the exposure the 08-20 work removed. Without it two of the four
-additions above are regressions rather than fixes, because the cookie is a single
-mutable slot that every tab on the room shares and each `/join` overwrites.
+**`/join` becomes idempotent per tab**, which is what closes the reload symptom.
+If the tab's cookie already resolves to a live session it returns that `userId`
+instead of minting a new one. Tab scoping is what makes this safe: the cookie
+unambiguously belongs to the tab asking, so there is no question of resuming
+somebody else. A reload therefore keeps its `tabId` from `sessionStorage`, its
+cookie, its token and its `userId`, the member entry is replaced rather than
+duplicated, and the old connection's ref-scoped teardown cannot evict the new
+one.
 
-*The leave beacon*, unchecked, would evict the wrong participant. Today's
-teardown is connection-scoped on purpose (`Room.scala:91-94`, "so a stale
-connection's delayed teardown can't evict a newer connection the same user
-reconnected with"). Closing one of two tabs sends a beacon carrying whichever
-token was written last, so it would remove the *other* tab's participant, who is
-still present and connected.
+It does take the `name` from the request rather than ignoring it, so a reload
+with a different name renames the participant instead of silently keeping the old
+one. That is today's effective behaviour, which reaches the same place by
+creating a second participant, and it is the nearest this app has to a rename.
 
-*The sequence number*, unchecked, would drop commands silently. Tab 1 joins as
-`A` and reaches counter 5; tab 2 joins as `B`, overwriting the cookie, and is at
-2. Tab 1 acts, and because the cookie now resolves to `B` the command lands on
-member `B` at sequence 6. Tab 2's next four commands are at or below 6 and
-vanish. Neither tab is locked out forever, since the trailing counter does
-eventually pass, which is worse rather than better: the two counters race, so
-votes disappear unpredictably instead of failing in a way anyone can reproduce.
+That matters because the reload, not the tab close, is the form users actually
+report: today `/join` mints a fresh identity on every call, so someone reloading
+watches their own name sit in the participant list twice until the old entry's
+grace period expires. This closes it structurally, rather than by hoping a
+`sendBeacon` wins a race against the new page's join.
 
-With the check, both failures become the same benign one: the asserted and
-resolved identities disagree, so the write is refused. A missed fast leave falls
-back to the grace period, and a refused command gets a real answer.
+**One coupling comes with it, and it is the kind that bites silently.** A member
+now survives a reload, so `Member.lastSeq` survives with it, while the tab's
+JavaScript counter restarts at 1. Every command from the reloaded tab would then
+be below the stored value and be dropped as stale. So **`/join` resets
+`Member.lastSeq` to 0**. A reload is a fresh heap and restarting the count is
+correct; the only commands this could re-admit are in flight from a page that no
+longer exists.
 
-**The check rests on one `/join` per page instance**, which is what makes a
-session token identify a page instance and therefore makes one counter per
-member correct. It holds here, retained sessions included, since retention keeps
-a session resolvable rather than making `/join` reuse one. It would stop holding
-if `/join` ever reused an existing valid session, which is a tempting fix for the
-duplicate-name-on-reload symptom; the fallbacks then are a per-recipient
-`connectionId` on the snapshot for the beacon, and a counter keyed by page
-instance rather than by member. The ideas look independent and are not.
-
-Left known and unfixed: the two-tab identity collision, where a second tab on
-the same room shares the path-scoped cookie and resumes as the same user. It
-stays a per-browser-session accident as long as the cookie is a session cookie.
-What changes is that it now fails loudly: the older tab's writes are refused
-rather than silently credited to the newer one, which the rewritten frontend can
-surface as "this room is open in another tab". That is a product-visible change
-and better than quiet misattribution, but it is a change rather than plumbing.
+**Two tabs on one room are two participants**, each with its own cookie, member
+entry and vote. That is a restoration rather than a change: it is what the
+WebSocket transport did, since each socket minted its own `userId`, and the SSE
+swap silently replaced it with the shared-cookie collision. One person can hold
+two votes this way, which is visible in the participant list and harmless for a
+team tool, where the honour system already covers voting twice from two
+browsers.
 
 ### 5. Client
 
@@ -834,7 +859,10 @@ Added, each with the step it lands at so nothing here is unassigned:
   on the day a new customer reports the same symptom.
 - **Playwright end-to-end cases** (step 0, extended at each later step): two
   browsers exchanging votes, reveal with a straggler, reconnect survival,
-  participant list on join and leave, and the issue-input guard.
+  participant list on join and leave, and the issue-input guard. Step 6 adds two
+  that need one browser context rather than two, since they are about cookie
+  scoping: two tabs on the same room staying independent, and a reload keeping
+  its identity instead of duplicating its participant.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -993,14 +1021,18 @@ step 1's diff is readable at its size only because most of it is deletion.
 any time after. About 55 and 100. Closes the pending-session leak.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the
-ask pattern replacing the unconditional `204`, per-user command sequence
-numbers, and the explicit leave endpoint. Wants step 4 first so handlers are not
-rewritten twice. About 200 and 180.
+ask pattern replacing the unconditional `204`, tab-scoped cookies with the
+`:tabId` path segment, idempotent `/join`, per-tab command sequence numbers, and
+the explicit leave endpoint. Wants step 4 first so handlers are not rewritten
+twice. About 225 and 200.
 
-tapir lands here rather than at step 8, and that is a dependency rather than a
-preference: this step already rewrites all five command endpoints, so describing
-them once with tapir costs less than describing them twice. Closes Phase 1's
-outstanding item, the command-ordering regression and the slow-departure issue.
+tapir and the `:tabId` segment both land here rather than later, and for the same
+reason: this step already rewrites all five command endpoints plus `/join` and
+`/events`, so describing them once with tapir and adding a path segment once
+costs less than doing either twice. Closes Phase 1's outstanding item, the
+command-ordering regression, the slow-departure issue and the same-room two-tab
+regression, and it closes the reload duplicate structurally rather than by
+beacon timing.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
@@ -1012,9 +1044,9 @@ route matcher from `path("rooms" / JavaUUID / ...)` to a segment, so landing thi
 first means step 6 re-describes endpoints this step just re-typed, where the
 other order changes a path type in a tapir description and nothing else.
 
-One consequence worth stating: **the cookie path becomes `/rooms/:slug`**, which
-orphans any cookie minted before the cutover, at no cost since they are session
-cookies.
+One consequence worth stating: **the cookie path becomes
+`/rooms/:slug/:tabId`**, which orphans any cookie minted before the cutover, at
+no cost since they are session cookies.
 
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
@@ -1095,8 +1127,9 @@ bounded-mode request-amplification paragraph describes a mode this design
 cancels, and the no-op publish guard it names as the backstop is also dropped.
 The underlying gap is unchanged.
 
-Three issues need **adding** to `docs/known-issues.md`, since they are currently
-recorded only inside a spec about to be marked superseded:
+Four issues need **adding** to `docs/known-issues.md`. Three are recorded only
+inside a spec about to be marked superseded; the fourth is recorded nowhere at
+all:
 
 - A transparently reconnecting client duplicates every known participant.
   Closed by step 1.
@@ -1104,6 +1137,10 @@ recorded only inside a spec about to be marked superseded:
   step 1.
 - Pre-reveal estimations are broadcast to every participant and only hidden
   client-side. Closed by step 2.
+- Two tabs on the same room share one identity, so one tab's clicks are silently
+  credited to the other. A regression from the WebSocket swap that was never
+  recorded: the 08-20 design examined two tabs on *different* rooms, where path
+  scoping works, and this case fell in the gap beside it. Closed by step 6.
 
 ## Open questions
 
