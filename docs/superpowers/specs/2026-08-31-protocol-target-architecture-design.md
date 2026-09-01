@@ -23,6 +23,15 @@ It answers two questions that were asked directly:
    iterating? **No**, but the analysis was closer than expected and the
    reasoning is recorded below along with the conditions that would reverse it.
 
+**What it decides, and what it leaves alone.** In scope: the wire format, the
+shape of room state, identity and the write path, what is persisted, and the order
+the work lands in. Out of scope: which features this product should have, which
+stays with `docs/roadmap.md`. A feature appears here only where it forced one of
+those decisions. Round history is the case that does, because it is the
+requirement a database was going to serve, so settling it settled whether there is
+a store at all; the recorded round outcome came with it as a gap found on the way,
+and is handed to the roadmap rather than argued for here.
+
 ## What the whitelist changed
 
 The whitelist removes the driver for the entire fallback half of the 08-28
@@ -381,9 +390,9 @@ does not travel, which is the same rule that dropped `version`. Voting scale is
 therefore deferred out of Phase 2 rather than delivered with it, on the
 product owner's own second thoughts about whether the feature is wanted. Nothing
 about waiting makes it harder: the server performs no validation on estimation
-strings today, so adding scale later is a column with a default, an additive
+strings today, so adding scale later is a field with a default, an additive
 wire field, an optional `create-room` body field and a client render change, on
-the order of 30 to 40 lines with no protocol break and no data migration.
+the order of 30 to 40 lines with no protocol break and nothing to backfill.
 
 `scale` is not purely a rendering input in one respect worth noting, since it is
 the only thing that gives an estimation an ordinal. Any feature that ranks votes
@@ -403,7 +412,8 @@ All state is in memory and nothing is persisted; the reasoning is under "No
 durable storage" below. The structural rule: **no connection handle appears in
 the room's own state.** Today `RoomData.users` is a `List[User]` whose `ref` is
 the live SSE connection, which is the one part of the current design that cannot
-carry forward. It splits three ways:
+carry forward. It splits three ways, and the block below shows the whole of
+`RoomData` around that split:
 
 ```
 RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
@@ -412,7 +422,16 @@ Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
+
+emptySince    Option[Instant]  // when connections last became empty; see "Two lifetimes"
+sawMessage    Boolean          // any message since the previous idle tick
 ```
+
+The last two are actor bookkeeping rather than a fifth group of state. They sit
+beside `connections` rather than inside `RoomState`, because both are derived from
+the connection layer: an `Instant` is not a handle, but putting either in the
+room's own data would break the rule below in spirit while satisfying it in
+letter. "Two lifetimes, not one" specifies what they mean.
 
 **`connections` maps a member to a set because one person can hold several
 connections at once**: a second tab, or a replacement opened because the first
@@ -453,11 +472,11 @@ half of what the client does client-side today and has to move with the
 derivation.
 
 `RoomData` keeps its name as the actor's state container and holds all four
-groups; `RoomState` is the room's own data within it, which is what the `publish`
-snippet below reaches through. `history` is the within-session round record,
-specified under "Round history" below. The rule forbids a connection handle
-anywhere in this group, which is why `connections` is separate and why nothing
-here is a `List[User]`. It survives the
+groups plus the idle bookkeeping; `RoomState` is the room's own data within it,
+which is what the `publish` snippet below reaches through. `history` is the
+within-session round record, specified under "Round history" below. The rule
+forbids a connection handle anywhere in this group, which is why `connections` is
+separate and why nothing here is a `List[User]`. It survives the
 absence of a store: the reason to keep connection handles out of the room's state
 is that they are the one thing that cannot be reconstructed or reasoned about
 independently, not that something is going to be written to disk.
@@ -502,6 +521,14 @@ forced today's staleness check needs no special handling either. The new stream
 is established before the old one's termination arrives, so the set briefly holds
 two refs and removing the old one leaves a non-empty set, which is the ordinary
 no-timer case rather than a distinguishable one.
+
+**What replaces the deleted check is `TimerScheduler`**, and the reliance is worth
+naming since nothing else now holds the invariant. Pekko guarantees that a
+cancelled or replaced timer's message is never received, even when it was already
+enqueued, by checking a generation counter on dequeue. That belongs to
+`Behaviors.withTimers`, which `Room` already uses (`Room.scala:111`, `202`);
+`context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
+so reaching for it instead would reintroduce exactly the race the check absorbed.
 
 Two consequences follow. **A transient drop produces no wire traffic**, since
 removing a ref from `connections` changes no snapshot and there is nothing to
@@ -653,9 +680,25 @@ until reload. The ordering that prevents it is causal rather than lucky, since
 `ConnectToRoom` is only ever sent after the same actor has answered
 `ValidateToken` (`API.scala:121-135`), and a mailbox is sequential, so any tick
 able to sit between them was itself preceded by that `ValidateToken` in the same
-interval. The term costs one field, and it lets a stray message defer an
-abandoned room's stop by one interval, which costs a few kilobytes of memory for
-a couple of hours.
+interval. The term costs one field, `sawMessage` above, set by any command and
+cleared by each tick, and it lets a stray message defer an abandoned room's stop
+by one interval, which costs a few kilobytes of memory for a couple of hours. A
+message every interval defers it indefinitely, and nothing here bounds the rate,
+so step 4 closes the abandoned-room issue against accidental abandonment rather
+than against a loop. Bounding the loop is the rate-limiting entry in
+`docs/known-issues.md`, which stays open.
+
+**Its two siblings get nothing, deliberately.** `RoomManager` keeps a stopping
+room in its map until `Terminated` arrives one hop later, so a `RequestSession`
+from `/join`, or a `ValidateToken` from `/events`, can be routed to an actor that
+has already stopped. Neither is covered by `sawMessage`, since each can be the
+first message after a long idle and so has nothing prior to defer the tick with.
+They are left alone because they fail loudly: the ask times out, the route answers
+500, the client already says "Could not join the room. Please try again."
+(`index.html:487-491`), and the retry lands on a freshly created room. That is the
+same rule that decides the stack above, that machinery is bought where being wrong
+is silent. `ConnectToRoom` earns a field because it leaves a heartbeating stream
+that never says anything is wrong; these two do not.
 
 **Message silence alone is the wrong criterion, though, and it is what an
 implementer reaches for.** Pekko's `setReceiveTimeout` fires on message silence,
@@ -904,6 +947,12 @@ framework is undecided and mutation-based reporting works under Vue's
 reactivity but needs rework under an immutable model. Being pure also removes
 the fake ref its tests would otherwise need.
 
+**The returned object is the shape the rewritten client will hold**, not today's.
+Six of its seven keys already match a top-level entry in the Vue 2 `data` block
+(`index.html:335-356`), so the step 1 call site assigns it wholesale and adapts
+the one that does not: `userEstimation` onto `user.estimation`, which the template
+binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
+
 Three details are load-bearing rather than polish:
 
 - **The `editing` guard is mandatory here.** `currentIssue` is `v-model`-bound
@@ -1039,7 +1088,7 @@ arrives.
 | Durable auth sessions | Wanting identity to survive a browser close. `localStorage` already covers name pre-fill. |
 | Multi-instance operation | Out of scope by decision; single process throughout. |
 | Event-sourcing the room | Never, on the same grounds that pick snapshots for the wire. Round history is a product feature with its own shape, not a projection anyone needs to rebuild. |
-| Per-command sequence numbers | Someone actually observing a reordered command. Under snapshots a reordering is visible rather than silent, since the client converges on what the server holds: the wrong card stays highlighted, or a vote outlives a clear, in front of everyone. `lastSeq` is live state re-derived per session, so it is free to add then and would otherwise need `/join` to reset it, a coupling that bites silently. |
+| Per-command sequence numbers | Someone actually observing a reordered command. Under snapshots a reordering is visible rather than silent, since the client converges on what the server holds: the wrong card stays highlighted, or a vote outlives a clear, in front of everyone. `lastSeq` is live state re-derived per session, so it is free to add then and would otherwise need `/join` to reset it, a coupling that bites silently. If it is ever added, note that a member can hold several connections, so a cursor kept per user is wrong: one connection would suppress sends the other still needed. It belongs on the connection. |
 | Rate limiting | Unscheduled and broader than any one symptom. |
 
 **Two caveats on the long-poll row**, since it is the only deferred item this
@@ -1124,7 +1173,9 @@ entirely to `sessions`, and sessions are only resolvable past promotion once ste
 resolving to nothing and turn every reconnect into an immediate 401.
 
 The split itself is a pure refactor; **the idle timeout is the one behaviour
-change in this step**. It stops a room dying the moment its last member's grace
+change in this step**. `connections` is a set per member from the start, but it
+holds at most one ref until step 6 makes `/join` idempotent, so nothing observable
+turns on it here. It stops a room dying the moment its last member's grace
 period expires, six seconds into a coffee break, taking the session's round
 history with it, and it closes the abandoned-room GC issue. Section 3 has the
 reasoning, including what "idle" means and why message silence is not it.
@@ -1208,12 +1259,15 @@ says why.
 | --- | --- |
 | 08-18 SSE transport | Historical. Its post-implementation note stays valuable as the record of why `userId` exposure widened, which the "Transport" section above reads as self-inflicted by the swap rather than inherited from WebSocket. |
 | 08-20 session identity | Current and implemented. The cookie-lifetime question is reaffirmed rather than reopened: it stays a session cookie, since no durable auth session is in the target. |
-| 08-24 backpressure | Decisions superseded (`fail` becomes `dropHead`, and the grace period stops being load-bearing once step 6 lands explicit leave), findings retained. Its empirical discoveries must survive the edit: `Source.actorRef` with `bufferSize = 0` silently bypassing the overflow strategy, and the connection-establishment race. Nothing else records either. |
+| 08-24 backpressure | Decisions superseded (`fail` becomes `dropHead`, and the grace period narrows to transient drops only once step 6 lands explicit leave, rather than delaying every departure), findings retained. Its empirical discoveries must survive the edit: `Source.actorRef` with `bufferSize = 0` silently bypassing the overflow strategy, and the connection-establishment race. Nothing else records either. |
 | 08-26 delta resync | Already superseded, now doubly so. Kept as history. |
 | 08-28 snapshot protocol | Superseded by this document, and kept for three things worth reading: the long-polling analysis at option 6 of its "Approaches considered", which is still the standing fallback design though it assumes a version cursor this design drops (see the caveats under "Deferred, with triggers"); the measurement table behind the snapshot-versus-replay comparison; and the Netskope investigation. Superseded rather than amended because §6's bounded mode, the proxy validation ladder and their scaffolding account for more of its 3,001 lines than everything that survives. |
 | 08-30 e2e testkit | Amended, not superseded. The stub and harness survive, the bounded-mode cases go, the characterization cases arrive. |
 
 ## Roadmap changes
+
+`docs/roadmap.md` is already written to match this list; it is kept here as the
+reasoning behind each move rather than as work outstanding.
 
 - Phase 1's fourth item (ask-pattern command endpoints) becomes step 6.
 - Phase 2 loses voting scale to the end of the backlog and its durable store
@@ -1240,46 +1294,33 @@ says why.
 
 ## Known issues disposition
 
-Five of the eight open entries close on this path.
+Ten of the thirteen open entries close on this path. `docs/known-issues.md` is
+already written to match this table. Five of the rows are marked **new**: they
+were surfaced by this design work rather than inherited, three having been
+recorded only inside the 08-28 spec now marked superseded and two recorded nowhere
+at all. That ratio is the honest measure of how much of this was discovery rather
+than execution.
 
 | Entry | Closed by |
 | --- | --- |
 | Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it costs is telling someone they mistyped a slug. |
-| No GC for abandoned or never-joined rooms | Step 4 |
+| No GC for abandoned or never-joined rooms | Step 4, against accidental abandonment. A client looping requests at a stopped-but-idle room defers its stop indefinitely; bounding that belongs to the rate-limiting entry, which stays open. |
 | A `/join` with no follow-up `/events` leaks a pending session | Step 4, which bounds a room's lifetime. Step 5's retained sessions remove the pending/promoted distinction the entry is phrased around, and deliberately add no TTL. |
 | SSE reverse-proxy buffering is undocumented | Step 1 |
 | A deliberate tab close is as slow to announce as a transient reconnect | Step 6 |
 | HTTP command ordering is not guaranteed | Stays open. Snapshots downgrade it from silent divergence to a visible wrong-but-true state, and it has never been observed; see "Deferred, with triggers". |
 | Resync doesn't replay whether votes are revealed | Step 1 |
 | No rate limiting on mutating room endpoints | Stays open |
+| **new** A transparently reconnecting client duplicates every known participant | Step 1. Applying complete state cannot duplicate. |
+| **new** A participant who departs during a reconnect gap is never pruned | Step 1. Under a snapshot an absent participant is absent. |
+| **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
+| **new** A disconnection outlasting the grace period forces a page reload | Step 5. The member is removed, the consumed session leaves nothing to resolve the token, and the retry gets a 401; sleeping a laptop for more than six seconds in an occupied room is enough. Live today and unrelated to this design. |
+| **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, by making `/join` resolve the existing cookie rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
 
-The rate-limiting entry needs rewriting rather than leaving alone: its
-bounded-mode request-amplification paragraph describes a mode this design
-cancels, and the no-op publish guard it names as the backstop is also dropped.
-The underlying gap is unchanged.
-
-Five issues need **adding** to `docs/known-issues.md`. Three are recorded only
-inside a spec about to be marked superseded; the other two are recorded nowhere
-at all, and one of those is a live bug rather than anything this design
-introduces:
-
-- A transparently reconnecting client duplicates every known participant.
-  Closed by step 1.
-- A participant who departs during a reconnect gap is never pruned. Closed by
-  step 1.
-- Pre-reveal estimations are broadcast to every participant and only hidden
-  client-side. Closed by step 2.
-- A disconnection outlasting the grace period forces a page reload. The member is
-  removed, the consumed session leaves nothing to resolve the token, and the
-  retry gets a 401. Sleeping a laptop for more than six seconds in an occupied
-  room is enough. Live today and unrelated to this design; closed by step 5.
-- A second tab on the same room displaces the first tab's identity, so its clicks
-  are silently credited to the other. Never recorded: the 08-20 design examined
-  two tabs on *different* rooms, where path scoping works, and this case fell in
-  the gap beside it. Closed by step 6, by making `/join` resolve the existing
-  cookie rather than mint over it, so the second tab joins the same participant
-  instead of displacing it. Sharing the identity is the intended outcome;
-  displacing it was the defect.
+The rate-limiting entry was rewritten rather than left alone: its bounded-mode
+request-amplification paragraph described a mode this design cancels, and the
+no-op publish guard it named as the backstop is also dropped. The underlying gap
+is unchanged.
 
 ## Open questions
 

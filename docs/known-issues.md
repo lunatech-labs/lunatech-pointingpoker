@@ -45,8 +45,11 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Scheduled as step 4 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: a room stops two to four
-  hours after its last connection goes, whether or not anyone ever joined. Remove
-  this entry when that lands.
+  hours after its last connection goes, whether or not anyone ever joined. That
+  closes the accidental form. It does not close the abusive one, since any message
+  arriving in an interval defers the stop by another, so a client looping requests
+  at an empty room keeps it alive; bounding that belongs to the rate-limiting
+  entry below. Remove this entry when step 4 lands.
 
 ### A `/join` with no follow-up `/events` leaks a pending session for the room's lifetime
 
