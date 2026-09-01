@@ -198,8 +198,9 @@ and the Clever Cloud runtime consequence recorded under "Accepted costs" below.
 Performance did not enter the decision. The JVM remains the stronger runtime
 under high load, but this workload is on the order of 200 concurrent SSE
 connections, a heartbeat every 15 seconds, snapshots of 418 bytes at three
-participants and 2,112 at twenty, and a few clicks per person per minute. Both
-runtimes idle. To the extent performance ever mattered it would favour staying.
+participants and 2,112 at twenty (roughly double that late in a session once
+`history` rides along, see section 2), and a few clicks per person per minute.
+Both runtimes idle. To the extent performance ever mattered it would favour staying.
 
 ### Transport
 
@@ -274,7 +275,8 @@ One message type, complete state, built per recipient.
 final case class RoomSnapshot(
     currentIssue: String,
     votesRevealed: Boolean,
-    users: List[RoomSnapshot.Participant]
+    users: List[RoomSnapshot.Participant],
+    history: List[RoundRecord] // arrives at step 9; empty until then
 )
 
 object RoomSnapshot:
@@ -301,6 +303,23 @@ of 418 to 2,112. Construction becomes O(N^2) per publish against O(N) today, N
 being members rather than connections, since a snapshot is per identity. All
 of it is noise at a team's size, and the O(N^2) term is the one that would grow
 first if very large rooms ever arrived.
+
+**`history` is the one field that grows within a session**, so it is worth
+sizing rather than waving through. A `RoundRecord` is about 165 bytes of JSON at a
+45 character issue and four distinct estimates, 200 at a long issue. Sessions here
+run 3 to 10 rounds, so the field tops out around 1.6KB, and a seven-person
+snapshot goes from roughly 800 bytes at the first round to roughly 2.4KB at the
+tenth. Across a whole meeting that is about 100KB more per participant, once. The
+worst case worth naming is twenty participants and ten rounds, at roughly 4KB a
+frame. Construction is unaffected, since the list is shared by reference across
+every per-member snapshot and only serialization pays per recipient.
+
+**Reverses if history ever outgrows the participant list**, which on these numbers
+means somewhere past twenty rounds in one session. Then it moves to a
+`GET /rooms/:slug/history` fetched when the view opens, which is a change at both
+ends of code we own and nothing else. Until then it stays on the snapshot, because
+one read path, one contract test and one invariant are worth more than the
+bytes.
 
 **`hasEstimation` exists because redaction would otherwise change what the table
 renders.** `showUserEstimation` (`index.html:556-558`) reads the estimation
@@ -727,6 +746,11 @@ has no concept of a settled estimate at all, so it implies a facilitator command
 and a snapshot field. That is a new Phase 4 roadmap entry, and it fits the
 property this architecture is built on, a feature being a field plus a command
 with no new branch in `applySnapshot`.
+
+**It travels on the snapshot rather than through an endpoint of its own**, so the
+history view is a render over state the client already holds and step 9 stays a
+field plus a command. Section 2 sizes that and names the round count at which the
+trade would reverse.
 
 **Open: what completes a round.** The candidate is that recording a value is the
 commit point, so one action is both the product capability and the trigger, and a
@@ -1160,10 +1184,11 @@ Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
 
 **Step 9. Recorded value and round history.** The facilitator command that
-records what the room settled on, its snapshot field, `RoomState.history`, and
-the history view. Waits on step 8 for the UI. Wants its own discussion first over
-what completes a round, though the shape is in memory and lasts an hour, so that
-question is cheaper to get wrong than it was when it decided a schema.
+records what the room settled on, its snapshot field, `RoomState.history` and the
+`history` field that carries it to the client, and the history view. Waits on
+step 8 for the UI. Wants its own discussion first over what completes a round,
+though the shape is in memory and lasts an hour, so that question is cheaper to
+get wrong than it was when it decided a schema.
 
 The two halves stay in one step because the recorded value is the candidate
 commit point for appending an entry, and because a settled estimate you cannot
