@@ -82,24 +82,28 @@ directly in the new frontend.
       observers from vote counts and status indicators.
 - [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
-      become real backend logic. **Moves into step 1**, where reveal becomes the
-      server-side derivation `round.revealed || everyMemberHasVoted` and every
-      snapshot carries the result. Check this off when that lands.
-- [ ] Latched reveal, deliberately separated from the item above. That change
-      moves "everyone voted" to the server without altering what it means, so
-      reveal stays a live derivation over the current participant set and can flip
-      either way when that set changes mid-round: a participant joining an
-      auto-revealed room hides the votes again, and the last non-voter leaving
-      reveals them with no facilitator action. Both are today's behaviour, kept
-      deliberately so a connectivity fix does not smuggle in a product change.
-      Latching means `vote()` setting `revealed = true` once every participant has
-      voted, so reveal becomes a one-way door until `clear()` or `reVote()` reopens
-      it. Cheap in code, and it synergizes with the observer role above, since an
-      observer changes what "everyone has voted" means. **Ship it with the
-      backlog's undo/re-hide**: latching removes the accidental un-reveal that
-      exists today, where a joiner flips the derivation back, and the exits that
-      remain (`clear`, `reVote`) either destroy the round or make everyone vote
-      again. Worth doing on its own so the behaviour change is reviewed as one.
+      become real backend logic. **Moves into step 1**, where `round.revealed` is
+      set by `Show` and by the vote that completes the round, and every snapshot
+      carries it. It lands as a latch rather than as a standing derivation, which
+      takes the auto-reveal half of the item below with it; section 3 of that spec
+      says why. Check this off when that lands.
+- [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
+      longer a product decision.** An earlier version of this item kept reveal as a
+      live derivation over the current participant set, so that a connectivity fix
+      would not smuggle in a product change, which meant accepting two flips when
+      that set changed mid-round: a joiner re-hiding an auto-revealed room, and the
+      last non-voter leaving revealing it with no facilitator action. The second
+      stopped being acceptable once step 2 made reveal the moment estimates reach
+      the wire and step 6 made a reload a departure. Together those turn a display
+      quirk into an unrecoverable disclosure that any participant can trigger by
+      pressing F5, so `round.revealed` is now set by the vote that completes the
+      round and cleared only by `clear()` or `reVote()`. The accidental un-reveal
+      closes at step 1 with it.
+      What is still a product question is whether a revealed round should survive a
+      `reVote`. That part still synergizes with the observer role above, since an
+      observer changes what "everyone has voted" means. **Ship what remains with the
+      backlog's undo/re-hide**, since the exits that survive (`clear`, `reVote`)
+      either destroy the round or make everyone vote again.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
       replay now goes out as a single batched message instead of one send per
@@ -185,8 +189,9 @@ directly in the new frontend.
 - [ ] Presentation/TV-mode read-only view for screen sharing.
 - [ ] Keyboard shortcuts for voting.
 - [ ] Per-session auto-reveal toggle (some teams may want manual-only reveal).
-- [ ] Undo/re-hide after an accidental reveal. Pairs with Phase 4's latched
-      reveal, which removes the accidental un-reveal that exists today.
+- [ ] Undo/re-hide after an accidental reveal. Pairs with what remains of Phase
+      4's latched reveal. The accidental un-reveal that exists today closes at
+      step 1 instead, where reveal becomes a latch.
 
 Deliberately at the end of the backlog, neither being customer-asked:
 

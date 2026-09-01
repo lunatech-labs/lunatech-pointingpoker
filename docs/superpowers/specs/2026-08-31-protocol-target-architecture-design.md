@@ -282,6 +282,7 @@ One message type, complete state, built per recipient.
 
 ```scala
 final case class RoomSnapshot(
+    you: UUID, // the identity this snapshot was built and redacted for
     currentIssue: String,
     votesRevealed: Boolean,
     users: List[RoomSnapshot.Participant],
@@ -313,6 +314,29 @@ being members rather than connections, since a snapshot is per identity. All
 of it is noise at a team's size, and the O(N^2) term is the one that would grow
 first if very large rooms ever arrived.
 
+**`you` is on the wire because the server already knows it and the client would
+otherwise guess.** It is the identity the snapshot was built and redacted for, so
+carrying it makes "who this was redacted for" and "who the client thinks it is"
+agree by construction rather than by both ends being careful. Without it the client
+recovers itself from a different request over a different transport, `/join`'s
+`userId`, and a divergence fails silently: `me` is `undefined`, so `userEstimation`
+goes blank and `ownVoteConfirmed` goes true while the participant list, the votes
+and the reveal all keep working, which is one person's own state being wrong in a
+room that looks healthy. It also makes `applySnapshot` a function of the snapshot
+alone, which is the same reason section 5 made it pure, and it gives the step 8
+contract test a field that pins the per-recipient contract. Forty-odd bytes on the
+frame sizes above, and unlike `version` it has a consumer on day one.
+
+The client stops needing to remember its own id at all, and that has a
+consequence on the other side of the wire worth following through. `/join`'s
+`userId` has no reader left once the event handlers go, its only consumers being
+`index.html:412` and `:431`, both inside the block step 1 deletes. So
+`JoinResponse.userId` becomes a field with no consumer, which is the same rule
+that dropped `version`. It stays until step 6, where tapir describes the endpoint and
+the ask pattern gives `/join` a real result to return instead, and it goes there
+rather than at step 1 only because the response body is what confirms the call
+succeeded until then.
+
 **`history` is the one field that grows within a session**, so it is worth
 sizing rather than waving through. A `RoundRecord` is about 165 bytes of JSON at a
 45 character issue and four distinct estimates, 200 at a long issue. Sessions here
@@ -340,14 +364,15 @@ today. Against the state model in section 3 that is the entry existing in
 coincide except in the re-vote state, which is the whole reason both fields are
 here.
 
-**The wire name is `votesRevealed`, not `revealed`.** The stored flag means
-"Show was pressed"; the wire field is the derivation that also covers
-auto-reveal. Naming both `revealed` would put two meanings one field access
-apart. The wire name also matches what the client already calls it.
+**The wire name is `votesRevealed`, not `revealed`.** Under the latch in section 3
+the two carry the same meaning, so the only reason for two names is that
+`votesRevealed` is what the client already calls it and renaming that buys nothing.
+Keep them in step: if the stored flag ever grows a second meaning, this is the
+field access that would hide it.
 
 Not on the wire: `version` (no live consumer, see above), `roomId` (the client
-opened the connection), and voting `scale` or participant `role` (see
-"Demonstrated but not built").
+opened the connection, and unlike `you` it is not a value the server minted), and
+voting `scale` or participant `role` (see "Demonstrated but not built").
 
 `issueLastEditBy` is **deleted outright rather than merely withheld**, which is
 a stronger statement than the 08-28 design made and worth being explicit about.
@@ -423,7 +448,7 @@ sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long 
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
 
-emptySince    Option[Instant]  // when connections last became empty; see "Two lifetimes"
+emptySince    Option[Instant]  // empty since when; Some at creation, see "Two lifetimes"
 sawMessage    Boolean          // any message since the previous idle tick
 ```
 
@@ -452,8 +477,31 @@ silently winning. Retention is a precondition for this shape rather than a
 companion to it, which is why step 4 waits on step 5.
 
 The name is deliberately in both `Session` and `Member`: a session exists before
-there is a member, which is why 08-20 put it on `PendingSession`. Idempotent
-`/join` updates both.
+there is a member, which is why 08-20 put it on `PendingSession`.
+
+**A `members` entry is created by `ConnectToRoom` and by nothing else.** `/join`
+writes `sessions` only, and renames a `Member` if and only if one already exists,
+which is all "updating both" amounts to. Letting `/join` create the member instead
+manufactures somebody who holds no connection and never votes, so
+`everyMemberHasVoted` can never fire and auto-reveal is dead for the rest of the
+meeting. That is the same failure section 4 rejects the `tabId` design for, and a
+`/join` whose `/events` never follows is reachable without malice: a failure
+between the two requests, an abandoned page load, a probe.
+
+**Resolving a token and being allowed to act are two checks, not one.** A command
+resolves its token through `sessions` and then requires the resulting `userId` to
+be in `members`, so a resolved identity that is no longer a member is a no-op,
+which is what today's `data.users.find(_.token == token)` already produces
+(`Room.scala:141`, `152`, `163`, `174`, `227`). Keeping the checks separate matters
+because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
+at any point in the actor's life clear a round they are not in. Nothing about this
+weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
+survives a departure independently of membership.
+
+`ValidateToken` and `/join` are deliberately not subject to the second check.
+Their job is to authorize a connection that is *about* to create the membership,
+and requiring membership first is what would break the outage recovery step 5
+exists for.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
@@ -461,15 +509,15 @@ while `clear()` clears both (`Room.scala:85-89`), so "has an estimation, is not
 counted as voted" is a state the current code holds and the wire format
 distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
 three things break at once: `ownVoteConfirmed` in section 5 is always true and
-the unconfirmed-button styling never appears, `everyMemberHasVoted` stays true
-through a re-vote so auto-reveal never switches off, and `showUserEstimation`
+the unconfirmed-button styling never appears, the first re-vote after a `reVote`
+instantly re-reveals the room, and `showUserEstimation`
 changes which rows show the shield icon. So `voted` on the wire is
 `confirmed`, `hasEstimation` is the entry existing at all, `reVote` sets
 `confirmed = false` across the map, and `clear` empties it.
 
 `round.revealed` is cleared by both `clear` and `reVote`, which is the other
-half of what the client does client-side today and has to move with the
-derivation.
+half of what the client does client-side today and has to move with the reveal
+itself.
 
 `RoomData` keeps its name as the actor's state container and holds all four
 groups plus the idle bookkeeping; `RoomState` is the room's own data within it,
@@ -499,9 +547,9 @@ a reconnect adds a ref to `connections` and touches neither `members` nor
 design rather than an accident.** A ref leaves its member's set the instant its
 stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
 dead ref is a no-op anyway, and `emptySince` has to reflect reality. A `members`
-entry goes at grace expiry, or immediately on the explicit leave in section 4.
-Estimates are never removed by a departure at all, only by `clear`, `reVote` or
-the round ending.
+entry goes at grace expiry, or immediately on the explicit leave in section 4,
+which removes no ref of its own. Estimates are never removed by a departure at
+all, only by `clear`, `reVote` or the round ending.
 
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
@@ -509,10 +557,12 @@ relevant, scanning for a user still holding that exact ref and doing nothing if 
 reconnect replaced it (`Room.scala:182-225`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
-alone starts only if the set is now empty. A member still holding another
-connection schedules nothing. `ConnectToRoom` adds a ref and cancels any pending
-timer, so `ConfirmLeave` removes the member unconditionally: it only ever runs for
-a member who had no connections left and gained none since.
+alone starts only if the set is now empty **and that member still exists**. A
+member still holding another connection schedules nothing, and neither does one
+whom section 4's leave endpoint has already removed, which is what an ordinary
+deliberate close looks like. `ConnectToRoom` adds a ref and cancels any pending
+timer, so `ConfirmLeave` needs no staleness check of its own: it removes the
+member if present.
 
 That deletes the ref from the timer key, the post-delay staleness check and the
 duplicate-`Leave` warning, and it makes **Problem C unrepresentable** rather than
@@ -521,6 +571,13 @@ forced today's staleness check needs no special handling either. The new stream
 is established before the old one's termination arrives, so the set briefly holds
 two refs and removing the old one leaves a non-empty set, which is the ordinary
 no-timer case rather than a distinguishable one.
+
+**One ordering the conjunct does not cover** is a beacon arriving after its own
+stream has already terminated, where the timer is pending before the member goes.
+`ConfirmLeave` then fires, removes nobody, and publishes a snapshot identical to
+the last. That is the redundant publish this design has already decided is cheap,
+under "The no-op publish guard goes with it" above, and it is still nothing
+accumulating: at most one timer per departure, and the tab that caused it is gone.
 
 **What replaces the deleted check is `TimerScheduler`**, and the reliance is worth
 naming since nothing else now holds the invariant. Pekko guarantees that a
@@ -583,18 +640,55 @@ private def publish(next: RoomData, context: ActorContext[Command]): RoomData =
 One snapshot is built per member and shared by that member's connections, since
 redaction is per recipient identity rather than per connection.
 
-Reveal stays a server-side derivation, `round.revealed || everyMemberHasVoted`,
-which is where auto-reveal moves from its current client-only home. Latched
-reveal remains a deliberate Phase 4 behaviour change rather than something this
-design smuggles in.
+**`publish` iterates `connections`, not `members`, so `RoomSnapshot.of` has to
+tolerate a recipient who is not a member.** The two maps are momentarily out of
+step in one direction: section 4's leave endpoint removes the member while that
+tab's stream is still open, since a ref only ever leaves where the ref is in hand.
+The closing tab therefore receives one last snapshot whose `you` is absent from
+`users`, which is correct rather than a case to special-case, and it is why the
+client's `me` lookup has to cope with `undefined` at all. The opposite skew, a
+member with no connections, is not a transient at all but the grace period doing
+its job: they keep their row in everyone else's list and receive nothing until
+they reconnect or expire. Neither map is derivable from the other, which is the
+point of separating them.
+
+**Reveal is a latch set on a vote, not a predicate re-derived per publish.**
+`round.revealed` is set by `ShowVotes`, and by a `Vote` whose effect is that
+`everyMemberHasVoted` holds; `clear` and `reVote` clear it. `votesRevealed` on the
+wire is that flag. Auto-reveal therefore moves server-side, from its current
+client-only home, as a transition rather than as a standing condition.
+
+**A standing `round.revealed || everyMemberHasVoted` would let a departure reveal
+the round, which is the one thing step 2 buys.** The predicate ranges over a
+mutable set, so shrinking the set satisfies it as readily as a vote does: remove
+the last member who has not voted and every estimate goes on the wire. Members are
+removed at grace expiry and, once section 4's leave endpoint lands, the moment a
+tab hits `pagehide`, which fires on reload and on the mobile app switch that puts
+a page into the back/forward cache. So under a standing predicate one participant
+pressing F5 discloses the room's votes, unrecoverably, and today's six-second
+grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:208-225`) are what keep
+that from happening at present. Latching removes the class rather than the trigger: no
+membership change of any kind can reveal a round, so the reload, the app switch,
+the slept laptop and the deliberate close all go together and a later feature
+cannot bring any of them back.
+
+The cost is that this is the auto-reveal half of Phase 4's latched reveal, landing
+early and deliberately. It is taken because the alternative is an unrecoverable
+disclosure reachable by a keystroke, not because latching is wanted for its own
+sake, and what remains genuinely undecided stays in Phase 4: whether reveal should
+survive a `reVote`, and the paired undo and re-hide. It also settles today's
+accidental un-reveal, where a joiner flips the room back, which the roadmap had
+left to Phase 4 and which now closes at step 1.
 
 `everyMemberHasVoted` reads the `confirmed` flag, not merely the presence of an
-estimate, which is what makes a re-vote switch auto-reveal back off. It is also
-written `members.nonEmpty && ...` rather than as a bare `forall`. The vacuous
-case is unobservable today, since no members means no connections and therefore
-no snapshot, but it stops being vacuous the moment `role` lands and the predicate
-filters to voting members: a room of observers would otherwise auto-reveal an
-empty round. The guard belongs where that change will land.
+estimate. Without that, a `reVote` would leave every estimate in place, so the
+first person to re-vote would satisfy the check and the room would re-reveal
+instantly. Writing it `members.nonEmpty && ...` rather than as a bare `forall` is
+insurance rather than a live case, and the latch is what makes it so: the check
+only ever runs on a `Vote`, and a vote implies a member in whatever set the
+predicate ranges over, including the voting-members-only set `role` will
+introduce. Keep the guard anyway. It costs nothing, and the day somebody
+re-derives the predicate somewhere else is the day it matters.
 
 #### No durable storage
 
@@ -662,6 +756,13 @@ is older than the timeout. Connections present means never idle, whether or not
 anyone is clicking, and a short emptiness is survivable, which is the
 coffee-break requirement above.
 
+**`emptySince` starts as `Some(now)` at the actor's creation and not as `None`**,
+which reads as a detail and is not one. A room whose `/events` never follows its
+`/join` has connections that are empty without ever having *become* empty, and
+that is exactly the never-joined half of the abandoned-room issue this step claims
+to close. Written as a transition-only field it would leave such a room running
+for the life of the process.
+
 **The tick interval is the idle timeout itself.** A room emptying just after a
 tick is therefore not seen as idle until the tick after next, so the actual stop
 lands between one and two intervals after the last departure: **two to four
@@ -693,12 +794,18 @@ room in its map until `Terminated` arrives one hop later, so a `RequestSession`
 from `/join`, or a `ValidateToken` from `/events`, can be routed to an actor that
 has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
-They are left alone because they fail loudly: the ask times out, the route answers
-500, the client already says "Could not join the room. Please try again."
-(`index.html:487-491`), and the retry lands on a freshly created room. That is the
-same rule that decides the stack above, that machinery is bought where being wrong
-is silent. `ConnectToRoom` earns a field because it leaves a heartbeating stream
-that never says anything is wrong; these two do not.
+They are left alone because they fail loudly. `RequestSession` times out, the route
+answers 500, the client says "Could not join the room. Please try again."
+(`index.html:487-491`), and the retry lands on a freshly created room.
+`ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
+fatal, so the client shows "Your session has ended. Please reload the page to
+rejoin." (`index.html:472-485`) and waits for a reload. That is worse than a
+retry, but it is the same thing the client is told when the room legitimately
+stopped and the token resolves to nothing, so the race adds no outcome the user
+does not already meet. That is the same rule that decides the stack above, that
+machinery is bought where being wrong is silent. `ConnectToRoom` earns a field
+because it leaves a heartbeating stream that never says anything is wrong; these
+two do not.
 
 **Message silence alone is the wrong criterion, though, and it is what an
 implementer reaches for.** Pekko's `setReceiveTimeout` fires on message silence,
@@ -713,6 +820,27 @@ wrong lives two files away from the code that would do it.
 A genuinely abandoned connection still resolves, so none of this depends on
 clients being polite: a suspended client's stream eventually fails to write and
 terminates into `ConnectionFailure`, which is already routed to `Leave`.
+
+**An actor that may stop on its own owes an answer to whoever is still attached,
+and today there is none.** `Source.actorRef`'s materialized ref has no lifecycle
+link to the room in either direction, and `completionMatcher` is deliberately
+`PartialFunction.empty` (`SSE.scala:71-75`), so a room that stops leaves every
+attached stream heartbeating from the `keepAlive` stage with no snapshot ever
+arriving again. That is the same symptom `sawMessage` above exists to prevent, from
+a second cause, and it is cheaper to close: `Room` handles `PostStop` by sending a
+completion message to every ref in `connections`, and `completionMatcher`
+recognizes it. The comment quoted above therefore becomes the thing being changed
+rather than a rule to preserve.
+
+Idle stop is not the cause, since `connections` is empty whenever the tick fires.
+The live cause is a crash, where Pekko typed's default supervision stops the actor,
+and the future one is the deferred destroy-room action, which currently has no way
+to evict anybody. What the client does next is the existing terminal path and an
+improvement on silence: a completed stream is a transient close to `EventSource`,
+so it retries, gets a 401 because the room is gone and its token resolves nowhere,
+and shows "Your session has ended. Please reload the page to rejoin."
+(`index.html:472-485`). Rejoining automatically under the remembered name belongs
+to step 8's connection module.
 
 #### Slug allocation
 
@@ -836,8 +964,8 @@ that user their identity, their vote and their state back, and the frozen
 connection costs only a few wasted sends until its stream fails to write and drops
 out, which "Two lifetimes" covers.
 
-And it is actively harmful once reveal moves server-side at step 1. Reveal is
-`round.revealed || everyMemberHasVoted` over `members`, so an extra tab is a
+And it is actively harmful once reveal moves server-side at step 1. Auto-reveal
+asks whether `everyMemberHasVoted` over `members`, so an extra tab is a
 member who never votes, and one person opening a second view would block
 auto-reveal for the whole room until they voted in both. The earlier text called
 two votes for one person "harmless"; the blocked reveal is not, and it postdates
@@ -874,11 +1002,33 @@ Three additions, each closing something documented:
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
 - **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`. It
-  drops that connection's ref, and if it was the member's last, removes the member
-  at once rather than waiting out the grace period. That is the other reason, and
-  it reduces the grace period to what it should be: cover for transient drops
-  only. `sendBeacon` is the right primitive because a normal POST is not reliably
-  delivered from an unload-adjacent handler.
+  removes the member at once, rather than waiting out the grace period, if that
+  member holds at most one connection; if they hold two or more it does nothing.
+  That is the other reason, and it reduces the grace period to what it should be:
+  cover for transient drops only. `sendBeacon` is the right primitive because a
+  normal POST is not reliably delivered from an unload-adjacent handler.
+
+  **The test is cardinality rather than identity, because the request cannot name
+  a connection.** All it carries is the room-scoped cookie, which resolves to a
+  `userId`, and section 1 keeps tabs and connections out of every path, so nothing
+  selects one ref out of that member's set. A ref is only ever removed where the
+  ref is in hand, on `ConnectionCompleted` or `ConnectionFailure`. So the endpoint
+  answers the one question it can: is this member down to their last connection,
+  in which case removing the member is what the beacon is for, or do they hold
+  another, in which case the closing tab's own ref drops through stream
+  termination a moment later and membership was never in question. Zero refs and
+  one ref take the same branch, which absorbs a beacon arriving after its own
+  stream has already torn down.
+
+  A client-minted connection id carried on `/events` would make the test exact,
+  and it is the same per-connection slot the command-cursor row under "Deferred,
+  with triggers" says a cursor would have to live in. It is not worth a wire field
+  for a case this section argues does not occur; reach for it on the day the
+  cursor does.
+
+  **The case cardinality does not cover** is two tabs closed near-simultaneously:
+  both beacons see a set of two, both do nothing, and that departure falls back to
+  the grace period. Rare, and the outcome is today's behaviour.
 
   **It clears no cookie, and that is deliberate.** `pagehide` fires on reload as
   well as on close and nothing on the event tells the two apart, so a leave
@@ -899,6 +1049,13 @@ Three additions, each closing something documented:
   own, which puts a second duration constant on the one path built to avoid a
   timer. Reconsider that if the flicker turns out to annoy anyone.
 
+  **The flicker is cosmetic only because reveal is a latch.** `pagehide` fires on
+  a reload and on the mobile app switch that puts a page into the back/forward
+  cache, so without section 3's latch this endpoint would hand any participant a
+  one-keystroke way to reveal the room's votes by removing themselves as its last
+  non-voter. That is the dependency to keep in mind if anyone ever reopens the
+  reveal derivation.
+
 **`/join` becomes idempotent**, and it is the whole of the fix above. If the
 request's cookie already resolves to a live session it returns that `userId`
 instead of minting a new one and overwriting the cookie. A reload therefore keeps
@@ -910,9 +1067,10 @@ a browser that was already given it.
 It does take the `name` from the request rather than ignoring it, so joining again
 under a different name renames the participant instead of silently keeping the old
 one. That is today's effective behaviour, which reaches the same place by creating
-a second participant, and it is the nearest this app has to a rename. The
-consequence to know is that a second tab opened with a different name renames the
-person in both.
+a second participant, and it is the nearest this app has to a rename. It writes
+that name to the `Session`, and to the `Member` only where one already exists;
+section 3 says why `/join` never creates a member. The consequence to know is that
+a second tab opened with a different name renames the person in both.
 
 That matters because the reload, not the tab close, is the form users actually
 report: today `/join` mints a fresh identity on every call, so someone reloading
@@ -924,9 +1082,9 @@ left is the brief gap recorded with the leave endpoint above.
 ### 5. Client
 
 ```js
-// prev is { userId, editing, currentIssue }; returns the next view state, mutating nothing.
+// prev is { issueFocused, currentIssue }; returns the next view state, mutating nothing.
 export function applySnapshot(prev, s) {
-  const me = s.users.find(u => u.id === prev.userId);
+  const me = s.users.find(u => u.id === s.you);
   const tally = {};
   for (const u of s.users) if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   return {
@@ -934,7 +1092,7 @@ export function applySnapshot(prev, s) {
     users: s.users,
     votesRevealed: s.votesRevealed,
     // Do not clobber the issue input while the user is typing in it.
-    currentIssue: prev.editing ? prev.currentIssue : s.currentIssue,
+    currentIssue: prev.issueFocused ? prev.currentIssue : s.currentIssue,
     userEstimation: me ? me.estimation : "",
     ownVoteConfirmed: !me || me.voted || !me.estimation,
     votesSummary: Object.entries(tally).sort((a, b) => b[1] - a[1])
@@ -955,12 +1113,44 @@ binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
 
 Three details are load-bearing rather than polish:
 
-- **The `editing` guard is mandatory here.** `currentIssue` is `v-model`-bound
+- **The issue-input guard is mandatory here.** `currentIssue` is `v-model`-bound
   to the issue input. Under the event protocol only an `edit_issue` broadcast
   could clobber in-progress typing; under snapshots every publish carries the
   issue, so any vote by anyone would wipe the edit box mid-keystroke. The 08-28
   design correctly called this out of scope for an event protocol and correctly
   in scope for this one.
+
+  **What the guard keys on is focus, and that has to be a flag of its own.**
+  `editing` cannot be it. It swaps the readonly input for the editable one and its
+  commit button (`index.html:191-207`), and its only writers are `showEdit`
+  (`:366-368`) and `doEdit` (`:519-520`), so as a guard it lasts until the user
+  presses the check rather than until they stop typing. Someone who opens the
+  editor and clicks away then stops applying `currentIssue` from every later
+  snapshot for the rest of the session, estimating against a ticket the room has
+  moved on from while their participant list and votes keep updating normally. That
+  is worse than the behaviour it replaces, where `edit_issue` clobbered the box:
+  the user lost their typing but stayed in sync.
+
+  So step 1 adds `issueFocused`, set by `v-on:focus` and `v-on:blur` on the
+  editable input, and the guard reads that. **The two flags must stay separate,
+  and this is the part not to simplify later.** Resetting `editing` on blur would
+  tear out the subtree holding the commit button on the very blur that pressing it
+  causes, so the click could never land and the edit would be dropped in silence.
+  `issueFocused` drives no `v-if` and appears nowhere in the template, so nothing
+  re-renders when it changes and the button behaves exactly as it does today; it
+  does not even need to be reactive. The readonly input gets no handlers, so
+  focusing it does not arm the guard. What the user sees, parked in edit mode, is
+  the box resyncing to the room's value, which is the right outcome for an edit
+  they have not committed. An explicit cancel belongs with step 8's component, as
+  does any affordance for "someone else changed the issue while you were editing".
+
+  Two windows stay open, both narrow. The blur precedes the commit click, so a
+  snapshot landing in that event-loop gap would have `doEdit` post the room's value
+  rather than the user's; deferring the blur reset by a tick closes it if it ever
+  bites. And `doEdit` clears `editing` before its POST, so a snapshot arriving
+  during that round trip reverts the displayed text until their own edit lands.
+  Step 6's ask-pattern reply is what makes the second reportable, the same way it is
+  for a failed vote.
 - **The tally counts only participants who have voted.** Today
   `updateSummary` tallies every user, so a non-voter's empty string becomes a
   summary row and in a revealed room with stragglers can win the count and
@@ -1016,6 +1206,15 @@ therefore never exercised the real `ConnectToRoom` path; they should go through
 Problem A's fix, since vote loss on reconnect is the regression they would have
 caught.
 
+**`BackpressureReconnectSpec` is retired at step 1, not ported.** Its single case
+asserts that a stalled client's stream fails and silently reconnects, which is the
+`OverflowStrategy.fail` behaviour `dropHead` deletes: under snapshots the stall
+resolves by discarding a superseded element and no reconnect happens. Its
+replacement is the opposite assertion, that a stalled client's stream stays open
+and receives the newest snapshot rather than a queued stale one, which is the
+property `dropHead` is chosen for and which nothing else covers. The 124 lines go
+with the case.
+
 Added, each with the step it lands at so nothing here is unassigned:
 
 - **The stub buffering proxy and browser harness** (step 0) from
@@ -1028,8 +1227,23 @@ Added, each with the step it lands at so nothing here is unassigned:
   on the day a new customer reports the same symptom.
 - **Playwright end-to-end cases** (step 0, extended at each later step): two
   browsers exchanging votes, reveal with a straggler, reconnect survival,
-  participant list on join and leave, and the issue-input guard. Step 6 adds two
-  that need one browser context rather than two, since they are about the shared
+  participant list on join and leave, and the issue-input guard.
+
+  Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
+  to the room once the editor loses focus, and an edit committed with the check
+  button reaching the other browser, since a guard scoped to the flag that renders
+  that button would break it in silence. Step 2 adds the one case that protects the
+  confidentiality property, a straggler departing while everyone else has voted
+  leaving the votes hidden, run for both a deliberate close and a reload, those
+  being the two triggers the reveal latch exists to neutralize. The reload variant
+  only turns hostile at step 6, where the beacon makes a reload a departure, which
+  is the argument for writing it at step 2 rather than beside the change that would
+  otherwise break it unwatched. There is deliberately no case for the grace timer
+  the leave endpoint makes redundant: a timer that fires into a no-op has nothing
+  observable to assert on, and `RoomSpec` is where it would belong if anywhere.
+
+  Step 6 adds two that need one browser context rather than two, since they are
+  about the shared
   room cookie: two tabs on the same room resolving to one participant, with a vote
   in either showing in both and closing one leaving the other connected and
   present; and a reload keeping its identity and its vote instead of duplicating
@@ -1081,9 +1295,10 @@ arrives.
 | WebSocket | Needing low-latency bidirectional interaction at many events per second. |
 | Voting scale | Someone asking for a non-fibonacci scale. Moved to the end of the backlog: it was a nice-to-have nobody requested. |
 | Custom chosen room names | An authentication and ownership model existing, without which "is this name taken forever" has no answer. |
-| An explicit destroy-room action | Wanted as a convenience. Nothing needs reclaiming now that rooms are memory-only. |
+| An explicit destroy-room action | Wanted as a convenience. Nothing needs reclaiming now that rooms are memory-only. Step 4's stop-time stream completion gives it the one mechanism it would otherwise have to invent, a way to evict whoever is still attached. |
 | Durable storage of any kind (a Postgres `rooms` table, or a whole-blob JSON snapshot in Cellar) | Someone wanting round history across sessions, or a truthful 404 becoming worth a database. See "No durable storage". A prior draft specified the Postgres version in full, including row TTLs, an expiry predicate and a sweeper; that analysis is in this file's history if it is ever needed. Between the two, Cellar is the simpler starting point on complexity grounds, since it needs no migration tool, no SQL and no database in CI. |
-| Observer roles, latched reveal | Phase 4, unchanged. Both are a field plus a predicate, and they share one: an observer changes what "everyone has voted" means. Latching also removes today's accidental un-reveal, when a joiner flips the derivation back, so pair it with the backlog's undo/re-hide. |
+| Observer roles | Phase 4, unchanged. A field plus one change to what "everyone has voted" means. |
+| Latched reveal, the part that is left | Phase 4. The auto-reveal half lands at step 1, because a re-derived predicate lets a departure disclose the round: see section 3. What stays deferred is whether a revealed round should survive a `reVote`, and it should ship with the backlog's undo and re-hide. Today's accidental un-reveal, where a joiner flips the room back, closes at step 1 rather than here. |
 | Idle indicator | Phase 5. Unlike the two above it is not only a field: it needs server-side activity tracking and a timer, and it publishes on a transition nobody commanded. |
 | Timer-based fallback reveal | Phase 4, but the least settled thing in it. Four open product and UI decisions, not a field: whether it runs for every round, whether the facilitator starts it, the duration and whether it is fixed or per room, and whether a running countdown can be cancelled when discussion breaks out. The countdown is also the first roadmap item needing a UI surface of its own. |
 | Persisting live round state | A zero-downtime deploy requirement, already deferred to its own spec under Phase 5. Until then, a restart warning and deploying outside meeting hours. |
@@ -1113,8 +1328,8 @@ of what the probe is being kept for.
 
 ## The ordered path
 
-Nine steps. The numbers are labels rather than a queue; each states what it
-actually waits on. Line counts are rough.
+Ten steps, numbered from zero. The numbers are labels rather than a queue; each
+states what it actually waits on. Line counts are rough.
 
 **Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
 a usability improvement, and 8 and 9 are product work whose case is the
@@ -1134,7 +1349,8 @@ are no end-to-end tests today and step 1 is the largest behavioural change in
 the set. Three caveats belong in it.
 
 **Cases covering behaviour that is currently buggy** (the non-voter tally, the
-duplicate participants) characterize the *intended* behaviour, so they would
+duplicate participants, a Show surviving someone joining) characterize the
+*intended* behaviour, so they would
 arrive red, and a suite that is red on arrival cannot answer "did I break
 something" during exactly the steps it was built for. They are marked
 `test.fail()` instead, annotated with the step that fixes each. Playwright fails
@@ -1186,19 +1402,30 @@ rather than an entry existing in a map.
 **The stored `revealed` flag does not exist today and this step adds it**, which
 is the mapping worth stating outright. `ShowVotes` broadcasts and returns
 `Behaviors.same` (`Room.scala:173-181`), so reveal lives only as a client-side
-flag. Section 3's `round.revealed || everyMemberHasVoted` can therefore be
-satisfied by its second term alone, which silently drops a Show pressed while a
-straggler has not voted. `RoomData` gains `revealed: Boolean`, `ShowVotes` sets
-it, and `clear()`/`reVote()` clear it beside the vote fields they already touch.
-That flag and the derivation over `users` are Problem E.
+flag, and a Show pressed while a straggler has not voted is silently dropped on
+resync. `RoomData` gains `revealed: Boolean`, `ShowVotes` sets it, `Vote` sets it
+when every user in `users` is then voted, and `clear()`/`reVote()` clear it beside
+the vote fields they already touch. That flag is Problem E.
+
+**The flag is a latch and not a per-publish derivation, from this step onward.**
+Section 3 has the reasoning; the part that matters here is that writing it as
+`revealed || everyUserHasVoted` at publish time would make a departure reveal the
+round, which step 2 then turns into a disclosure rather than a display toggle. So
+`Vote` is the only thing besides `ShowVotes` that may set it. Two behaviour
+changes ride along and are user-visible: a Show now survives someone joining,
+where today `allVoted()` (`index.html:553-554`) flips the room back, and an
+auto-revealed room stays revealed when a straggler arrives. Both are intended;
+step 0's characterization cases should pin the new behaviour with `test.fail()`
+rather than the old.
 
 **Problem A is fixed here too.** `RoomManager.ConnectToRoom` builds the `User`
 it sends with `InitialVoteState`/`InitialEstimation` (`RoomManager.scala:81-84`)
 and `RoomData.joinUser` (`Room.scala:66-74`) replaces the existing entry
 wholesale, so a reconnect resets that participant's vote in the room's own
 state. Under events the loss was quiet; under snapshots it is immediately
-republished to everyone. The fix is one call site (`Room.scala:130`):
-`joinUser` keeps `voted` and `estimation` from the existing entry and takes
+republished to everyone. The fix is one method, `RoomData.joinUser`
+(`Room.scala:67-74`), whose only call site is `Room.scala:130`: it keeps `voted`
+and `estimation` from the existing entry and takes
 everything else from the incoming user. Taking the rest is safe because only
 `ref` actually differs on a reconnect, there being no rename feature and
 `EventSource`'s retry reusing the existing session cookie rather than calling
@@ -1234,18 +1461,27 @@ rather than how state is shaped.
 Waits on step 1, independent of step 2. About 5 and 25. Separate because it is
 the one change a user notices as a different answer rather than better plumbing.
 
+**Steps 2 and 3 should land before step 4, not merely after step 1.** Both are
+specified in terms of today's `RoomData`, as step 1 is: `hasEstimation` is
+`estimation.nonEmpty` and the tally reads `User.voted`. Taking step 4 first does
+not break them, but it re-expresses both against `round.estimates` and costs the
+translation twice. Step 2 in particular wants to be early on its own merit, being
+the confidentiality fix.
+
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, replacing the room actor's
-stop-when-empty with an idle timeout, and Problem C. Waits on steps 1 and 5.
-About 140 changed and 100 of tests.
+stop-when-empty with an idle timeout, completing attached streams on stop, and
+Problem C. Waits on steps 1 and 5. About 150 changed and 110 of tests.
 
 **It waits on step 5 because `Member` carries no token.** Resolution moves
 entirely to `sessions`, and sessions are only resolvable past promotion once step
 5 retains them, so landing this first would leave a connected client's token
 resolving to nothing and turn every reconnect into an immediate 401.
 
-The split itself is a pure refactor; **the idle timeout is the one behaviour
-change in this step**. `connections` is a set per member from the start, but
+The split itself is a pure refactor; **the idle timeout is the only behaviour
+change a working room can observe in this step**. Completing attached streams on
+stop changes only what happens to a room that has already stopped or failed, which
+section 3 covers. `connections` is a set per member from the start, but
 until step 6 makes `/join` idempotent it holds a second ref only transiently,
 across the racing reconnect section 3 describes, so nothing observable turns on
 it here. The timeout stops a room dying the moment its last member's grace
@@ -1277,8 +1513,8 @@ room's lifetime is bounded.
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, and the explicit
 leave endpoint. Wants step 4 first, both so handlers are not rewritten twice and
-because the leave endpoint drops a ref from a member's connection set. About 185
-and 165.
+because the leave endpoint's rule reads the size of a member's connection set.
+About 185 and 165.
 
 tapir lands here rather than later because this step already rewrites all five
 command endpoints plus `/join` and `/events`, so describing them once costs less
@@ -1302,6 +1538,14 @@ One consequence worth stating: **the cookie path becomes `/rooms/:slug`** with a
 slug where a UUID was, which orphans any cookie minted before the cutover, at no
 cost since they are session cookies.
 
+A second one is a route hazard rather than a cookie one. **The page route stops
+being self-limiting.** `path(JavaUUID)` (`API.scala:66`) matches only a UUID, so
+it can sit anywhere in the `concat`; `path(Segment)` matches every single-segment
+path there will ever be, so from this step on it must come last, after
+`create-room` and after whatever static route step 8's bundled assets need. Today
+there is nothing to shadow, since every asset comes from a CDN, which is exactly
+why the trap is invisible until step 8 adds the first local one.
+
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
 and client types checked against the server contract. Waits on steps 1 and 6.
@@ -1319,10 +1563,11 @@ The two halves stay in one step because the recorded value is the candidate
 commit point for appending an entry, and because a settled estimate you cannot
 look back at afterwards is half a feature.
 
-The remaining Phase 4 items are deliberately **not** steps here: latched reveal,
-observer roles, re-vote refinement, results polish, the timer-based reveal and
-the idle indicator are product work built on the target rather than steps toward
-it. They stay in `docs/roadmap.md`, where what this design contributes is that
+The remaining Phase 4 items are deliberately **not** steps here: what is left of
+latched reveal, observer roles, re-vote refinement, results polish, the
+timer-based reveal and the idle indicator are product work built on the target
+rather than steps toward it. They stay in `docs/roadmap.md`, where what this
+design contributes is that
 most of them become a field plus a predicate rather than a protocol change. The
 timer reveal and the idle indicator are the exceptions, and the deferred table
 says why.
@@ -1348,8 +1593,10 @@ reasoning behind each move rather than as work outstanding.
   entirely, so what remains is slug ids, which become step 7. The "reject
   unknown slugs (404)" item goes with the store: see "No durable storage".
 - Phase 3 becomes step 8.
-- Phase 4's server-authoritative auto-reveal moves into step 1. Latched reveal
-  stays in Phase 4 as a deliberate behaviour change reviewed on its own.
+- Phase 4's server-authoritative auto-reveal moves into step 1, and it lands as a
+  latch rather than a standing predicate, which takes the auto-reveal half of
+  latched reveal with it: section 3 says why a re-derived predicate would let a
+  departure disclose the round.
 - Phase 5's abandoned-room GC is absorbed by step 4's idle timeout.
 - Phase 4 gains an entry for the facilitator-recorded round outcome, which does
   not exist there today and which step 9 pairs with round history.
@@ -1360,8 +1607,9 @@ reasoning behind each move rather than as work outstanding.
   Phase 4 alongside step 9. With history held only in memory it is the sole way
   to keep a session's rounds, which makes it part of the feature rather than a
   convenience beside it.
-- Latched reveal stays where it is and gains a note that it should ship with the
-  backlog's undo/re-hide, since latching removes today's accidental un-reveal.
+- Latched reveal is narrowed rather than moved. What stays in Phase 4 is whether a
+  revealed round should survive a `reVote`, and it gains a note that it should ship
+  with the backlog's undo/re-hide. Today's accidental un-reveal closes at step 1.
 - The backlog's per-user command sequencing item stays in the backlog, with the
   reasoning under "Deferred, with triggers".
 - The backlog's client-side connection-liveness watchdog stays in the backlog.

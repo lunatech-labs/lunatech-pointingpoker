@@ -152,8 +152,9 @@ roadmap item instead of leaving it here as stale history.
   if ever, a subsequent `Show`/`Clear` happens to arrive live.
 - **Resolution:** Scheduled as step 1 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  where every snapshot carries `votesRevealed` as a server-side derivation,
-  `round.revealed || everyMemberHasVoted`. Remove this entry when that lands.
+  where every snapshot carries `votesRevealed`: a stored flag set by `Show` and by
+  the vote that completes the round, rather than a predicate re-derived per publish.
+  Remove this entry when that lands.
   Phase 4's "server-authoritative auto-reveal" item in `docs/roadmap.md` is
   closed by the same change, since reveal becomes real backend logic rather than
   a client-only derivation.
