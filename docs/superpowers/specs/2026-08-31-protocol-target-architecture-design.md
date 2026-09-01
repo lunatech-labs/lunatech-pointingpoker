@@ -40,8 +40,7 @@ has to send *nothing* in order to stay open." With reconnects rare again,
 answering every connect with a snapshot is correct and cheap. A second
 justification appeared briefly while durability was under discussion (a
 revision column for optimistic concurrency) and did not survive the decision
-below that live state is not persisted: a config row in a single-writer process
-has no contention to be optimistic about. No consumer remains, so the version,
+below that there is no store at all. No consumer remains, so the version,
 the SSE `id:` field, the `Last-Event-ID` parsing and the four-case resolution
 table are all dropped. This follows the same rule that keeps `roomId` off the
 wire, and is a weaker statement than the one made about `issueLastEditBy` in
@@ -338,16 +337,16 @@ scale field when it lands rather than acquiring a rule of their own.
 transient non-state notification, such as a toast or a typing indicator. Every
 roadmap item checked turned out to be state, so nothing needs it yet.
 
-### 3. Room state and the store
+### 3. Room state
 
-The structural rule: **no connection handle appears in state that is persisted
-or persistable.** Today `RoomData.users` is a `List[User]` whose `ref` is the
-live SSE connection, which is the one part of the current design that cannot
+All state is in memory and nothing is persisted; the reasoning is under "No
+durable storage" below. The structural rule: **no connection handle appears in
+the room's own state.** Today `RoomData.users` is a `List[User]` whose `ref` is
+the live SSE connection, which is the one part of the current design that cannot
 carry forward. It splits three ways:
 
 ```
-RoomState   slug, createdAt, currentIssue   // the persisted part
-            round: Round                    // live, never persisted
+RoomState   slug, createdAt, currentIssue, round: Round, history: List[RoundRecord]
 Round       id, estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
 members     Map[UUID, Member]     // Member(name, token, lastSeq); lastSeq arrives at step 6
@@ -370,12 +369,12 @@ changes which rows show the shield icon. So `voted` on the wire is
 half of what the client does client-side today and has to move with the
 derivation.
 
-**"Persistable" is a property of fields, not of the whole record**, and saying
-otherwise would contradict "Not stored" below. `RoomState` holds both: `slug`,
-`createdAt` and `currentIssue` are written through to the row, while `round` is
-live only. What the structural rule actually forbids is a connection handle
-anywhere in this group, which is why `connections` is separate and why nothing
-here is a `List[User]`.
+`history` is the within-session round record, specified under "Round history"
+below. The rule forbids a connection handle anywhere in this group, which is why
+`connections` is separate and why nothing here is a `List[User]`. It survives the
+absence of a store: the reason to keep connection handles out of the room's state
+is that they are the one thing that cannot be reconstructed or reasoned about
+independently, not that something is going to be written to disk.
 
 `members` is room membership and survives the grace period, so the participant
 list does not flicker on a transient drop. `connections` exists solely to send
@@ -434,9 +433,8 @@ deliberately not carried. **The test for whether a field is safe to defer is
 whether its state is re-derived per session or accumulated.** Members are not
 persisted, so a `joinSeq` on `Member` added the day a display option wants it is
 correct from the next session onward: an in-memory field, an additive wire
-field, a client sort, nothing to backfill. Round history is the opposite case,
-where a value not recorded when a round completed is gone, which is why round
-history gets a schema below and this does not.
+field, a client sort, nothing to backfill. Nothing in this design is the
+opposite case, since nothing accumulates beyond the actor's life.
 
 Publishing reduces to:
 
@@ -460,49 +458,63 @@ no snapshot, but it stops being vacuous the moment `role` lands and the predicat
 filters to voting members: a room of observers would otherwise auto-reveal an
 empty round. The guard belongs where that change will land.
 
-**The store is small, and deliberately holds no live state.**
+#### No durable storage
 
-```sql
-rooms (slug PK, created_at, last_seen_at, first_joined_at NULL, current_issue)
-```
+An earlier draft of this document specified a Postgres addon, a `rooms` table,
+row TTLs, an expiry predicate and a sweeper actor. All of it is dropped. The
+analysis is kept as a deferred entry rather than repeated here, and this section
+records why the requirement it was built for turned out to be a different
+requirement.
 
-`rooms` is written on creation, on first join to set `first_joined_at`, on issue
-edit, and on the room actor's periodic tick to move `last_seen_at`. Tick
-granularity is deliberate: a TTL measured in days does not need per-publish
-precision, and it keeps writes off every command path, which is the point of a
-small store.
+**The requirement is slug stability, not state durability.** Teams pin one room
+URL in a recurring calendar invite and a channel message and reuse it for years;
+one team's room in this company ran for close to two. What that demands is that
+the URL always resolve to a working room. It does not demand that the room's
+*state* survive, and the product owner's account is that fresh state is actively
+preferred: a meeting starts on a blank issue, and last Thursday's issue would be
+noise. Nobody has ever noticed that a stale link silently creates a new room,
+because that behaviour is indistinguishable from the one they want.
 
-The `rounds` table is specified separately under "Round history" below, because
-it is not settled.
+So the known issue titled "an unrecognized `roomId` silently creates an empty
+room, with no bookmark continuity" describes the primary use case working. It
+stays open, reclassified rather than fixed.
 
-**Not stored: members, connections, the in-flight round, reveal state.**
-Participants are presence, and presence is defined by live connections. After a
-restart every connection is dead, so a restored participant list would show
-people present who are not connected, which is worse than an empty room that
-refills as browsers reconnect. Votes and reveal state hang off that list and
-inherit the answer. The cost of not persisting them is everyone clicking their
-card again, about ten seconds, rarely.
+**A store would have threatened that requirement rather than served it.** Any
+row TTL short enough to reclaim abandoned rooms is short enough that a team
+pausing for a reorg or a long holiday has its slug returned to the pool, and
+finds its pinned link opening another team's room. Auto-create has no such
+failure mode.
 
-This is a correction to an earlier draft that had the room's state row mirroring
-the snapshot. It does not, and the roadmap's own Phase 2 wording (slug, scale,
-created_at) always described a registry rather than a state mirror.
+**Round history is within-session, so it needs no table.** Its value is
+comparing an issue to the two before it during the same meeting, to see a trend
+without reopening tickets. Between sessions the ticketing system is the source of
+truth. So history is `RoomState.history`, alive as long as the actor is, which
+stop-after-idle already guarantees for the length of a meeting. Copy-and-export,
+promoted out of the backlog to sit with step 9, covers anyone who wants to keep
+it.
 
-#### Three lifetimes, not one
+**And the store never protected the thing anyone would miss.** Live state was
+already excluded from it by design, so a deploy mid-meeting destroys the round
+either way. What the table would have held is a slug, two timestamps and
+`current_issue`, and the paragraphs above remove the case for each.
 
-Adding a durable row created a question that did not previously exist, since
-today a room dies with its last member. Three lifetimes now need distinguishing,
-and conflating them is the mistake to avoid:
+What is genuinely given up: cross-session round history, which nobody has asked
+for, and the truthful 404, which retains a small residual value in telling
+someone they mistyped a slug instead of leaving them alone in a phantom room.
+Neither is worth a database. The trigger that would reopen this is in "Deferred,
+with triggers".
+
+#### Two lifetimes, not one
+
+Today a room dies with its last member, which conflates two things worth keeping
+apart:
 
 1. **The connection**, ending when the SSE stream does, with the grace period
    covering transient drops.
-2. **The actor**, which becomes only a working set. It stops after an idle
-   period, on the order of two hours, and rehydrates from its row on next
-   access. Stop-after-idle replaces today's stop-when-empty, which is what
-   closes the actor half of the abandoned-room GC issue (the row half is the TTLs
-   below) and what stops a room losing its in-session history to a coffee break.
-   This is worth doing whether or not there is a store to rehydrate from, and
-   lands at step 4 for that reason.
-3. **The row**, which is new.
+2. **The actor**, which stops after an idle period on the order of two hours
+   rather than when its last member leaves. That closes the abandoned-room GC
+   issue and stops a room losing its in-session history, now including its round
+   history, to a coffee break. It lands at step 4.
 
 **Idle means `connections` has been empty continuously for the idle period, and
 no message has arrived since the previous tick.** It is a duration rather than an
@@ -512,14 +524,13 @@ is older than the timeout. Connections present means never idle, whether or not
 anyone is clicking, and a short emptiness is survivable, which is the
 coffee-break requirement above.
 
-**The tick interval is the idle timeout itself**, so one timer does both this and
-the `last_seen_at` refresh below, and there is one configurable value rather than
-two. The consequence is that a room emptying just after a tick is not seen as
-idle until the tick after next, so the actual stop lands between one and two
-intervals after the last departure: **two to four hours**, on the figures above.
-Nothing distinguishes those outcomes, and one timer is easier to test than two.
-Splitting them, a single-shot idle timer plus a periodic write tick, buys an
-exact stop for a second timer and a fifth configuration value.
+**The tick interval is the idle timeout itself.** A room emptying just after a
+tick is therefore not seen as idle until the tick after next, so the actual stop
+lands between one and two intervals after the last departure: **two to four
+hours**, on the figures above. Nothing distinguishes those outcomes, and one
+periodic timer is easier to test than a single-shot one that has to be cancelled
+and rescheduled. The actor idle timeout is the only value this design makes
+configurable, following the existing `SseConfig` pattern.
 
 **The no-message term is what stops a join being lost.** `ConnectToRoom` is
 fire-and-forget (`RoomManager.scala:80-86`) and is sent from
@@ -532,7 +543,8 @@ until reload. The ordering that prevents it is causal rather than lucky, since
 `ValidateToken` (`API.scala:121-135`), and a mailbox is sequential, so any tick
 able to sit between them was itself preceded by that `ValidateToken` in the same
 interval. The term costs one field, and it lets a stray message defer an
-abandoned room's stop by one interval, which is nothing against a 90-day row TTL.
+abandoned room's stop by one interval, which costs a few kilobytes of memory for
+a couple of hours.
 
 **Message silence alone is the wrong criterion, though, and it is what an
 implementer reaches for.** Pekko's `setReceiveTimeout` fires on message silence,
@@ -548,109 +560,13 @@ A genuinely abandoned connection still resolves, so none of this depends on
 clients being polite: a suspended client's stream eventually fails to write and
 terminates into `ConnectionFailure`, which is already routed to `Leave`.
 
-**The `rooms` row expires on idle, not on a timer from creation and not on an
-explicit destroy.** Expiry from creation is wrong, because a team room used every
-sprint would die mid-life. Explicit destroy cannot be the mechanism, because
-there is no room ownership model to authorize it and nobody performs housekeeping
-on a tool like this; it is a reasonable convenience to add later, but not the
-reclamation path. So idle expiry, keyed on `last_seen_at`, with a generous
-configurable default. 90 days is proposed: a fortnightly team wants their room
-and its history to survive between sprints.
-
-**`last_seen_at` moves on the room actor's periodic tick, not on room activation
-alone and not on every publish.** Activation alone is not enough, and an earlier
-draft that said otherwise argued the staleness was "bounded by how long an actor
-can live, which is the idle window". That inverts the bound: the idle window
-limits how long an actor lives *after* activity stops, not how long it can live,
-so a room in continuous use keeps a frozen `last_seen_at` for as long as it stays
-in use. Once that value passes the idle TTL the read predicate calls a live room
-expired, which means a truthful-looking 404 for people trying to join it, its
-slug back in the allocation pool, and the sweeper deleting the row from under a
-running actor.
-
-The tick is the same one that tests for idleness, so no new machinery appears:
-each tick checks whether the room is idle and touches `last_seen_at` if it is
-not. Staleness is then bounded by the tick interval, which only has to sit well
-under the idle TTL, so the actor idle timeout is itself a fine value. Writes stay
-off every command path. **That bound is what makes the two mechanisms safe to run
-independently of each other**, which is the claim the original sentence was
-reaching for and did not support.
-
-**A room that never had a member expires much sooner, and this is a requirement
-rather than a refinement.** `POST /create-room` is unauthenticated and
-unthrottled, so without a short TTL for never-joined rooms a `create-room` loop
-inflates the table for the full idle period. `first_joined_at` being null after
-roughly 24 hours is enough to reclaim the row, which bounds spam damage to a
-day's worth. The broader gap, no rate limiting on room creation, stays open and
-is now more pressing than before; this bounds one symptom and does not close it,
-which is exactly how `docs/known-issues.md` already records the pattern.
-
-**How expiry is enforced: as a query predicate first, a sweep second.** These are
-two mechanisms with different jobs, and separating them is the point.
-
-Expiry is *semantic*, expressed in every read:
-
-```sql
--- A row is expired if it was never joined and is old, or has not been seen in the idle window.
-(first_joined_at IS NULL AND created_at < now() - :unjoined_ttl)
-  OR last_seen_at < now() - :idle_ttl
-```
-
-Slug lookup applies it directly, and creation applies it in the `DELETE` below,
-so an expired room is already absent (a truthful 404) and its slug is already
-back in the pool, without waiting for the sweeper. **Correctness therefore never
-depends on a background job**, which is the property worth having: a sweeper that
-fails, is misconfigured or was never deployed cannot cause a stale room to
-resolve or a slug to stay taken.
-
-**Creation therefore has to cope with the row still being there**, since the
-predicate frees a slug logically while the row physically holds the primary key.
-Room creation is a `DELETE FROM rooms WHERE slug = ? AND <the predicate above>`
-followed by the `INSERT`, in one transaction. If the row exists and is live the
-delete matches nothing, the insert raises a unique violation, and that is caught
-as an ordinary collision so generation retries.
-
-**Delete-then-insert rather than an upsert, and the reason is `rounds`.** An
-`ON CONFLICT DO UPDATE` keeps the row, so `ON DELETE CASCADE` never fires and the
-expired room's history stays attached to the slug for the next team allocated it
-to read. The delete makes that unrepresentable instead of leaving it to a second
-statement someone has to remember, which is the same reason `Participant` is a
-projection.
-
-The sweep is *hygiene only*: a timer in a single sweeper actor, on the order of
-hourly, issuing one `DELETE FROM rooms WHERE <the predicate above>` and logging
-the count. `rounds` follows via `ON DELETE CASCADE`. Its only job is stopping the
-table growing without bound, so its interval is a tuning question rather than a
-correctness one.
-
-Three alternatives were considered. **A Postgres-native TTL** does not exist;
-approximating it needs `pg_cron` or table partitioning, neither of which is worth
-assuming on a managed XXS_SML addon for one `DELETE`. **Sweeping only at server
-start** is insufficient on its own, since a process that runs for months would
-never reclaim anything, though the periodic sweep firing once immediately covers
-that case anyway. **Sweeping without the predicate**, relying on deletion alone,
-is the option to avoid: it makes room resolution and slug availability depend on
-a job having run recently, which is how you get a bookmark that works on Tuesday
-and not on Wednesday for reasons nobody can reproduce.
-
-Four values become configuration, following the existing `SseConfig` pattern of
-a typed config object loaded from `application.conf` with env overrides: the idle
-TTL, the never-joined TTL, the sweep interval, and the actor idle timeout, which
-is a different thing from the two row TTLs and should not be named as if it were
-the same. They arrive in two instalments rather than one, since the actor idle
-timeout, doubling as the tick interval, lands with the idle stop at step 4 while
-the three row and sweep values wait for the store at step 7.
-
 #### Slug allocation
 
 Generated slugs are three words, for example `nice-brave-otter`, allocated
-**unique among live rooms** by retrying generation when creation reports a
-collision, which is the unique violation described above rather than a separate
-lookup. "Live" means not matching the expiry predicate above, so a slug returns
-to the pool the moment its room expires rather than when the sweeper happens to
-delete the row.
-Uniqueness is scoped to live rooms rather than to all rooms ever, which is what
-keeps the namespace bounded by real usage instead of by total history.
+**unique among rooms currently in memory** by retrying generation on collision.
+There is no record of rooms that have stopped, so uniqueness is scoped to what is
+running rather than to all rooms ever, which keeps the namespace bounded by
+concurrent usage rather than by total history.
 
 The requirement driving this is not aesthetics. The slug exists so a person
 working with two teams on the same project can tell at a glance which room to
@@ -661,204 +577,72 @@ the memorable part is identical and the distinguishing part is not memorable.
 Three words over a few hundred each gives tens of millions of combinations,
 which is where the namespace size comes from instead.
 
-**Reuse is allowed, and the hazard is smaller than it first appears.** A
-recycled slug could in principle let a stale bookmark open a different team's
-room. For that to happen the bookmark must be older than the idle TTL, the exact
-triple must be regenerated by chance out of tens of millions against a live-room
-count in the tens, and the person must ignore an unfamiliar participant list and
-issue. The third condition is doing most of the work: landing in the wrong room
-is immediately visible rather than silent, which an earlier draft of this section
-got wrong. A quarantine period before a slug returns to the pool was considered
-and rejected as adding a column and a job for no measurable reduction in an
-already negligible risk.
+**A pinned slug is not reserved while its room is stopped, and that is the one
+hazard worth naming.** A team's room stops two to four hours after their meeting,
+so for most of the fortnight their slug is free and `create-room` could draw it
+for someone else. Their pinned link would then open a room another team is in.
+The chance is negligible, one specific triple out of tens of millions against a
+few hundred rooms generated a year, and landing in the wrong room announces
+itself immediately through an unfamiliar participant list. It is nonetheless a
+hazard that raw UUIDs did not have, and it is the price of memorable names.
 
-**Reallocating a slug destroys the prior room's history**, which is a property to
-keep rather than an unfortunate side effect. The other direction of the reuse
-hazard, the new occupants silently reading the previous team's rounds, is the one
-that is *not* self-announcing, so it is closed by construction in the
-delete-then-insert above rather than reasoned about here.
-
-**Never-reuse was considered and rejected**, having been the earlier proposal.
-It fails on room-creation spam: it would turn the existing unthrottled
-`create-room` endpoint into a way to permanently consume a finite,
-human-meaningful namespace, which is the same amplification pattern the 08-28
-design was caught by and documented. It also leaves someone who dislikes their
-generated name with no recourse, since there is no destroy action.
+Reserving slugs against it would need exactly the durable record this design
+declines to keep, which is the trade rather than an oversight.
 
 **Custom chosen names stay deferred.** The moment a user can claim `team-alpha`,
 "is this name taken forever" becomes unavoidable, and answering it requires
 knowing who owns a name. That needs an authentication and ownership model this
-app does not have, so it is out of scope for step 7 and should not be designed
-before that exists.
+app does not have, so it should not be designed before that exists.
 
-#### Choosing the store
+#### What a restart costs
 
-**Postgres rather than SQLite, and the reason is the platform, not the data.**
-By workload SQLite wins easily: two tables, a handful of writes per meeting, one
-process, one writer. It loses because Clever Cloud runs immutable disposable
-VMs, so a redeploy discards the instance filesystem and any SQLite file on it.
-The persistent alternative for file semantics, an FS Bucket, is documented as
-the wrong place for a SQLite database, carries 24-hour backups with 72-hour
-retention, and is unavailable to Docker applications, which is likely the
-runtime this app needs (see "Accepted costs"). Postgres as a managed addon
-sidesteps all of it: a deploy replacing the instance does not touch the data.
-XXS_SML instances are routine across this company's projects, so this is a
-provisioning request rather than a cost question.
+Nothing is persisted, so a deploy or a crash takes every room with it: presence,
+the round, the current issue and the session's round history. Meetings here run
+30 to 60 minutes and deploys are manual, so the mitigation is scheduling rather
+than engineering, which promotes Phase 5's restart-warning and maintenance-mode
+item from a nicety to the actual answer. Room URLs are unaffected, since the next
+visit recreates the room.
 
-**If the deployment target ever changes to a host with a real persistent volume,
-SQLite becomes the better answer for this workload**, and the persistence layer
-is deliberately thin enough that revisiting is about a day's work.
-
-**Viable fallback: a whole-blob JSON snapshot in Cellar.** Read once at startup,
-written by a periodic dump, with memory authoritative in between. An earlier
-draft dismissed this and the dismissal was half wrong, so the reasoning is
-recorded properly.
-
-The corruption hazard that rules out SQLite over a network mount does not apply,
-because it comes from POSIX advisory locking during concurrent in-place mutation
-and this pattern has neither. The safety comes from the write pattern rather
-than from JSON being a more robust format than a database file, which it is not:
-Cellar is S3-compatible, so a PUT is atomic per object and a reader sees either
-the whole previous blob or the whole new one, never a torn file. That is also
-why Cellar rather than an FS Bucket, which offers file semantics over a network
-mount where an in-place write can tear, and which Docker applications cannot use
-anyway.
-
-Crash exposure is bounded by dump frequency rather than left open. The blob is
-kilobytes to low megabytes, so a dump every five minutes costs a few hundred
-PUTs a day and caps loss at five minutes of issue text plus at most one
-completed round. That matters because it removes any dependence on the shutdown
-path: whether Clever Cloud's SIGTERM-to-SIGKILL window reliably leaves time for
-a blocking PUT from a Pekko `CoordinatedShutdown` task is unmeasured, and with
-periodic dumps it never needs measuring. A flush on shutdown stays worth
-attempting, as best effort only.
-
-Against Postgres it costs hand-rolled serialization, the dump scheduler, and
-tolerance for reading an older blob shape. In exchange, schema evolution is free
-where Postgres wants a migration tool, and timestamped keys give rotating
-point-in-time snapshots more cheaply than anyone would bother configuring for a
-database. Its one structural limit is that a blob must be loaded whole, so
-history is bounded by memory and cannot be queried without holding all of it. At
-this tool's volume that is fine for years, and it is the thing that would
-eventually break.
-
-**Not chosen because it does not solve the problem it appears to solve.** Cellar
-is an addon too, so if addon provisioning is the blocker then both options are
-blocked, and if it is not then Postgres is available and is the better fit for
-the one table that grows. Its triggers are addon access being refused for a
-database specifically, or the deployment target changing.
-
-A room actor loads its row on first access for a slug, so an absent row is
-finally distinguishable from a never-used slug. That closes the
-"unrecognized `roomId` silently creates an empty room" known issue.
-
-The abandoned-room GC issue closes in two halves rather than at one step, and
-the halves are worth keeping apart: **accumulating actors** are fixed by the
-stop-after-idle change at step 4, and **accumulating rows** by the never-joined
-and idle TTLs at step 7. The first is useful with no store at all, which is why
-it is not deferred to the second.
-
-An auth `sessions` table is **not** in the target. It would only be needed if
-the cookie outlived the browser, and since `localStorage` already remembers the
-user's name, the payoff is thin. The cookie stays a session cookie exactly as
+An auth `sessions` table is **not** in the target either, for a separate reason.
+It would only be needed if the cookie outlived the browser, and since
+`localStorage` already remembers the user's name, the payoff is thin. The cookie
+stays a session cookie exactly as
 `docs/superpowers/specs/2026-08-20-session-identity-design.md` designed it.
 
-#### If durable storage is unavailable
 
-Recorded because the answer is not obvious and would otherwise be re-derived
-under time pressure. Nothing in steps 0 through 6 touches the store, so this
-decides nothing until step 7: raise the provisioning request now and leave the
-contingency unused unless it is refused.
+#### Round history, within the session
 
-**What is genuinely lost.** Bookmark continuity, and with it the truthful 404.
-An absent map entry cannot distinguish "this slug never existed" from "this room
-existed and everyone left", so the only way a bookmarked link appears to work is
-today's silent auto-create, handing back the right name and none of the state.
-That known issue then stays open by necessity rather than by choice. Also lost
-is any history beyond the process lifetime.
+`RoomState.history` is a list of completed rounds, held in memory for as long as
+the actor lives and gone when it stops. That is the whole of it, and it is enough
+because the value is comparing an issue to the two before it during the same
+meeting: seeing a trend, or checking what the room settled on for something of
+similar size, without reopening tickets. Across sessions the ticketing system is
+the source of truth.
 
-**What is already recovered, at step 4 rather than here.** History would
-otherwise be scoped not to a session but to *continuous occupancy*, because
-`ConfirmLeave` stops the actor when the last member's grace period expires and
-that period is six seconds: a room emptying for a coffee break takes its history
-with it. Stop-after-idle fixes that, and it lands at step 4 regardless of whether
-a store ever arrives, so **this contingency requires no extra work for it.** With
-a store it is the working-set eviction the "three lifetimes" section describes;
-without one it is the same idle stop with nothing to rehydrate from. It buys
-survival across temporary emptiness, history for a whole meeting, slug stability
-while idle, and the actor half of the abandoned-room GC issue, losing only
-survival across a process restart.
-
-That is worth stating in this section rather than only at step 4, because the
-reasoning was originally found here, under the assumption that storage might be
-refused. It survived the assumption being lifted, which is why it moved into the
-ordered path instead of staying filed as contingency work.
-
-**What else follows.** A deploy becomes destructive rather than merely
-disruptive, since presence, the round, the room and its history all go at once.
-That promotes Phase 5's restart-warning and maintenance-mode item from a nicety
-to the actual mitigation, alongside a deploy-window habit. Step 9 degrades
-rather than dying, and the surviving half is the better one: the
-facilitator-recorded outcome is a command plus a snapshot field and needs no
-storage at all, while only the historical table does. Export then stops being a
-convenience and becomes the durability mechanism, which for an internal tool puts
-the data where people actually look for it afterwards.
-
-**Two non-consequences worth knowing.** Slug allocation is unaffected, since
-uniqueness is defined among live rooms and live rooms are in memory; after a
-restart every slug is free, which is consistent rather than broken. And the
-instance filesystem is not a partial answer, because it is discarded on exactly
-the redeploy this protects against.
-
-**Rejected even under this constraint:** having the facilitator's browser hold
-the room's durable content and re-assert it on creation. It works, and it makes
-durability depend on one person's `localStorage` surviving, which is not a
-durability story worth adopting.
-
-#### Round history: a starting point, not a settled design
-
-Recorded here so the thinking is not lost, and explicitly **not** specified to
-the level of the rest of this document. It lands at step 9 and wants its own
-discussion first. The data shape below is expected to be roughly stable; the
-trigger is open.
-
-```sql
-rounds (
-  id PK, room_slug,
-  issue text,
-  recorded_value text NULL,   -- what the room settled on
-  distribution jsonb,         -- [[score, count], ...] as the client already shapes it
-  completed_at
-)
+```
+RoundRecord   issue, recordedValue: Option[String], distribution: List[(String, Int)], completedAt
 ```
 
-Three properties make this preferable to storing per-participant estimates:
+Three things about the shape. **No personal data**, since per-participant
+estimates are rarely the interesting part of a retrospective view and their
+absence keeps retention an ordinary question. **The distribution matches code
+that already exists**, because `updateSummary` produces `Object.entries(tally)`,
+which is exactly `[(score, count)]`, so a history view reuses the live summary's
+rendering, and later views (highest and lowest, majority, most voted) are
+additive. And **`recordedValue` is a product gap rather than a storage choice**:
+teams often resolve a split by talking it out rather than re-voting, and the app
+has no concept of a settled estimate at all, so it implies a facilitator command
+and a snapshot field. That is a new Phase 4 roadmap entry, and it fits the
+property this architecture is built on, a feature being a field plus a command
+with no new branch in `applySnapshot`.
 
-**No personal data.** Retention stays ordinary housekeeping rather than becoming
-a data-protection question, and both step 7 and step 9 keep the store free of
-personal data. Participant names are rarely the interesting part of a
-retrospective view.
+**Open: what completes a round.** The candidate is that recording a value is the
+commit point, so one action is both the product capability and the trigger, and a
+round abandoned without a recorded value appends nothing. The alternative is that
+every `clear` appends an entry with no outcome. Cheaper to change than it was
+when this was a table, since the shape is in memory and lasts an hour, but still
+worth deciding before step 9 rather than during it.
 
-**`recorded_value` is a product gap, not just a storage choice.** Teams often
-resolve a split by talking it out rather than by re-voting, and the app today has
-no concept of a settled estimate at all: a round simply ends when someone clears.
-So this implies a facilitator command and a snapshot field, which is a new
-roadmap entry under Phase 4 rather than part of the history item. It also fits
-the property this architecture is built on: a feature is a field plus a command,
-and `applySnapshot` grows no branch.
-
-**The distribution matches code that already exists.** `updateSummary` produces
-`Object.entries(tally)`, which is exactly `[(score, count)]`, so the stored
-distribution and the live vote summary are the same structure and a history view
-can reuse the rendering. It is what separates "we settled on 5" from "we settled
-on 5 despite a 3-to-8 spread", and it makes later views (highest and lowest,
-majority, most voted) additive rather than requiring a migration.
-
-**Open: what completes a round.** The candidate is that recording a value is
-itself the commit point, so one action is both the product capability and the
-trigger, and a round abandoned without a recorded value writes nothing. The
-alternative is that every `clear` writes a row with a null outcome, which risks
-filling the table with rounds nobody resolved. Not decided.
 
 ### 4. Identity and the write path
 
@@ -1056,11 +840,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   because the node build must run before sbt packages the assets that
   `build.sbt` already ships via `Universal / mappings`. `DockerPlugin` is
   already enabled. Verify what is available in Clever Cloud's sbt build image
-  before assuming a pre-build hook suffices. This interacts with the storage
-  decision above, since FS Buckets are unavailable to Docker applications.
-- **Postgres in tests**, via a `services:` container in the CI job or an
-  embedded Postgres for the JVM, where SQLite would have given an in-memory
-  database for free.
+  before assuming a pre-build hook suffices.
+- **A restart is destructive**, since nothing is persisted. Deploy outside
+  meeting hours and see "What a restart costs".
 
 ## Deferred, with triggers
 
@@ -1072,16 +854,18 @@ arrives.
 | Long-poll fallback transport (analysed as option 6 under 08-28's "Approaches considered") | Proxy-hostile networks recurring at more than one customer. Still the first thing to try, ahead of short polling, subject to the two caveats below the table. |
 | Elixir and Phoenix | The same trigger. If automatic transport downgrade becomes a product requirement, Channels supply it and hand-building it three times is worse than learning Elixir once. |
 | WebSocket | Needing low-latency bidirectional interaction at many events per second. |
-| Voting scale | Someone asking for a non-fibonacci scale. |
+| Voting scale | Someone asking for a non-fibonacci scale. Moved to the end of the backlog: it was a nice-to-have nobody requested. |
 | Custom chosen room names | An authentication and ownership model existing, without which "is this name taken forever" has no answer. |
-| An explicit destroy-room action | Wanted as a convenience, never as the reclamation mechanism. Idle expiry is that. |
-| A whole-blob JSON snapshot in Cellar instead of Postgres | Addon access being refused for a database specifically, or the deployment target changing. Sound but solves nothing Postgres does not, since Cellar is an addon too. |
-| Observer roles, latched reveal, idle indicator | Phase 4, unchanged. Each is a field plus a predicate. |
+| An explicit destroy-room action | Wanted as a convenience. Nothing needs reclaiming now that rooms are memory-only. |
+| Durable storage of any kind (a Postgres `rooms` table, or a whole-blob JSON snapshot in Cellar) | Someone wanting round history across sessions, or a truthful 404 becoming worth a database. See "No durable storage". A prior draft specified the Postgres version in full, including row TTLs, an expiry predicate and a sweeper; that analysis is in this file's history if it is ever needed. Between the two, Cellar is the simpler starting point on complexity grounds, since it needs no migration tool, no SQL and no database in CI. |
+| Observer roles, latched reveal | Phase 4, unchanged. Both are a field plus a predicate, and they share one: an observer changes what "everyone has voted" means. Latching also removes today's accidental un-reveal, when a joiner flips the derivation back, so pair it with the backlog's undo/re-hide. |
+| Idle indicator | Phase 5. Unlike the two above it is not only a field: it needs server-side activity tracking and a timer, and it publishes on a transition nobody commanded. |
+| Timer-based fallback reveal | Phase 4, but the least settled thing in it. Four open product and UI decisions, not a field: whether it runs for every round, whether the facilitator starts it, the duration and whether it is fixed or per room, and whether a running countdown can be cancelled when discussion breaks out. The countdown is also the first roadmap item needing a UI surface of its own. |
 | Persisting live round state | A zero-downtime deploy requirement, already deferred to its own spec under Phase 5. Until then, a restart warning and deploying outside meeting hours. |
 | Client-assisted round recovery | Someone complaining about a restart mid-meeting. Each client re-asserts its own vote on reconnect and the round rebuilds from whoever returns. Needs a round identity on the snapshot so a stale vote cannot land in a new round. |
 | Durable auth sessions | Wanting identity to survive a browser close. `localStorage` already covers name pre-fill. |
 | Multi-instance operation | Out of scope by decision; single process throughout. |
-| Event-sourcing the room | Never, on the same grounds that pick snapshots for the wire. Round history is a product feature with its own schema, not a projection anyone needs to rebuild. |
+| Event-sourcing the room | Never, on the same grounds that pick snapshots for the wire. Round history is a product feature with its own shape, not a projection anyone needs to rebuild. |
 | Rate limiting | Unscheduled and broader than any one symptom. |
 
 **Two caveats on the long-poll row**, since it is the only deferred item this
@@ -1105,6 +889,14 @@ of what the probe is being kept for.
 
 Nine steps. The numbers are labels rather than a queue; each states what it
 actually waits on. Line counts are rough.
+
+**Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
+a usability improvement, and 8 and 9 are product work whose case is the
+roadmap's rather than this document's. That matters because the roadmap is
+projections under an agile process rather than commitments, so argument 7 above
+carries exactly as much weight as the roadmap does on the day someone reads it.
+Stopping after step 6 leaves a correct app with no open defect except the two
+recorded as staying open.
 
 **Step 0. Characterization harness.** The stub buffering proxy, the browser
 harness, and Playwright cases pinning today's behaviour. Waits on nothing.
@@ -1142,11 +934,10 @@ stop-when-empty with an idle timeout. Waits on step 1. About 140 changed and 100
 of tests.
 
 The split itself is a pure refactor; **the idle timeout is the one behaviour
-change in this step** and is here rather than at step 7 because it is worth
-having with no store at all: it stops a room dying the moment its last member's
-grace period expires, six seconds into a coffee break, and it closes the actor
-half of the abandoned-room GC issue. Section 3 has the reasoning, including what
-"idle" means and why message silence is not it.
+change in this step**. It stops a room dying the moment its last member's grace
+period expires, six seconds into a coffee break, taking the session's round
+history with it, and it closes the abandoned-room GC issue. Section 3 has the
+reasoning, including what "idle" means and why message silence is not it.
 
 The idle timeout also deletes the stop path it replaces, which is worth claiming
 because this step's diff is otherwise additive. `ConfirmLeave` no longer stops
@@ -1175,33 +966,19 @@ preference: this step already rewrites all five command endpoints, so describing
 them once with tapir costs less than describing them twice. Closes Phase 1's
 outstanding item, the command-ordering regression and the slow-departure issue.
 
-**Step 7. Durable room registry.** The Postgres addon, the `rooms` table, slug
-ids replacing raw UUIDs, a real 404 for an unknown slug, and rooms loading their
-row on first access, with expiry as a query predicate plus a sweeper actor. The
-room actor's tick, which exists from step 4 to decide idleness, gains its
-`last_seen_at` write here, since before this step there is no row to write to.
-Waits on steps 4 and 6. About 180 and 150. This is Phase 2 with scale removed.
-Closes the unrecognized-`roomId` issue and the row half of abandoned-room GC, the
-actor half having closed at step 4.
+**Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
+`create-room` and unique among the rooms currently in memory. Waits on steps 4
+and 6. About 60 and 50. This is what remains of Phase 2 once voting scale moves
+to the backlog and durable storage is dropped.
 
-**It waits on step 6 for the same reason tapir lands there**, which is worth
-stating because the Postgres addon may well be provisioned before step 6 is
-ready. Slugs change every route matcher from `path("rooms" / JavaUUID / ...)` to
-a segment, so landing this first means step 6 re-describes endpoints this step
-just re-typed, where the other order changes a path type in a tapir description
-and nothing else. An addon sitting unused for one step costs nothing.
+**It waits on step 6 for the same reason tapir lands there.** Slugs change every
+route matcher from `path("rooms" / JavaUUID / ...)` to a segment, so landing this
+first means step 6 re-describes endpoints this step just re-typed, where the
+other order changes a path type in a tapir description and nothing else.
 
-Two rules this step needs and does not get from section 3. **The slug resolves
-before the cookie**, so an unknown or expired slug is a 404 rather than today's
-401 (`API.scala:105-120` checks the cookie before consulting the room at all).
-Slug existence is not a secret, since `/join` is unauthenticated for any slug,
-so there is nothing gained by preferring 401, and a stale bookmark currently gets
-told its session ended when the truth is that the room is gone. And **the cookie
-path becomes `/rooms/:slug`**, which orphans any cookie minted before the
-cutover, at no cost since they are session cookies. A cookie surviving to a
-reallocated slug would need a 90-day idle expiry inside one browser session, and
-even then the new room holds no such session, so it resolves as `Unresolved`,
-401s, and the client re-joins.
+One consequence worth stating: **the cookie path becomes `/rooms/:slug`**, which
+orphans any cookie minted before the cutover, at no cost since they are session
+cookies.
 
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
@@ -1210,20 +987,22 @@ Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
 
 **Step 9. Recorded value and round history.** The facilitator command that
-records what the room settled on, its snapshot field, the `rounds` table, and the
-history view. Waits on step 7 for the store and step 8 for the UI. **Designed
-only to the "starting point" level in section 3 and wanting its own discussion
-before implementation**, principally over what completes a round.
+records what the room settled on, its snapshot field, `RoomState.history`, and
+the history view. Waits on step 8 for the UI. Wants its own discussion first over
+what completes a round, though the shape is in memory and lasts an hour, so that
+question is cheaper to get wrong than it was when it decided a schema.
 
 The two halves stay in one step because the recorded value is the candidate
-commit point for the table, and because a settled estimate you cannot look back
-at afterwards is half a feature.
+commit point for appending an entry, and because a settled estimate you cannot
+look back at afterwards is half a feature.
 
 The remaining Phase 4 items are deliberately **not** steps here: latched reveal,
-observer roles, re-vote refinement, results polish and the idle indicator are
-product work built on the target rather than steps toward it. They stay in
-`docs/roadmap.md`, where what this design contributes is that each becomes a
-field plus a predicate rather than a protocol change.
+observer roles, re-vote refinement, results polish, the timer-based reveal and
+the idle indicator are product work built on the target rather than steps toward
+it. They stay in `docs/roadmap.md`, where what this design contributes is that
+most of them become a field plus a predicate rather than a protocol change. The
+timer reveal and the idle indicator are the exceptions, and the deferred table
+says why.
 
 ## Disposition of existing specs
 
@@ -1239,33 +1018,35 @@ field plus a predicate rather than a protocol change.
 ## Roadmap changes
 
 - Phase 1's fourth item (ask-pattern command endpoints) becomes step 6.
-- Phase 2 loses voting scale, deferred with the reasoning recorded above, and
-  the rest becomes step 7.
+- Phase 2 loses voting scale to the end of the backlog and its durable store
+  entirely, so what remains is slug ids, which become step 7. The "reject
+  unknown slugs (404)" item goes with the store: see "No durable storage".
 - Phase 3 becomes step 8.
 - Phase 4's server-authoritative auto-reveal moves into step 1. Latched reveal
   stays in Phase 4 as a deliberate behaviour change reviewed on its own.
-- Phase 5's abandoned-room GC is absorbed by step 4's actor idle timeout and
-  step 7's never-joined and idle TTLs.
+- Phase 5's abandoned-room GC is absorbed by step 4's idle timeout.
 - Phase 4 gains an entry for the facilitator-recorded round outcome, which does
   not exist there today and which step 9 pairs with round history.
 - Phase 4's existing round-history item becomes step 9, paired with that new
   entry rather than sitting alongside it. Without this the roadmap ends up
   carrying two round-history entries.
-- The backlog's "copy/export round history at end of session" stays in the
-  backlog, with one note: under "If durable storage is unavailable" it stops
-  being a convenience and becomes the durability mechanism, so a refusal on the
-  Postgres addon promotes it.
+- The backlog's "copy/export round history at end of session" is promoted to
+  Phase 4 alongside step 9. With history held only in memory it is the sole way
+  to keep a session's rounds, which makes it part of the feature rather than a
+  convenience beside it.
+- Latched reveal stays where it is and gains a note that it should ship with the
+  backlog's undo/re-hide, since latching removes today's accidental un-reveal.
 - The backlog's per-user command sequencing item becomes step 6.
 - The backlog's client-side connection-liveness watchdog stays in the backlog.
 
 ## Known issues disposition
 
-Seven of the eight open entries close on this path.
+Six of the eight open entries close on this path.
 
 | Entry | Closed by |
 | --- | --- |
-| Unrecognized `roomId` silently creates an empty room | Step 7 |
-| No GC for abandoned or never-joined rooms | Steps 4 and 7 (actors, then rows) |
+| Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it costs is telling someone they mistyped a slug. |
+| No GC for abandoned or never-joined rooms | Step 4 |
 | A `/join` with no follow-up `/events` leaks a pending session | Step 5 |
 | SSE reverse-proxy buffering is undocumented | Step 1 |
 | A deliberate tab close is as slow to announce as a transient reconnect | Step 6 |
@@ -1293,20 +1074,15 @@ recorded only inside a spec about to be marked superseded:
 1. **Clever Cloud's sbt build image.** Whether it can run a node build via a
    pre-build hook, or whether step 8 forces the Docker runtime. Answer before
    step 8, not before step 1.
-2. **Provisioning a Postgres addon**, which needs someone with administrative
-   credentials on the Clever Cloud organization. No longer a design question:
-   XXS_SML instances are already routine across this company's projects and the
-   data volume here is trivial. Raise the request early, since a refusal is what
-   activates "If durable storage is unavailable".
-3. **Whether the probe earns its 682 lines** over the longer term. Retained
+2. **Whether the probe earns its 682 lines** over the longer term. Retained
    deliberately for now on option-value grounds, and on one concrete unanswered
    question: probes F and G are what would establish whether the deferred
    long-poll fallback works at all, and they have never run against a hostile
    appliance. Revisit if a year passes with no second incident.
-4. **What completes a round**, and therefore what writes a `rounds` row. The
-   candidate and its alternative are in section 3. Answer before step 9; it does
-   not block anything earlier.
-5. **Wordlist size and source for slug generation**, and the fallback when
+3. **What completes a round**, and therefore what appends to
+   `RoomState.history`. The candidate and its alternative are in section 3.
+   Answer before step 9; it does not block anything earlier.
+4. **Wordlist size and source for slug generation**, and the fallback when
    generation cannot find a free triple. Answer at step 7. The fallback should
    log loudly, since exhaustion means either genuine scale or an unthrottled
    `create-room` being abused.
