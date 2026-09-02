@@ -87,6 +87,37 @@ This app is going through a multi-PR modernization effort. See
 [`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
 found along the way that are not yet scheduled or fixed.
 
+### Testing
+
+The Scala suite:
+
+```
+sbt test
+```
+
+There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
+stub buffering proxy that reproduces the response-scanning appliance a customer reported,
+and a harness that starts the packaged app. Both need the app staged first:
+
+```
+sbt "; coverageOff; Universal/stage"
+npm test
+```
+
+`coverageOff` matters: `sbt qa` leaves scoverage-instrumented classes behind, and staging
+without it packages them.
+
+The stub also runs standalone, so the failure can be reproduced by hand against an app you
+are already running:
+
+```
+UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
+```
+
+It prints its own address; point a browser at that instead of the app. Buffering can be
+switched at runtime with `/__stub/buffering?mode=on` and `?mode=off`, which affects later
+requests rather than ones already in flight.
+
 ### Running locally
 
 `SECURE_COOKIES` defaults to `true`, which marks the session cookie `Secure` (the
