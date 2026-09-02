@@ -97,7 +97,7 @@ sbt test
 
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
-and a harness that starts the packaged app. Both need the app staged first:
+and a harness that starts the packaged app. The reproduction half needs the app staged first:
 
 ```
 sbt "; coverageOff; Universal/stage"
@@ -107,10 +107,12 @@ npm test
 `coverageOff` matters: `sbt qa` leaves scoverage-instrumented classes behind, and staging
 without it packages them.
 
-The stub also runs standalone, so the failure can be reproduced by hand against an app you
-are already running:
+The stub also runs standalone, so the failure can be reproduced by hand. Start the app with
+plain-HTTP cookies, or the room will fail to populate for the unrelated reason in "Running
+locally" below and the reproduction will look successful when it is not:
 
 ```
+SECURE_COOKIES=false sbt run
 UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
 ```
 

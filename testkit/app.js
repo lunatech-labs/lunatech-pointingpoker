@@ -79,7 +79,7 @@ export async function startApp({ port, env = {} } = {}) {
 
   const stop = async () => {
     if (exited) return
-    child.kill('SIGTERM')
+    if (!child.kill('SIGTERM')) return
     const hard = setTimeout(() => child.kill('SIGKILL'), 2000)
     await once(child, 'exit')
     clearTimeout(hard)

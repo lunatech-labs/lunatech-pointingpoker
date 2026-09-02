@@ -4,7 +4,7 @@ import http from 'node:http'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
 
-test('an SSE stream through a buffering proxy delivers nothing and dies at the deadline', async t => {
+test('an SSE stream through a buffering proxy delivers nothing and dies at the deadline', { timeout: 30_000 }, async t => {
   const app = await startApp()
   t.after(() => app.stop())
   const stub = await createStub({ upstream: app.baseUrl, buffering: true })
@@ -29,6 +29,26 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
     .map(value => value.split(';')[0])
     .join('; ')
   assert.match(cookie, /^session=/)
+
+  // Without this the test cannot tell "the proxy buffered it" from "the app sent nothing".
+  // The control stream stays open for the rest of the test so the member never leaves.
+  stub.setBuffering(false)
+  const control = http.get(`${stub.baseUrl}/rooms/${roomId}/events`, { headers: { cookie } })
+  t.after(() => control.destroy())
+  const streamed = await new Promise(resolve => {
+    const started = Date.now()
+    control.on('response', response => {
+      response.once('data', chunk => resolve({ bytes: chunk.length, ms: Date.now() - started }))
+      response.on('error', () => resolve({ bytes: 0, ms: Date.now() - started }))
+    })
+    control.on('error', () => resolve({ bytes: 0, ms: Date.now() - started }))
+  })
+  assert.ok(streamed.bytes > 0, 'the app must stream something once the proxy is out of the way')
+  assert.ok(
+    streamed.ms < stub.deadlineMs,
+    `first byte at ${streamed.ms}ms, which is not inside the ${stub.deadlineMs}ms deadline`
+  )
+  stub.setBuffering(true)
 
   const started = Date.now()
   const result = await new Promise(resolve => {
