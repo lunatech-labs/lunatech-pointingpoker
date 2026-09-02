@@ -633,9 +633,22 @@ export async function startApp({ port, env = {} } = {}) {
   const output = () => Buffer.concat(captured).toString()
 
   let exited = null
+  let spawnError = null
   child.on('exit', (code, signal) => {
     exited = { code, signal }
   })
+  // A launcher that exists but cannot be run emits 'error' and may never emit 'exit', so
+  // without this both the readiness loop and stop() would hang on a process that never was.
+  child.on('error', error => {
+    spawnError = error
+    exited ??= { code: null, signal: null }
+  })
+
+  const failure = () => {
+    if (spawnError) return `${launcher} could not be spawned: ${spawnError.message}`
+    if (exited) return `the app exited before it became ready (code ${exited.code}, signal ${exited.signal})`
+    return null
+  }
 
   const stop = async () => {
     if (exited) return
@@ -647,7 +660,7 @@ export async function startApp({ port, env = {} } = {}) {
 
   const baseUrl = `http://localhost:${chosen}`
   try {
-    await waitForReady(baseUrl, () => exited)
+    await waitForReady(baseUrl, failure)
   } catch (reason) {
     // A config error looks identical to a slow machine without the captured output.
     const log = output()
@@ -657,10 +670,11 @@ export async function startApp({ port, env = {} } = {}) {
   return { baseUrl, port: chosen, output, stop }
 }
 
-async function waitForReady(baseUrl, exited) {
+async function waitForReady(baseUrl, failure) {
   const deadline = Date.now() + READY_TIMEOUT_MS
   while (Date.now() < deadline) {
-    if (exited()) throw new Error('the app exited before it became ready')
+    const reason = failure()
+    if (reason) throw new Error(reason)
     try {
       const response = await fetch(baseUrl, { signal: AbortSignal.timeout(1000) })
       if (response.ok) {
