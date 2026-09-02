@@ -43,7 +43,7 @@ sentence that bundles both.
 In: the stub, the harness, the Playwright fixtures, `package.json`, the
 `node --test` plumbing, CI steps gating everything here, the stub unit tests,
 the reproduction, and the browser suite step 0 of the target architecture
-specifies: a smoke case, five behavioural cases, and two `test.fail()`
+specifies: a smoke case, five behavioural cases, and four `test.fail()`
 characterization cases.
 
 Out: cases for behaviour that does not exist yet, which arrive with the step
@@ -281,11 +281,16 @@ and gives the behavioural cases something known-good to build on.
 
 **`e2e/room.spec.js`**, the behavioural cases step 0 pins: two browsers
 exchanging votes, reveal with a straggler, reconnect survival, the participant
-list on join and leave, and the issue-input guard. Two more sit beside them
-marked `test.fail()` and annotated with the step that fixes each, the duplicate
-participants on reconnect at step 1 and the non-voter tally at step 3, so the
-suite is green the day it lands and CI reports the annotation as stale the
-moment a fix arrives.
+list on join and leave, and the issue-input guard. Four more sit beside them
+marked `test.fail()` and annotated with the step that fixes each: the duplicate
+participants on reconnect, a Show surviving someone joining, and an
+auto-revealed room staying revealed when a straggler arrives, all three at step
+1, plus the non-voter tally at step 3. So the suite is green the day it lands
+and CI reports the annotation as stale the moment a fix arrives.
+
+The three step 1 cases pin the *intended* behaviour rather than today's, which
+for the two reveal cases means asserting the opposite of what `allVoted()`
+currently does on a join.
 
 **What none of this proves.** The stub is built to the 08-28 spec's description
 of the customer's proxy, so a green suite shows the design answers the modelled

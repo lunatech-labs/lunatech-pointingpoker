@@ -345,7 +345,10 @@ snapshot goes from roughly 800 bytes at the first round to roughly 2.4KB at the
 tenth. Across a whole meeting that is about 100KB more per participant, once. The
 worst case worth naming is twenty participants and ten rounds, at roughly 4KB a
 frame. Construction is unaffected, since the list is shared by reference across
-every per-member snapshot and only serialization pays per recipient.
+every per-member snapshot and only serialization pays per recipient. That makes
+`history` the one snapshot field not built per recipient, which is licensed by
+section 3's invariant that only a revealed round enters it: once every
+participant has seen every estimate there is nothing left to redact.
 
 **Reverses if history ever outgrows the participant list**, which on these numbers
 means somewhere past twenty rounds in one session. Then it moves to a
@@ -442,6 +445,7 @@ carry forward. It splits three ways, and the block below shows the whole of
 
 ```
 RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
+            // slug holds the room's UUID until step 7 generates a name
 Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
@@ -471,10 +475,8 @@ which is what lets `ValidateToken` become one map lookup. Today it takes two
 `users` by token, the scan existing only because `joinUser` consumes the pending
 entry on promotion so the token's last record is on the `User`. Retaining
 sessions past promotion removes that reason, so the scan goes and `Member` needs
-no token. It also makes a disagreement unrepresentable, where today the same
-token could sit in both maps against different user ids with the pending one
-silently winning. Retention is a precondition for this shape rather than a
-companion to it, which is why step 4 waits on step 5.
+no token. Retention is a precondition for this shape rather than a companion to
+it, which is why step 4 waits on step 5.
 
 The name is deliberately in both `Session` and `Member`: a session exists before
 there is a member, which is why 08-20 put it on `PendingSession`.
@@ -643,10 +645,13 @@ redaction is per recipient identity rather than per connection.
 **`publish` iterates `connections`, not `members`, so `RoomSnapshot.of` has to
 tolerate a recipient who is not a member.** The two maps are momentarily out of
 step in one direction: section 4's leave endpoint removes the member while that
-tab's stream is still open, since a ref only ever leaves where the ref is in hand.
+tab's stream is still open, or while its replacement's is in the late-beacon
+case section 4 records, since a ref only ever leaves where the ref is in hand.
 The closing tab therefore receives one last snapshot whose `you` is absent from
-`users`, which is correct rather than a case to special-case, and it is why the
-client's `me` lookup has to cope with `undefined` at all. The opposite skew, a
+`users`, and a replacement tab receives them until its rejoin lands, which is
+correct rather than a case to special-case and is why the client's `me` lookup
+has to cope with `undefined` at all. Section 5 makes that absence a signal
+rather than only a state to survive. The opposite skew, a
 member with no connections, is not a transient at all but the grace period doing
 its job: they keep their row in everyone else's list and receive nothing until
 they reconnect or expire. Neither map is derivable from the other, which is the
@@ -663,19 +668,37 @@ the round, which is the one thing step 2 buys.** The predicate ranges over a
 mutable set, so shrinking the set satisfies it as readily as a vote does: remove
 the last member who has not voted and every estimate goes on the wire. Members are
 removed at grace expiry and, once section 4's leave endpoint lands, the moment a
-tab hits `pagehide`, which fires on reload and on the mobile app switch that puts
-a page into the back/forward cache. So under a standing predicate one participant
+tab hits `pagehide` on a page that is being discarded, which a reload is and a
+back/forward cache entry is not, section 4 gating the beacon on `persisted` for
+the reason recorded there. So under a standing predicate one participant
 pressing F5 discloses the room's votes, unrecoverably, and today's six-second
 grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:208-225`) are what keep
-that from happening at present. Latching removes the class rather than the trigger: no
-membership change of any kind can reveal a round, so the reload, the app switch,
-the slept laptop and the deliberate close all go together and a later feature
-cannot bring any of them back.
+that from happening at present. Latching removes the unilateral trigger: a
+membership change on its own can no longer reveal anything, so the reload, the
+app switch, the slept laptop and the deliberate close all stop being reveals in
+their own right, and a later feature cannot bring that back.
 
-The cost is that this is the auto-reveal half of Phase 4's latched reveal, landing
-early and deliberately. It is taken because the alternative is an unrecoverable
-disclosure reachable by a keystroke, not because latching is wanted for its own
-sake, and what remains genuinely undecided stays in Phase 4: whether reveal should
+**What survives is a departure plus a later vote**, and it is worth stating
+rather than leaving to be found. `everyMemberHasVoted` still ranges over
+`members`, so removing a non-voter shrinks the set the next `Vote` checks: a
+participant whose connection drops past the grace period is removed, the
+remaining members finish voting, and the round reveals without them. The same
+holds after a `reVote` cast while someone is absent, and in the few hundred
+milliseconds a reload costs. Accepted, because the disclosure now needs somebody
+still present to cast a vote rather than one person pressing F5, and because the
+fix costs more than the case does.
+
+The option not taken is a Boolean on `Round`, set by any member removal and
+cleared by `clear` or `reVote`, suppressing the auto-reveal path while set. It
+would remove the residual and replace it with a room that silently stops
+auto-revealing after any departure, a quieter form of the phantom-member failure
+section 4 rejects the `tabId` design for, and the facilitator's Show already
+covers the case. Reach for it if the residual is ever observed.
+
+The cost of the latch is that it is the auto-reveal half of Phase 4's latched
+reveal, landing early and deliberately. It is taken because the alternative is an
+unrecoverable disclosure reachable by a keystroke, not because latching is wanted
+for its own sake, and what remains genuinely undecided stays in Phase 4: whether reveal should
 survive a `reVote`, and the paired undo and re-hide. It also settles today's
 accidental un-reveal, where a joiner flips the room back, which the roadmap had
 left to Phase 4 and which now closes at step 1.
@@ -923,12 +946,22 @@ history view is a render over state the client already holds and step 9 stays a
 field plus a command. Section 2 sizes that and names the round count at which the
 trade would reverse.
 
-**Open: what completes a round.** The candidate is that recording a value is the
-commit point, so one action is both the product capability and the trigger, and a
-round abandoned without a recorded value appends nothing. The alternative is that
-every `clear` appends an entry with no outcome. Cheaper to change than it was
-when this was a table, since the shape is in memory and lasts an hour, but still
-worth deciding before step 9 rather than during it.
+**Only a revealed round can enter `history`, and that is an invariant rather
+than a consequence of whichever commit point wins.** A `RoundRecord` carries no
+personal data, but its `distribution` is the round's aggregate spread, and
+unlike every other field on the snapshot it is shared by reference rather than
+built per recipient, so it reaches everyone unredacted. Appending a round nobody
+revealed would publish the shape of the votes step 2 exists to keep hidden, and
+a room voting that issue again would be anchored by it in aggregate. So the gate
+is that every participant could already see every estimate, reached either by a
+plain `ShowVotes` or by the latch above.
+
+**Open, and a product decision rather than a technical one: what completes a
+revealed round.** Either the facilitator recording a value is the commit point,
+or a `clear` of a revealed round appends with no outcome. Both sit behind the
+reveal gate above, which is the part this design fixes; the choice follows the
+selection UI and is specified when step 9 starts. Cheaper to change than it was
+when this was a table, since the shape is in memory and lasts an hour.
 
 
 ### 4. Identity and the write path
@@ -1008,6 +1041,19 @@ Three additions, each closing something documented:
   cover for transient drops only. `sendBeacon` is the right primitive because a
   normal POST is not reliably delivered from an unload-adjacent handler.
 
+  **The beacon fires only on a page that is being discarded**, gated on
+  `pagehide`'s `persisted` being false. A page entering the back/forward cache,
+  which is what a mobile app switch and a same-tab navigation away produce, can
+  be restored without a page load, so nothing would call `/join` again and the
+  member would stay removed under a live page. If the freeze did not kill its
+  stream, that page keeps receiving snapshots whose `you` is absent from `users`
+  and renders a healthy room in which its own commands are silent no-ops, since
+  a resolved non-member is section 3's no-op case. Gating on `persisted` removes
+  that case instead of recovering from it, and it leaves the two triggers this
+  endpoint is for untouched, a close and a reload both being discarded pages.
+  It does not distinguish a reload from a close, which is the separate question
+  the cookie paragraph below answers.
+
   **The test is cardinality rather than identity, because the request cannot name
   a connection.** All it carries is the room-scoped cookie, which resolves to a
   `userId`, and section 1 keeps tabs and connections out of every path, so nothing
@@ -1023,8 +1069,9 @@ Three additions, each closing something documented:
   A client-minted connection id carried on `/events` would make the test exact,
   and it is the same per-connection slot the command-cursor row under "Deferred,
   with triggers" says a cursor would have to live in. It is not worth a wire field
-  for a case this section argues does not occur; reach for it on the day the
-  cursor does.
+  for a case this section argues does not occur, and the late beacon below, which
+  does occur, is answered by section 5's rejoin more cheaply than a wire field
+  would answer it. Reach for it on the day the cursor does.
 
   **The case cardinality does not cover** is two tabs closed near-simultaneously:
   both beacons see a set of two, both do nothing, and that departure falls back to
@@ -1040,6 +1087,17 @@ Three additions, each closing something documented:
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
+  **A late beacon can outlive the reload it belongs to**, and the consequence for
+  membership is worth following through as well as the one for the cookie.
+  Arriving after the new page's `/join` and `/events` have recreated the member
+  with a single connection, it meets exactly the cardinality this endpoint acts
+  on, so the removal lands on a page that is up and connected and left holding an
+  open stream as a non-member. The ordering is unlikely, the beacon leaving
+  before the new document starts loading, and it is not something to rely on:
+  section 5's rejoin on a snapshot that does not name the client as a member is
+  what recovers it, which is why that rule lands with this step rather than with
+  step 8's module.
+
   **The cost is a brief flicker on reload**, since the beacon fires there too and
   a reload's tab is usually the member's last connection: the member is removed
   and comes back across a page load, so the room sees a departure and a return a
@@ -1049,12 +1107,14 @@ Three additions, each closing something documented:
   own, which puts a second duration constant on the one path built to avoid a
   timer. Reconsider that if the flicker turns out to annoy anyone.
 
-  **The flicker is cosmetic only because reveal is a latch.** `pagehide` fires on
-  a reload and on the mobile app switch that puts a page into the back/forward
-  cache, so without section 3's latch this endpoint would hand any participant a
-  one-keystroke way to reveal the room's votes by removing themselves as its last
-  non-voter. That is the dependency to keep in mind if anyone ever reopens the
-  reveal derivation.
+  **The flicker is cosmetic almost entirely because reveal is a latch.**
+  `pagehide` fires on a reload, so without section 3's latch this endpoint would
+  hand any participant a one-keystroke way to reveal the room's votes by removing
+  themselves as its last non-voter. That is the dependency to keep in mind if
+  anyone ever reopens the reveal derivation. What the latch leaves is the residual
+  section 3 records, a vote from somebody still present landing inside the gap and
+  completing the shrunken member set, which needs another participant to act and
+  is accepted there.
 
 **`/join` becomes idempotent**, and it is the whole of the fix above. If the
 request's cookie already resolves to a live session it returns that `userId`
@@ -1178,6 +1238,29 @@ Three details are load-bearing rather than polish:
 the redaction forces, and it is why the confidentiality step is not server-side
 only.
 
+**A snapshot whose `you` is absent from `users` means the server no longer holds
+this identity as a member**, and the client treats it as a signal to rejoin
+rather than as a room to render. It lands at step 6, in today's client, because
+that is the step whose leave endpoint makes it reachable: a beacon outliving its
+own reload removes a member whose replacement page is already connected, which
+section 4 records. In the Vue page it is a few lines in the message handler
+calling the existing join path, and step 8's module inherits the rule rather
+than introducing it. **It has to close the current `EventSource` before
+reopening**, since `doJoin` does not, and a rejoin that left its old stream
+running would manufacture the interleaving hazard described below.
+
+`applySnapshot` keeps coping with `me` being `undefined`, since it stays pure
+and a departing tab legitimately receives one such snapshot, so the rejoin is
+suppressed where this tab asked to leave itself. This is the consumer the `you`
+field's own argument in section 2 implies: the field exists so that who a
+snapshot was redacted for and who the client thinks it is cannot silently
+disagree, and this is the one disagreement the design can still produce. Section
+4's `persisted` gate closes the other route to it, a page restored from the
+back/forward cache, and it also covers whatever later feature removes a member
+while a stream is open. What neither covers is a restored page whose stream is
+dead but silent, which is the backlog's connection-liveness watchdog rather than
+this field.
+
 No client-side version comparison, because out-of-order snapshots are
 unreachable: SSE delivers in order within a connection, and a snapshot is one
 frame. What that argument needs is one connection per page instance, and **that
@@ -1191,9 +1274,10 @@ newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
 closing the previous one (`index.html:388`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
-load-bearing rather than tidy. The exposure before then is small, because nothing
-in today's flow reaches `doJoin` twice without a reload, but this is the one
-guarantee the design moves from the server to the client and it should not be
+load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
+without a reload, so the exposure is nil until step 6, whose rejoin is the first
+path that does and which closes the stream itself for that reason. This is the
+one guarantee the design moves from the server to the client and it should not be
 lost on the way.
 
 ### 6. Testing
@@ -1247,14 +1331,16 @@ Added, each with the step it lands at so nothing here is unassigned:
   room cookie: two tabs on the same room resolving to one participant, with a vote
   in either showing in both and closing one leaving the other connected and
   present; and a reload keeping its identity and its vote instead of duplicating
-  its participant.
+  its participant. The rejoin on a snapshot that does not name the client as a
+  member is not one of these, since the race that produces it cannot be forced in
+  a browser; it is a unit test over a snapshot fixture instead.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
   for one.** tapir describes HTTP endpoints, and the snapshot is not one: it
   travels as JSON inside a `text/event-stream` body, where tapir sees a stream of
   `ServerSentEvent` whose `data` is a `String`, so the generated document covers
-  the five command bodies and omits the one type the client models. Getting it in
+  the command endpoints and omits the one type the client models. Getting it in
   there deliberately, by attaching a schema to the SSE endpoint or registering it
   in components, is possible and fiddly, and worth doing only if drift actually
   bites. Parsing a real payload against the client's types is also the better
@@ -1336,8 +1422,11 @@ a usability improvement, and 8 and 9 are product work whose case is the
 roadmap's rather than this document's. That matters because the roadmap is
 projections under an agile process rather than commitments, so argument 7 above
 carries exactly as much weight as the roadmap does on the day someone reads it.
-Stopping after step 6 leaves a correct app with no open defect except the two
-recorded as staying open.
+Stopping after step 6 leaves a correct app whose only open defects are the two
+recorded as staying open, HTTP command ordering and rate limiting. A third entry
+stays open as well, the silent auto-create on an unrecognized room id, which the
+table below reclassifies as the primary use case working rather than as a
+defect.
 
 **Step 0. Characterization harness.** The stub buffering proxy, the browser
 harness, and Playwright cases pinning today's behaviour. Waits on nothing.
@@ -1349,10 +1438,10 @@ are no end-to-end tests today and step 1 is the largest behavioural change in
 the set. Three caveats belong in it.
 
 **Cases covering behaviour that is currently buggy** (the non-voter tally, the
-duplicate participants, a Show surviving someone joining) characterize the
-*intended* behaviour, so they would
-arrive red, and a suite that is red on arrival cannot answer "did I break
-something" during exactly the steps it was built for. They are marked
+duplicate participants, a Show surviving someone joining, and an auto-revealed
+room staying revealed when a straggler arrives) characterize the *intended*
+behaviour, so they would arrive red, and a suite red on arrival cannot
+answer "did I break something" during exactly the steps it was built for. They are marked
 `test.fail()` instead, annotated with the step that fixes each. Playwright fails
 the run when such a test *passes*, so the suite is green from step 0, a
 regression during steps 1 to 3 still shows, and the moment a fix lands CI reports
@@ -1511,14 +1600,15 @@ outage-recovery reload; the pending-session leak closes at step 4 instead, once 
 room's lifetime is bounded.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
-pattern replacing the unconditional `204`, idempotent `/join`, and the explicit
-leave endpoint. Wants step 4 first, both so handlers are not rewritten twice and
-because the leave endpoint's rule reads the size of a member's connection set.
-About 185 and 165.
+pattern replacing the unconditional `204`, idempotent `/join`, the explicit
+leave endpoint with its beacon gated on a discarded page, and the client rejoin
+on a snapshot that does not name it as a member. Wants step 4 first, both so
+handlers are not rewritten twice and because the leave endpoint's rule reads the
+size of a member's connection set. About 190 and 175.
 
 tapir lands here rather than later because this step already rewrites all five
-command endpoints plus `/join` and `/events`, so describing them once costs less
-than describing them twice. Closes Phase 1's outstanding item, the slow-departure
+command endpoints plus `/join`, `/events` and the leave endpoint it adds, so
+describing them once costs less than describing them twice. Closes Phase 1's outstanding item, the slow-departure
 issue and the same-room two-tab collision, and it closes the reload duplicate
 structurally rather than by beacon timing. The routes themselves do not move:
 there is no `:tabId` segment, and the cookie keeps the `/rooms/:slug` path 08-20
@@ -1548,7 +1638,8 @@ why the trap is invisible until step 8 adds the first local one.
 
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
-and client types checked against the server contract. Waits on steps 1 and 6.
+inheriting step 6's rejoin on a snapshot that does not name the client as a
+member, and client types checked against the server contract. Waits on steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
 
@@ -1577,7 +1668,7 @@ says why.
 | Spec | Disposition |
 | --- | --- |
 | 08-18 SSE transport | Historical. Its post-implementation note stays valuable as the record of why `userId` exposure widened, which the "Transport" section above reads as self-inflicted by the swap rather than inherited from WebSocket. |
-| 08-20 session identity | Current and implemented. The cookie-lifetime question is reaffirmed rather than reopened: it stays a session cookie, since no durable auth session is in the target. |
+| 08-20 session identity | Current and implemented. The cookie-lifetime question is reaffirmed rather than reopened: it stays a session cookie, since no durable auth session is in the target. Its scope is unchanged as well, `Path=/rooms/:slug` and one slot per room, an earlier draft's per-tab path having been dropped for the reasons in section 4. The same-room two-tab collision that design did not examine closes at step 6 through idempotent `/join`, which makes the shared slot resolve to one participant instead of displacing the first tab. |
 | 08-24 backpressure | Decisions superseded (`fail` becomes `dropHead`, and the grace period narrows to transient drops only once step 6 lands explicit leave, rather than delaying every departure), findings retained. Its empirical discoveries must survive the edit: `Source.actorRef` with `bufferSize = 0` silently bypassing the overflow strategy, and the connection-establishment race. Nothing else records either. |
 | 08-26 delta resync | Already superseded, now doubly so. Kept as history. |
 | 08-28 snapshot protocol | Superseded by this document, and kept for three things worth reading: the long-polling analysis at option 6 of its "Approaches considered", which is still the standing fallback design though it assumes a version cursor this design drops (see the caveats under "Deferred, with triggers"); the measurement table behind the snapshot-versus-replay comparison; and the Netskope investigation. Superseded rather than amended because §6's bounded mode, the proxy validation ladder and their scaffolding account for more of its 3,001 lines than everything that survives. |
@@ -1599,10 +1690,12 @@ reasoning behind each move rather than as work outstanding.
   departure disclose the round.
 - Phase 5's abandoned-room GC is absorbed by step 4's idle timeout.
 - Phase 4 gains an entry for the facilitator-recorded round outcome, which does
-  not exist there today and which step 9 pairs with round history.
+  not exist there today and which step 9 pairs with round history. Its
+  interaction is left undefined there, being a UI decision step 9 makes.
 - Phase 4's existing round-history item becomes step 9, paired with that new
   entry rather than sitting alongside it. Without this the roadmap ends up
-  carrying two round-history entries.
+  carrying two round-history entries. It carries the reveal gate as well, since
+  only a revealed round enters history.
 - The backlog's "copy/export round history at end of session" is promoted to
   Phase 4 alongside step 9. With history held only in memory it is the sole way
   to keep a session's rounds, which makes it part of the feature rather than a
@@ -1612,7 +1705,9 @@ reasoning behind each move rather than as work outstanding.
   with the backlog's undo/re-hide. Today's accidental un-reveal closes at step 1.
 - The backlog's per-user command sequencing item stays in the backlog, with the
   reasoning under "Deferred, with triggers".
-- The backlog's client-side connection-liveness watchdog stays in the backlog.
+- The backlog's client-side connection-liveness watchdog stays in the backlog,
+  with a note that step 8 should arm it on `pageshow`: a page restored holding a
+  stream that is dead but silent is the one case section 5's rejoin cannot see.
 
 ## Known issues disposition
 
@@ -1654,9 +1749,12 @@ is unchanged.
    question: probes F and G are what would establish whether the deferred
    long-poll fallback works at all, and they have never run against a hostile
    appliance. Revisit if a year passes with no second incident.
-3. **What completes a round**, and therefore what appends to
-   `RoomState.history`. The candidate and its alternative are in section 3.
-   Answer before step 9; it does not block anything earlier.
+3. **What completes a revealed round**, and therefore what appends to
+   `RoomState.history`. Settled here: only a revealed round enters history at
+   all. Left open as a product decision, since it follows the selection UI
+   rather than any technical constraint: whether the append needs a recorded
+   value, or whether a `clear` of a revealed round appends one without an
+   outcome. Specified when step 9 starts; it blocks nothing earlier.
 4. **Wordlist size and source for slug generation**, and the fallback when
    generation cannot find a free triple. Answer at step 7. The fallback should
    log loudly, since exhaustion means either genuine scale or an unthrottled

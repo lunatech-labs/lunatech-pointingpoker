@@ -110,7 +110,10 @@ roadmap item instead of leaving it here as stale history.
   which closes both forms by different means. A deliberate close fires
   `navigator.sendBeacon` on `pagehide` to an explicit leave endpoint that
   bypasses the grace period, so the grace period covers only what it should,
-  transient drops. The reload is closed structurally rather than by beacon
+  transient drops. The beacon fires only where the page is being discarded, so a
+  back/forward cache entry (a mobile app switch, a navigation away) leaves
+  membership alone rather than removing a member that no page load will come back
+  to re-create. The reload is closed structurally rather than by beacon
   timing: `/join` becomes idempotent against the room cookie, so a reload resumes
   the same identity and the same vote instead of adding a second participant.
   What remains on a reload is a sub-second gap where the member is absent, since
@@ -163,7 +166,7 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all
   mutating `POST` endpoints (`vote`, `show`, `clear`, `revote`,
-  `edit-issue`).
+  `edit-issue`), and the leave endpoint once step 6 lands.
 - **Issue:** Every mutating endpoint is unthrottled beyond session-token
   resolution, so a client can call any of them in a tight loop at no cost.
   Today this wastes CPU and bandwidth.
@@ -228,10 +231,10 @@ roadmap item instead of leaving it here as stale history.
   which makes `POST /join` idempotent: a request whose cookie already resolves
   returns that `userId` instead of minting over it, so both tabs are one
   participant with one vote and either can be closed without evicting the other.
-  Two tabs as two participants was considered and rejected there, since no
-  browser primitive gives a per-tab id that both survives reload and resists a
-  duplicated tab, and an extra non-voting member would block server-side
-  auto-reveal for the whole room. Remove this entry when that lands.
+  Two tabs as two participants was considered and rejected there, not because a
+  per-tab id is unobtainable (the Web Locks API would give one) but because it is
+  not the requirement and because an extra non-voting member would block
+  server-side auto-reveal for the whole room. Remove this entry when that lands.
 
 ### A transparently reconnecting client duplicates every known participant
 

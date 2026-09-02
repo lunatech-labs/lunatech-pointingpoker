@@ -6,9 +6,9 @@ Status: Superseded by
 Supersedes: `docs/superpowers/specs/2026-08-26-sse-delta-resync-design.md`
 
 Kept for three things worth reading: the long-polling analysis at option 6 of
-"Approaches considered", which is still the standing fallback design though it
-assumes a version cursor the successor drops; the measurement table behind the
-snapshot-versus-replay comparison; and the Netskope investigation. Superseded
+"Approaches considered", which is still the standing fallback design; the
+measurement table behind the snapshot-versus-replay comparison; and the Netskope
+investigation. Superseded
 rather than amended because §6's bounded mode, the proxy validation ladder and
 their scaffolding account for more of its length than everything that survives.
 
