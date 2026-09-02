@@ -92,10 +92,39 @@ function forwardStreaming(req, res, target) {
   req.pipe(up)
 }
 
-// Placeholder until Task 2. Buffering mode is the whole point of the stub; it is split out
-// so the transparent-proxy half can be reviewed on its own.
 function forwardBuffered(req, res, target, deadlineMs) {
-  forwardStreaming(req, res, target)
+  const up = openUpstream(req, target)
+  // The appliance gives up at its own timeout having released nothing at all, which is
+  // the customer's report exactly.
+  const deadline = setTimeout(() => {
+    up.destroy()
+    res.destroy()
+  }, deadlineMs)
+
+  up.on('response', upRes => {
+    const chunks = []
+    upRes.on('data', chunk => chunks.push(chunk))
+    upRes.on('end', () => {
+      clearTimeout(deadline)
+      if (res.destroyed) return
+      const body = Buffer.concat(chunks)
+      // A scanner that has buffered a whole response knows its length and sends it.
+      const headers = relayHeaders(upRes.headers)
+      headers['content-length'] = String(body.length)
+      res.writeHead(upRes.statusCode, headers)
+      res.end(body)
+    })
+  })
+  up.on('error', () => {
+    clearTimeout(deadline)
+    fail502(res)
+  })
+  // A downstream abort mid-buffer has to reach the app, or it never observes the disconnect.
+  res.on('close', () => {
+    clearTimeout(deadline)
+    up.destroy()
+  })
+  req.pipe(up)
 }
 
 function fail502(res) {
