@@ -1437,6 +1437,23 @@ of what the probe is being kept for.
 Ten steps, numbered from zero. The numbers are labels rather than a queue; each
 states what it actually waits on. Line counts are rough.
 
+| Step | Waits on |
+| --- | --- |
+| 0 Characterization harness | nothing |
+| 1 Snapshot protocol | nothing, though safer after 0 |
+| 2 Pre-reveal vote confidentiality | 1 |
+| 3 Vote summary correction | 1 |
+| 4 State split, plus stop-after-idle | 1 and 5 |
+| 5 Retained sessions | 1 |
+| 6 The write path becomes real | 4 |
+| 7 Slug room ids | 4 and 6 |
+| 8 Frontend rewrite | 1 and 6 |
+| 9 Recorded value and round history | 8 |
+
+One landing sequence that satisfies all of it: **0, 1, 2, 3, 5, 4, 6, 7, 8, 9**.
+Steps 2, 3 and 5 are mutually independent, as are 7 and 8; what is fixed beyond
+the table is that 2 and 3 precede 4, for the reason under step 3.
+
 **Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
 a usability improvement, and 8 and 9 are product work whose case is the
 roadmap's rather than this document's. That matters because the roadmap is
@@ -1520,12 +1537,9 @@ the vote fields they already touch. That flag is Problem E.
 Section 3 has the reasoning; the part that matters here is that writing it as
 `revealed || everyUserHasVoted` at publish time would make a departure reveal the
 round, which step 2 then turns into a disclosure rather than a display toggle. So
-`Vote` is the only thing besides `ShowVotes` that may set it. Two behaviour
-changes ride along and are user-visible: a Show now survives someone joining,
-where today `allVoted()` (`index.html:553-554`) flips the room back, and an
-auto-revealed room stays revealed when a straggler arrives. Both are intended;
-step 0's characterization cases should pin the new behaviour with `test.fail()`
-rather than the old.
+`Vote` is the only thing besides `ShowVotes` that may set it. It retires today's
+client-side `allVoted()` (`index.html:553-554`), which is what makes the two
+reveal cases step 0 marked `test.fail()` intended rather than regressions.
 
 **Problem A is fixed here too.** `RoomManager.ConnectToRoom` builds the `User`
 it sends with `InitialVoteState`/`InitialEstimation` (`RoomManager.scala:81-84`)
@@ -1540,14 +1554,13 @@ everything else from the incoming user. Taking the rest is safe because only
 `EventSource`'s retry reusing the existing session cookie rather than calling
 `/join`.
 
-**Problem C is not in this step**, and moves to step 4. Its urgency came from
-bounded mode's reconnect cadence, which left several stale timers alive per user
-at once; without it a superseded timer is one wasted `ConfirmLeave` per
-reconnect, which is today's behaviour and has never been observed to hurt.
-Fixing it here means re-keying the timer on `userId` alone plus moving the
-staleness check to `Leave` time, where getting only the first half produces a
-phantom participant for the life of the process, and step 4 then deletes all of
-it. Step 4 makes it unrepresentable instead.
+**Problem C is not in this step**, and moves to step 4, which makes it
+unrepresentable. Its urgency was bounded mode's reconnect cadence; without that,
+a superseded timer is one wasted `ConfirmLeave` per reconnect, which is today's
+behaviour and has never been observed to hurt. Fixing it here means re-keying the
+timer on `userId` alone plus moving the staleness check to `Leave` time, where
+getting only the first half produces a phantom participant for the life of the
+process, and step 4 deletes all of it anyway.
 
 The deterministic sort by user id lands here, as part of the wire format. That
 is also what keeps participant order stable across the reconnect above, so
