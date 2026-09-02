@@ -76,9 +76,11 @@ is now recorded.
 reader of the 08-28 design does not go looking for it.
 
 What survives on independent merit: the snapshot wire format, the single
-`publish` path, the pure `applySnapshot`, Problems A, C and E, the pre-reveal
+`publish` path, the pure `applySnapshot`, Problems A, C, D and E, the pre-reveal
 vote confidentiality fix, the vote-summary correction, retained sessions, and the
-anti-buffering headers.
+anti-buffering headers. Problem D appears twice in that list under two names: it
+is 08-28's label for a disconnection outlasting the grace period being terminal
+rather than a flicker, and retained sessions at step 5 are its fix.
 
 ## Why the snapshot migration still stands
 
@@ -298,7 +300,7 @@ object RoomSnapshot:
       id: UUID,
       name: String,
       voted: Boolean,
-      hasEstimation: Boolean,
+      hasEstimation: Boolean, // added at step 2 with the redaction it exists for
       estimation: String
   )
 ```
@@ -453,6 +455,7 @@ carry forward. It splits three ways, and the block below shows the whole of
 ```
 RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
             // slug holds the room's UUID until step 7 generates a name
+            // history, and RoundRecord with it, arrives at step 9
 Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
@@ -562,7 +565,8 @@ stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
 dead ref is a no-op anyway, and `emptySince` has to reflect reality. A `members`
 entry goes at grace expiry, or immediately on the explicit leave in section 4,
 which removes no ref of its own. Estimates are never removed by a departure at
-all, only by `clear`, `reVote` or the round ending.
+all, only by `clear` or the round ending; a `reVote` leaves the values in place
+and clears `confirmed`, which is the state `Estimate` exists to express.
 
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
@@ -779,7 +783,7 @@ apart:
    covering transient drops.
 2. **The actor**, which stops after an idle period on the order of two hours
    rather than when its last member leaves. That closes the abandoned-room GC
-   issue and stops a room losing its in-session history, now including its round
+   issue and stops a room losing its in-session state, and from step 9 its round
    history, to a coffee break. It lands at step 4.
 
 **Idle means `connections` has been empty continuously for the idle period, and
@@ -1508,9 +1512,11 @@ never written.
 **Step 1. Snapshot protocol.** The wire format, `publish`, pure
 `applySnapshot`, `dropHead`, the anti-buffering headers and README note, plus
 Problems A and E. Deletes `RoomEvent.scala`, `broadcast`, `setupNewUser`, 89
-client lines, and `ConnectionFailure`'s now-unreachable `BufferOverflowException`
-branch. Waits on nothing, though much safer after step 0. About 170
-added, 190 deleted, 200 of tests. Independently releasable, and it closes four
+client lines, `ConnectionFailure`'s now-unreachable `BufferOverflowException`
+branch, and `issueLastEditBy` with the `userId` argument `RoomData.editIssue`
+takes only to write it (`Room.scala:96-97`, `:234`), section 2 having no reader
+left for it once the replay goes. Waits on nothing, though much safer after
+step 0. About 170 added, 190 deleted, 200 of tests. Independently releasable, and it closes four
 things: both reconnect bugs, the reveal-on-resync issue and the
 proxy-buffering documentation issue.
 
