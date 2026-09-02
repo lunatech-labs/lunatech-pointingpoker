@@ -33,6 +33,7 @@ Each of these is a decision the spec left open or got slightly wrong. They are l
 3. **`createStub` also returns `baseUrl` and `deadlineMs`.** The spec's return shape is `{ port, setBuffering, close }`. Both additions remove string-building from every call site, and `deadlineMs` is what the reproduction asserts against.
 4. **`sbt Universal/stage` is required before `npm test`, not only before `npm run e2e`.** 08-30 §Delivery's follow-up note says otherwise, but `test/reproduction.test.js` runs the real app. The README says the accurate thing.
 5. **Two PRs rather than one.** The stub and harness have no browser dependency and their review question ("is the appliance modelled faithfully") is different from the browser suite's ("are these the right nine pins"). This half also ships the customer's failure as a gated test immediately.
+6. **`.gitignore` gains only `node_modules/`, not `test-results/` too.** 08-30 §4 asks for both. `test-results/` is Playwright's output directory and arrives with the browser suite in the next PR.
 
 ---
 
@@ -430,7 +431,7 @@ Expected: 7 tests, 3 failing. Precisely:
 - "a response that never ends" FAILS on `result.response` being non-null, because the placeholder streams the headers straight through and nothing destroys the socket.
 - "a finite response is released whole" FAILS on `transfer-encoding` being `chunked` and `content-length` being `undefined`.
 - "the toggle changes the mode" FAILS on the same two headers for its second request.
-- "an upstream error answers 502" and "a downstream abort mid-buffer" PASS already, because `forwardStreaming` implements both paths too. That is expected, not a gap: they exist to pin the same two guarantees on the buffered path once Step 3 replaces the placeholder, and Step 4 is where they start meaning something.
+- "an upstream error answers 502" and "a downstream abort mid-buffer" PASS already, because `forwardStreaming` implements both paths too. That is expected, not a gap: they exist to pin the same two guarantees on the buffered path once Step 3 replaces the placeholder, and Step 4 is where they start meaning something. This is only true for a pre-response connect error; the mid-stream case passed on neither path until a later fix added an error handler on the upstream response.
 
 - [ ] **Step 3: Replace the placeholder with real buffering**
 
@@ -836,7 +837,7 @@ What "done" looks like:
 - `node --test "test/**/*.test.js"` reports 8 passing tests and exits 0, in well under a minute.
 - Deleting `target/universal/stage` makes the reproduction fail with the "is missing" message naming the exact sbt command, not with a 30 second timeout.
 - The stub CLI reproduces the failure in a real browser by hand, and `?mode=off` recovers it.
-- `git status` is clean apart from the four commits; no `node_modules/` is tracked.
+- `git status` is clean; no `node_modules/` is tracked.
 - The `test` job in `.github/workflows/ci.yml` stages the app, sets up Node 24 and runs `node --test "test/**/*.test.js"`, after the Codecov step.
 
 Nothing in the Scala source changes in this PR. If a task tempts you into `src/main`, stop: the app is the thing being characterized, and step 1 is where it starts changing.

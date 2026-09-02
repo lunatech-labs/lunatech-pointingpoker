@@ -8,8 +8,8 @@ import { pathToFileURL } from 'node:url'
 // buffering. A probe measurement lands here as a change to this number, not as a rewrite.
 export const DEADLINE_MS = 2000
 
-// Hop-by-hop headers a proxy must not pass on. transfer-encoding is also the one that
-// buffering mode replaces with a content-length.
+// Hop-by-hop headers stripped from the upstream response before relaying it. transfer-encoding
+// is also the one that buffering mode replaces with a content-length.
 const HOP_BY_HOP = [
   'connection',
   'keep-alive',
@@ -23,6 +23,9 @@ const HOP_BY_HOP = [
 
 export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering = false }) {
   const target = new URL(upstream)
+  if (target.protocol !== 'http:' || target.pathname !== '/') {
+    throw new Error(`upstream must be a plain http origin with no path, got ${upstream}`)
+  }
   const state = { buffering }
 
   const server = http.createServer((req, res) => {
@@ -85,6 +88,8 @@ function forwardStreaming(req, res, target) {
   const up = openUpstream(req, target)
   up.on('response', upRes => {
     res.writeHead(upRes.statusCode, relayHeaders(upRes.headers))
+    // pipe does not forward source errors, and fail502 cannot help once headers are out.
+    upRes.on('error', () => res.destroy())
     upRes.pipe(res)
   })
   up.on('error', () => fail502(res))
@@ -113,6 +118,10 @@ function forwardBuffered(req, res, target, deadlineMs) {
       headers['content-length'] = String(body.length)
       res.writeHead(upRes.statusCode, headers)
       res.end(body)
+    })
+    upRes.on('error', () => {
+      clearTimeout(deadline)
+      res.destroy()
     })
   })
   up.on('error', () => {

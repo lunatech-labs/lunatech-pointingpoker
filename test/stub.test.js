@@ -36,6 +36,11 @@ function get(url, options = {}) {
         result.endedAt = Date.now() - started
         resolve(result)
       })
+      res.on('error', error => {
+        result.error = error
+        result.endedAt = Date.now() - started
+        resolve(result)
+      })
     })
     req.on('error', error => {
       result.error = error
@@ -46,13 +51,15 @@ function get(url, options = {}) {
   return { req, done }
 }
 
-test('pass-through delivers bytes as they are written, not at the end', async () => {
+test('pass-through delivers bytes as they are written, not at the end', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     res.write('data: first\n\n')
     setTimeout(() => res.end('data: last\n\n'), 300)
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
 
   const result = await get(`${stub.baseUrl}/`).done
 
@@ -62,17 +69,16 @@ test('pass-through delivers bytes as they are written, not at the end', async ()
     result.endedAt - result.firstByteAt > 150,
     'a buffering stub would also eventually deliver these, so the gap is the assertion'
   )
-
-  await stub.close()
-  await up.close()
 })
 
-test('the buffering toggle is handled locally and never forwarded', async () => {
+test('the buffering toggle is handled locally and never forwarded', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' })
     res.end(req.url)
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
 
   const toggled = await fetch(`${stub.baseUrl}/__stub/buffering?mode=on`)
   assert.equal(toggled.status, 200)
@@ -81,9 +87,6 @@ test('the buffering toggle is handled locally and never forwarded', async () => 
 
   const bad = await fetch(`${stub.baseUrl}/__stub/buffering`)
   assert.equal(bad.status, 400)
-
-  await stub.close()
-  await up.close()
 })
 
 // A stub that never gives up would otherwise hang the run instead of failing it.
@@ -91,12 +94,14 @@ function within(promise, ms) {
   return Promise.race([promise, new Promise(resolve => setTimeout(() => resolve(null), ms))])
 }
 
-test('a response that never ends yields nothing downstream, then a destroyed socket', async () => {
+test('a response that never ends yields nothing downstream, then a destroyed socket', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' })
     res.write('data: hello\n\n')
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url, deadlineMs: 300, buffering: true })
+  t.after(() => stub.close())
 
   const result = await within(get(`${stub.baseUrl}/`).done, 3000)
 
@@ -105,12 +110,9 @@ test('a response that never ends yields nothing downstream, then a destroyed soc
   assert.equal(Buffer.concat(result.chunks).length, 0)
   assert.ok(result.error, 'the socket is destroyed rather than left hanging')
   assert.ok(result.endedAt >= 250, `expected the destroy at the deadline, got ${result.endedAt}ms`)
-
-  await stub.close()
-  await up.close()
 })
 
-test('a finite response is released whole, content-length delimited', async () => {
+test('a finite response is released whole, content-length delimited', async t => {
   const up = await upstream((req, res) => {
     // Two writes and no content-length, so the upstream response is chunked and the
     // stub has to replace that encoding rather than pass it on.
@@ -118,7 +120,9 @@ test('a finite response is released whole, content-length delimited', async () =
     res.write('one')
     res.end('two')
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url, buffering: true })
+  t.after(() => stub.close())
 
   const result = await get(`${stub.baseUrl}/`).done
 
@@ -126,17 +130,16 @@ test('a finite response is released whole, content-length delimited', async () =
   assert.equal(Buffer.concat(result.chunks).toString(), 'onetwo')
   assert.equal(result.response.headers['content-length'], '6')
   assert.equal(result.response.headers['transfer-encoding'], undefined)
-
-  await stub.close()
-  await up.close()
 })
 
-test('the toggle changes the mode for subsequent requests', async () => {
+test('the toggle changes the mode for subsequent requests', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' })
     res.end('ok')
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
 
   const streamed = await get(`${stub.baseUrl}/x`).done
   assert.equal(streamed.response.headers['transfer-encoding'], 'chunked')
@@ -145,25 +148,21 @@ test('the toggle changes the mode for subsequent requests', async () => {
   const buffered = await get(`${stub.baseUrl}/x`).done
   assert.equal(buffered.response.headers['transfer-encoding'], undefined)
   assert.equal(buffered.response.headers['content-length'], '2')
-
-  await stub.close()
-  await up.close()
 })
 
-test('an upstream error answers 502 rather than hanging', async () => {
+test('an upstream error answers 502 rather than hanging', async t => {
   const up = await upstream((req, res) => res.end())
   const dead = up.url
   await up.close()
   const stub = await createStub({ upstream: dead, buffering: true })
+  t.after(() => stub.close())
 
   const result = await get(`${stub.baseUrl}/`).done
 
   assert.equal(result.response.statusCode, 502)
-
-  await stub.close()
 })
 
-test('a downstream abort mid-buffer destroys the upstream request', async () => {
+test('a downstream abort mid-buffer destroys the upstream request', async t => {
   let sawAbort
   const aborted = new Promise(resolve => {
     sawAbort = resolve
@@ -174,14 +173,30 @@ test('a downstream abort mid-buffer destroys the upstream request', async () => 
     // This is what makes the app observe the disconnect and schedule Leave.
     res.on('close', () => sawAbort(true))
   })
+  t.after(() => up.close())
   const stub = await createStub({ upstream: up.url, deadlineMs: 5000, buffering: true })
+  t.after(() => stub.close())
 
   const { req } = get(`${stub.baseUrl}/`)
+  t.after(() => req.destroy())
   setTimeout(() => req.destroy(), 100)
 
   const timeout = new Promise(resolve => setTimeout(() => resolve(false), 2000))
   assert.equal(await Promise.race([aborted, timeout]), true)
+})
 
-  await stub.close()
-  await up.close()
+test('pass-through does not leave the client hanging when upstream dies mid-body', async t => {
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write('data: first\n\n')
+    setTimeout(() => res.socket.destroy(), 50)
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  const result = await within(get(`${stub.baseUrl}/`).done, 3000)
+
+  assert.ok(result, 'the downstream response never ended, so a real client would hang')
+  assert.equal(Buffer.concat(result.chunks).toString(), 'data: first\n\n')
 })
