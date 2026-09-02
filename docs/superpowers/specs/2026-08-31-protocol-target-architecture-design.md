@@ -536,7 +536,11 @@ list does not flicker on a transient drop. `connections` exists solely to send
 to. `round.estimates` is keyed by user id and is independent of both.
 
 A snapshot is a join: a participant appears because they are a member, and their
-estimate comes from the round.
+estimate comes from the round. **Every aggregate over estimates is that same
+join, not a read of `round.estimates`**, which is the rule any later summary
+field inherits. It matters because the map outlives membership by design, so an
+estimate keyed by a departed user is present in the map and has to be absent from
+anything published.
 
 **That join makes Problem A unrepresentable rather than fixed.** Vote loss on
 reconnect exists today because `RoomManager.ConnectToRoom`
@@ -934,7 +938,12 @@ absence keeps retention an ordinary question. **The distribution matches code
 that already exists**, because `updateSummary` produces `Object.entries(tally)`,
 which is exactly `[(score, count)]`, so a history view reuses the live summary's
 rendering, and later views (highest and lowest, majority, most voted) are
-additive. And **`recordedValue` is a product gap rather than a storage choice**:
+additive. It is section 3's join taken at the moment of the append, so it counts
+the participants the snapshot was showing and equals the client's own
+`votesSummary` by construction rather than by both sides tallying carefully; a
+voter who leaves between the reveal and the append drops out of the record, which
+is the direction the participant list moves anyway. And **`recordedValue` is a
+product gap rather than a storage choice**:
 teams often resolve a split by talking it out rather than re-voting, and the app
 has no concept of a settled estimate at all, so it implies a facilitator command
 and a snapshot field. That is a new Phase 4 roadmap entry, and it fits the
@@ -954,7 +963,10 @@ built per recipient, so it reaches everyone unredacted. Appending a round nobody
 revealed would publish the shape of the votes step 2 exists to keep hidden, and
 a room voting that issue again would be anchored by it in aggregate. So the gate
 is that every participant could already see every estimate, reached either by a
-plain `ShowVotes` or by the latch above.
+plain `ShowVotes` or by the latch above. What makes that true of the aggregate
+and not merely of the round is that `distribution` is the join: an estimate
+belonging to somebody who left before the reveal sits in `round.estimates` and
+never reaches the record.
 
 **Open, and a product decision rather than a technical one: what completes a
 revealed round.** Either the facilitator recording a value is the commit point,
