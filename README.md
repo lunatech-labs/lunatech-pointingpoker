@@ -114,9 +114,13 @@ are already running:
 UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
 ```
 
-It prints its own address; point a browser at that instead of the app. Buffering can be
-switched at runtime with `/__stub/buffering?mode=on` and `?mode=off`, which affects later
-requests rather than ones already in flight.
+It prints its own address; point a browser at that instead of the app. The page itself still
+loads, because it is a finite response the stub releases whole. What fails is the room: its SSE
+stream never ends, so the stub releases nothing and destroys the connection at its deadline.
+That is the customer's symptom exactly, and it is why the reproduction test asserts against
+`/rooms/{roomId}/events` rather than `/`. Buffering can be switched at runtime with
+`/__stub/buffering?mode=on` and `?mode=off`, which affects later requests rather than ones
+already in flight.
 
 ### Running locally
 
