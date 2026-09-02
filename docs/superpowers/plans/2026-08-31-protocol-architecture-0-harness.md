@@ -14,7 +14,7 @@
 
 ## Global Constraints
 
-- **No runtime or dev dependencies in this PR.** `test/` must stay runnable with a bare `node --test test/`. `package.json` exists only for `"type": "module"` and the `test` script.
+- **No runtime or dev dependencies in this PR.** `test/` must stay runnable with a bare `node --test "test/**/*.test.js"`. `package.json` exists only for `"type": "module"` and the `test` script.
 - **Node 24**, matching the CI `actions/setup-node@v5` pin.
 - **ES modules throughout** (`import`, not `require`), because `package.json` declares `"type": "module"`.
 - **Three shallow directories, nothing imports backwards:** `testkit/` is machinery, `test/` is what `node --test` runs. `test/` imports from `testkit/`; `testkit/` imports nothing local.
@@ -57,7 +57,7 @@ Pass-through forwarding plus the local toggle endpoint. A reviewer can accept th
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test \"test/**/*.test.js\""
   }
 }
 ```
@@ -166,7 +166,7 @@ test('the buffering toggle is handled locally and never forwarded', async () => 
 
 - [ ] **Step 4: Run the tests to verify they fail**
 
-Run: `node --test test/`
+Run: `node --test "test/**/*.test.js"`
 Expected: FAIL with `Cannot find module .../testkit/stub.js`.
 
 - [ ] **Step 5: Write the stub**
@@ -292,7 +292,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `node --test test/`
+Run: `node --test "test/**/*.test.js"`
 Expected: PASS, 2 tests.
 
 - [ ] **Step 7: Commit**
@@ -424,7 +424,7 @@ test('a downstream abort mid-buffer destroys the upstream request', async () => 
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `node --test test/`
+Run: `node --test "test/**/*.test.js"`
 Expected: 7 tests, 3 failing. Precisely:
 
 - "a response that never ends" FAILS on `result.response` being non-null, because the placeholder streams the headers straight through and nothing destroys the socket.
@@ -475,7 +475,7 @@ function forwardBuffered(req, res, target, deadlineMs) {
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `node --test test/`
+Run: `node --test "test/**/*.test.js"`
 Expected: PASS, 7 tests.
 
 - [ ] **Step 5: Commit**
@@ -693,7 +693,7 @@ Expected: PASS, 1 test, taking roughly 5 seconds (about 2 for the JVM, 2 for the
 
 - [ ] **Step 7: Run the whole node suite**
 
-Run: `node --test test/`
+Run: `node --test "test/**/*.test.js"`
 Expected: PASS, 8 tests.
 
 - [ ] **Step 8: Commit**
@@ -730,7 +730,7 @@ In `.github/workflows/ci.yml`, after the `Codecov` step (so a node failure does 
           node-version: '24'
 
       - name: node tests
-        run: node --test test/
+        run: node --test "test/**/*.test.js"
 ```
 
 These go on the existing job rather than a second sbt job, since that job already has a JVM and a warm build. No `npm ci` step: `test/` has no dependencies. The browser suite's `npm ci` and `playwright install` arrive with the next PR.
@@ -776,7 +776,7 @@ requests rather than ones already in flight.
 
 ```bash
 rm -rf target/universal/stage
-node --test test/    # expect the reproduction to fail with the "is missing" guard
+node --test "test/**/*.test.js"    # expect the reproduction to fail with the "is missing" guard
 sbt "; coverageOff; Universal/stage"
 npm test             # expect PASS, 8 tests
 ```
@@ -809,15 +809,15 @@ Run all of it in order from a clean checkout of the branch:
 ```bash
 sbt qa                                # the Scala suite is untouched and still green
 sbt "; coverageOff; Universal/stage"  # the launcher the harness spawns
-node --test test/                     # 8 tests: 7 stub, 1 reproduction
+node --test "test/**/*.test.js"   # 8 tests: 7 stub, 1 reproduction
 ```
 
 What "done" looks like:
 
-- `node --test test/` reports 8 passing tests and exits 0, in well under a minute.
+- `node --test "test/**/*.test.js"` reports 8 passing tests and exits 0, in well under a minute.
 - Deleting `target/universal/stage` makes the reproduction fail with the "is missing" message naming the exact sbt command, not with a 30 second timeout.
 - The stub CLI reproduces the failure in a real browser by hand, and `?mode=off` recovers it.
 - `git status` is clean apart from the four commits; no `node_modules/` is tracked.
-- The `test` job in `.github/workflows/ci.yml` stages the app, sets up Node 24 and runs `node --test test/`, after the Codecov step.
+- The `test` job in `.github/workflows/ci.yml` stages the app, sets up Node 24 and runs `node --test "test/**/*.test.js"`, after the Codecov step.
 
 Nothing in the Scala source changes in this PR. If a task tempts you into `src/main`, stop: the app is the thing being characterized, and step 1 is where it starts changing.
