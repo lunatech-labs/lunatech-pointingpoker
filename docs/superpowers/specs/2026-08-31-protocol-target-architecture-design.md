@@ -262,6 +262,33 @@ than a formality: the snapshot protocol is transport-agnostic, so `publish`,
 
 ## Target architecture
 
+### 0. Invariants
+
+Seven rules the rest of this section applies. They are listed here rather than
+left inside the paragraphs that argue them because a violation of any one is
+silent, and because four of the eleven defects the last review found were
+violations of one.
+
+1. **No connection handle appears in the room's own state.** `connections` is the
+   only place an `ActorRef` lives. Section 3.
+2. **Everything that reaches the wire is built per recipient, and every estimate
+   in it comes from the join over `members`.** That build is the only place room
+   state is serialized, so it is the only place redaction has to happen;
+   `round.estimates` outlives membership, so reading it directly publishes a
+   departed participant's vote. Sections 2 and 3.
+3. **Only a revealed round enters `history`.** Its `distribution` is shared
+   unredacted, so the gate is that every participant could already see every
+   estimate. Section 3, "Round history".
+4. **Reveal is a latch, never re-derived at publish time.** A standing predicate
+   over a mutable member set lets a departure disclose the round. Section 3.
+5. **A `members` entry is created by `ConnectToRoom` and by nothing else.** A
+   member who holds no connection and never votes makes `everyMemberHasVoted`
+   unsatisfiable for the rest of the meeting. Sections 3 and 4.
+6. **Resolving a token and being allowed to act are two checks.** Sessions carry
+   no TTL, so `sessions` alone would let anyone who ever joined act. Section 3.
+7. **A field with no consumer does not travel, and none is added before it has
+   one.** Section 2.
+
 ### 1. Transport
 
 SSE for server-to-client push on `GET /rooms/:slug/events`, authorized by the
