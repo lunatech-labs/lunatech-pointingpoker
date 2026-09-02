@@ -54,7 +54,7 @@ Pass-through forwarding plus the local toggle endpoint. A reviewer can accept th
 
 ```json
 {
-  "name": "pointingpoker-testkit",
+  "name": "pointingpoker",
   "private": true,
   "type": "module",
   "scripts": {
@@ -829,12 +829,16 @@ Run all of it in order from a clean checkout of the branch:
 ```bash
 sbt qa                                # the Scala suite is untouched and still green
 sbt "; coverageOff; Universal/stage"  # the launcher the harness spawns
-node --test "test/**/*.test.js"   # 8 tests: 7 stub, 1 reproduction
+node --test "test/**/*.test.js"   # 9 tests: 8 stub, 1 reproduction
 ```
+
+The ninth stub case, and several pieces of hardening the four tasks do not describe, came from
+the whole-branch review after Task 4. Executing the four tasks alone lands eight tests; the
+branch as shipped has nine.
 
 What "done" looks like:
 
-- `node --test "test/**/*.test.js"` reports 8 passing tests and exits 0, in well under a minute.
+- `node --test "test/**/*.test.js"` reports 9 passing tests and exits 0, in well under a minute.
 - Deleting `target/universal/stage` makes the reproduction fail with the "is missing" message naming the exact sbt command, not with a 30 second timeout.
 - The stub CLI reproduces the failure in a real browser by hand, and `?mode=off` recovers it.
 - `git status` is clean; no `node_modules/` is tracked.
