@@ -781,9 +781,13 @@ are already running:
 UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
 ```
 
-It prints its own address; point a browser at that instead of the app. Buffering can be
-switched at runtime with `/__stub/buffering?mode=on` and `?mode=off`, which affects later
-requests rather than ones already in flight.
+It prints its own address; point a browser at that instead of the app. The page itself still
+loads, because it is a finite response the stub releases whole. What fails is the room: its SSE
+stream never ends, so the stub releases nothing and destroys the connection at its deadline.
+That is the customer's symptom exactly, and it is why the reproduction test asserts against
+`/rooms/{roomId}/events` rather than `/`. Buffering can be switched at runtime with
+`/__stub/buffering?mode=on` and `?mode=off`, which affects later requests rather than ones
+already in flight.
 ````
 
 - [ ] **Step 3: Verify the documented commands work from a clean tree**
@@ -802,10 +806,11 @@ SECURE_COOKIES=false sbt run &
 node testkit/stub.js --buffering
 ```
 
-Open the address the stub prints. Expected: the page does not load, because the whole
-response is being buffered and the deadline destroys the socket. Then visit
-`/__stub/buffering?mode=off` on the stub's origin and reload. Expected: the app works
-normally. Stop both.
+Open the address the stub prints and join a room. Expected: the page loads, because it is a
+finite response the stub releases whole, but the room never populates — the SSE stream never
+ends, so the stub delivers nothing and destroys the connection at its deadline. That is the
+customer's symptom. Then visit `/__stub/buffering?mode=off` on the stub's origin and reload.
+Expected: the room works normally. Stop both.
 
 - [ ] **Step 5: Commit**
 
