@@ -90,20 +90,12 @@ directly in the new frontend.
       takes the auto-reveal half of the item below with it; section 3 of that spec
       says why. Check this off when that lands.
 - [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
-      longer a product decision.** An earlier version of this item kept reveal as a
-      live derivation over the current participant set, so that a connectivity fix
-      would not smuggle in a product change, which meant accepting two flips when
-      that set changed mid-round: a joiner re-hiding an auto-revealed room, and the
-      last non-voter leaving revealing it with no facilitator action. The second
-      stopped being acceptable once step 2 made reveal the moment estimates reach
-      the wire and step 6 made a reload a departure. Together those turn a display
-      quirk into an unrecoverable disclosure that any participant can trigger by
-      pressing F5, so `round.revealed` is now set by the vote that completes the
-      round and cleared only by `clear()` or `reVote()`. The accidental un-reveal
-      closes at step 1 with it. What the latch does not remove is a departure
-      followed by a vote from someone still present, since the check still ranges
-      over the live member set; that residual is accepted in section 3 of that
-      spec, along with the option not taken.
+      longer a product decision.** `round.revealed` is set by `Show` and by the
+      vote that completes the round, and cleared only by `clear()` or `reVote()`;
+      the accidental un-reveal closes at step 1 with it. Section 3 of that spec
+      owns the reasoning, including why a live derivation over the participant set
+      was reversed, the residual it leaves (a departure followed by a vote from
+      someone still present) and the option not taken. Do not restate it here.
       What is still a product question is whether a revealed round should survive a
       `reVote`. That part still synergizes with the observer role above, since an
       observer changes what "everyone has voted" means. **Ship what remains with the
