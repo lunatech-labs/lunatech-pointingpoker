@@ -1273,17 +1273,27 @@ than introducing it. **It has to close the current `EventSource` before
 reopening**, since `doJoin` does not, and a rejoin that left its old stream
 running would manufacture the interleaving hazard described below.
 
-`applySnapshot` keeps coping with `me` being `undefined`, since it stays pure
-and a departing tab legitimately receives one such snapshot, so the rejoin is
-suppressed where this tab asked to leave itself. This is the consumer the `you`
-field's own argument in section 2 implies: the field exists so that who a
-snapshot was redacted for and who the client thinks it is cannot silently
-disagree, and this is the one disagreement the design can still produce. Section
-4's `persisted` gate closes the other route to it, a page restored from the
-back/forward cache, and it also covers whatever later feature removes a member
-while a stream is open. What neither covers is a restored page whose stream is
-dead but silent, which is the backlog's connection-liveness watchdog rather than
-this field.
+**The rule needs no "unless I am the one leaving" guard, and adding one would
+hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
+own stream as its last act (`index.html:511-518`), so no snapshot follows, and a
+beacon fires only on a page being discarded, which has no live document to rejoin
+from. The one path that does deliver a snapshot naming its recipient as a
+non-member is the replacement page in section 4's late-beacon race, and there
+rejoining is the point. A `leaving` flag would also have to be cleared on
+`pageshow`, since `pagehide` fires into the back/forward cache too, and getting
+that wrong leaves a restored page never rejoining, which is a quieter form of the
+failure section 4's `persisted` gate removes.
+
+`applySnapshot` still copes with `me` being `undefined`, since it stays pure and
+the teardown window can deliver one such snapshot to a page on its way out. This
+is the consumer the `you` field's own argument in section 2 implies: the field
+exists so that who a snapshot was redacted for and who the client thinks it is
+cannot silently disagree, and this is the one disagreement the design can still
+produce. Section 4's `persisted` gate closes the other route to it, a page
+restored from the back/forward cache, and the rejoin also covers whatever later
+feature removes a member while a stream is open. What neither covers is a
+restored page whose stream is dead but silent, which is the backlog's
+connection-liveness watchdog rather than this field.
 
 No client-side version comparison, because out-of-order snapshots are
 unreachable: SSE delivers in order within a connection, and a snapshot is one
@@ -1336,6 +1346,16 @@ Added, each with the step it lands at so nothing here is unassigned:
 - **Playwright end-to-end cases** (step 0, extended at each later step): two
   browsers exchanging votes, reveal with a straggler, reconnect survival,
   participant list on join and leave, and the issue-input guard.
+
+  **"Reconnect survival" at step 0 is the two list assertions**, no duplicates
+  and a departed participant pruned, which are the pair marked `test.fail()`.
+  It is deliberately not the vote-survival assertion: today a reconnecting
+  browser keeps its own `user.estimation` and every other browser keeps its stale
+  `users` entry, so a case asserting that a vote outlives a reconnect passes on
+  stale client state while the room has already reset that participant, and it
+  would stay green through the very change it looks like it guards. That
+  assertion arrives at step 1 with Problem A's fix, alongside the `RoomSpec`
+  cases moved onto `ConnectToRoom` for the same reason.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
   to the room once the editor loses focus, and an edit committed with the check
@@ -1479,11 +1499,12 @@ are no end-to-end tests today and step 1 is the largest behavioural change in
 the set. Three caveats belong in it.
 
 **Cases covering behaviour that is currently buggy** (the non-voter tally, the
-duplicate participants, a Show surviving someone joining, and an auto-revealed
-room staying revealed when a straggler arrives) characterize the *intended*
-behaviour, so they would arrive red, and a suite red on arrival cannot
-answer "did I break something" during exactly the steps it was built for. They are marked
-`test.fail()` instead, annotated with the step that fixes each. Playwright fails
+duplicate participants, a participant who departed during the gap going unpruned,
+a Show surviving someone joining, and an auto-revealed room staying revealed when
+a straggler arrives) characterize the *intended* behaviour, so they would arrive
+red, and a suite red on arrival cannot answer "did I break something" during
+exactly the steps it was built for. They are marked `test.fail()` instead,
+annotated with the step that fixes each. Playwright fails
 the run when such a test *passes*, so the suite is green from step 0, a
 regression during steps 1 to 3 still shows, and the moment a fix lands CI reports
 the stale annotation rather than leaving anyone to notice. Those annotations are
@@ -1635,7 +1656,24 @@ The idle timeout also deletes the stop path it replaces, which is worth claiming
 because this step's diff is otherwise additive. `ConfirmLeave` no longer stops
 the actor, so it always answers `Running`; `Room.Stopped`, the `Stopped` case of
 the `Response` ADT, and `RoomManager`'s `removeRoom` call site all become
-unreachable. `Terminated` (`RoomManager.scala:163-165`) becomes the single
+unreachable.
+
+**Take the whole reply channel with them, not just the `Stopped` half.** A
+`Running` whose only handler is `case Room.Running(_) => Behaviors.same`
+(`RoomManager.scala:107`) is the no-consumer case this design applies to
+`version` and `scale`, so `Response` and `Running` go, `replyTo` leaves `Leave`
+and `ConfirmLeave`, and with them go `RoomResponseWrapper` (`:27`), its handler
+(`:105-110`), the `roomResponseActor` adapter (`:59-60`) and the
+`roomResponseWrapper` parameter threaded through `receiveBehaviour` and its seven
+recursive calls. That takes `RoomManager.receiveBehaviour` from three parameters
+to two. Most of the test churn is mechanical probe wiring, only
+`RoomSpec.scala:231` and `:257` asserting on a value, and step 4 is rewriting
+those cases for the split regardless. **Step 6's leave endpoint does not revive
+this**: its reply is an ask answered to the HTTP route, carrying the
+applied / not-a-member results the ask pattern is for, so a `Response` ADT
+reappearing there is a new type under an old name rather than this one returning.
+
+`Terminated` (`RoomManager.scala:163-165`) becomes the single
 deregistration path, which it has to be anyway, since it is the only one that can
 observe a self-initiated stop.
 
