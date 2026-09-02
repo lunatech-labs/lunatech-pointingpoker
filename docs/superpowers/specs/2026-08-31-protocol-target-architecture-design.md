@@ -1197,6 +1197,7 @@ left is the brief gap recorded with the leave endpoint above.
 export function applySnapshot(prev, s) {
   const me = s.users.find(u => u.id === s.you);
   const tally = {};
+  // The `u.voted` filter arrives at step 3, with the template guard it requires.
   for (const u of s.users) if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   return {
     inRoom: true,
@@ -1269,6 +1270,17 @@ Three details are load-bearing rather than polish:
   empty, so the summary block's condition becomes
   `v-if="votesRevealed && votesSummary.length"`. That guard is reachable by two
   clicks (Show in a room where nobody voted), not defensive.
+
+  **The two must land in the same step, and the reason is stronger than
+  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:268`)
+  under `v-if="votesRevealed"` alone, so an empty tally is a render error rather
+  than an empty box. Today that is unreachable only because the buggy all-user
+  tally is never empty while anyone is in the room, and the one path that empties
+  `votesSummary` (`clear`) also clears `votesRevealed`. So the voted-only filter
+  without the guard is a regression this design would introduce, not a
+  pre-existing bug left standing, which is why the filter is annotated in the
+  `applySnapshot` block above as arriving at step 3 rather than with the rest of
+  that function at step 1.
 
   Note that once redaction lands, the tally is meaningless before reveal: every
   other participant's `estimation` is `""`, so voted participants all collapse
@@ -1579,6 +1591,14 @@ already the confirmed flag since `reVote()` keeps `estimation`
 (`Room.scala:85-89`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
+**`applySnapshot`'s tally keeps counting every participant here**, matching
+today's `updateSummary`, and the voted-only filter waits for step 3 to land it
+together with the template guard. Do not move it forward: the summary block
+dereferences `votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a
+voted-only tally without that guard turns Show in a room where nobody voted into
+a render error. Section 5 has the detail. Every key of the returned object is
+already its target shape; this one line of the body is not.
+
 **The stored `revealed` flag does not exist today and this step adds it**, which
 is the mapping worth stating outright. `ShowVotes` broadcasts and returns
 `Behaviors.same` (`Room.scala:173-181`), so reveal lives only as a client-side
@@ -1636,6 +1656,9 @@ rather than how state is shaped.
 **Step 3. Vote summary correction.** Voted-only tally plus the template guard.
 Waits on step 1, independent of step 2. About 5 and 25. Separate because it is
 the one change a user notices as a different answer rather than better plumbing.
+**Its two halves are atomic**, and this is the one place in the path where
+shipping half a step breaks the app rather than leaving it unimproved: section 5
+says why the filter without the guard is a render error.
 
 **Steps 2 and 3 should land before step 4, not merely after step 1.** Both are
 specified in terms of today's `RoomData`, as step 1 is: `hasEstimation` is
