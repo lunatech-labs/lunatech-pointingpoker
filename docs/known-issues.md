@@ -229,7 +229,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which makes `POST /join` idempotent: a request whose cookie already resolves
-  returns that `userId` instead of minting over it, so both tabs are one
+  resolves to that `userId` instead of minting over it, so both tabs are one
   participant with one vote and either can be closed without evicting the other.
   Two tabs as two participants was considered and rejected there, not because a
   per-tab id is unobtainable (the Web Locks API would give one) but because it is

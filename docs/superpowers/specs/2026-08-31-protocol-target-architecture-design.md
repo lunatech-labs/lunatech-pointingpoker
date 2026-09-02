@@ -99,8 +99,12 @@ Every argument below was checked against the code rather than carried over.
    safe to discard; a dropped event is unrecoverable. This retires the only
    reconnect the app inflicts on itself, which is what the 08-24 grace period
    exists to absorb.
-4. **Reveal state on resync** closes as one derived Boolean, ending an open
-   known issue.
+4. **Reveal state on resync** closes as one stored flag carried as one snapshot
+   field, ending an open known issue. It lands as a latch rather than as a
+   derivation, for the reason in section 3, so it is a field on room state and
+   not free. What snapshots add is that every connect answers with it, where the
+   event protocol needs a `Show` synthesized into the replay beside the
+   `EditIssue` one `setupNewUser` already fabricates.
 5. **The pre-reveal vote leak is real and orthogonal to the proxy.**
    `Room.scala:144-148` broadcasts an estimation to every participant the moment
    it is cast; the client merely hides it. It reaches the wire in two places,
@@ -332,10 +336,13 @@ consequence on the other side of the wire worth following through. `/join`'s
 `userId` has no reader left once the event handlers go, its only consumers being
 `index.html:412` and `:431`, both inside the block step 1 deletes. So
 `JoinResponse.userId` becomes a field with no consumer, which is the same rule
-that dropped `version`. It stays until step 6, where tapir describes the endpoint and
-the ask pattern gives `/join` a real result to return instead, and it goes there
-rather than at step 1 only because the response body is what confirms the call
-succeeded until then.
+that dropped `version`. The **response body** goes at step 6, where tapir
+describes the endpoint, because a response contract belongs to the step that
+rewrites endpoints rather than to the one that changes the wire. Between step 1
+and step 6 it is dead but harmless: nothing reads it, and what confirms the call
+is the status, not the body. Note that `/join` is not waiting on the ask pattern
+for a real result, having had one since 08-20; it is the five command endpoints
+that are still unconditionally `204`.
 
 **`history` is the one field that grows within a session**, so it is worth
 sizing rather than waving through. A `RoundRecord` is about 165 bytes of JSON at a
@@ -1129,8 +1136,9 @@ Three additions, each closing something documented:
   is accepted there.
 
 **`/join` becomes idempotent**, and it is the whole of the fix above. If the
-request's cookie already resolves to a live session it returns that `userId`
-instead of minting a new one and overwriting the cookie. A reload therefore keeps
+request's cookie already resolves to a live session it resolves to that `userId`
+instead of minting a new one and overwriting the cookie; nothing of it reaches the
+response body, which section 2 empties at this step. A reload therefore keeps
 its cookie, its token, its `userId` and its vote, and a second tab joins the
 existing participant rather than displacing it. There is no question of resuming
 somebody else, since the cookie is path-scoped to the room and arrives only from
@@ -1578,6 +1586,20 @@ Problem C. Waits on steps 1 and 5. About 150 changed and 110 of tests.
 entirely to `sessions`, and sessions are only resolvable past promotion once step
 5 retains them, so landing this first would leave a connected client's token
 resolving to nothing and turn every reconnect into an immediate 401.
+
+**It waits on step 1 for cost rather than correctness, and that is the one
+dependency here worth arguing with.** Landing the split first means porting
+`broadcast` and `setupNewUser` onto `members`, `round.estimates` and
+`connections`, keeping `issueLastEditBy` alive to do it, and deleting all of it
+one step later; the larger half of that bill is tests, since `RoomSpec` is 510 of
+the project's 1,434 test lines and is written in event assertions throughout, so
+they would be rewritten for the new state model and again for snapshots. Against
+that, the current order pays for stating every rule in steps 1 to 3 in two
+vocabularies, today's and section 3's, and for the throwaway Problem A fix below.
+The only structural constraint is narrow and does not favour either order:
+`Round.revealed` has no consumer until
+something carries it, so the latch belongs to whichever step brings the wire
+format.
 
 The split itself is a pure refactor; **the idle timeout is the only behaviour
 change a working room can observe in this step**. Completing attached streams on
