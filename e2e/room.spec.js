@@ -57,9 +57,7 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   // The app notices a dead stream only when a write to it fails, and the first write after a
   // close only draws the reset, so two broadcasts stand in for the heartbeat 15s away.
   const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  const settled = alice.page.waitForResponse(response => response.url().endsWith('/clear'))
   await clear.click()
-  await settled
   await clear.click()
 
   await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
