@@ -1559,7 +1559,7 @@ immediately before the Phase 3 framework migration". Phase 3 is step 8 here,
 while the suite is the regression net for steps 1 to 3, so the deferral is seven
 steps too late for the job it was front-loaded to do, against 08-28's own
 warning that a suite nothing runs automatically rots worse than a manual
-checklist. The cost is `npm ci` and a cached `playwright install --with-deps
+checklist. The cost is `npm ci` and a `playwright install --with-deps
 chromium firefox` on the job that already stages the app, both engines because
 08-30 measured them disagreeing on exactly this streaming edge and runs the
 reconnect case in both. Its app and stub fixtures are worker-scoped, so the
