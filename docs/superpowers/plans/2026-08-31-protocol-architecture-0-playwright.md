@@ -50,7 +50,7 @@ Deliberately not here, each with the step that owns it: the vote-survival assert
 
 Each of these is a decision the specs left open or got slightly wrong. They are listed so a reviewer can reject one without re-deriving it.
 
-1. **`SSE_GRACE_PERIOD` widens from 600ms to 4s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. Two margins in the departure cases are the grace period plus detection, and both scale with it: the window to cut a participant after a departure is noticed and before it is announced, and, more tightly, the window for that cut participant to reconnect before his own removal fires. At 600ms each is about 1.7s, at 2s about 3.1s, at 4s about 5.1s. 2s was the first value here and it was not enough: the control case timed out in Firefox on a loaded machine, with the cut participant removed before his reconnect landed, which turns his banner into "Your session has ended" and never clears it. `4s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is about two seconds on each of three departure waits per engine. If it flakes again, the next value is 6s, and the leave case's 10s assertion timeout has to grow with it.
+1. **`SSE_GRACE_PERIOD` widens from 600ms to 8s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. Two margins in the departure cases are detection plus the grace period, and both scale with it: the window to cut a participant after a departure is noticed and before it is announced, and, more tightly, the window for that cut participant to reconnect before his own removal fires. At 600ms each is about 1.7s, at 2s about 3.1s, at 4s about 5.1s, at 8s about 9.1s. The first two values were both tried and both flaked: the control case timed out in Firefox on a loaded machine, with the cut participant removed before his reconnect landed, which turns his banner into "Your session has ended" and never clears it. The budget was then measured directly, by bisecting an inserted delay before the restore, at about 3s under a 2s grace and about 5s under 4s, which is what says the model here is right and only the value was wrong. `8s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is about seven seconds on each of three departure waits per engine, and the two assertions that wait on a departure carry a 20s timeout to stay clear of it.
 2. **The stub gains `cut(match)` and `restore(match)`**, which 08-30 §1 does not describe. Two cases need an established SSE stream to break and then reconnect, and nothing else in the toolbox does it: a reload clears the client state that makes the bug visible, the buffering toggle by design only affects later requests, and `browserContext.setOffline` is network emulation whose behaviour over loopback is not guaranteed and differs by engine, while these cases must run in both. A proxy that kills one client's connection is also squarely what the stub already models. It is scoped to a cookie value so one participant can be cut while another stays connected and observing.
 3. **`test/stub.test.js`'s `get` helper also returns its `result` object**, so a test can wait for a stream to open before cutting it. One added property on an existing local helper.
 4. **A sixth green case exists that no spec sentence asks for**, "a cut stream reconnects and the room survives it". `test.fail()` accepts *any* failure as expected, including a timeout, so the two reconnect cases would stay green if `cut` silently stopped working and no assertion in them could tell. This is the same argument 08-30 makes for the reproduction's control stream, applied to the same mechanism.
@@ -73,7 +73,7 @@ shapes three cases. Measured against the staged app, on this machine, with the t
 | through the stub, then one broadcast to the room | 16.7s |
 | through the stub, then two broadcasts | 1.7s |
 
-Measured at `SSE_GRACE_PERIOD=600ms`; the shipped test profile is 4s, so every figure above is about 3.4s larger against it.
+Measured at `SSE_GRACE_PERIOD=600ms`; the shipped test profile is 8s, so every figure above is about 7.4s larger against it.
 
 Rows 1 and 3 are both a half-close, but row 1's peer is still reading and row 3's is not, which is the whole difference between never and 31.8s.
 
@@ -107,7 +107,7 @@ package.json               # + devDependency @playwright/test, + "e2e" script
 package-lock.json          # new, committed, so CI can npm ci
 playwright.config.js       # new: testDir e2e, chromium + firefox projects
 testkit/stub.js            # + cut/restore
-testkit/app.js             # testProfile grace period 600ms -> 4s
+testkit/app.js             # testProfile grace period 600ms -> 8s
 test/stub.test.js          # + 3 cases for cut/restore
 e2e/fixtures.js            # new: app, stub, room, join fixtures + shared locators
 e2e/smoke.spec.js          # new: 1 case
@@ -648,7 +648,7 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await clear.click()
   await clear.click()
 
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
 
@@ -661,7 +661,7 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
 })
 ```
 
-The 10 second timeout is deliberately far above detection plus the grace period, because the assertion is about the departure being announced at all, not about when. The two clicks are load-bearing rather than incidental: without them this case waits 31s and fails on Playwright's default per-case timeout. "How a departure is actually noticed" above has the measurements.
+The 20 second timeout is deliberately far above detection plus the grace period, because the assertion is about the departure being announced at all, not about when. The two clicks are load-bearing rather than incidental: without them this case waits 31s and fails on Playwright's default per-case timeout. "How a departure is actually noticed" above has the measurements.
 
 - [ ] **Step 4: Run them**
 
@@ -733,12 +733,12 @@ In `testkit/app.js`, change `testProfile`:
 
 ```js
 export const testProfile = {
-  SSE_GRACE_PERIOD: '4s',
+  SSE_GRACE_PERIOD: '8s',
   SSE_RETRY: '200ms'
 }
 ```
 
-The comment above it stays as it is. The arithmetic that forces this value is in step 5 below; `4s >= 2 x 200ms` keeps `SseConfig.load`'s `require` satisfied, and `npm test` starting the app at all is the proof.
+The comment above it stays as it is. The arithmetic that forces this value is in step 5 below; `8s >= 2 x 200ms` keeps `SseConfig.load`'s `require` satisfied, and `npm test` starting the app at all is the proof.
 
 - [ ] **Step 2: Run the node suite to confirm the profile is still valid**
 
@@ -844,7 +844,7 @@ test('a participant who departed during the gap is pruned on reconnect', async (
   await bob.cut()
   await expect(connectionAlert(bob.page)).toBeVisible()
 
-  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 20_000 })
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
@@ -852,17 +852,19 @@ test('a participant who departed during the gap is pruned on reconnect', async (
 })
 ```
 
-This is the one case whose ordering is partly timed rather than observed, so here is what has to hold, with detection at about 1.1s after the second broadcast and the grace period G at 4s:
+This is the one case whose ordering is partly timed rather than observed, so here is what has to hold, with detection at about 1.1s after the second broadcast and the grace period G at 8s:
 
 - Carol's context closes. Nothing happens yet: the app has not written to her stream.
-- The two clicks land. Carol's stream fails on the second, so her `ConfirmLeave` is scheduled for about 1.1s + G, roughly 5.1s later. Bob is alive and simply receives both.
-- Bob is cut, and this is the only timed step: it must land before Carol's `ConfirmLeave` fires. The margin is about 5.1s, against two clicks and a cut that take a few hundred milliseconds. Cutting Bob before the clicks instead would put both removals on the same clock and lose the race.
+- The two clicks land. Carol's stream fails on the second, so her `ConfirmLeave` is scheduled for about 1.1s + G, roughly 9.1s later. Bob is alive and simply receives both.
+- Bob is cut, and this is the only timed step: it must land before Carol's `ConfirmLeave` fires. The margin is about 9.1s, against two clicks and a cut that take a few hundred milliseconds. Cutting Bob before the clicks instead would put both removals on the same clock and lose the race.
 - Carol's leave is broadcast and Alice observes it. That same broadcast is a write to Bob's cut stream, and because `cut` destroys his connection rather than half-closing it, the write fails outright instead of only drawing a reset. Bob's own `ConfirmLeave` is therefore scheduled for about 1.1s + G after that broadcast, and that, not the 15s heartbeat, is the budget his reconnect has.
 - Bob is restored and his banner clears, inside that budget. His `Join` replaces his entry, so the pending `ConfirmLeave` finds a different ref and does nothing.
 
 This case has two ways to flake and they are not equally visible. The cut landing after Carol's leave is loud: Bob then receives the departure, prunes Carol himself, and Playwright reports "expected to fail, but passed". Bob failing to reconnect inside his own budget is quiet in the `test.fail()` case, since any failure there counts as expected, which is exactly why the green control above runs the same helper. The second is the one that has actually happened, in Firefox on a loaded machine at G = 2s. The fix for either is a larger `SSE_GRACE_PERIOD`, which widens both margins together. Do not add a wait before the cut, which spends the first margin, and do not raise the banner assertion's timeout to chase the second, which is the app removing Bob rather than the assertion giving up early.
 
 Alice is a participant here purely to be the observation point, which is also why `carol.close()` leaves the room non-empty and the room actor alive. Nothing votes, so nothing reveals, and no assertion depends on either.
+
+**The whole-branch review then extracted this case's setup, so read the code rather than the block above.** Everything from the three joins down to Bob's banner clearing now lives in a `departureWhileCut(join)` helper in `e2e/room.spec.js`, shared with a green control case that runs it and asserts nothing further. The reason is deviation 4's: a `test.fail()` case cannot police its own machinery, this case's machinery is the more fragile of the two, and sharing the helper is what stops the control drifting from the case it controls. It earned that on its first day, catching the reconnect-budget flake recorded in deviation 1, which inside the `test.fail()` case would have counted as an expected failure and said nothing.
 
 - [ ] **Step 6: Run the whole suite**
 
