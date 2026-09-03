@@ -65,9 +65,8 @@ export const test = base.extend({
     { scope: 'worker' }
   ],
 
-  // The stub listens on 127.0.0.1 only, so do not make a browser fall back from ::1.
   origin: async ({ stub }, use) => {
-    await use(`http://127.0.0.1:${stub.port}`)
+    await use(stub.baseUrl)
   },
 
   // A case that turns buffering on or cuts a session cannot poison the next one.

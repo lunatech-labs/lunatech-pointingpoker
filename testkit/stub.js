@@ -47,7 +47,8 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
 
   return {
     port,
-    baseUrl: `http://localhost:${port}`,
+    // 127.0.0.1 rather than localhost, since the server binds that family only.
+    baseUrl: `http://127.0.0.1:${port}`,
     deadlineMs,
     setBuffering(on) {
       state.buffering = Boolean(on)
