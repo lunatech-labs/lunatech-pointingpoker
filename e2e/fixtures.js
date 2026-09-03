@@ -24,18 +24,23 @@ export const test = base.extend({
       const serve = async route => {
         const url = route.request().url()
         if (!cache.has(url)) {
-          // A miss falls through to the network, which is what the page did before this cache.
-          const response = await fetch(url).catch(() => null)
-          if (!response?.ok) return route.continue()
-          const headers = {}
-          for (const [name, value] of response.headers) {
-            if (!DROPPED.has(name)) headers[name] = value
+          try {
+            // Bounded, since a CDN that stalls rather than failing is the case this exists for.
+            const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+            if (!response.ok) return route.continue()
+            const headers = {}
+            for (const [name, value] of response.headers) {
+              if (!DROPPED.has(name)) headers[name] = value
+            }
+            cache.set(url, {
+              status: response.status,
+              headers,
+              body: Buffer.from(await response.arrayBuffer())
+            })
+          } catch {
+            // Any failure falls back to the network, which is what the page did before this.
+            return route.continue()
           }
-          cache.set(url, {
-            status: response.status,
-            headers,
-            body: Buffer.from(await response.arrayBuffer())
-          })
         }
         await route.fulfill(cache.get(url))
       }
