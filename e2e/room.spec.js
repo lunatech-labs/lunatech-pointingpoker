@@ -88,3 +88,87 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
     timeout: 10_000
   })
 })
+
+test('a Show survives someone joining', async ({ join }) => {
+  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
+  const alice = await join('Alice')
+  await join('Bob')
+
+  await vote(alice.page, '5')
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await join('Carol')
+  // Carol's row proves the join was processed, and the un-reveal happens in the same handler.
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
+  await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
+})
+
+test('an auto-revealed round stays revealed when a straggler arrives', async ({ join }) => {
+  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  await vote(bob.page, '3')
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await join('Carol')
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
+  await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
+})
+
+test('the tally counts only the votes that were cast', async ({ join }) => {
+  test.fail(true, 'step 3: a voted-only tally, landing with the template guard beside it')
+  const alice = await join('Alice')
+  await join('Bob')
+
+  await vote(alice.page, '5')
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  // Today Bob's empty estimation is a row of its own.
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+})
+
+test('no duplicate participants after a reconnect', async ({ join }) => {
+  test.fail(true, 'step 1: a snapshot replaces the replay that pushes a second entry')
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
+    timeout: 10_000
+  })
+
+  await expect(participantRows(bob.page)).toHaveCount(2, { timeout: 2000 })
+  await expect(participantRows(alice.page)).toHaveCount(2, { timeout: 2000 })
+})
+
+test('a participant who departed during the gap is pruned on reconnect', async ({ join }) => {
+  test.fail(true, 'step 1: a snapshot is the whole list, so a departure cannot be missed')
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const carol = await join('Carol')
+  await expect(participantRows(bob.page)).toHaveCount(3)
+
+  await carol.close()
+  // Two broadcasts are what make the app notice Carol, and Bob must still be connected for
+  // them, or his own removal starts on the same clock as the departure he has to miss.
+  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  await clear.click()
+  await clear.click()
+  await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
+
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
+})
