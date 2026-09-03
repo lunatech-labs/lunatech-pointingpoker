@@ -2,6 +2,7 @@ import {
   test,
   expect,
   connectionAlert,
+  connectionLost,
   participantRow,
   participantRows,
   summaryTable,
@@ -91,7 +92,7 @@ async function departureWhileCut(join) {
   await expect(votedMark(aliceOnBob)).toHaveCount(0)
 
   await bob.cut()
-  await expect(connectionAlert(bob.page)).toBeVisible()
+  await expect(connectionLost(bob.page)).toBeVisible()
 
   await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 20_000 })
   await bob.restore()
@@ -104,7 +105,7 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
   const bob = await join('Bob')
 
   await bob.cut()
-  await expect(connectionAlert(bob.page)).toBeVisible()
+  await expect(connectionLost(bob.page)).toBeVisible()
   await bob.restore()
   // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
@@ -169,7 +170,7 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
   const bob = await join('Bob')
 
   await bob.cut()
-  await expect(connectionAlert(bob.page)).toBeVisible()
+  await expect(connectionLost(bob.page)).toBeVisible()
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
