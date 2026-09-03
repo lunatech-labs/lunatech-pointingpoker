@@ -1527,10 +1527,9 @@ projections under an agile process rather than commitments, so argument 7 above
 carries exactly as much weight as the roadmap does on the day someone reads it.
 Stopping after step 6 leaves a correct app whose only open defects are the three
 recorded as staying open: HTTP command ordering, rate limiting, and the page's
-runtime dependency on three public CDNs. A fourth entry
-stays open as well, the silent auto-create on an unrecognized room id, which the
-table below reclassifies as the primary use case working rather than as a
-defect.
+runtime dependency on three public CDNs. A fourth entry stays open as well, the
+silent auto-create on an unrecognized room id, which the table below reclassifies
+as the primary use case working rather than as a defect.
 
 **Step 0. Characterization harness.** The stub buffering proxy, the browser
 harness, and Playwright cases pinning today's behaviour. Waits on nothing.

@@ -42,7 +42,8 @@ sentence that bundles both.
 
 In: the stub, the harness, the Playwright fixtures, `package.json`, the
 `node --test` plumbing, CI steps gating everything here, the stub unit tests,
-the reproduction, and the browser suite step 0 of the target architecture
+the reproduction, the harness's own startup case, and the browser suite step 0
+of the target architecture
 specifies: a smoke case, five behavioural cases, and four `test.fail()`
 characterization cases.
 
@@ -216,6 +217,7 @@ testkit/stub.js
 testkit/app.js
 test/stub.test.js         # node --test
 test/reproduction.test.js # node --test
+test/startup.test.js      # node --test
 e2e/fixtures.js
 e2e/smoke.spec.js
 e2e/room.spec.js
@@ -225,7 +227,7 @@ Three shallow directories named for what they hold: `testkit/` is machinery,
 `test/` is what `node --test` runs, `e2e/` is what Playwright runs. Nothing
 imports backwards. `playwright.config.js` sets `testDir: 'e2e'` so the two
 runners cannot pick up each other's files, and `.gitignore` gains
-`node_modules/` and `test-results/`.
+`node_modules/`, `test-results/` and `playwright-report/`.
 
 `app` and `stub` are worker-scoped fixtures, one pair per worker, on ports
 allocated by binding to 0. This costs a JVM per worker and buys the ability to
@@ -288,6 +290,15 @@ which is most of what makes them evidence rather than a restatement of what the
 stub was built to do. Holding it open also keeps the member from leaving, since
 a departed member's token stops resolving and the buffered request would get
 that same finite 401.
+
+**`test/startup.test.js`**, the harness against a port already taken. Asserts
+that `startApp` rejects with an exit rather than with a readiness timeout, and
+that it does so well inside the 30s cap. It exists because the failure it pins
+was live: `Main` discarded `API.run()`'s future, so a bind failure left a
+server-less JVM running, `failure()` saw no exit, and the conflict surfaced
+after 31s as "the app did not answer", blaming a slow machine. Added by review
+rather than by the original design, and verified to fail against the behaviour
+it replaced.
 
 **`e2e/smoke.spec.js`**, Playwright, pass-through. Load the page through the
 stub, join a room, reach the room view. Proves the harness drives the real app,
