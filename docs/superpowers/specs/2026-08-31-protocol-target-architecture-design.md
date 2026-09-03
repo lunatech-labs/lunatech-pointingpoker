@@ -1648,6 +1648,15 @@ with it. The chain is unchanged here and the send gets smaller, one snapshot in
 place of a batched replay, so restate the caveat on `publish` rather than
 re-running the trials.
 
+**The anti-buffering headers need an assertion and not only an implementation.**
+`APISpec`'s "open an SSE events stream for a resolved session" is where it
+belongs, beside a route test that already exists. Step 0's stub cannot stand in
+for it: the stub buffers on its own flag and never reads the upstream response
+headers, so `test/reproduction.test.js` passes identically before and after this
+step. Whether a stub mode that honours the hint is also worth having is a
+question about the stub's fidelity to nginx rather than about this app, and it is
+better answered here, against a header that exists, than assumed at step 0.
+
 **Step 2. Pre-reveal vote confidentiality.** Per-recipient redaction,
 `hasEstimation`, and the `showUserEstimation` change. Waits on step 1. About 20
 and 50. Separate because it wants a reviewer thinking about what is on the wire
