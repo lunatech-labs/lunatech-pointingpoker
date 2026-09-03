@@ -262,6 +262,11 @@ tests the wrong thing thoroughly.
   them.
 - An upstream error answers 502 rather than hanging.
 - A downstream abort mid-buffer destroys the upstream request.
+- Pass-through does not leave the client hanging when upstream dies mid-body.
+  `pipe` does not forward source errors, so this needs its own handler on the
+  upstream response rather than falling out of the two cases above.
+- The buffering toggle is handled locally and never forwarded upstream.
+- The toggle applies to later requests rather than to one already in flight.
 
 **`test/reproduction.test.js`**, the stub in front of the real app. Still no
 browser. `POST /join` through the stub for the session cookie, then
@@ -274,6 +279,15 @@ promptly, so a reproduction that skipped the join would pass while proving
 nothing at all. Obtaining the cookie through the stub also exercises the claim
 that buffered POSTs still work, which matters because `JoinResponse` is the
 delivery channel for the detection windows.
+
+A control stream is load-bearing for the same reason. Before the buffered
+request the case opens a second `/events` in pass-through, asserts 200 and a
+first byte well inside the deadline, and holds it open to the end. Without it
+the assertions cannot tell "the proxy buffered it" from "the app sent nothing",
+which is most of what makes them evidence rather than a restatement of what the
+stub was built to do. Holding it open also keeps the member from leaving, since
+a departed member's token stops resolving and the buffered request would get
+that same finite 401.
 
 **`e2e/smoke.spec.js`**, Playwright, pass-through. Load the page through the
 stub, join a room, reach the room view. Proves the harness drives the real app,
@@ -311,7 +325,7 @@ that job already has a JVM and a warm build:
   with:
     node-version: '24'
 - name: node tests
-  run: node --test test/
+  run: node --test "test/**/*.test.js"
 - name: install the browser suite
   run: npm ci && npx playwright install --with-deps chromium firefox
 - name: browser tests
@@ -320,6 +334,10 @@ that job already has a JVM and a warm build:
 
 `coverageOff` is not optional: `sbt qa` leaves scoverage-instrumented classes
 behind, and staging without it packages them.
+
+The glob is not interchangeable with the directory: on Node 24 `node --test
+test/` exits 1 with a spurious failing case, so keep the quoted pattern, which
+Node expands itself.
 
 `node --test` is built in and `test/` has no dependencies, so the stub and
 reproduction cases cost one node setup and a few seconds. From the day they
