@@ -119,13 +119,16 @@ UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
 ```
 
 It prints its own address; point a browser at that instead of the app. The page itself still
-loads, because it is a finite response the stub releases whole. What fails is the room: its SSE
-stream never ends, so the stub releases nothing and destroys the connection at its deadline.
-That is the customer's reported symptom, against a modelled appliance rather than a measured
-one: the stub's deadline is a placeholder rather than a measurement of theirs. It is also
-why the reproduction test asserts against `/rooms/{roomId}/events` rather than `/`. Buffering
-can be switched at runtime with `/__stub/buffering?mode=on` and `?mode=off`, which affects
-later requests rather than ones already in flight.
+loads, because it is a finite response the stub releases whole. What fails is the room: the
+browser stays on the Create page and never displays the room at all, since the client switches
+views only when the first SSE message arrives and the stream never ends, so the stub releases
+nothing and destroys the connection at its deadline. That is the customer's reported symptom,
+against a modelled appliance rather than a measured one: the stub's deadline is a placeholder
+rather than a measurement of theirs. It is also why the reproduction test asserts against
+`/rooms/{roomId}/events` rather than `/`. Buffering can be switched at runtime with
+`/__stub/buffering?mode=on` and `?mode=off`, which affects later requests rather than ones
+already in flight. Recovering needs no reload: `EventSource` retries on its own, so the page
+moves from Create to the room a second or two after `?mode=off`.
 
 ### Running locally
 
