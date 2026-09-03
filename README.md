@@ -109,6 +109,21 @@ session setting, so a separate `sbt` invocation recompiles without instrumentati
 It earns its place if you ever stage from the same sbt shell that ran `qa`, where the
 instrumented classes do get packaged and no scoverage runtime is staged to satisfy them.
 
+The browser suite under `e2e/` drives the same packaged app through the stub in Chromium and
+Firefox, one app and one stub per Playwright worker:
+
+```
+npm ci
+npx playwright install --with-deps chromium firefox
+sbt "; coverageOff; Universal/stage"
+npm run e2e
+```
+
+Cases that pin behaviour the app gets wrong today are marked `test.fail()` and annotated with
+the step that fixes each, so the suite is green until a fix lands and then reports its own
+annotation as stale. A case reported as "expected to fail, but passed" means the fix arrived:
+drop the annotation in the same change.
+
 The stub also runs standalone, so the failure can be reproduced by hand. Start the app with
 plain-HTTP cookies, or the room will fail to populate for the unrelated reason in "Running
 locally" below and the reproduction will look successful when it is not:
