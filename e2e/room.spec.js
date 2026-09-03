@@ -61,7 +61,7 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await settled
   await clear.click()
 
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
 
@@ -92,7 +92,7 @@ async function departureWhileCut(join) {
   await bob.cut()
   await expect(connectionAlert(bob.page)).toBeVisible()
 
-  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 20_000 })
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
   return { alice, bob }

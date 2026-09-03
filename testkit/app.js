@@ -17,7 +17,7 @@ const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
 // SseConfig.load's `require`s validate this at startup, so the profile does not get its own
 // copy of the rules. The heartbeat is hardcoded at 15s and cannot be turned down.
 export const testProfile = {
-  SSE_GRACE_PERIOD: '4s',
+  SSE_GRACE_PERIOD: '8s',
   SSE_RETRY: '200ms'
 }
 
