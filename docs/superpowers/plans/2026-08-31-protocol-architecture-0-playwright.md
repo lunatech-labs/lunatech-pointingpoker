@@ -1033,7 +1033,7 @@ adding `assets` to that fixture's dependencies.
 
 - [ ] **Step 3: Prove the cache is real, without committing the proof**
 
-Temporarily count the upstream fetches (a counter incremented beside the `fetch` call, logged at worker teardown), run the suite once, and record the number. Expect eight, four assets in each of two workers, rather than two hundred. Remove the instrumentation before committing.
+Temporarily count the upstream fetches (a counter incremented beside the `fetch` call, logged at worker teardown), run the suite once, and record the number. Expect four per worker rather than two hundred per run: eight on CI, where `workers` is pinned to 2, and four times however many workers Playwright picks locally. Remove the instrumentation before committing.
 
 Then confirm the stylesheet still loads rather than being blocked as a CORS failure, which is the trap that would otherwise pass every structural selector while silently unstyling the page. In a scratch script or a temporary line, compare `page.evaluate(() => document.styleSheets.length)` with the route active against the same page without it. The two must agree. Record both numbers and remove the check.
 
