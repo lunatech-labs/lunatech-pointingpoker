@@ -10,7 +10,7 @@ async function upstream(handler) {
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   return {
-    url: `http://localhost:${server.address().port}`,
+    url: `http://127.0.0.1:${server.address().port}`,
     async close() {
       server.closeAllConnections()
       server.close()
