@@ -2,6 +2,12 @@ import { test as base, expect } from '@playwright/test'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
 
+// The page pulls four assets from three public hosts on every load, and a run opens roughly
+// 55 contexts. Fetch each once per worker instead of once per context.
+const CDN = /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|stackpath\.bootstrapcdn\.com)\//
+// fetch decompresses the body, so relaying either of these alongside it corrupts the response.
+const DROPPED = new Set(['content-encoding', 'content-length'])
+
 export const test = base.extend({
   app: [
     async ({}, use) => {
@@ -11,6 +17,37 @@ export const test = base.extend({
     },
     { scope: 'worker' }
   ],
+
+  assets: [
+    async ({}, use) => {
+      const cache = new Map()
+      const serve = async route => {
+        const url = route.request().url()
+        if (!cache.has(url)) {
+          // A miss falls through to the network, which is what the page did before this cache.
+          const response = await fetch(url).catch(() => null)
+          if (!response?.ok) return route.continue()
+          const headers = {}
+          for (const [name, value] of response.headers) {
+            if (!DROPPED.has(name)) headers[name] = value
+          }
+          cache.set(url, {
+            status: response.status,
+            headers,
+            body: Buffer.from(await response.arrayBuffer())
+          })
+        }
+        await route.fulfill(cache.get(url))
+      }
+      await use(serve)
+    },
+    { scope: 'worker' }
+  ],
+
+  context: async ({ context, assets }, use) => {
+    await context.route(CDN, assets)
+    await use(context)
+  },
 
   // Worker-scoped: buffering and the cut list are global to a stub instance, so a shared
   // one would force workers: 1 permanently.
@@ -47,10 +84,11 @@ export const test = base.extend({
 
   // One browser context per participant: two pages in one context share the room cookie and
   // resolve to a single session, which is a step 6 case rather than any of these.
-  join: async ({ browser, origin, room, stub }, use) => {
+  join: async ({ browser, origin, room, stub, assets }, use) => {
     const open = []
     const join = async name => {
       const context = await browser.newContext({ baseURL: origin })
+      await context.route(CDN, assets)
       const page = await context.newPage()
       await page.goto(`/${room}`)
       await nameInput(page).fill(name)
