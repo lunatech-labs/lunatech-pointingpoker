@@ -699,7 +699,7 @@ Expected: FAIL with `target/universal/stage/bin/pointingpoker is missing. Run: s
 - [ ] **Step 5: Stage the app**
 
 Run: `sbt "; coverageOff; Universal/stage"`
-Expected: `target/universal/stage/bin/pointingpoker` exists and is executable. `coverageOff` is not optional; `sbt qa` leaves scoverage-instrumented classes behind and staging without it packages them.
+Expected: `target/universal/stage/bin/pointingpoker` exists and is executable. `coverageOff` is insurance rather than a requirement here, since a separate `sbt` invocation recompiles without instrumentation anyway; it matters only if you stage from the same shell that ran `qa`.
 
 - [ ] **Step 6: Run it to verify it passes**
 
@@ -772,8 +772,10 @@ sbt "; coverageOff; Universal/stage"
 npm test
 ```
 
-`coverageOff` matters: `sbt qa` leaves scoverage-instrumented classes behind, and staging
-without it packages them.
+`coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
+session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
+It earns its place if you ever stage from the same sbt shell that ran `qa`, where the
+instrumented classes do get packaged and no scoverage runtime is staged to satisfy them.
 
 The stub also runs standalone, so the failure can be reproduced by hand against an app you
 are already running:

@@ -332,8 +332,12 @@ that job already has a JVM and a warm build:
   run: npm run e2e
 ```
 
-`coverageOff` is not optional: `sbt qa` leaves scoverage-instrumented classes
-behind, and staging without it packages them.
+`coverageOff` is insurance rather than a requirement in these two invocations.
+Enabling coverage is a session setting, so a fresh `sbt` recompiles without
+instrumentation regardless, the changed `scalacOptions` invalidating Zinc's
+analysis. It earns its place only if the two are ever collapsed into one shell,
+where the instrumented classes are packaged and no scoverage runtime is staged
+beside them to satisfy the calls.
 
 The glob is not interchangeable with the directory: on Node 24 `node --test
 test/` exits 1 with a spurious failing case, so keep the quoted pattern, which
