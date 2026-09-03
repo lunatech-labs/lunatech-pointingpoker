@@ -105,6 +105,8 @@ export const participantRows = page =>
 export const participantRow = (page, name) => participantRows(page).filter({ hasText: name })
 // An empty <i> has no size, so count it rather than asking whether it is visible.
 export const votedMark = row => row.locator('td').first().locator('svg, i')
+// The page's own "connection lost" banner, which is how a cut and a reconnect are sequenced.
+export const connectionAlert = page => page.getByRole('alert')
 export const vote = (page, value) =>
   page.getByRole('button', { name: value, exact: true }).click()
 
