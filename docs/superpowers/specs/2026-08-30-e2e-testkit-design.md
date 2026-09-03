@@ -173,7 +173,7 @@ Every value arrives by environment variable. No new configuration surface.
 
 | Variable | Test | Production |
 | --- | --- | --- |
-| `SSE_GRACE_PERIOD` | 600ms | 6s |
+| `SSE_GRACE_PERIOD` | 4s | 6s |
 | `SSE_RETRY` | 200ms | 2000ms |
 
 **Two variables, not the ten an earlier draft of this section tabled.** The
@@ -187,7 +187,7 @@ depend on turning it down. The profile grows again at step 4, which makes the
 actor idle timeout configurable and will want it turned right down to test
 stop-after-idle.
 
-One invariant is left, and it is the one the app actually enforces: `600 >=
+One invariant is left, and it is the one the app actually enforces: `4000 >=
 2x200`, against `SseConfig.load`'s `require` that the grace period be at least
 twice the retry. That `require` throwing is what validates the profile, which
 is section 2's point rather than a second mechanism.
