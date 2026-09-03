@@ -383,7 +383,7 @@ unbounded SSE stream is already the input that makes it fail.
 rather than at step 8, which needs them later for the connection module's
 tests and will find them already present.
 
-Two follow-ups this creates, both recorded rather than scheduled: the
-`README.md` needs the two commands (`npm test`, and `sbt Universal/stage`
-before `npm run e2e`), and `.gitignore` needs `node_modules` and
-`test-results/`.
+Two follow-ups this created, both since landed: `README.md` gained the
+commands, in the fuller form `sbt "; coverageOff; Universal/stage"` with the
+reasoning beside them, and `.gitignore` gained `node_modules/`,
+`test-results/` and `playwright-report/`.
