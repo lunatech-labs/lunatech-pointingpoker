@@ -82,13 +82,14 @@ async function departureWhileCut(join) {
   await expect(participantRows(alice.page)).toHaveCount(3)
 
   await carol.close()
-  // Two broadcasts are what make the app notice Carol, and Bob must still be connected for
-  // them, or his own removal starts on the same clock as the departure he has to miss.
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  const settled = alice.page.waitForResponse(response => response.url().endsWith('/clear'))
-  await clear.click()
-  await settled
-  await clear.click()
+  // Two broadcasts are what make the app notice Carol, and both must be seen reaching Bob
+  // before he is cut, or his own removal starts on the same clock as Carol's.
+  const aliceOnBob = participantRow(bob.page, 'Alice')
+  await vote(alice.page, '5')
+  await expect(votedMark(aliceOnBob)).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(aliceOnBob)).toHaveCount(0)
+
   await bob.cut()
   await expect(connectionAlert(bob.page)).toBeVisible()
 
