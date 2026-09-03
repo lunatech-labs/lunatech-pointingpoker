@@ -44,13 +44,13 @@ The two specs count the cases differently. 08-30 §Testing lists "five behaviour
 | An auto-revealed round stays revealed | `room.spec.js` | `test.fail()`, step 1 | 08-31: "an auto-revealed room staying revealed when a straggler arrives" |
 | The tally counts only the votes cast | `room.spec.js` | `test.fail()`, step 3 | 08-31: "the non-voter tally" |
 
-Deliberately not here, each with the step that owns it: the vote-survival assertion on reconnect and the two further issue-input cases (step 1, beside Problem A's fix, for the reason 08-31 §6 gives), the straggler-departure confidentiality case (step 2), the two shared-cookie tab cases (step 6), and an assertion on the anti-buffering headers, which 08-31 puts in `APISpec` at step 1 and explicitly refuses to accept from this stub.
+Deliberately not here, each with the step that owns it: the vote-survival assertion on reconnect and the two further issue-input cases (step 1, beside Problem A's fix, for the reason 08-31 §6 gives), the straggler-departure confidentiality case (step 2), the two shared-cookie tab cases (step 6), an assertion on the anti-buffering headers, which 08-31 puts in `APISpec` at step 1 and explicitly refuses to accept from this stub, and turning buffering on: `test/reproduction.test.js` already covers that path without a browser, and no step owns a browser-level version of it.
 
 ## Deviations from the spec, and why
 
 Each of these is a decision the specs left open or got slightly wrong. They are listed so a reviewer can reject one without re-deriving it.
 
-1. **`SSE_GRACE_PERIOD` widens from 600ms to 2s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. One case has to cut a participant inside the window between a departure being noticed and being announced, and that window is the grace period. At 600ms it is about 1.4s wide once detection is counted, and at 2s it is about 2.8s, on the one case whose flake mode is a false pass rather than a false failure. `2s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is that the leave case waits about 3.1s rather than 1.7s. This deviation was originally justified by an arithmetic that the measurements above replaced; it survives on the margin argument alone.
+1. **`SSE_GRACE_PERIOD` widens from 600ms to 2s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. One case has to cut a participant inside the window between a departure being noticed and being announced, and that window is the grace period. At 600ms it is about 1.4s wide once detection is counted, and at 2s it is about 2.8s, on the one case whose flake mode is a loud false pass, which Playwright already reports as "expected to fail, but passed", rather than a silent one. The silent risk is different, a vacuous pass from a nudge or a reconnect failing quietly, which the added control case guards against separately. `2s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is that the leave case waits about 3.1s rather than 1.7s. This deviation was originally justified by an arithmetic that the measurements above replaced; it survives on the margin argument alone.
 2. **The stub gains `cut(match)` and `restore(match)`**, which 08-30 §1 does not describe. Two cases need an established SSE stream to break and then reconnect, and nothing else in the toolbox does it: a reload clears the client state that makes the bug visible, the buffering toggle by design only affects later requests, and `browserContext.setOffline` is network emulation whose behaviour over loopback is not guaranteed and differs by engine, while these cases must run in both. A proxy that kills one client's connection is also squarely what the stub already models. It is scoped to a cookie value so one participant can be cut while another stays connected and observing.
 3. **`test/stub.test.js`'s `get` helper also returns its `result` object**, so a test can wait for a stream to open before cutting it. One added property on an existing local helper.
 4. **A sixth green case exists that no spec sentence asks for**, "a cut stream reconnects and the room survives it". `test.fail()` accepts *any* failure as expected, including a timeout, so the two reconnect cases would stay green if `cut` silently stopped working and no assertion in them could tell. This is the same argument 08-30 makes for the reproduction's control stream, applied to the same mechanism.
@@ -72,6 +72,10 @@ shapes three cases. Measured against the staged app, on this machine, with the t
 | the same, through the stub (its upstream teardown is a half-close) | 31.8s |
 | through the stub, then one broadcast to the room | 16.7s |
 | through the stub, then two broadcasts | 1.7s |
+
+Measured at `SSE_GRACE_PERIOD=600ms`; the shipped test profile is 2s, so every figure above is about 1.4s larger against it.
+
+Rows 1 and 3 are both a half-close, but row 1's peer is still reading and row 3's is not, which is the whole difference between never and 31.8s.
 
 The rule behind the table: the app learns a stream is dead only when a write to it fails, and
 after a half-close the first write merely elicits the peer's reset, so the second is the one
@@ -856,7 +860,7 @@ This is the one case whose ordering is partly timed rather than observed, so her
 - Carol's leave is broadcast, Alice observes it, and the same broadcast is the first write to Bob's cut stream, which only draws his reset. Bob's own detection therefore waits for the next write, up to 15s away, which is the slack his reconnect has.
 - Bob is restored and his banner clears. His `Join` replaces his entry, so when his old stream is finally noticed, `ConfirmLeave` finds a different ref and does nothing.
 
-If this case flakes, it flakes on the cut landing late, and the fix is a larger `SSE_GRACE_PERIOD`. Do not add a wait before the cut, which spends the margin it needs.
+If this case flakes, it flakes on the cut landing late, which is a loud false pass that Playwright reports directly rather than a silent one, and the fix is a larger `SSE_GRACE_PERIOD`. Do not add a wait before the cut, which spends the margin it needs.
 
 Alice is a participant here purely to be the observation point, which is also why `carol.close()` leaves the room non-empty and the room actor alive. Nothing votes, so nothing reveals, and no assertion depends on either.
 
