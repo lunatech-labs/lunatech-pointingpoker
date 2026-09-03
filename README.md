@@ -104,8 +104,10 @@ sbt "; coverageOff; Universal/stage"
 npm test
 ```
 
-`coverageOff` matters: `sbt qa` leaves scoverage-instrumented classes behind, and staging
-without it packages them.
+`coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
+session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
+It earns its place if you ever stage from the same sbt shell that ran `qa`, where the
+instrumented classes do get packaged and no scoverage runtime is staged to satisfy them.
 
 The stub also runs standalone, so the failure can be reproduced by hand. Start the app with
 plain-HTTP cookies, or the room will fail to populate for the unrelated reason in "Running
