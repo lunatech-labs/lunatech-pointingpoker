@@ -50,7 +50,7 @@ Deliberately not here, each with the step that owns it: the vote-survival assert
 
 Each of these is a decision the specs left open or got slightly wrong. They are listed so a reviewer can reject one without re-deriving it.
 
-1. **`SSE_GRACE_PERIOD` widens from 600ms to 2s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. One case needs two departures to resolve in a fixed order (Task 4 has the arithmetic), and the ordering window is bounded by the grace period itself, so 600ms leaves margins of tens of milliseconds. `2s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is that the leave case waits 2s rather than 600ms.
+1. **`SSE_GRACE_PERIOD` widens from 600ms to 2s** in `testkit/app.js`'s `testProfile`, against 08-30 §3's table. One case has to cut a participant inside the window between a departure being noticed and being announced, and that window is the grace period. At 600ms it is about 1.4s wide once detection is counted, and at 2s it is about 2.8s, on the one case whose flake mode is a false pass rather than a false failure. `2s >= 2 x 200ms` still satisfies the app's `require`, which is the only invariant the profile has. The cost is that the leave case waits about 3.1s rather than 1.7s. This deviation was originally justified by an arithmetic that the measurements above replaced; it survives on the margin argument alone.
 2. **The stub gains `cut(match)` and `restore(match)`**, which 08-30 §1 does not describe. Two cases need an established SSE stream to break and then reconnect, and nothing else in the toolbox does it: a reload clears the client state that makes the bug visible, the buffering toggle by design only affects later requests, and `browserContext.setOffline` is network emulation whose behaviour over loopback is not guaranteed and differs by engine, while these cases must run in both. A proxy that kills one client's connection is also squarely what the stub already models. It is scoped to a cookie value so one participant can be cut while another stays connected and observing.
 3. **`test/stub.test.js`'s `get` helper also returns its `result` object**, so a test can wait for a stream to open before cutting it. One added property on an existing local helper.
 4. **A sixth green case exists that no spec sentence asks for**, "a cut stream reconnects and the room survives it". `test.fail()` accepts *any* failure as expected, including a timeout, so the two reconnect cases would stay green if `cut` silently stopped working and no assertion in them could tell. This is the same argument 08-30 makes for the reproduction's control stream, applied to the same mechanism.
@@ -59,6 +59,42 @@ Each of these is a decision the specs left open or got slightly wrong. They are 
 7. **`join(name)` returns a participant object rather than taking a page.** 08-30 §4 sketches `join(page, room, name)`, which would hand every case Playwright's default `page` and therefore one shared cookie jar: two participants in one context resolve to one session, which is a step 6 case rather than any of these. One context per participant is the only shape that works, so the helper owns the context.
 8. **No browser-binary cache step in CI.** 08-30 §CI calls the browser install cacheable but its own YAML omits a cache step, and `--with-deps` needs its apt work on every run regardless. `actions/setup-node`'s npm cache is switched on, which is the free half.
 9. **`.gitignore` gains `test-results/` and `playwright-report/`.** 08-30 §4 asks for `test-results/` only; the second is what the HTML reporter writes if anyone runs it locally with `--reporter=html`.
+
+## How a departure is actually noticed, measured
+
+Task 3 discovered that the plan's first draft was wrong about departures, and the correction
+shapes three cases. Measured against the staged app, on this machine, with the testkit:
+
+| What happens to a member's connection | When the room announces the leave |
+| --- | --- |
+| the client half-closes (FIN, still reading) | never, within 70s |
+| the client aborts (RST) with no traffic after it | 31.7s |
+| the same, through the stub (its upstream teardown is a half-close) | 31.8s |
+| through the stub, then one broadcast to the room | 16.7s |
+| through the stub, then two broadcasts | 1.7s |
+
+The rule behind the table: the app learns a stream is dead only when a write to it fails, and
+after a half-close the first write merely elicits the peer's reset, so the second is the one
+that fails. `SSE.scala:34`'s hardcoded 15 second heartbeat is otherwise the only write there
+is, which is where 31.7s comes from (two heartbeats), and why `docs/known-issues.md`
+attributing the delay to the grace period alone is understating it by 30 seconds. Detection
+then costs about 1.1s, and the grace period runs after that.
+
+Three consequences, applied in the tasks below:
+
+1. **A case that waits for a departure sends two broadcasts first.** `Clear votes` is the
+   nudge, being the only broadcast that changes nothing. Without it the case waits 31s, which
+   is past Playwright's default per-case timeout.
+2. **A cut participant must be cut after those nudges, never before.** A nudge that lands on
+   an already-cut stream starts that participant's own removal on the same clock as the
+   departure it is supposed to miss.
+3. **`cut` and `restore` are sequenced on the page's own connection banner**, not on a timer.
+   `index.html:472-485` sets `errorMessage` on an `EventSource` error and `:389-395` clears it
+   on reopen, so `getByRole('alert')` appearing and disappearing is a retryable state
+   assertion for "this participant is disconnected" and "this participant is back".
+
+The heartbeat stays untouched. 08-30 §3 singles it out as hardcoded and forbids any case from
+depending on turning it down, which is exactly what these three consequences work around.
 
 ## File structure
 
@@ -511,10 +547,11 @@ Five cases, all green, pinning behaviour the app already gets right. They are th
 
 **Files:**
 - Create: `e2e/room.spec.js`
+- Modify: `e2e/fixtures.js`
 
 **Interfaces:**
 - Consumes everything `e2e/fixtures.js` exports (Task 2).
-- Produces: nothing. Task 4 appends to this file.
+- Produces one more export on `e2e/fixtures.js`, `connectionAlert(page)`, which Task 4 also uses. Nothing else.
 
 Facts these cases rest on, all in `src/main/resources/pages/index.html`:
 - `allVoted()` (`:553-554`) sets `votesRevealed` whenever every entry in `users` is voted, so a round reveals itself with no one pressing Show. That is intended and survives step 1 as a stored latch, so it is pinned here rather than marked failing.
@@ -522,7 +559,14 @@ Facts these cases rest on, all in `src/main/resources/pages/index.html`:
 - `Leave` and `Copy link` are `<a>` elements (`:177-181`), so they are links, not buttons.
 - The issue box is `readonly` until the pencil sets `editing` (`:200-207`).
 
-- [ ] **Step 1: Write the two voting cases**
+- [ ] **Step 1: Add the connection banner locator, then write the two voting cases**
+
+In `e2e/fixtures.js`, beside the other locators:
+
+```js
+// The page's own "connection lost" banner, which is how a cut and a reconnect are sequenced.
+export const connectionAlert = page => page.getByRole('alert')
+```
 
 Create `e2e/room.spec.js`:
 
@@ -530,6 +574,7 @@ Create `e2e/room.spec.js`:
 import {
   test,
   expect,
+  connectionAlert,
   participantRow,
   participantRows,
   summaryTable,
@@ -593,7 +638,12 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await expect(participantRows(bob.page)).toHaveCount(2)
 
   await bob.page.getByRole('link', { name: 'Leave' }).click()
-  // The room waits out its grace period before announcing the departure.
+  // The app notices a dead stream only when a write to it fails, and the first write after a
+  // close only draws the reset, so two broadcasts stand in for the heartbeat 15s away.
+  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  await clear.click()
+  await clear.click()
+
   await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 10_000 })
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
@@ -607,7 +657,7 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
 })
 ```
 
-The 10 second timeout is deliberately far above the grace period in either value it takes in this branch, because the assertion is about the departure being announced at all, not about when.
+The 10 second timeout is deliberately far above detection plus the grace period, because the assertion is about the departure being announced at all, not about when. The two clicks are load-bearing rather than incidental: without them this case waits 31s and fails on Playwright's default per-case timeout. "How a departure is actually noticed" above has the measurements.
 
 - [ ] **Step 4: Run them**
 
@@ -625,10 +675,13 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
   const bob = await join('Bob')
 
   await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
   await bob.restore()
+  // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // A vote landing on Bob's page is the proof his stream came back. The two reconnect cases
-  // below cannot assert this themselves: test.fail() accepts a timeout as expected.
+  // A vote landing on Bob's page is the proof his stream came back usable. The two reconnect
+  // cases below cannot assert this themselves: test.fail() accepts a timeout as expected.
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000
@@ -758,7 +811,10 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
   const bob = await join('Bob')
 
   await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
   await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000
@@ -776,30 +832,33 @@ test('a participant who departed during the gap is pruned on reconnect', async (
   await expect(participantRows(bob.page)).toHaveCount(3)
 
   await carol.close()
-  // Cut Bob halfway through Carol's grace period: his own then outlasts the leave he must miss.
-  await bob.page.waitForTimeout(1000)
+  // Two broadcasts are what make the app notice Carol, and Bob must still be connected for
+  // them, or his own removal starts on the same clock as the departure he has to miss.
+  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  await clear.click()
+  await clear.click()
   await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
+
   await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
   await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  await vote(alice.page, '5')
-  await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
-    timeout: 10_000
-  })
   await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
 })
 ```
 
-The second case is the only one in this suite whose ordering is timed rather than observed, so here is the arithmetic, with the grace period G at 2s and the SSE retry at 200ms:
+This is the one case whose ordering is partly timed rather than observed, so here is what has to hold, with detection at about 1.1s after the second broadcast and the grace period G at 2s:
 
-- t=0, Carol's context closes. Her `Leave` is scheduled for t=G.
-- t=1.0s, Bob is cut. His `Leave` is scheduled for t=1.0+G=3.0s. He must be cut before t=G or he receives the departure and prunes Carol himself, which would make this case pass and fail the run.
-- t=G=2.0s, Carol's `ConfirmLeave` fires and is broadcast. Alice, still connected, is the observation point, so the restore waits on a fact rather than a clock.
-- t=2.05s or so, Bob is restored, and his `EventSource` retries 200ms later. He must reconnect before t=3.0s, or `ConfirmLeave` has already removed him and his token no longer resolves, which answers 401 and stops the retries for good.
+- Carol's context closes. Nothing happens yet: the app has not written to her stream.
+- The two clicks land. Carol's stream fails on the second, so her `ConfirmLeave` is scheduled for about 1.1s + G, roughly 3.1s later. Bob is alive and simply receives both.
+- Bob is cut, and this is the only timed step: it must land before Carol's `ConfirmLeave` fires. The margin is about 2.8s, against two clicks and a cut that take a few hundred milliseconds. Cutting Bob before the clicks instead would put both removals on the same clock and lose the race.
+- Carol's leave is broadcast, Alice observes it, and the same broadcast is the first write to Bob's cut stream, which only draws his reset. Bob's own detection therefore waits for the next write, up to 15s away, which is the slack his reconnect has.
+- Bob is restored and his banner clears. His `Join` replaces his entry, so when his old stream is finally noticed, `ConfirmLeave` finds a different ref and does nothing.
 
-Both margins are about a second wide and both scale with G. If this case ever flakes, raise `SSE_GRACE_PERIOD`; do not shorten the wait, which only narrows the first margin.
+If this case flakes, it flakes on the cut landing late, and the fix is a larger `SSE_GRACE_PERIOD`. Do not add a wait before the cut, which spends the margin it needs.
 
-Alice is a participant here purely to keep the observation point, which is also why `carol.close()` leaves the room non-empty and the room actor alive.
+Alice is a participant here purely to be the observation point, which is also why `carol.close()` leaves the room non-empty and the room actor alive. Nothing votes, so nothing reveals, and no assertion depends on either.
 
 - [ ] **Step 6: Run the whole suite**
 
