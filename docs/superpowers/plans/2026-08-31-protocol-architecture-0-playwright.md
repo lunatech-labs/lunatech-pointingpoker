@@ -991,18 +991,23 @@ And as a fixture, beside `app` and `stub`:
       const serve = async route => {
         const url = route.request().url()
         if (!cache.has(url)) {
-          // A miss falls through to the network, which is what the page did before this cache.
-          const response = await fetch(url).catch(() => null)
-          if (!response?.ok) return route.continue()
-          const headers = {}
-          for (const [name, value] of response.headers) {
-            if (!DROPPED.has(name)) headers[name] = value
+          try {
+            // Bounded, since a CDN that stalls rather than failing is the case this exists for.
+            const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+            if (!response.ok) return route.continue()
+            const headers = {}
+            for (const [name, value] of response.headers) {
+              if (!DROPPED.has(name)) headers[name] = value
+            }
+            cache.set(url, {
+              status: response.status,
+              headers,
+              body: Buffer.from(await response.arrayBuffer())
+            })
+          } catch {
+            // Any failure falls back to the network, which is what the page did before this.
+            return route.continue()
           }
-          cache.set(url, {
-            status: response.status,
-            headers,
-            body: Buffer.from(await response.arrayBuffer())
-          })
         }
         await route.fulfill(cache.get(url))
       }
@@ -1067,7 +1072,7 @@ git status --short
 
 Expected:
 - `npm test`: 12/12 passing, output pristine.
-- `npm run e2e`: 22 passed, 10 of them expected failures, no flakes across two consecutive runs.
+- `npm run e2e`: 24 passed, 10 of them expected failures, no flakes across two consecutive runs. Twelve cases in each project, the eleven this plan tabled plus the control the whole-branch review added.
 - `git status --short`: empty. No `node_modules/`, `test-results/` or `playwright-report/` tracked, and `package-lock.json` committed.
 - Nothing under `src/` in `git diff main...HEAD --stat`.
 
