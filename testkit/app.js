@@ -23,6 +23,8 @@ export const testProfile = {
 
 export async function freePort() {
   const server = net.createServer()
+  // The literal address, not 'localhost': node resolves that to ::1 and the JVM to 127.0.0.1,
+  // so the hostname would probe a different family than HOST=localhost actually binds.
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const { port } = server.address()

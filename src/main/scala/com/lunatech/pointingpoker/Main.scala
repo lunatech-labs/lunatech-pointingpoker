@@ -40,11 +40,17 @@ object Main extends App:
   }
   given ec: ExecutionContextExecutor = system.executionContext
 
+  // A startup failure here is asynchronous, so without an explicit exit the actor system's
+  // threads keep a server-less JVM alive and every supervisor still sees a running process.
   roomManagerFuture.onComplete {
     case Success(roomManager) =>
       val api = API(roomManager, apiConfig, sseConfig, probeConfig)
-      api.run()
+      api.run().failed.foreach { exception =>
+        log.error("Could not bind the HTTP server, exiting", exception)
+        System.exit(1)
+      }
     case Failure(exception) =>
-      log.error("Error creating room manager {}", exception)
+      log.error("Error creating the room manager, exiting", exception)
+      System.exit(1)
   }
 end Main
