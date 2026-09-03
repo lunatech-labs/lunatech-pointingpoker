@@ -6,7 +6,8 @@ export default defineConfig({
   reporter: 'list',
   // The per-worker asset cache keeps the CDNs off the critical path, so retries buy nothing.
   retries: 0,
-  // A test.fail() case that passes then fails-as-expected on retry reports flaky and exits 0.
+  // Insurance for a future retries change: a test.fail() case that passes then fails-as-expected
+  // on retry would otherwise report flaky and exit 0.
   failOnFlakyTests: true,
   // Each worker boots its own JVM and stub; two is the ceiling worth paying for on CI.
   workers: process.env.CI ? 2 : undefined,
