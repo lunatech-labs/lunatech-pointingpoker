@@ -31,6 +31,16 @@ jobs:
       - name: Codecov
         uses: codecov/codecov-action@v7
 
+      - name: stage the app for the node tests
+        run: sbt "; coverageOff; Universal/stage"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: node tests
+        run: node --test "test/**/*.test.js"
+
   style-check:
     runs-on: ubuntu-latest
 
