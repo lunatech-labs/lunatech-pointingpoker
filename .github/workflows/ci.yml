@@ -37,9 +37,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
+          cache: 'npm'
 
       - name: node tests
         run: node --test "test/**/*.test.js"
+
+      - name: install the browser suite
+        run: npm ci && npx playwright install --with-deps chromium firefox
+
+      - name: browser tests
+        run: npm run e2e
 
   style-check:
     runs-on: ubuntu-latest
