@@ -285,6 +285,33 @@ roadmap item instead of leaving it here as stale history.
   which builds each snapshot per recipient and redacts other participants'
   estimations until the room reveals. Remove this entry when that lands.
 
+### The page and the browser suite depend on three public CDNs at runtime
+
+- **Where:** `src/main/resources/pages/index.html` (the four asset tags at
+  `:5`, `:84`, `:330` and `:331`); `e2e/fixtures.js` (the `assets` fixture).
+- **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
+  `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
+  load, so an outage at any of the three takes the app down and nothing is
+  vendored to fall back to. The browser suite inherits it: the `assets` fixture
+  caches each asset once per worker, which cut the fetch count but not the
+  dependency, and its fallback on a failed fetch is `route.continue()` to the
+  same unreachable host. The failure mode is therefore all cases failing at once
+  on a page whose Vue never mounts, rather than one case degrading. Only
+  Bootstrap carries an `integrity` attribute; the other three are unverified.
+  The axios tag was also unpinned until it was fixed alongside this entry,
+  resolving to whatever was latest at page load, which made the suite
+  irreproducible across time independently of any outage.
+- **Resolution:** Stays open, unscheduled. Step 8 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  the frontend rewrite, would close it structurally, since its build tooling
+  bundles these assets, but nothing schedules it as a fix and the page is
+  expected to keep loading from a CDN until then. Vendoring the four files for
+  the test suite alone was considered and declined: third-party bytes in the
+  repo plus a refresh ritual, bought against an outage nobody has hit, and it
+  would make the suite load something production does not, against the point of
+  driving the real page. The trigger is an observed CDN failure in CI. Remove
+  this entry if step 8 bundles them.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside

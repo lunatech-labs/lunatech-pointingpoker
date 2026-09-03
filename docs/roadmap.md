@@ -10,10 +10,10 @@ make sense once an earlier one exists.
 
 `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
 supersedes the phases below with a ten-step ordered path numbered from zero, and
-each item here notes the step that absorbs it. Steps 0 to 6 close every
-documented defect; 7 is a usability improvement and 8 and 9 are product work.
-Items that stay in a phase are product decisions built on that target rather
-than steps toward it.
+each item here notes the step that absorbs it. Steps 0 to 6 close the scheduled
+defects, with `docs/known-issues.md` recording which entries stay open and why;
+7 is a usability improvement and 8 and 9 are product work. Items that stay in a
+phase are product decisions built on that target rather than steps toward it.
 
 ## Phase 1: Transport + identity foundation
 
@@ -167,6 +167,17 @@ directly in the new frontend.
       persisted: a restart takes presence, the round, the current issue and the
       session's history at once, so scheduling deploys outside meeting hours is
       the actual mitigation.
+- [ ] A deliberate logging policy. There is no `logback.xml` in the repo or the
+      staged distribution, so logback falls back to root DEBUG on the console:
+      every room broadcast (`actors/Room.scala`) and every request path is
+      logged in production. Logging was never in scope for the 2026-08 spec
+      round or for the phases above, so this is recorded to keep it from being
+      rediscovered, not because anything has been reported. It is deliberately
+      not "set a level floor of INFO": DEBUG is what currently lets an operator
+      see whether a room is in use, which is how the deploy timing in the item
+      above gets judged. The item is to decide what operations actually needs,
+      an activity signal that does not depend on debug-level noise, and set the
+      level once that exists.
 
 ## Backlog: suggested, not yet prioritized
 
