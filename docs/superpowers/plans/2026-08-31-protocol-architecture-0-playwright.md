@@ -952,6 +952,108 @@ git commit -m "ci: gate the browser suite and document how to run it"
 
 ---
 
+### Task 6: Take the public CDNs off the critical path
+
+Added after the whole-branch review. `src/main/resources/pages/index.html` pulls four assets from three public hosts on every page load, each browser context has its own cache, and a run opens roughly 55 contexts, so a run makes over two hundred external requests and any one of them stalling past a 5s assertion fails a green case. That is the suite's only dependency on something outside the machine and its most likely failure on a loaded runner. Fetching each asset once per worker cuts the exposure to eight requests, and once the network is off the critical path `retries` can go to zero, which also settles the comment that currently explains retries as absorbing CDN flakiness two lines above `failOnFlakyTests`.
+
+**Files:**
+- Modify: `e2e/fixtures.js`, `playwright.config.js`
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: a worker-scoped `assets` fixture, a route handler `(route) => Promise<void>`. It is internal to the fixtures file and no spec imports it.
+
+The four assets, all in `index.html`: `stackpath.bootstrapcdn.com` (Bootstrap CSS, at `:5`), `unpkg.com` (feather, at `:84`), and `cdn.jsdelivr.net` (axios at `:330` and Vue at `:331`).
+
+Two traps make this less trivial than it looks, and getting either wrong changes what the page is:
+
+1. **The Bootstrap link carries `integrity` and `crossorigin="anonymous"`** (`index.html:5`). A fulfilled response must therefore be byte-identical, or Subresource Integrity rejects it, and must carry the upstream `Access-Control-Allow-Origin`, or the browser blocks the stylesheet as a CORS failure. So relay the upstream headers rather than setting only a content type.
+2. **`fetch` decompresses the body but leaves the header saying otherwise.** Relaying `content-encoding` or `content-length` alongside a decompressed body corrupts the response, the same class of bug the stub already avoids by stripping hop-by-hop headers.
+
+- [ ] **Step 1: Add the worker-scoped cache**
+
+In `e2e/fixtures.js`, above the `test.extend` call:
+
+```js
+// The page pulls four assets from three public hosts on every load, and a run opens roughly
+// 55 contexts. Fetch each once per worker instead of once per context.
+const CDN = /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|stackpath\.bootstrapcdn\.com)\//
+// fetch decompresses the body, so relaying either of these alongside it corrupts the response.
+const DROPPED = new Set(['content-encoding', 'content-length'])
+```
+
+And as a fixture, beside `app` and `stub`:
+
+```js
+  assets: [
+    async ({}, use) => {
+      const cache = new Map()
+      const serve = async route => {
+        const url = route.request().url()
+        if (!cache.has(url)) {
+          // A miss falls through to the network, which is what the page did before this cache.
+          const response = await fetch(url).catch(() => null)
+          if (!response?.ok) return route.continue()
+          const headers = {}
+          for (const [name, value] of response.headers) {
+            if (!DROPPED.has(name)) headers[name] = value
+          }
+          cache.set(url, {
+            status: response.status,
+            headers,
+            body: Buffer.from(await response.arrayBuffer())
+          })
+        }
+        await route.fulfill(cache.get(url))
+      }
+      await use(serve)
+    },
+    { scope: 'worker' }
+  ],
+```
+
+- [ ] **Step 2: Route every context through it**
+
+The participants' contexts are made in `join`, and the smoke case uses Playwright's default `page`, which comes from the built-in `context` fixture. Both need the route, so override `context` as well:
+
+```js
+  context: async ({ context, assets }, use) => {
+    await context.route(CDN, assets)
+    await use(context)
+  },
+```
+
+and in `join`, immediately after `browser.newContext(...)`:
+
+```js
+      await context.route(CDN, assets)
+```
+
+adding `assets` to that fixture's dependencies.
+
+- [ ] **Step 3: Prove the cache is real, without committing the proof**
+
+Temporarily count the upstream fetches (a counter incremented beside the `fetch` call, logged at worker teardown), run the suite once, and record the number. Expect eight, four assets in each of two workers, rather than two hundred. Remove the instrumentation before committing.
+
+Then confirm the stylesheet still loads rather than being blocked as a CORS failure, which is the trap that would otherwise pass every structural selector while silently unstyling the page. In a scratch script or a temporary line, compare `page.evaluate(() => document.styleSheets.length)` with the route active against the same page without it. The two must agree. Record both numbers and remove the check.
+
+- [ ] **Step 4: Retire the retry**
+
+In `playwright.config.js`, `retries: 0`, and rewrite the comment above it: retries existed to absorb CDN flakiness, the cache removes the CDN from the critical path, and `failOnFlakyTests` stays so that a `test.fail()` case flipping cannot be reported as flaky and exit 0.
+
+- [ ] **Step 5: Run the suite twice**
+
+Run: `npm run e2e && npm run e2e`
+
+Expected: 24 passed with 10 expected failures, twice, agreeing. Report both wall-clock times against the 45.6s baseline from before this task.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add e2e/fixtures.js playwright.config.js
+git commit -m "test(e2e): serve the page's CDN assets from a per-worker cache"
+```
+
 ## Verification
 
 Run from a clean tree on `20260831.protocol_architecture_0_playwright`, after `20260831.protocol_architecture_0_harness`:
