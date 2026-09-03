@@ -271,6 +271,18 @@ test('a request carrying a cut cookie is refused without reaching upstream', asy
   assert.equal(reached, 1)
 })
 
+test('cut refuses an empty match rather than cutting every connection', async t => {
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('ok')
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  assert.throws(() => stub.cut(''), /non-empty cookie match/)
+})
+
 test('restore lets a cut cookie through again', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' })

@@ -42,11 +42,20 @@ jobs:
       - name: node tests
         run: node --test "test/**/*.test.js"
 
-      - name: install the browser suite
-        run: npm ci && npx playwright install --with-deps chromium firefox
+      - name: install node dependencies
+        run: npm ci
+
+      - name: install the browsers
+        run: npx playwright install --with-deps chromium firefox
 
       - name: browser tests
         run: npm run e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-artifacts
+          path: test-results/
 
   style-check:
     runs-on: ubuntu-latest
