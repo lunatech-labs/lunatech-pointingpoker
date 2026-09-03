@@ -4,7 +4,9 @@ import http from 'node:http'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
 
-test('an SSE stream through a buffering proxy delivers nothing and dies at the deadline', { timeout: 30_000 }, async t => {
+// Above app.js's 30s readiness cap, or the runner cancels the test before startApp can
+// report the captured app output that tells you why the app never came up.
+test('an SSE stream through a buffering proxy delivers nothing and dies at the deadline', { timeout: 45_000 }, async t => {
   const app = await startApp()
   t.after(() => app.stop())
   const stub = await createStub({ upstream: app.baseUrl, buffering: true })
@@ -35,14 +37,22 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
   stub.setBuffering(false)
   const control = http.get(`${stub.baseUrl}/rooms/${roomId}/events`, { headers: { cookie } })
   t.after(() => control.destroy())
+  let controlEnded = false
   const streamed = await new Promise(resolve => {
     const started = Date.now()
     control.on('response', response => {
-      response.once('data', chunk => resolve({ bytes: chunk.length, ms: Date.now() - started }))
-      response.on('error', () => resolve({ bytes: 0, ms: Date.now() - started }))
+      const at = bytes => ({ status: response.statusCode, bytes, ms: Date.now() - started })
+      response.once('data', chunk => resolve(at(chunk.length)))
+      response.on('end', () => {
+        controlEnded = true
+      })
+      response.on('error', () => resolve(at(0)))
     })
-    control.on('error', () => resolve({ bytes: 0, ms: Date.now() - started }))
+    control.on('error', () => resolve({ status: null, bytes: 0, ms: Date.now() - started }))
   })
+  // A 401 or 500 here is finite, so the stub would release it and the buffered case below
+  // would fail pointing at the stub rather than at the session.
+  assert.equal(streamed.status, 200)
   assert.ok(streamed.bytes > 0, 'the app must stream something once the proxy is out of the way')
   assert.ok(
     streamed.ms < stub.deadlineMs,
@@ -65,6 +75,9 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
     req.on('error', error => resolve({ response, bytes, error, ms: Date.now() - started }))
   })
 
+  // Checked before the assertions below, because a stream that ended is the cause of the
+  // 401 they would otherwise blame on the stub.
+  assert.equal(controlEnded, false, 'the app SSE stream must not end on its own')
   assert.equal(result.response, null, 'not even the response headers may reach the client')
   assert.equal(result.bytes, 0)
   assert.ok(result.error, 'the appliance destroys the socket at its own timeout')
