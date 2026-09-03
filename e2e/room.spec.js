@@ -56,7 +56,9 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   // The app notices a dead stream only when a write to it fails, and the first write after a
   // close only draws the reset, so two broadcasts stand in for the heartbeat 15s away.
   const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  const settled = alice.page.waitForResponse(response => response.url().endsWith('/clear'))
   await clear.click()
+  await settled
   await clear.click()
 
   await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 10_000 })
@@ -70,6 +72,31 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
   await issueButton(alice.page).click()
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 })
+
+// Carol departs while Bob is cut, and Bob is back before his own removal fires. Shared so the
+// green control below cannot drift from the case it exists to control.
+async function departureWhileCut(join) {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const carol = await join('Carol')
+  await expect(participantRows(alice.page)).toHaveCount(3)
+
+  await carol.close()
+  // Two broadcasts are what make the app notice Carol, and Bob must still be connected for
+  // them, or his own removal starts on the same clock as the departure he has to miss.
+  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  const settled = alice.page.waitForResponse(response => response.url().endsWith('/clear'))
+  await clear.click()
+  await settled
+  await clear.click()
+  await bob.cut()
+  await expect(connectionAlert(bob.page)).toBeVisible()
+
+  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+  return { alice, bob }
+}
 
 test('a cut stream reconnects and the room survives it', async ({ join }) => {
   const alice = await join('Alice')
@@ -87,6 +114,10 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000
   })
+})
+
+test('a departure is announced while another participant is cut', async ({ join }) => {
+  await departureWhileCut(join)
 })
 
 test('a Show survives someone joining', async ({ join }) => {
@@ -152,23 +183,7 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
 
 test('a participant who departed during the gap is pruned on reconnect', async ({ join }) => {
   test.fail(true, 'step 1: a snapshot is the whole list, so a departure cannot be missed')
-  const alice = await join('Alice')
-  const bob = await join('Bob')
-  const carol = await join('Carol')
-  await expect(participantRows(bob.page)).toHaveCount(3)
-
-  await carol.close()
-  // Two broadcasts are what make the app notice Carol, and Bob must still be connected for
-  // them, or his own removal starts on the same clock as the departure he has to miss.
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.click()
-  await clear.click()
-  await bob.cut()
-  await expect(connectionAlert(bob.page)).toBeVisible()
-
-  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 10_000 })
-  await bob.restore()
-  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+  const { bob } = await departureWhileCut(join)
 
   await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
 })
