@@ -93,12 +93,18 @@ roadmap item instead of leaving it here as stale history.
   `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace period).
 - **Issue:** The grace period introduced in
   `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md` to swallow a
-  reconnect-driven leave-then-rejoin flicker delays *every* disconnect by the same
-  6 seconds, not just the transient ones. The server has no signal that distinguishes
-  "this connection will retry" from "this participant closed the tab and is gone for
-  good" - both arrive as the SSE stream simply ending, so both wait out the same
-  grace period before the rest of the room is told. A participant closing their tab
-  mid-meeting still shows as present for up to 6 seconds afterward.
+  reconnect-driven leave-then-rejoin flicker treats every disconnect alike, not
+  just the transient ones, and it is not even where most of the delay comes from.
+  The server has no signal that distinguishes "this connection will retry" from
+  "this participant closed the tab and is gone for good" - both arrive as the SSE
+  stream simply ending. But the room does not notice either one until a write to
+  that dead stream fails, and absent other traffic the only writes are the
+  15-second heartbeats, with the first one after a close only drawing the peer's
+  reset. The step 0 browser suite measured about 31 seconds from a tab close to
+  detection with no other room activity, or about 1.7 seconds if two broadcasts
+  happen to follow the close, and only then does the 6-second grace period run.
+  A participant closing their tab mid-meeting can show as present for far longer
+  than 6 seconds afterward, not up to 6.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
@@ -196,17 +202,21 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
   (`joinUser` consuming the pending session, `ConfirmLeave`);
   `src/main/resources/pages/index.html` (`onerror`).
-- **Issue:** When a connection drops for longer than the 6-second grace period,
+- **Issue:** When a connection drops for longer than the grace period,
   `ConfirmLeave` removes the member. Because `joinUser` consumed the pending
   session on promotion, the member entry was the token's only remaining record,
   so `ValidateToken` now resolves nothing and `/events` answers `401`.
   `EventSource` stops retrying on a non-2xx, the readyState goes to `CLOSED`,
   and the user is told "Your session has ended. Please reload the page to
-  rejoin." The retry interval is 2 seconds, so a brief blip recovers silently
-  and anything longer does not: sleeping a laptop, or a wifi handoff of more
-  than six seconds, is enough, as long as somebody else is still in the room to
-  keep it alive. The `onerror` comment attributes the 401 to the room having
-  been reaped, which is a different and rarer cause.
+  rejoin." The grace timer only starts once the room detects the disconnect,
+  and detection itself rides on the room's own traffic, not a fixed clock: in a
+  quiet room a blip can run well past six seconds and still recover invisibly,
+  while in a busy room detection is fast and the 6-second grace period is what
+  actually governs from there. So "a wifi handoff of more than six seconds" is
+  not the threshold; what has to outlast the window is detection plus the grace
+  period together, and how long that takes depends on the room. The `onerror`
+  comment attributes the 401 to the room having been reaped, which is a
+  different and rarer cause.
 - **Resolution:** Scheduled as step 5 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which retains sessions past promotion instead of consuming them, so the token

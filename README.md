@@ -121,8 +121,10 @@ npm run e2e
 
 Cases that pin behaviour the app gets wrong today are marked `test.fail()` and annotated with
 the step that fixes each, so the suite is green until a fix lands and then reports its own
-annotation as stale. A case reported as "expected to fail, but passed" means the fix arrived:
-drop the annotation in the same change.
+annotation as stale. A case annotated for step N is expected to flip when step N lands, and one
+that still fails after that step is a case to investigate rather than an annotation to leave. A
+case reported as "expected to fail, but passed" means the fix arrived: drop the annotation in
+the same change.
 
 The stub also runs standalone, so the failure can be reproduced by hand. Start the app with
 plain-HTTP cookies, or the room will fail to populate for the unrelated reason in "Running
