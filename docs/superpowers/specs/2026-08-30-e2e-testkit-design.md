@@ -53,7 +53,7 @@ that creates it.
 ## Approaches considered
 
 **Stub as a reverse proxy in front of the app (chosen).** The browser points
-at `localhost:STUB`, which forwards to `localhost:APP`. Everything, page, SSE
+at `127.0.0.1:STUB`, which forwards to `127.0.0.1:APP`. Everything, page, SSE
 and POSTs, travels through it. No CONNECT, no browser proxy configuration.
 
 **Stub as a forward proxy via Playwright's `proxy` option.** Closer to how a
@@ -206,7 +206,10 @@ otherwise cost an afternoon:
   plain HTTP and every case fails with a 401 that looks like a session bug.
 - `INDEX_PATH` as an absolute path, because `application.conf`'s default is
   repo-relative and the staged binary does not run from the repo root.
-- `HOST=localhost`.
+- `HOST=127.0.0.1`, the literal address and not `localhost`, so the JVM's bind
+  and node's readiness probe cannot resolve to different families. Node prefers
+  `::1` for `localhost` and the JVM takes `127.0.0.1`, which works on undici's
+  fallback and hides a family mismatch behind a failed connect per request.
 
 ### 4. Fixtures
 

@@ -8,7 +8,7 @@ import { startApp, freePort } from '../testkit/app.js'
 // cancelled by the runner before it can report why.
 test('a bind failure surfaces as an exit, not as a readiness timeout', { timeout: 45_000 }, async t => {
   const port = await freePort()
-  // 127.0.0.1 is what the JVM binds for HOST=localhost, so this genuinely takes the port.
+  // 127.0.0.1 is the HOST the harness spawns the app with, so this genuinely takes the port.
   const squatter = net.createServer()
   squatter.listen(port, '127.0.0.1')
   await once(squatter, 'listening')

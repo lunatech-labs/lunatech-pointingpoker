@@ -23,8 +23,8 @@ export const testProfile = {
 
 export async function freePort() {
   const server = net.createServer()
-  // The literal address, not 'localhost': node resolves that to ::1 and the JVM to 127.0.0.1,
-  // so the hostname would probe a different family than HOST=localhost actually binds.
+  // The literal address, matching the HOST the app is spawned with, so a probe and a bind
+  // cannot land on different families.
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const { port } = server.address()
@@ -43,7 +43,8 @@ export async function startApp({ port, env = {} } = {}) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
-      HOST: 'localhost',
+      // The literal address, so the bind family never depends on how a resolver orders localhost.
+      HOST: '127.0.0.1',
       PORT: String(chosen),
       // Without this the browser never returns the session cookie over plain HTTP and
       // every case fails with a 401 that looks like a session bug.
@@ -87,7 +88,7 @@ export async function startApp({ port, env = {} } = {}) {
     clearTimeout(hard)
   }
 
-  const baseUrl = `http://localhost:${chosen}`
+  const baseUrl = `http://127.0.0.1:${chosen}`
   try {
     await waitForReady(baseUrl, failure)
   } catch (reason) {
