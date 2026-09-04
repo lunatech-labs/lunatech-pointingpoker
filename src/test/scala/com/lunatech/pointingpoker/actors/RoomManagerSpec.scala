@@ -295,6 +295,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       firstProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.Vote(token, "5")
       managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, secondProbe.ref)
+      // Same barrier as above, so GetData below cannot race the reconnect's Join.
+      secondProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.GetData(dataProbe.ref)
 
       val users = dataProbe.expectMessageType[Room.DataStatus].data.users

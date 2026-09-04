@@ -215,8 +215,9 @@ roadmap item instead of leaving it here as stale history.
 
 ### Pre-reveal estimations are broadcast to every participant
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (the `Vote` broadcast, and `setupNewUser`'s replay of `u.estimation`).
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala`
+  (`RoomSnapshot.of`, which copies every participant's `estimation` into the
+  projection built for every recipient).
 - **Issue:** An estimation is sent to every participant the moment it is cast,
   and the client merely declines to render it until votes are revealed. Anyone
   with devtools open can read their colleagues' votes before the reveal, which
@@ -268,29 +269,22 @@ roadmap item instead of leaving it here as stale history.
   it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
   nothing updates `@playwright/test` today.
 
-### The SSE buffer-overflow test races its own demand
+### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
-  ("fail the stream when the buffer overflows, instead of silently dropping events").
-- **Issue:** The case sends five batches with `!`, then calls `probe.request(5)`
-  before `expectError()`. Both the sends and the demand are asynchronous with
-  respect to the stream, so when the demand reaches it before all five batches
-  land, the buffer drains instead of overflowing and the case sees an `OnNext`
-  where it expects an error. Observed once, on the first attempt of run
-  33850382115, where the delivered element carried the first vote; two re-runs of
-  the same commit passed. Test-only, with no production behaviour implicated, but
-  the failure lands in `sbt qa`, which gates every step after it, so a flake takes
-  the whole job red and costs a manual re-run.
-- **Resolution:** Stays open, deferred rather than unscheduled. The likely fix is
-  dropping `probe.request(5)`, since an overflow failure propagates downstream
-  without demand and the assertion then holds with nothing to race. That narrows
-  what the case proves, from "overflow fails even under demand" to "overflow fails
-  with none", which is what the comment above it intends but is still a change of
-  contract worth its own review and worth backing with a looped run rather than one
-  green build. It is not being done now because the spec, stub and browser-suite
-  branches are stacked on `main` and deliver as one pack once steps 1 and 2 are
-  ready, so a test change landing underneath them buys a cascading rebase across
-  the stack against a cost of one re-run. Remove this entry when the fix lands.
+  ("keep a stalled client's stream open and hand it the newest snapshot, not a
+  stale queued one").
+- **Issue:** The case sends five snapshots with no demand yet granted, then calls
+  `probe.expectNoMessage(300.millis)` before requesting demand, so that all five
+  sends have landed and been resolved by `dropHead` before the assertion runs.
+  That wait is a deliberate wall-clock settle, not a synchronization primitive
+  like the barriers used elsewhere in this suite.
+- **Resolution:** Accepted as-is. The wait can only fail safe: if fewer than five
+  sends have landed by the time demand arrives, the surviving element is a
+  lower-numbered issue than expected, and the assertion goes red rather than
+  passing on a race. No arrangement of timings produces a green result out of a
+  broken `dropHead`, so the 300ms settle costs a small amount of suite time
+  against a real synchronization primitive and buys nothing in return.
 
 ### The browser suite's apt step is unbounded and now dominates the CI job
 
