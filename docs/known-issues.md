@@ -72,20 +72,6 @@ roadmap item instead of leaving it here as stale history.
   and it deliberately adds no TTL: the leak is a hundred bytes per abandoned tab
   in a room whose lifetime is now bounded. Remove this entry when step 4 lands.
 
-### SSE reverse-proxy buffering is undocumented
-
-- **Where:** `README.md` / deployment notes (no dedicated section exists).
-- **Issue:** A common way SSE silently breaks in production is a reverse proxy
-  (nginx by default) buffering the response, so pushed events arrive in batches or
-  not at all until the buffer fills. Nothing in the code sets `Cache-Control:
-  no-cache`, and nothing in the docs mentions `X-Accel-Buffering: no` or the
-  equivalent for whatever proxy fronts this in deployment.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` on the SSE
-  response and adds a deployment note to `README.md`. Remove this entry when that
-  lands.
-
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -148,25 +134,6 @@ roadmap item instead of leaving it here as stale history.
   having observed one makes a sequence number machinery bought against an
   unmeasured risk. It stays cheap to add, being live state re-derived per
   session, so the trigger is someone actually seeing a reordered command.
-
-### Resync doesn't replay whether votes are currently revealed
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`); `src/main/resources/pages/index.html` (`votesRevealed`).
-- **Issue:** `setupNewUser`'s catch-up replay reconstructs participants,
-  votes, and the current issue for a (re)connecting client, but has no
-  equivalent of a `Show` replay: whether votes are currently revealed isn't
-  part of the resync. A client that reconnects mid-session, after a dropped
-  connection or a page reload, has no way to know votes are already shown until,
-  if ever, a subsequent `Show`/`Clear` happens to arrive live.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  where every snapshot carries `votesRevealed`: a stored flag set by `Show` and by
-  the vote that completes the round, rather than a predicate re-derived per publish.
-  Remove this entry when that lands.
-  Phase 4's "server-authoritative auto-reveal" item in `docs/roadmap.md` is
-  closed by the same change, since reveal becomes real backend logic rather than
-  a client-only derivation.
 
 ### No rate limiting on mutating room endpoints
 
@@ -245,32 +212,6 @@ roadmap item instead of leaving it here as stale history.
   per-tab id is unobtainable (the Web Locks API would give one) but because it is
   not the requirement and because an extra non-voting member would block
   server-side auto-reveal for the whole room. Remove this entry when that lands.
-
-### A transparently reconnecting client duplicates every known participant
-
-- **Where:** `src/main/resources/pages/index.html` (the `init` and `join`
-  handlers); `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`).
-- **Issue:** `EventSource`'s automatic retry reuses the same JS object, so
-  `ref.users` is never cleared, while the server replays `init` plus one `join`
-  per participant on every reconnect. The handlers push unconditionally, so
-  every participant appears twice, three times, once per reconnect.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
-  Applying a complete snapshot cannot duplicate. Remove this entry when that
-  lands.
-
-### A participant who departs during a reconnect gap is never pruned
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`).
-- **Issue:** The catch-up replay lists the participants who are present and
-  never says who left, so a reconnecting client keeps anyone who departed while
-  it was disconnected. Same root cause as the entry above, opposite direction.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
-  Under a snapshot an absent participant is absent. Remove this entry when that
-  lands.
 
 ### Pre-reveal estimations are broadcast to every participant
 
