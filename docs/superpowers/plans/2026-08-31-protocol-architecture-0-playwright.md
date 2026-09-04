@@ -57,7 +57,7 @@ Each of these is a decision the specs left open or got slightly wrong. They are 
 5. **`e2e/fixtures.js` also exports the shared locators.** 08-30 §4's file list has no page-object file, and a fourth file for six one-line locator helpers is not worth it. Keeping them in one place is also what makes step 8's selector revision a single-file change.
 6. **Browser contexts use `http://127.0.0.1:<port>` rather than `stub.baseUrl`.** The stub listens on `127.0.0.1` only, and a browser that resolves `localhost` to `::1` first would be relying on its own fallback to reach it. Same origin either way for cookie purposes, since `SECURE_COOKIES=false` and the cookie is `SameSite=Strict` on the page's own origin.
 7. **`join(name)` returns a participant object rather than taking a page.** 08-30 §4 sketches `join(page, room, name)`, which would hand every case Playwright's default `page` and therefore one shared cookie jar: two participants in one context resolve to one session, which is a step 6 case rather than any of these. One context per participant is the only shape that works, so the helper owns the context.
-8. **No browser-binary cache step in CI.** 08-30 §CI calls the browser install cacheable but its own YAML omits a cache step, and `--with-deps` needs its apt work on every run regardless. `actions/setup-node`'s npm cache is switched on, which is the free half.
+8. **A browser-binary cache step in CI, added late.** This item first declined one: 08-30 §CI calls the browser install cacheable but its own YAML omits a cache step, and `--with-deps` needs its apt work on every run regardless. The second half of that held and the first did not. The apt work does run every time, so `--with-deps` splits into a `playwright install-deps` step of its own and only the download is cached, which is what §CI meant by calling the install cacheable. What prompted the revisit was a CI run where `npm ci` sat for 300s, npm's default `fetch-timeout`, against a stalled registry, while the same run pulled both browsers in 26s: the uncached download was the next thing worth removing once the stall was explained, and `npm ci` gains `--prefer-offline --no-audit` to drop the call that hung. Measured on this branch's runs: the browser install goes from 26-50s to 1s on a cache hit, `npm ci` from 10s to 1s, and the `test` job from 3m34s, or 8m1s in the run that hit the stall, to 2m41s. The cache is keyed on the lockfile hash, so a Playwright bump retires it; it does not track which browsers were asked for, and an added engine self-heals by downloading the one that is missing.
 9. **`.gitignore` gains `test-results/` and `playwright-report/`.** 08-30 §4 asks for `test-results/` only; the second is what the HTML reporter writes if anyone runs it locally with `--reporter=html`.
 
 ## How a departure is actually noticed, measured
@@ -112,7 +112,7 @@ test/stub.test.js          # + 3 cases for cut/restore
 e2e/fixtures.js            # new: app, stub, room, join fixtures + shared locators
 e2e/smoke.spec.js          # new: 1 case
 e2e/room.spec.js           # new: 10 cases
-.github/workflows/ci.yml   # + npm cache, + 2 browser steps
+.github/workflows/ci.yml   # + npm cache, + browser cache, + 3 browser steps
 .gitignore                 # + test-results/, playwright-report/
 README.md                  # + the e2e commands
 ```
