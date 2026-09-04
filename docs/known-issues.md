@@ -351,6 +351,36 @@ roadmap item instead of leaving it here as stale history.
   ready, so a test change landing underneath them buys a cascading rebase across
   the stack against a cost of one re-run. Remove this entry when the fix lands.
 
+### The browser suite's apt step is unbounded and now dominates the CI job
+
+- **Where:** `.github/workflows/ci.yml`, the `install the browser system
+  dependencies` step (`npx playwright install-deps chromium firefox`), and the
+  absence of `timeout-minutes` on either job.
+- **Issue:** Measured twice on 2026-09-04, seven minutes apart, on the same
+  branch. Run 33896625441: the apt step took 19s and the whole `test` job 2m43s.
+  Run 33897256520, a docs-only commit: the same step took 18m25s and the job
+  21m03s. Nothing in either commit touches the workflow or the suite, so the
+  difference is the Debian mirror. Both caches behaved perfectly across the two
+  runs, `npm ci` and the browser download at 1s each, which is what makes this
+  visible: with the cacheable work reduced to nothing, the uncached apt step is
+  the job's whole cost and its only exposure to anything outside the runner. The
+  Playwright plan's deviation 8 already reasoned that the apt work runs on every
+  run regardless and is therefore not worth caching, which is correct and is why
+  the step exists separately; what that reasoning did not anticipate is the step
+  becoming the sole variable. Neither job sets `timeout-minutes`, so a mirror
+  that hangs rather than crawls runs to GitHub's six-hour default instead of
+  failing fast, and both runs above went green, so nothing today reports this.
+- **Resolution:** Stays open, unscheduled, and deliberately not fixed inside the
+  browser-suite PR that surfaced it. The cheap half is `timeout-minutes` on both
+  jobs, which converts a hung mirror into a fast red and a re-run; a value wants
+  picking against observed times rather than guessed, and 19s against 18m25s is
+  two data points, not a distribution. The larger question is whether
+  `install-deps` is needed at all on `ubuntu-latest`, whose image may already
+  carry what Chromium and Firefox link against, in which case the step could be
+  dropped or narrowed rather than bounded. That wants measuring on a runner, not
+  reasoning about, and it belongs with whoever next touches CI. Remove this entry
+  when the step is bounded or retired.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
