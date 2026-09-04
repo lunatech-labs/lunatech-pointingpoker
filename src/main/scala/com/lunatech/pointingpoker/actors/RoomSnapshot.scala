@@ -38,7 +38,7 @@ object RoomSnapshot:
       currentIssue = data.currentIssue,
       votesRevealed = data.revealed,
       users = data.users
-        .sortWith((a, b) => b.id.compareTo(a.id) < 0)
+        .sortWith((a, b) => a.id.compareTo(b.id) < 0)
         .map(u => Participant(u.id, u.name, u.voted, u.estimation))
     )
 end RoomSnapshot

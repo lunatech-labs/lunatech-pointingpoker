@@ -31,11 +31,13 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     }
 
     "order participants by id so every recipient agrees and a reconnect cannot reshuffle" in {
-      val low  = user(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Low", false, "")
-      val high = user(UUID.fromString("ffffffff-0000-0000-0000-000000000000"), "High", false, "")
-      val data = RoomData.empty.copy(users = List(high, low))
+      // UUID.compareTo compares mostSigBits as signed long, so leading hex 8+ sorts first.
+      val first  = user(UUID.fromString("00000000-0000-0000-0000-000000000001"), "First", false, "")
+      val second =
+        user(UUID.fromString("00000001-0000-0000-0000-000000000000"), "Second", false, "")
+      val data = RoomData.empty.copy(users = List(second, first))
 
-      RoomSnapshot.of(data, low.id).users.map(_.name) mustBe List("Low", "High")
+      RoomSnapshot.of(data, first.id).users.map(_.name) mustBe List("First", "Second")
     }
 
     "carry the stored reveal flag rather than deriving one" in {
@@ -55,9 +57,9 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     }
 
     "build for a recipient who is not a member, rather than failing" in {
-      val alice   = user(UUID.randomUUID(), "Alice", false, "")
+      val alice    = user(UUID.randomUUID(), "Alice", false, "")
       val departed = UUID.randomUUID()
-      val data    = RoomData.empty.copy(users = List(alice))
+      val data     = RoomData.empty.copy(users = List(alice))
 
       val snapshot = RoomSnapshot.of(data, departed)
       snapshot.you mustBe departed
@@ -68,7 +70,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val data  = RoomData.empty.copy(users = List(alice))
 
-      RoomSnapshot.of(data, alice.id).asJson.noSpaces must not include alice.token.raw
+      (RoomSnapshot.of(data, alice.id).asJson.noSpaces must not).include(alice.token.raw)
     }
 
     "serialize exactly the agreed field set" in {
