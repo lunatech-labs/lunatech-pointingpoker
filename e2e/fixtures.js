@@ -94,11 +94,6 @@ export const test = base.extend({
       const context = await browser.newContext({ baseURL: origin })
       await context.route(CDN, assets)
       const page = await context.newPage()
-      await page.goto(`/${room}`)
-      await nameInput(page).fill(name)
-      await page.getByRole('button', { name: 'Join' }).click()
-      // inRoom flips on the first SSE message, so the room view proves the stream arrived.
-      await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
       const token = async () => {
         const cookie = (await context.cookies()).find(c => c.name === 'session')
         if (!cookie) throw new Error(`${name} has no session cookie`)
@@ -111,7 +106,13 @@ export const test = base.extend({
         cut: async () => stub.cut(await token()),
         restore: async () => stub.restore(await token())
       }
+      // Tracked before the join itself can fail, so a failed join still gets torn down.
       open.push(participant)
+      await page.goto(`/${room}`)
+      await nameInput(page).fill(name)
+      await page.getByRole('button', { name: 'Join' }).click()
+      // inRoom flips on the first SSE message, so the room view proves the stream arrived.
+      await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
       return participant
     }
     await use(join)
