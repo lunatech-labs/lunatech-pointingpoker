@@ -82,7 +82,7 @@ directly in the new frontend.
 
 - [ ] Roles: voting participant vs. observer, self-service switching, excluding
       observers from vote counts and status indicators.
-- [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
+- [x] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
       become real backend logic. **Moves into step 1**, where `round.revealed` is
       set by `Show` and by the vote that completes the round, and every snapshot

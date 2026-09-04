@@ -7,31 +7,31 @@ This project provides an HTTP + Server-Sent-Events (SSE) based pointing poker se
 
 Clients send commands as plain HTTP POST requests (see the API table below). The
 server pushes room updates the other way, over a long-lived SSE stream opened on
-`GET /rooms/{roomId}/events`. Each pushed event carries one `RoomEvent` JSON
-object as its `data` payload. Json example:
+`GET /rooms/{roomId}/events`. Every pushed message carries one complete
+`RoomSnapshot` as its `data` payload, built for the participant receiving it.
+There is one message type, so a client applies whatever arrives and never
+reconstructs state from a sequence. Json example:
 
 ```json
 {
-    "messageType": "join",
-    "roomId": "42c31270-6eaa-4dd7-adfc-b7c131022597",
-    "userId": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
-    "extra": "John Doe"
+    "you": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+    "currentIssue": "PP-42",
+    "votesRevealed": false,
+    "users": [
+        {
+            "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+            "name": "John Doe",
+            "voted": true,
+            "estimation": "5"
+        }
+    ]
 }
 ```
 
-Possible values for messageType:
-* "init"
-* "join"
-* "vote"
-* "show"
-* "revote"
-* "clear"
-* "leave"
-* "edit_issue"
-
-`roomId` and `userId` should be `UUID`.
-
-`extra` value depends `messageType`.
+`you` is the identity the snapshot was built for, so a client never has to infer
+which participant it is. `users` is ordered by `id`, the same order for every
+recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
+that completes the round, and cleared by `Clear` and `Re-vote`.
 
 The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
 connection is not closed by the server's idle timeout.
@@ -45,7 +45,7 @@ Available endpoints:
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
 |`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId and a session, returns `{"userId": "..."}`, and sets a room-scoped session cookie |
-|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
+|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
 |`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
