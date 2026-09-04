@@ -88,7 +88,7 @@ directly in the new frontend.
       set by `Show` and by the vote that completes the round, and every snapshot
       carries it. It lands as a latch rather than as a standing derivation, which
       takes the auto-reveal half of the item below with it; section 3 of that spec
-      says why. Check this off when that lands.
+      says why.
 - [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
       longer a product decision.** `round.revealed` is set by `Show` and by the
       vote that completes the round, and cleared only by `clear()` or `reVote()`;
@@ -103,18 +103,20 @@ directly in the new frontend.
       either destroy the round or make everyone vote again.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
-      replay now goes out as a single batched message instead of one send per
-      event, removing the one systematic, room-size-scaling burst against the
-      outbound buffer; the source switched to `OverflowStrategy.fail` with a small
-      non-zero buffer, since a zero-size buffer turned out to bypass whichever
-      overflow strategy is configured entirely rather than applying it at a
-      zero-element threshold. A failed connection self-heals through the client's
-      existing reconnect-and-replay path, now on an explicit `retry` interval this
-      app controls instead of each browser's own unpinned default. A grace period
-      before a disconnect is announced (`Room.Leave`/`ConfirmLeave`) keeps an
-      ordinary reconnect invisible to the rest of the room instead of showing as a
+      replay went out as a single batched message instead of one send per event,
+      removing the one systematic, room-size-scaling burst against the outbound
+      buffer; the source switched to `OverflowStrategy.fail` with a small non-zero
+      buffer, since a zero-size buffer turned out to bypass whichever overflow
+      strategy is configured entirely rather than applying it at a zero-element
+      threshold. A failed connection self-healed through the client's existing
+      reconnect-and-replay path, on an explicit `retry` interval this app controls
+      instead of each browser's own unpinned default. A grace period before a
+      disconnect is announced (`Room.Leave`/`ConfirmLeave`) keeps an ordinary
+      reconnect invisible to the rest of the room instead of showing as a
       leave-then-rejoin flicker. See
-      `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`.
+      `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`. Step 1 of
+      the protocol re-architecture superseded both mechanisms: the batched replay
+      by a single `RoomSnapshot`, and `fail` by `dropHead`.
 - [ ] Re-vote refinement: prior-vote tracking, confirm-vs-change distinction, the
       pre/post-reveal visibility rules from the spec. The current `ReVote` command
       is a stub.

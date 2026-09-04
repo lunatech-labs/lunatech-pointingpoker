@@ -175,7 +175,7 @@ response, which nginx honours. Other proxies need their own setting:
 | Proxy | Setting |
 |-------|---------|
 | nginx | Honours `X-Accel-Buffering: no`. Otherwise `proxy_buffering off;` in the location block |
-| Apache `mod_proxy` | `SetEnv proxy-sendchunked` and no `mod_deflate` on this path |
+| Apache `mod_proxy` | `mod_proxy_http` does not buffer responses by default. No `mod_deflate` on this path |
 | HAProxy | Buffers responses but streams them, so no change is needed |
 | Envoy | No response buffering by default. Do not enable the buffer filter on this route |
 
