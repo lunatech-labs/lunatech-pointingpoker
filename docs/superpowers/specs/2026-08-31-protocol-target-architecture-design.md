@@ -275,7 +275,10 @@ violations of one.
    in it comes from the join over `members`.** That build is the only place room
    state is serialized, so it is the only place redaction has to happen;
    `round.estimates` outlives membership, so reading it directly publishes a
-   departed participant's vote. Sections 2 and 3.
+   departed participant's vote. The requirement is that no participant is
+   influenced by another's estimate before the reveal, not that the value is
+   secret, so the server's own logs are deliberately out of scope. Sections 2
+   and 3.
 3. **Only a revealed round enters `history`.** Its `distribution` is shared
    unredacted, so the gate is that every participant could already see every
    estimate. Section 3, "Round history".
@@ -1522,11 +1525,11 @@ a usability improvement, and 8 and 9 are product work whose case is the
 roadmap's rather than this document's. That matters because the roadmap is
 projections under an agile process rather than commitments, so argument 7 above
 carries exactly as much weight as the roadmap does on the day someone reads it.
-Stopping after step 6 leaves a correct app whose only open defects are the two
-recorded as staying open, HTTP command ordering and rate limiting. A third entry
-stays open as well, the silent auto-create on an unrecognized room id, which the
-table below reclassifies as the primary use case working rather than as a
-defect.
+Stopping after step 6 leaves a correct app whose only open defects are the three
+recorded as staying open: HTTP command ordering, rate limiting, and the page's
+runtime dependency on three public CDNs. A fourth entry stays open as well, the
+silent auto-create on an unrecognized room id, which the table below reclassifies
+as the primary use case working rather than as a defect.
 
 **Step 0. Characterization harness.** The stub buffering proxy, the browser
 harness, and Playwright cases pinning today's behaviour. Waits on nothing.
@@ -1559,7 +1562,7 @@ immediately before the Phase 3 framework migration". Phase 3 is step 8 here,
 while the suite is the regression net for steps 1 to 3, so the deferral is seven
 steps too late for the job it was front-loaded to do, against 08-28's own
 warning that a suite nothing runs automatically rots worse than a manual
-checklist. The cost is `npm ci` and a cached `playwright install --with-deps
+checklist. The cost is `npm ci` and a `playwright install --with-deps
 chromium firefox` on the job that already stages the app, both engines because
 08-30 measured them disagreeing on exactly this streaming edge and runs the
 reconnect case in both. Its app and stub fixtures are worker-scoped, so the
@@ -1861,7 +1864,7 @@ reasoning behind each move rather than as work outstanding.
 
 ## Known issues disposition
 
-Ten of the thirteen open entries close on this path. `docs/known-issues.md` is
+Ten of the fourteen open entries close on this path. `docs/known-issues.md` is
 already written to match this table. Five of the rows are marked **new**: they
 were surfaced by this design work rather than inherited, three having been
 recorded only inside the 08-28 spec now marked superseded and two recorded nowhere
@@ -1883,6 +1886,7 @@ than execution.
 | **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
 | **new** A disconnection outlasting the grace period forces a page reload | Step 5. The member is removed, the consumed session leaves nothing to resolve the token, and the retry gets a 401; sleeping a laptop for more than six seconds in an occupied room is enough. Live today and unrelated to this design. |
 | **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, by making `/join` resolve the existing cookie rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
+| The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. |
 
 The rate-limiting entry was rewritten rather than left alone: its bounded-mode
 request-amplification paragraph described a mode this design cancels, and the

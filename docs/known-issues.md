@@ -93,12 +93,18 @@ roadmap item instead of leaving it here as stale history.
   `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace period).
 - **Issue:** The grace period introduced in
   `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md` to swallow a
-  reconnect-driven leave-then-rejoin flicker delays *every* disconnect by the same
-  6 seconds, not just the transient ones. The server has no signal that distinguishes
-  "this connection will retry" from "this participant closed the tab and is gone for
-  good" - both arrive as the SSE stream simply ending, so both wait out the same
-  grace period before the rest of the room is told. A participant closing their tab
-  mid-meeting still shows as present for up to 6 seconds afterward.
+  reconnect-driven leave-then-rejoin flicker treats every disconnect alike, not
+  just the transient ones, and it is not even where most of the delay comes from.
+  The server has no signal that distinguishes "this connection will retry" from
+  "this participant closed the tab and is gone for good" - both arrive as the SSE
+  stream simply ending. But the room does not notice either one until a write to
+  that dead stream fails, and absent other traffic the only writes are the
+  15-second heartbeats, with the first one after a close only drawing the peer's
+  reset. The step 0 browser suite measured about 31 seconds from a tab close to
+  detection with no other room activity, or about 1.7 seconds if two broadcasts
+  happen to follow the close, and only then does the 6-second grace period run.
+  A participant closing their tab mid-meeting can show as present for far longer
+  than 6 seconds afterward, not up to 6.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
@@ -196,17 +202,21 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
   (`joinUser` consuming the pending session, `ConfirmLeave`);
   `src/main/resources/pages/index.html` (`onerror`).
-- **Issue:** When a connection drops for longer than the 6-second grace period,
+- **Issue:** When a connection drops for longer than the grace period,
   `ConfirmLeave` removes the member. Because `joinUser` consumed the pending
   session on promotion, the member entry was the token's only remaining record,
   so `ValidateToken` now resolves nothing and `/events` answers `401`.
   `EventSource` stops retrying on a non-2xx, the readyState goes to `CLOSED`,
   and the user is told "Your session has ended. Please reload the page to
-  rejoin." The retry interval is 2 seconds, so a brief blip recovers silently
-  and anything longer does not: sleeping a laptop, or a wifi handoff of more
-  than six seconds, is enough, as long as somebody else is still in the room to
-  keep it alive. The `onerror` comment attributes the 401 to the room having
-  been reaped, which is a different and rarer cause.
+  rejoin." The grace timer only starts once the room detects the disconnect,
+  and detection itself rides on the room's own traffic, not a fixed clock: in a
+  quiet room a blip can run well past six seconds and still recover invisibly,
+  while in a busy room detection is fast and the 6-second grace period is what
+  actually governs from there. So "a wifi handoff of more than six seconds" is
+  not the threshold; what has to outlast the window is detection plus the grace
+  period together, and how long that takes depends on the room. The `onerror`
+  comment attributes the 401 to the room having been reaped, which is a
+  different and rarer cause.
 - **Resolution:** Scheduled as step 5 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which retains sessions past promotion instead of consuming them, so the token
@@ -274,6 +284,102 @@ roadmap item instead of leaving it here as stale history.
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which builds each snapshot per recipient and redacts other participants'
   estimations until the room reveals. Remove this entry when that lands.
+
+### The page and the browser suite depend on three public CDNs at runtime
+
+- **Where:** `src/main/resources/pages/index.html` (the four asset tags at
+  `:5`, `:84`, `:330` and `:331`); `e2e/fixtures.js` (the `assets` fixture).
+- **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
+  `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
+  load, so an outage at any of the three takes the app down and nothing is
+  vendored to fall back to. The browser suite inherits it: the `assets` fixture
+  caches each asset once per worker, which cut the fetch count but not the
+  dependency, and its fallback on a failed fetch is `route.continue()` to the
+  same unreachable host. The failure mode is therefore all cases failing at once
+  on a page whose Vue never mounts, rather than one case degrading. Only
+  Bootstrap carries an `integrity` attribute; the other three are unverified.
+  The axios tag was also unpinned until it was fixed alongside this entry,
+  resolving to whatever was latest at page load, which made the suite
+  irreproducible across time independently of any outage. The pin closed that
+  and took on a smaller version of the cost this entry declines vendoring for
+  below: 1.20.0 is now served indefinitely, through any future advisory, and
+  nothing in this repository bumps a CDN pin.
+- **Resolution:** Stays open, unscheduled. Step 8 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  the frontend rewrite, would close it structurally, since its build tooling
+  bundles these assets, but nothing schedules it as a fix and the page is
+  expected to keep loading from a CDN until then. Vendoring the four files for
+  the test suite alone was considered and declined: third-party bytes in the
+  repo plus a refresh ritual, bought against an outage nobody has hit, and it
+  would make the suite load something production does not, against the point of
+  driving the real page. The trigger is an observed CDN failure in CI. Remove
+  this entry if step 8 bundles them.
+- **Follow-ups this entry carries.** Two, both unscheduled. **Subresource
+  integrity:** now that axios is pinned its bytes are stable, so `integrity`
+  could cover axios, feather-icons and Vue as it already covers Bootstrap. That
+  wants its own pass where each hash is verified in both engines, not an
+  appendix to a test-suite change. **npm plus Dependabot:** installing the four
+  assets as npm dependencies and serving them from the app would replace the
+  refresh ritual with something that already works here, since
+  `.github/dependabot.yml` runs weekly but currently covers
+  `package-ecosystem: "github-actions"` only. It overlaps step 8, which bundles
+  these assets anyway, so it is worth deciding with step 8 rather than ahead of
+  it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
+  nothing updates `@playwright/test` today.
+
+### The SSE buffer-overflow test races its own demand
+
+- **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
+  ("fail the stream when the buffer overflows, instead of silently dropping events").
+- **Issue:** The case sends five batches with `!`, then calls `probe.request(5)`
+  before `expectError()`. Both the sends and the demand are asynchronous with
+  respect to the stream, so when the demand reaches it before all five batches
+  land, the buffer drains instead of overflowing and the case sees an `OnNext`
+  where it expects an error. Observed once, on the first attempt of run
+  33850382115, where the delivered element carried the first vote; two re-runs of
+  the same commit passed. Test-only, with no production behaviour implicated, but
+  the failure lands in `sbt qa`, which gates every step after it, so a flake takes
+  the whole job red and costs a manual re-run.
+- **Resolution:** Stays open, deferred rather than unscheduled. The likely fix is
+  dropping `probe.request(5)`, since an overflow failure propagates downstream
+  without demand and the assertion then holds with nothing to race. That narrows
+  what the case proves, from "overflow fails even under demand" to "overflow fails
+  with none", which is what the comment above it intends but is still a change of
+  contract worth its own review and worth backing with a looped run rather than one
+  green build. It is not being done now because the spec, stub and browser-suite
+  branches are stacked on `main` and deliver as one pack once steps 1 and 2 are
+  ready, so a test change landing underneath them buys a cascading rebase across
+  the stack against a cost of one re-run. Remove this entry when the fix lands.
+
+### The browser suite's apt step is unbounded and now dominates the CI job
+
+- **Where:** `.github/workflows/ci.yml`, the `install the browser system
+  dependencies` step (`npx playwright install-deps chromium firefox`), and the
+  absence of `timeout-minutes` on either job.
+- **Issue:** Measured twice on 2026-09-04, seven minutes apart, on the same
+  branch. Run 33896625441: the apt step took 19s and the whole `test` job 2m43s.
+  Run 33897256520, a docs-only commit: the same step took 18m25s and the job
+  21m03s. Nothing in either commit touches the workflow or the suite, so the
+  difference is the Debian mirror. Both caches behaved perfectly across the two
+  runs, `npm ci` and the browser download at 1s each, which is what makes this
+  visible: with the cacheable work reduced to nothing, the uncached apt step is
+  the job's whole cost and its only exposure to anything outside the runner. The
+  Playwright plan's deviation 8 already reasoned that the apt work runs on every
+  run regardless and is therefore not worth caching, which is correct and is why
+  the step exists separately; what that reasoning did not anticipate is the step
+  becoming the sole variable. Neither job sets `timeout-minutes`, so a mirror
+  that hangs rather than crawls runs to GitHub's six-hour default instead of
+  failing fast, and both runs above went green, so nothing today reports this.
+- **Resolution:** Stays open, unscheduled, and deliberately not fixed inside the
+  browser-suite PR that surfaced it. The cheap half is `timeout-minutes` on both
+  jobs, which converts a hung mirror into a fast red and a re-run; a value wants
+  picking against observed times rather than guessed, and 19s against 18m25s is
+  two data points, not a distribution. The larger question is whether
+  `install-deps` is needed at all on `ubuntu-latest`, whose image may already
+  carry what Chromium and Firefox link against, in which case the step could be
+  dropped or narrowed rather than bounded. That wants measuring on a runner, not
+  reasoning about, and it belongs with whoever next touches CI. Remove this entry
+  when the step is bounded or retired.
 
 ## Traceability note
 
