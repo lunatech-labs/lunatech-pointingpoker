@@ -163,3 +163,23 @@ Without this, `/join` will appear to succeed but every subsequent request will g
 
 ### Deployment
 
+**Do not let a reverse proxy buffer the SSE response.** The server pushes room
+updates over a long-lived `text/event-stream` on `GET /rooms/{roomId}/events`. A
+proxy that buffers response bodies holds those frames until its buffer fills or
+the connection closes, so the room appears frozen and then updates in a burst.
+The symptom looks like a server bug and is not one.
+
+The app sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` on that
+response, which nginx honours. Other proxies need their own setting:
+
+| Proxy | Setting |
+|-------|---------|
+| nginx | Honours `X-Accel-Buffering: no`. Otherwise `proxy_buffering off;` in the location block |
+| Apache `mod_proxy` | `SetEnv proxy-sendchunked` and no `mod_deflate` on this path |
+| HAProxy | Buffers responses but streams them, so no change is needed |
+| Envoy | No response buffering by default. Do not enable the buffer filter on this route |
+
+Response-scanning appliances are the harder case, since they may buffer to
+inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
+and the testing section above says how to run it.
+
