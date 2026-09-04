@@ -188,3 +188,69 @@ test('a participant who departed during the gap is pruned on reconnect', async (
 
   await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
 })
+
+test('a vote survives its own reconnect', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(bob.page, '8')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  // The room's own state, not Bob's stale copy: Alice never disconnected, so her row for
+  // Bob is redrawn from a snapshot published after the reconnect.
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Bob')).toContainText('8')
+})
+
+test('the issue box resyncs once the editor loses focus', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('Alice is still typing')
+
+  // Any publish carries the issue, so a vote by anyone would clobber an unguarded box.
+  await vote(bob.page, '5')
+  await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
+
+  await issueBox(alice.page).blur()
+  await vote(bob.page, '3')
+  await expect(issueBox(alice.page)).toHaveValue('')
+})
+
+test('an edit committed with the check button reaches the other browser', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('PP-42')
+  // The guard keys on focus, and pressing the button blurs first: a guard scoped to
+  // `editing` instead would tear out this button on that very blur.
+  await issueButton(alice.page).click()
+
+  await expect(issueBox(bob.page)).toHaveValue('PP-42')
+  await expect(issueBox(alice.page)).toHaveValue('PP-42')
+})
+
+test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
+  const alice = await join('Alice')
+  const selected = alice.page.locator('.estimation-button-selected')
+  const unconfirmed = alice.page.locator('.estimation-button-uncomfirmed')
+
+  await vote(alice.page, '5')
+  await expect(selected).toHaveText('5')
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  // reVote clears voted and keeps estimation, which is the only state this styling means.
+  await expect(unconfirmed).toHaveText('5')
+  await expect(selected).toHaveCount(0)
+
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(unconfirmed).toHaveCount(0)
+})
