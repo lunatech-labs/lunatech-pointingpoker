@@ -114,7 +114,8 @@ Firefox, one app and one stub per Playwright worker:
 
 ```
 npm ci
-npx playwright install --with-deps chromium firefox
+npx playwright install-deps chromium firefox
+npx playwright install chromium firefox
 sbt "; coverageOff; Universal/stage"
 npm run e2e
 ```
