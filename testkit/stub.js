@@ -56,8 +56,10 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
     // Stands in for an appliance that has killed one client's connections: destroys the live
     // ones carrying this cookie value and refuses new ones until restore().
     cut(match) {
-      // An empty match is includes() in every cookie, cutting the whole stub instead of one session.
-      if (!match) throw new Error(`cut() expected a non-empty cookie match, got ${JSON.stringify(match)}`)
+      // An empty match is includes() in every cookie, cutting the whole stub, not one session.
+      if (!match) {
+        throw new Error(`cut() expected a non-empty cookie match, got ${JSON.stringify(match)}`)
+      }
       state.cuts.add(match)
       for (const entry of state.live) if (entry.cookie.includes(match)) entry.res.destroy()
     },
