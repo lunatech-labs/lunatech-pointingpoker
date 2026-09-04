@@ -64,7 +64,10 @@ export async function startApp({ port, env = {} } = {}) {
   const keep = chunk => {
     captured.push(chunk)
     capturedBytes += chunk.length
-    while (capturedBytes > OUTPUT_CAP_BYTES) capturedBytes -= captured.shift().length
+    // length > 1 so a single chunk over the cap is kept rather than leaving an empty log.
+    while (captured.length > 1 && capturedBytes > OUTPUT_CAP_BYTES) {
+      capturedBytes -= captured.shift().length
+    }
   }
   child.stdout.on('data', keep)
   child.stderr.on('data', keep)
