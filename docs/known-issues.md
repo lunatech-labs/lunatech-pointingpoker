@@ -312,6 +312,30 @@ roadmap item instead of leaving it here as stale history.
   driving the real page. The trigger is an observed CDN failure in CI. Remove
   this entry if step 8 bundles them.
 
+### The SSE buffer-overflow test races its own demand
+
+- **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
+  ("fail the stream when the buffer overflows, instead of silently dropping events").
+- **Issue:** The case sends five batches with `!`, then calls `probe.request(5)`
+  before `expectError()`. Both the sends and the demand are asynchronous with
+  respect to the stream, so when the demand reaches it before all five batches
+  land, the buffer drains instead of overflowing and the case sees an `OnNext`
+  where it expects an error. Observed once, on the first attempt of run
+  33850382115, where the delivered element carried the first vote; two re-runs of
+  the same commit passed. Test-only, with no production behaviour implicated, but
+  the failure lands in `sbt qa`, which gates every step after it, so a flake takes
+  the whole job red and costs a manual re-run.
+- **Resolution:** Stays open, deferred rather than unscheduled. The likely fix is
+  dropping `probe.request(5)`, since an overflow failure propagates downstream
+  without demand and the assertion then holds with nothing to race. That narrows
+  what the case proves, from "overflow fails even under demand" to "overflow fails
+  with none", which is what the comment above it intends but is still a change of
+  contract worth its own review and worth backing with a looped run rather than one
+  green build. It is not being done now because the spec, stub and browser-suite
+  branches are stacked on `main` and deliver as one pack once steps 1 and 2 are
+  ready, so a test change landing underneath them buys a cascading rebase across
+  the stack against a cost of one re-run. Remove this entry when the fix lands.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
