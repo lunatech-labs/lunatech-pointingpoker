@@ -42,11 +42,21 @@ jobs:
       - name: node tests
         run: node --test "test/**/*.test.js"
 
+      # --no-audit drops the registry call that once stalled for npm's full 300s fetch-timeout.
       - name: install node dependencies
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund --fetch-timeout=60000
+
+      # The browsers are ~120MB a run; the lockfile hash retires the cache on a playwright bump.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: install the browser system dependencies
+        run: npx playwright install-deps chromium firefox
 
       - name: install the browsers
-        run: npx playwright install --with-deps chromium firefox
+        run: npx playwright install chromium firefox
 
       - name: browser tests
         run: npm run e2e
