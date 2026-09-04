@@ -45,7 +45,11 @@ In: the stub, the harness, the Playwright fixtures, `package.json`, the
 the reproduction, the harness's own startup case, and the browser suite step 0
 of the target architecture
 specifies: a smoke case, five behavioural cases, and four `test.fail()`
-characterization cases.
+characterization cases. Twelve shipped, seven green and five `test.fail()`.
+These counts are what this spec asked for and are left as written; the
+Playwright plan's case table is the record of what landed, mapping each of the
+twelve to the sentence that asks for it and naming the step that owns every
+case deliberately left out.
 
 Out: cases for behaviour that does not exist yet, which arrive with the step
 that creates it.
