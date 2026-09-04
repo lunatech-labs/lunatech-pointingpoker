@@ -189,7 +189,7 @@
               <div class="form-group row">
                 <div class="col">
                   <div class="input-group" v-if="editing">
-                    <input type="text" placeholder="Current issue" class="form-control" v-model="currentIssue">
+                    <input type="text" placeholder="Current issue" class="form-control" v-model="currentIssue" v-on:focus="issueFocused = true" v-on:blur="issueFocused = false">
                     <div class="input-group-append" v-on:click="doEdit">
                       <button class="btn btn-outline-secondary" type="button">
                         <i data-feather="check"></i>
@@ -330,6 +330,24 @@
   <script src="https://cdn.jsdelivr.net/npm/axios@1.20.0/dist/axios.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14"></script>
   <script>
+    // Pure, so the framework migration at step 8 inherits it unchanged. prev carries only
+    // what the next state depends on: { issueFocused, currentIssue }.
+    function applySnapshot(prev, s) {
+      var me = s.users.find(u => u.id === s.you);
+      var tally = {};
+      // The u.voted filter arrives at step 3, with the template guard it requires.
+      s.users.forEach(u => { tally[u.estimation] = (tally[u.estimation] || 0) + 1; });
+      return {
+        inRoom: true,
+        users: s.users,
+        votesRevealed: s.votesRevealed,
+        // Do not clobber the issue input while the user is typing in it.
+        currentIssue: prev.issueFocused ? prev.currentIssue : s.currentIssue,
+        userEstimation: me ? me.estimation : "",
+        ownVoteConfirmed: !me || me.voted || !me.estimation,
+        votesSummary: Object.entries(tally).sort(function (a, b) { return b[1] - a[1]; })
+      };
+    }
     var app = new Vue({
       el: '#app',
       data: {
@@ -339,6 +357,7 @@
         creating: true,
         joining: false,
         editing: false,
+        issueFocused: false,
         inRoom: false,
         votesRevealed: false,
         ownVoteConfirmed: true,
@@ -349,7 +368,6 @@
         errorMessage: "",
         users:[],
         user: {
-          id: "",
           name: localStorage.getItem("name"),
           estimation: ""
         }
@@ -383,8 +401,6 @@
           localStorage.setItem("name", this.user.name);
           axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
           .then(function (response) {
-            var userId = response.data.userId;
-            ref.user.id = userId;
             ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events');
             ref.eventSource.onopen = function() {
               // EventSource retries automatically on transient network blips; a
@@ -398,76 +414,18 @@
               if (!event.data) {
                 return;
               }
-              ref.inRoom = true;
-              var message = JSON.parse(event.data);
-              if (message.messageType === 'init') {
-                ref.users.push({
-                  id: message.userId,
-                  name: message.extra,
-                  voted: false,
-                  estimation: ""
-                });
-              }
-              if (message.messageType === 'join') {
-                if (message.userId !== ref.user.id) {
-                  ref.users.push({
-                    id: message.userId,
-                    name: message.extra,
-                    voted: false,
-                    estimation: ""
-                  });
-                }
-                ref.updateSummary();
-                ref.allVoted();
-              }
-              if (message.messageType === 'vote') {
-                ref.users = ref.users.map(u => {
-                  if (u.id === message.userId) {
-                    u.estimation = message.extra;
-                    u.voted = true;
-                  }
-                  return u;
-                });
-                if (ref.user.id === message.userId) {
-                  ref.user.estimation = message.extra;
-                }
-                ref.updateSummary();
-                ref.allVoted();
-              }
-              if (message.messageType === 'show') {
-                ref.votesRevealed = true;
-                ref.updateSummary();
-              }
-              if (message.messageType === 'clear') {
-                ref.votesRevealed = false;
-                ref.ownVoteConfirmed = true;
-                ref.votesSummary = [];
-                ref.user.estimation = "";
-                ref.users = ref.users.map(u => {
-                  u.estimation = "";
-                  u.voted = false;
-                  return u;
-                });
-              }
-              if (message.messageType === 'revote') {
-                ref.votesRevealed = false;
-                ref.ownVoteConfirmed = false;
-                ref.updateSummary();
-                ref.users = ref.users.map(u => {
-                  u.voted = false;
-                  return u;
-                });
-              }
-              if (message.messageType === 'leave') {
-                ref.users = ref.users.filter(u => {
-                  return u.id !== message.userId;
-                });
-                ref.updateSummary();
-                ref.allVoted();
-              }
-              if (message.messageType === 'edit_issue') {
-                ref.currentIssue = message.extra;
-              }
+              var next = applySnapshot(
+                { issueFocused: ref.issueFocused, currentIssue: ref.currentIssue },
+                JSON.parse(event.data)
+              );
+              ref.inRoom = next.inRoom;
+              ref.users = next.users;
+              ref.votesRevealed = next.votesRevealed;
+              ref.currentIssue = next.currentIssue;
+              ref.ownVoteConfirmed = next.ownVoteConfirmed;
+              ref.votesSummary = next.votesSummary;
+              // The one key that does not match a top-level data entry; step 8 flattens it.
+              ref.user.estimation = next.userEstimation;
             };
             ref.eventSource.onerror = function(event) {
               ref.showError = true;
@@ -542,16 +500,6 @@
           .catch(function (error) {
             console.log(error);
           });
-        },
-        updateSummary: function() {
-          var updatedSummary = {};
-          this.users.forEach(u => {
-            updatedSummary[u.estimation] = updatedSummary[u.estimation] ? updatedSummary[u.estimation] + 1 : 1;
-          });
-          this.votesSummary = Object.entries(updatedSummary).sort(function(a, b) { return b[1] - a[1]; });
-        },
-        allVoted: function() {
-          this.votesRevealed = this.users.map(u => { return u.voted; }).reduce(function(acc, current) { return acc && current; },true);
         },
         showUserEstimation: function(u) {
           return u.estimation && u.estimation !== "" && !this.votesRevealed;
