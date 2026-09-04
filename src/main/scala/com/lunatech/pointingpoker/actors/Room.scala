@@ -62,31 +62,46 @@ object Room:
       users: List[User],
       currentIssue: String,
       issueLastEditBy: Option[UUID],
+      revealed: Boolean = false,
       pendingSessions: Map[SessionToken, PendingSession] = Map.empty
   ):
     def joinUser(user: User): RoomData =
-      // Replaces any existing entry for this userId so a reconnect (e.g. the browser's
-      // automatic EventSource retry racing an old connection's slow-to-detect failure)
-      // doesn't leave two entries for the same user.
+      // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
+      // ref actually differs on a reconnect, there being no rename feature.
+      val kept = this.users
+        .find(_.id == user.id)
+        .fold(user)(old => user.copy(voted = old.voted, estimation = old.estimation))
       this.copy(
-        users = user :: this.users.filterNot(_.id == user.id),
+        users = kept :: this.users.filterNot(_.id == user.id),
         pendingSessions = this.pendingSessions - user.token
       )
+    end joinUser
 
     def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
-      this.copy(users = this.users.map { u =>
+      val voted = this.users.map { u =>
         if userId == u.id then u.copy(voted = true, estimation = estimation)
         else u
-      })
+      }
+      // A latch, so only a vote or ShowVotes reveals; a departure satisfying the same
+      // predicate must not, which is the disclosure step 2 exists to prevent.
+      this.copy(
+        users = voted,
+        revealed = this.revealed || (voted.nonEmpty && voted.forall(_.voted))
+      )
+    end vote
+
+    def show(): RoomData =
+      this.copy(revealed = true)
 
     def clear(): RoomData =
-      this.copy(users = this.users.map(_.copy(voted = false, estimation = "")))
+      this.copy(users = this.users.map(_.copy(voted = false, estimation = "")), revealed = false)
 
     def reVote(): RoomData =
-      this.copy(users = this.users.map(u => u.copy(voted = false)))
+      // Keeps estimation, which is what makes "estimation but not voted" mean re-vote.
+      this.copy(users = this.users.map(u => u.copy(voted = false)), revealed = false)
 
     def leave(userId: UUID, ref: UntypedRef): RoomData =
       // Scoped to the specific connection's ref, not just userId, so a stale connection's
@@ -171,14 +186,16 @@ object Room:
               receiveBehaviour(roomId, newData, gracePeriod, timers)
             case None => Behaviors.same
         case ShowVotes(token) =>
-          data.users.find(_.token == token).foreach { user =>
-            broadcast(
-              RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra),
-              data.users,
-              context
-            )
-          }
-          Behaviors.same
+          data.users.find(_.token == token) match
+            case Some(user) =>
+              val newData = data.show()
+              broadcast(
+                RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra),
+                newData.users,
+                context
+              )
+              receiveBehaviour(roomId, newData, gracePeriod, timers)
+            case None => Behaviors.same
         case Leave(userId, ref, replyTo) =>
           // Delay acting on this until the grace period elapses (see ConfirmLeave below),
           // instead of removing the user and broadcasting Leave right away. A reconnect

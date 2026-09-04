@@ -328,8 +328,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Join(rejoinedUser)
       roomRef ! Room.GetData(dataProbe.ref)
 
+      // Only one entry for user.id, proving no duplicate; voted/estimation carried over
+      // from the stored entry rather than reset to rejoinedUser's, per joinUser's contract.
       dataProbe.expectMessage(
-        Room.DataStatus(data = RoomData.empty.copy(users = List(rejoinedUser)))
+        Room.DataStatus(data = RoomData.empty.copy(users = List(user.copy(ref = newRefProbe.ref))))
       )
     }
 
@@ -486,6 +488,108 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val data = dataProbe.expectMessageType[Room.DataStatus]
       data.data.pendingSessions.get(minted.token) mustBe None
       data.data.users.map(_.id) must contain(minted.userId)
+    }
+
+    "reveal the round when the last outstanding vote lands" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe true
+    }
+
+    "leave the round hidden while anyone is still outstanding" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      roomRef ! Room.Vote(user.token, "5")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe false
+    }
+
+    "store the reveal on ShowVotes rather than only broadcasting it" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2))
+      )
+
+      roomRef ! Room.ShowVotes(user.token)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe true
+    }
+
+    "keep the round revealed when a straggler joins" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user), revealed = true)
+      )
+      val newUserProbe = TestProbe()(testKit.system.classicSystem)
+      val newUser      = Room.User(
+        UUID.randomUUID(),
+        "new user",
+        false,
+        "",
+        newUserProbe.ref,
+        Room.SessionToken.mint()
+      )
+
+      roomRef ! Room.Join(newUser)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe true
+    }
+
+    "hide the round again on a clear and on a revote" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user), revealed = true)
+      )
+
+      roomRef ! Room.ClearVotes(user.token)
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe false
+
+      roomRef ! Room.Vote(user.token, "5") // re-reveals: the only member has voted
+      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe false
+    }
+
+    "keep a reconnecting user's vote instead of resetting it" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "5")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
+
+      // What RoomManager.ConnectToRoom actually builds on a reconnect: a fresh User with
+      // InitialVoteState and InitialEstimation, differing from the stored one only by ref.
+      val newRefProbe = TestProbe()(testKit.system.classicSystem)
+      roomRef ! Room.Join(Room.User(user.id, user.name, false, "", newRefProbe.ref, user.token))
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val users = dataProbe.expectMessageType[Room.DataStatus].data.users
+      users.map(u => (u.voted, u.estimation)) mustBe List((true, "5"))
+      users.map(_.ref) mustBe List(newRefProbe.ref)
     }
   }
 end RoomSpec
