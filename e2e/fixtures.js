@@ -31,23 +31,26 @@ export const test = base.extend({
               // Release the socket; cancel() rejects if the body already errored, and an
               // unhandled rejection would be blamed on whichever case is running.
               response.body?.cancel().catch(() => {})
-              return route.continue()
+              cache.set(url, null)
+            } else {
+              const headers = {}
+              for (const [name, value] of response.headers) {
+                if (!DROPPED.has(name)) headers[name] = value
+              }
+              cache.set(url, {
+                status: response.status,
+                headers,
+                body: Buffer.from(await response.arrayBuffer())
+              })
             }
-            const headers = {}
-            for (const [name, value] of response.headers) {
-              if (!DROPPED.has(name)) headers[name] = value
-            }
-            cache.set(url, {
-              status: response.status,
-              headers,
-              body: Buffer.from(await response.arrayBuffer())
-            })
           } catch {
-            // Any failure falls back to the network, which is what the page did before this.
-            return route.continue()
+            cache.set(url, null)
           }
         }
-        await route.fulfill(cache.get(url))
+        const hit = cache.get(url)
+        // null is a failure, cached so a dead CDN is paid once per worker, not once per context.
+        // Falling back to the network is what the page did before this fixture existed.
+        return hit ? route.fulfill(hit) : route.continue()
       }
       await use(serve)
     },
@@ -114,7 +117,7 @@ export const test = base.extend({
       // Tracked before the join itself can fail, so a failed join still gets torn down.
       open.push(participant)
       await page.goto(`/${room}`)
-      // Bounded so a stalling CDN reports a page that never mounted, not a 60s timeout.
+      // The input renders under v-if, so this is the mount; navigationTimeout owns the transport.
       await expect(nameInput(page)).toBeVisible({ timeout: 15_000 })
       await nameInput(page).fill(name)
       await page.getByRole('button', { name: 'Join' }).click()
