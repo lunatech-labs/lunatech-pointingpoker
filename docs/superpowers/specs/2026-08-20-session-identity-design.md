@@ -1,7 +1,10 @@
 # Session/Identity Mechanism (closes the userId spoofing gap)
 
 Date: 2026-08-20
-Status: Proposed, pending review
+Status: Implemented and current. Partly superseded by
+`docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`; its
+"Disposition of existing specs" table says what that design changes and what it
+leaves alone.
 
 ## Purpose
 
