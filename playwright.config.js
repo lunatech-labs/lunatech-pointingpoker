@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   // node --test owns test/, so the two runners cannot pick up each other's files.
   testDir: 'e2e',
-  reporter: 'list',
+  // Annotations put a CI failure inline on the PR; the traces in the artifact say why.
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
   // The per-worker asset cache keeps the CDNs off the critical path, so retries buy nothing.
   retries: 0,
   // Insurance for a future retries change: a test.fail() case that passes then fails-as-expected
