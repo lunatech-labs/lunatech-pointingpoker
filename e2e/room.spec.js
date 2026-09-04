@@ -60,7 +60,9 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await clear.click()
   await clear.click()
 
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
+  // 25s, not 20s: if detection ever falls back to the 15s heartbeat the removal lands at about
+  // 20.1s, just outside the tighter cap, and this case has no cut whose budget a wait spends.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 25_000 })
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
 
@@ -78,6 +80,9 @@ async function departureWhileCut(join) {
   const alice = await join('Alice')
   const bob = await join('Bob')
   const carol = await join('Carol')
+  // Both, and not just one: Bob must have seen Carol for the case to mean anything, and Alice
+  // must have too or her removal assertion below passes on someone she never had.
+  await expect(participantRows(bob.page)).toHaveCount(3)
   await expect(participantRows(alice.page)).toHaveCount(3)
 
   await carol.close()

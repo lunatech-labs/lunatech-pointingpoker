@@ -90,16 +90,21 @@ export const test = base.extend({
   // Per-test isolation without restarting anything.
   room: async ({ app }, use) => {
     const response = await fetch(`${app.baseUrl}/create-room`, { method: 'POST' })
-    if (!response.ok) throw new Error(`POST /create-room answered ${response.status}`)
+    if (!response.ok) {
+      response.body?.cancel().catch(() => {})
+      throw new Error(`POST /create-room answered ${response.status}`)
+    }
     await use((await response.text()).trim())
   },
 
   // One browser context per participant: two pages in one context share the room cookie and
   // resolve to a single session, which is a step 6 case rather than any of these.
   join: async ({ browser, origin, room, stub, assets }, use) => {
-    const open = []
+    const closers = []
     const join = async name => {
       const context = await browser.newContext({ baseURL: origin })
+      // Tracked before anything else can throw, so a half-built participant is still torn down.
+      closers.push(() => context.close())
       await context.route(CDN, assets)
       const page = await context.newPage()
       const token = async () => {
@@ -114,8 +119,6 @@ export const test = base.extend({
         cut: async () => stub.cut(await token()),
         restore: async () => stub.restore(await token())
       }
-      // Tracked before the join itself can fail, so a failed join still gets torn down.
-      open.push(participant)
       await page.goto(`/${room}`)
       // The input renders under v-if, so this is the mount; navigationTimeout owns the transport.
       await expect(nameInput(page)).toBeVisible({ timeout: 15_000 })
@@ -126,7 +129,8 @@ export const test = base.extend({
       return participant
     }
     await use(join)
-    for (const participant of open) await participant.close().catch(() => {})
+    // A case may have closed one already; context.close() is idempotent.
+    for (const close of closers) await close().catch(() => {})
   },
 
   // The captured output is the whole worker's, which is still the only place a config or

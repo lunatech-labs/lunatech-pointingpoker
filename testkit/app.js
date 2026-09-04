@@ -13,6 +13,7 @@ const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'inde
 
 export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
+const OUTPUT_CAP_BYTES = 1 << 20
 
 // SseConfig.load's `require`s validate this at startup, so the profile does not get its own
 // copy of the rules. The heartbeat is hardcoded at 15s and cannot be turned down.
@@ -57,9 +58,16 @@ export async function startApp({ port, env = {} } = {}) {
     }
   })
 
+  // A tail, since the app logs every room broadcast at DEBUG and a worker runs many cases.
   const captured = []
-  child.stdout.on('data', chunk => captured.push(chunk))
-  child.stderr.on('data', chunk => captured.push(chunk))
+  let capturedBytes = 0
+  const keep = chunk => {
+    captured.push(chunk)
+    capturedBytes += chunk.length
+    while (capturedBytes > OUTPUT_CAP_BYTES) capturedBytes -= captured.shift().length
+  }
+  child.stdout.on('data', keep)
+  child.stderr.on('data', keep)
   const output = () => Buffer.concat(captured).toString()
 
   let exited = null
@@ -76,7 +84,8 @@ export async function startApp({ port, env = {} } = {}) {
 
   const failure = () => {
     if (spawnError) return `${launcher} could not be spawned: ${spawnError.message}`
-    if (exited) return `the app exited before it became ready (code ${exited.code}, signal ${exited.signal})`
+    if (exited)
+      return `the app exited before it became ready (code ${exited.code}, signal ${exited.signal})`
     return null
   }
 

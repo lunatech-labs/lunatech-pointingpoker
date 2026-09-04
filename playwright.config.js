@@ -10,6 +10,8 @@ export default defineConfig({
   // Insurance for a future retries change: a test.fail() case that passes then fails-as-expected
   // on retry would otherwise report flaky and exit 0.
   failOnFlakyTests: true,
+  // A stray test.only would narrow a characterization suite to one case and still exit 0.
+  forbidOnly: !!process.env.CI,
   // Each worker boots its own JVM and stub; two is the ceiling worth paying for on CI.
   workers: process.env.CI ? 2 : undefined,
   // Three reconnect cases can exceed the 30s default once their own assertion timeouts sum.
