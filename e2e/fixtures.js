@@ -27,7 +27,12 @@ export const test = base.extend({
           try {
             // Bounded, since a CDN that stalls rather than failing is the case this exists for.
             const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
-            if (!response.ok) return route.continue()
+            if (!response.ok) {
+              // Release the socket; cancel() rejects if the body already errored, and an
+              // unhandled rejection would be blamed on whichever case is running.
+              response.body?.cancel().catch(() => {})
+              return route.continue()
+            }
             const headers = {}
             for (const [name, value] of response.headers) {
               if (!DROPPED.has(name)) headers[name] = value
@@ -109,6 +114,8 @@ export const test = base.extend({
       // Tracked before the join itself can fail, so a failed join still gets torn down.
       open.push(participant)
       await page.goto(`/${room}`)
+      // Bounded so a stalling CDN reports a page that never mounted, not a 60s timeout.
+      await expect(nameInput(page)).toBeVisible({ timeout: 15_000 })
       await nameInput(page).fill(name)
       await page.getByRole('button', { name: 'Join' }).click()
       // inRoom flips on the first SSE message, so the room view proves the stream arrived.
