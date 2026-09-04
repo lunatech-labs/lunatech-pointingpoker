@@ -11,7 +11,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const launcher = path.join(repoRoot, 'target', 'universal', 'stage', 'bin', 'pointingpoker')
 const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
 
-const READY_TIMEOUT_MS = 30_000
+export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
 
 // SseConfig.load's `require`s validate this at startup, so the profile does not get its own
