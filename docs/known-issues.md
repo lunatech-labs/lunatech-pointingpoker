@@ -300,7 +300,10 @@ roadmap item instead of leaving it here as stale history.
   Bootstrap carries an `integrity` attribute; the other three are unverified.
   The axios tag was also unpinned until it was fixed alongside this entry,
   resolving to whatever was latest at page load, which made the suite
-  irreproducible across time independently of any outage.
+  irreproducible across time independently of any outage. The pin closed that
+  and took on a smaller version of the cost this entry declines vendoring for
+  below: 1.20.0 is now served indefinitely, through any future advisory, and
+  nothing in this repository bumps a CDN pin.
 - **Resolution:** Stays open, unscheduled. Step 8 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   the frontend rewrite, would close it structurally, since its build tooling
@@ -311,6 +314,18 @@ roadmap item instead of leaving it here as stale history.
   would make the suite load something production does not, against the point of
   driving the real page. The trigger is an observed CDN failure in CI. Remove
   this entry if step 8 bundles them.
+- **Follow-ups this entry carries.** Two, both unscheduled. **Subresource
+  integrity:** now that axios is pinned its bytes are stable, so `integrity`
+  could cover axios, feather-icons and Vue as it already covers Bootstrap. That
+  wants its own pass where each hash is verified in both engines, not an
+  appendix to a test-suite change. **npm plus Dependabot:** installing the four
+  assets as npm dependencies and serving them from the app would replace the
+  refresh ritual with something that already works here, since
+  `.github/dependabot.yml` runs weekly but currently covers
+  `package-ecosystem: "github-actions"` only. It overlaps step 8, which bundles
+  these assets anyway, so it is worth deciding with step 8 rather than ahead of
+  it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
+  nothing updates `@playwright/test` today.
 
 ### The SSE buffer-overflow test races its own demand
 
