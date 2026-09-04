@@ -53,8 +53,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.ClearVotes(user.token)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      for probe <- List(userProbe, user2Probe) do
+      for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
+        snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(u => (u.voted, u.estimation)) mustBe List((false, ""), (false, ""))
 
@@ -80,8 +81,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.ReVote(user.token)
 
-      for probe <- List(userProbe, user2Probe) do
+      for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
+        snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(_.voted) mustBe List(false, false)
         // The estimations survive, which is what makes the client's re-vote state derivable.
@@ -115,8 +117,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Vote(user.token, estimation)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      for probe <- List(userProbe, user2Probe) do
-        val voter = expectSnapshot(probe).users.find(_.id == user.id)
+      for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
+        val snapshot = expectSnapshot(probe)
+        snapshot.you mustBe member.id
+        val voter = snapshot.users.find(_.id == user.id)
         voter.map(_.voted) mustBe Some(true)
         voter.map(_.estimation) mustBe Some(estimation)
 
@@ -167,7 +171,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val (roomId, roomRef)   = createRoom(
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2)),
         gracePeriod = 200.millis
@@ -253,7 +257,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
-      val (roomId, roomRef)   = createRoom(
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         RoomData.empty.copy(users = List(user, user2)),
         gracePeriod = 200.millis
@@ -350,8 +354,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // One message, not a replay: the catch-up and the announcement are the same send.
       newUserProbe.expectNoMessage()
 
-      for probe <- List(userProbe, user2Probe) do
-        expectSnapshot(probe).users.map(_.id).toSet mustBe Set(newUser.id, user.id, user2.id)
+      for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
+        val snapshot = expectSnapshot(probe)
+        snapshot.you mustBe member.id
+        snapshot.users.map(_.id).toSet mustBe Set(newUser.id, user.id, user2.id)
 
       dataProbe.expectMessage(
         Room.DataStatus(data =
