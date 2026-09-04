@@ -292,7 +292,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, firstProbe.ref)
       // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
       // managerRef is guaranteed applied before Vote is sent directly to roomRef below.
-      firstProbe.expectMsgType[List[RoomEvent]]
+      firstProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.Vote(token, "5")
       managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, secondProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)

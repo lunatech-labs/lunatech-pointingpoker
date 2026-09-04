@@ -7,7 +7,6 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import org.apache.pekko.actor.ActorRef as UntypedRef
-import RoomEvent.MessageType
 
 object Room:
 
@@ -61,7 +60,6 @@ object Room:
   final case class RoomData(
       users: List[User],
       currentIssue: String,
-      issueLastEditBy: Option[UUID],
       revealed: Boolean = false,
       pendingSessions: Map[SessionToken, PendingSession] = Map.empty
   ):
@@ -108,12 +106,12 @@ object Room:
       // delayed teardown can't evict a newer connection the same user reconnected with.
       this.copy(users = this.users.filterNot(u => u.id == userId && u.ref == ref))
 
-    def editIssue(issue: String, userId: UUID): RoomData =
-      this.copy(currentIssue = issue, issueLastEditBy = Option(userId))
+    def editIssue(issue: String): RoomData =
+      this.copy(currentIssue = issue)
   end RoomData
 
   object RoomData:
-    val empty: RoomData = RoomData(List.empty[User], "", Option.empty[UUID])
+    val empty: RoomData = RoomData(List.empty[User], "")
 
   val defaultGracePeriod: FiniteDuration = 6.seconds
 
@@ -137,15 +135,7 @@ object Room:
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
-          // setupNewUser's batched replay send races the new connection's downstream demand
-          // not yet being established; only checked empirically (not guaranteed), see the
-          // "connection-establishment race" section of
-          // docs/superpowers/specs/2026-08-24-sse-backpressure-design.md. Re-verify if this
-          // Join -> setupNewUser actor-hop chain is ever restructured.
-          val newData = data.joinUser(user)
-          setupNewUser(user, roomId, newData)
-          broadcast(RoomEvent(MessageType.Join, roomId, user.id, user.name), newData.users, context)
-          receiveBehaviour(roomId, newData, gracePeriod, timers)
+          receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
           val token   = SessionToken.mint()
@@ -155,46 +145,23 @@ object Room:
         case Vote(token, estimation) =>
           data.users.find(_.token == token) match
             case Some(user) =>
-              val newData = data.vote(user.id, estimation)
-              broadcast(
-                RoomEvent(MessageType.Vote, roomId, user.id, estimation),
-                newData.users,
-                context
-              )
+              val newData = publish(data.vote(user.id, estimation), context)
               receiveBehaviour(roomId, newData, gracePeriod, timers)
             case None => Behaviors.same
         case ClearVotes(token) =>
           data.users.find(_.token == token) match
-            case Some(user) =>
-              val newData = data.clear()
-              broadcast(
-                RoomEvent(MessageType.Clear, roomId, user.id, RoomEvent.NoExtra),
-                newData.users,
-                context
-              )
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+            case Some(_) =>
+              receiveBehaviour(roomId, publish(data.clear(), context), gracePeriod, timers)
             case None => Behaviors.same
         case ReVote(token) =>
           data.users.find(_.token == token) match
-            case Some(user) =>
-              val newData = data.reVote()
-              broadcast(
-                RoomEvent(MessageType.Revote, roomId, user.id, RoomEvent.NoExtra),
-                newData.users,
-                context
-              )
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+            case Some(_) =>
+              receiveBehaviour(roomId, publish(data.reVote(), context), gracePeriod, timers)
             case None => Behaviors.same
         case ShowVotes(token) =>
           data.users.find(_.token == token) match
-            case Some(user) =>
-              val newData = data.show()
-              broadcast(
-                RoomEvent(MessageType.Show, roomId, user.id, RoomEvent.NoExtra),
-                newData.users,
-                context
-              )
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+            case Some(_) =>
+              receiveBehaviour(roomId, publish(data.show(), context), gracePeriod, timers)
             case None => Behaviors.same
         case Leave(userId, ref, replyTo) =>
           // Delay acting on this until the grace period elapses (see ConfirmLeave below),
@@ -224,12 +191,7 @@ object Room:
           Behaviors.same
         case ConfirmLeave(userId, ref, replyTo) =>
           if data.users.exists(u => u.id == userId && u.ref == ref) then
-            val newData = data.leave(userId, ref)
-            broadcast(
-              RoomEvent(MessageType.Leave, roomId, userId, RoomEvent.NoExtra),
-              newData.users,
-              context
-            )
+            val newData = publish(data.leave(userId, ref), context)
             if newData.users.isEmpty then
               replyTo ! Stopped(roomId)
               Behaviors.stopped
@@ -242,13 +204,8 @@ object Room:
             Behaviors.same
         case EditIssue(token, issue) =>
           data.users.find(_.token == token) match
-            case Some(user) =>
-              broadcast(
-                RoomEvent(MessageType.EditIssue, roomId, user.id, issue),
-                data.users,
-                context
-              )
-              receiveBehaviour(roomId, data.editIssue(issue, user.id), gracePeriod, timers)
+            case Some(_) =>
+              receiveBehaviour(roomId, publish(data.editIssue(issue), context), gracePeriod, timers)
             case None => Behaviors.same
         case ValidateToken(token, replyTo) =>
           val resolution = data.pendingSessions.get(token) match
@@ -265,28 +222,11 @@ object Room:
 
     }
 
-  private[actors] def broadcast(
-      message: RoomEvent,
-      users: List[User],
-      context: ActorContext[Command]
-  ): Unit =
-    context.log.debug("Broadcasting: {} ", message)
-    users.foreach { user =>
-      user.ref ! List(message)
-    }
-  end broadcast
-
-  private[actors] def setupNewUser(user: User, roomId: UUID, data: RoomData): Unit =
-    val init      = List(RoomEvent(MessageType.Init, roomId, user.id, user.name))
-    val editIssue = data.issueLastEditBy.map(lastEditUser =>
-      RoomEvent(MessageType.EditIssue, roomId, lastEditUser, data.currentIssue)
-    )
-    val perUser = data.users.flatMap { u =>
-      RoomEvent(MessageType.Join, roomId, u.id, u.name) ::
-        (if u.voted then List(RoomEvent(MessageType.Vote, roomId, u.id, u.estimation)) else Nil)
-    }
-    // One send for the whole replay - not one per event - so a large room's worth of
-    // catch-up state can't overrun the outbound SSE buffer on connect.
-    user.ref ! (init ++ editIssue.toList ++ perUser)
-  end setupNewUser
+  private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
+    // The Join to publish hop still races a new connection's downstream demand; 08-24's
+    // empirical finding stands, so re-check it if this chain is ever restructured.
+    context.log.debug("Publishing to {} users", data.users.size)
+    data.users.foreach(user => user.ref ! RoomSnapshot.of(data, user.id))
+    data
+  end publish
 end Room
