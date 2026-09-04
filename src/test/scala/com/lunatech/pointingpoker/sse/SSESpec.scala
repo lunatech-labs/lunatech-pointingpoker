@@ -2,6 +2,8 @@ package com.lunatech.pointingpoker.sse
 
 import java.util.UUID
 
+import scala.concurrent.duration.DurationInt
+
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.scaladsl.Keep
 import org.apache.pekko.stream.testkit.scaladsl.TestSink
@@ -10,8 +12,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.lunatech.pointingpoker.actors.RoomEvent.MessageType
-import com.lunatech.pointingpoker.actors.{Room, RoomEvent}
+import com.lunatech.pointingpoker.actors.{Room, RoomSnapshot}
 
 class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -34,38 +35,33 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     (roomId, userId, user, probe)
   end wire
 
+  private def snapshot(userId: UUID, issue: String) =
+    RoomSnapshot(userId, issue, false, List(RoomSnapshot.Participant(userId, "Alice", false, "")))
+
   "SSE.source" should {
 
-    "flatten a batched list of events into individual SSE frames, in order" in {
-      val (roomId, userId, user, probe) = wire()
-      probe.request(2)
-
-      user ! List(
-        RoomEvent(MessageType.Join, roomId, userId, "Alice"),
-        RoomEvent(MessageType.Vote, roomId, userId, "5")
-      )
-
-      probe.expectNext().data must include("\"messageType\":\"join\"")
-      probe.expectNext().data must include("\"messageType\":\"vote\"")
-    }
-
-    "fail the stream when the buffer overflows, instead of silently dropping events" in {
-      val (roomId, userId, user, probe) = wire()
+    "keep a stalled client's stream open and hand it the newest snapshot, not a stale queued one" in {
+      val (_, userId, user, probe) = wire()
       probe.ensureSubscription()
 
-      // No demand requested yet: production's buffer only tolerates bufferSize + 1 = 2
-      // undelivered batches (see SSE.bufferSize), so a clear excess must fail the stream
-      // (and let the client reconnect), not vanish silently.
-      (1 to 5).foreach(i => user ! List(RoomEvent(MessageType.Vote, roomId, userId, i.toString)))
+      // No demand yet, so these queue past the buffer's tolerance. Under fail this errored;
+      // under dropHead the superseded ones are discarded and the stream stays open.
+      (1 to 5).foreach(i => user ! snapshot(userId, s"issue $i"))
+
+      // Nothing is pushed without demand, and this settles all five before any is granted.
+      probe.expectNoMessage(300.millis)
+
       probe.request(5)
-      probe.expectError()
+      // bufferSize + 1 survive: the one already current, plus the newest queued behind it.
+      probe.expectNextN(2).last.data must include("issue 5")
+      probe.expectNoMessage()
     }
 
     "set an explicit retry hint so clients reconnect on a value this app controls" in {
-      val (roomId, userId, user, probe) = wire()
+      val (_, userId, user, probe) = wire()
       probe.request(1)
 
-      user ! List(RoomEvent(MessageType.Join, roomId, userId, "Alice"))
+      user ! snapshot(userId, "")
 
       probe.expectNext().retry mustBe Some(2000)
     }
