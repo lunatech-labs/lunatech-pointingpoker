@@ -139,7 +139,7 @@ The one piece of machinery the browser cases need that Part 1 did not build. TDD
   - `cut(match: string): void` destroys every live proxied response whose request `cookie` header contains `match`, and refuses new such requests without opening upstream, until restored.
   - `restore(match?: string): void` lifts one cut, or every cut when called with no argument.
 
-- [ ] **Step 1: Give the `get` helper its result object**
+- [x] **Step 1: Give the `get` helper its result object**
 
 In `test/stub.test.js`, the helper currently returns `{ req, done }`. Return the mutable `result` too, so a case can wait for a stream to open:
 
@@ -147,7 +147,7 @@ In `test/stub.test.js`, the helper currently returns `{ req, done }`. Return the
   return { req, done, result }
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Append to `test/stub.test.js`:
 
@@ -246,13 +246,13 @@ test('restore lets a cut cookie through again', async t => {
 })
 ```
 
-- [ ] **Step 3: Run them to verify they fail**
+- [x] **Step 3: Run them to verify they fail**
 
 Run: `npm test`
 
 Expected: the three new cases fail with `TypeError: stub.cut is not a function`. The eight existing cases and the reproduction still pass.
 
-- [ ] **Step 4: Implement `cut` and `restore`**
+- [x] **Step 4: Implement `cut` and `restore`**
 
 In `testkit/stub.js`, extend the state and the request handler:
 
@@ -297,13 +297,13 @@ function isCut(state, cookie) {
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `npm test`
 
 Expected: 12/12 passing, output pristine. Destroying `res` is enough to tear down upstream, because both forwarders already destroy the upstream request on `res.on('close')`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add testkit/stub.js test/stub.test.js
@@ -328,13 +328,13 @@ Everything needed for one browser case to drive the real app through the stub in
   - `Participant` is `{ name, page, close(), cut(), restore() }`, where `cut()` and `restore()` are scoped to that participant's session cookie.
   - Locators: `nameInput(page)`, `issueBox(page)`, `issueButton(page)`, `summaryTable(page)`, `participantRows(page)`, `participantRow(page, name)`, `votedMark(row)`, and the action `vote(page, value)`.
 
-- [ ] **Step 1: Confirm the toolchain is reachable, and stop if it is not**
+- [x] **Step 1: Confirm the toolchain is reachable, and stop if it is not**
 
 Run: `npm ping`
 
 If the registry is unreachable, stop and report BLOCKED: this task cannot be done offline. The Netskope whitelist covered `registry.npmjs.org` and `cdn.playwright.dev` when this plan was written.
 
-- [ ] **Step 2: Install Playwright and the two engines**
+- [x] **Step 2: Install Playwright and the two engines**
 
 ```bash
 npm install --save-dev @playwright/test
@@ -343,7 +343,7 @@ npx playwright install chromium firefox
 
 `--with-deps` is deliberately omitted here: it needs `sudo` for apt and the browsers launch on this machine without it. CI keeps `--with-deps`, where apt is available and the image is bare. Record the resolved `@playwright/test` version in your report.
 
-- [ ] **Step 3: Add the `e2e` script**
+- [x] **Step 3: Add the `e2e` script**
 
 `package.json` becomes:
 
@@ -362,7 +362,7 @@ npx playwright install chromium firefox
 }
 ```
 
-- [ ] **Step 4: Ignore Playwright's output directories**
+- [x] **Step 4: Ignore Playwright's output directories**
 
 Append to `.gitignore`:
 
@@ -371,7 +371,7 @@ test-results/
 playwright-report/
 ```
 
-- [ ] **Step 5: Write the config**
+- [x] **Step 5: Write the config**
 
 Create `playwright.config.js`:
 
@@ -394,7 +394,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 6: Write the fixtures**
+- [x] **Step 6: Write the fixtures**
 
 Create `e2e/fixtures.js`:
 
@@ -512,7 +512,7 @@ export const vote = (page, value) =>
 export { expect }
 ```
 
-- [ ] **Step 7: Write the smoke case**
+- [x] **Step 7: Write the smoke case**
 
 Create `e2e/smoke.spec.js`:
 
@@ -533,7 +533,7 @@ test('create a room through the stub and reach the room view', async ({ page, or
 
 The default `page` fixture is used deliberately here rather than `join`: its context has no `baseURL`, which is why the `goto` is absolute, and the Create tab is the path a first visitor takes.
 
-- [ ] **Step 8: Stage the app and run the suite**
+- [x] **Step 8: Stage the app and run the suite**
 
 ```bash
 sbt "; coverageOff; Universal/stage"
@@ -542,7 +542,7 @@ npm run e2e
 
 Expected: 2 passed (one case in each project). If the room view never appears, read the attached `app.log` before anything else: a config error and a slow machine look identical without it.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add package.json package-lock.json playwright.config.js .gitignore e2e/
@@ -569,7 +569,7 @@ Facts these cases rest on, all in `src/main/resources/pages/index.html`:
 - `Leave` and `Copy link` are `<a>` elements (`:177-181`), so they are links, not buttons.
 - The issue box is `readonly` until the pencil sets `editing` (`:200-207`).
 
-- [ ] **Step 1: Add the connection banner locator, then write the two voting cases**
+- [x] **Step 1: Add the connection banner locator, then write the two voting cases**
 
 In `e2e/fixtures.js`, beside the other locators:
 
@@ -628,13 +628,13 @@ test('a straggler keeps the votes hidden until Show is pressed', async ({ join }
 })
 ```
 
-- [ ] **Step 2: Run them**
+- [x] **Step 2: Run them**
 
 Run: `npm run e2e`
 
 Expected: 6 passed (three cases in each project).
 
-- [ ] **Step 3: Write the participant list and issue box cases**
+- [x] **Step 3: Write the participant list and issue box cases**
 
 Append to `e2e/room.spec.js`:
 
@@ -669,13 +669,13 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
 
 The 20 second timeout is deliberately far above detection plus the grace period, which is about 5.1s, because the assertion is about the departure being announced at all, not about when. The two clicks are load-bearing rather than incidental: without them this case waits 31s and fails on Playwright's default per-case timeout. "How a departure is actually noticed" above has the measurements.
 
-- [ ] **Step 4: Run them**
+- [x] **Step 4: Run them**
 
 Run: `npm run e2e`
 
 Expected: 10 passed.
 
-- [ ] **Step 5: Write the reconnect control case**
+- [x] **Step 5: Write the reconnect control case**
 
 Append to `e2e/room.spec.js`:
 
@@ -701,13 +701,13 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
 
 `.first()` on the row is load-bearing: today's reconnect leaves Bob's page with two entries for Alice, and a locator matching two rows would fail Playwright's strict mode rather than the assertion.
 
-- [ ] **Step 6: Run them**
+- [x] **Step 6: Run them**
 
 Run: `npm run e2e`
 
 Expected: 12 passed. If the reconnect never lands, the `cut` is the suspect and Task 1's node cases are the place to reproduce it without a browser.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add e2e/room.spec.js
@@ -733,7 +733,7 @@ Why each fails today, all in `src/main/resources/pages/index.html`:
 - `allVoted()` runs on every `join`, `vote` and `leave` (`:421`, `:435`, `:466`), so an arriving straggler un-reveals a revealed round, whether Show was pressed or the reveal was automatic.
 - `updateSummary` (`:546-552`) counts every entry in `users`, keyed by estimation, so a participant who has not voted becomes a row of its own under the empty key.
 
-- [ ] **Step 1: Widen the grace period**
+- [x] **Step 1: Widen the grace period**
 
 In `testkit/app.js`, change `testProfile`:
 
@@ -746,13 +746,13 @@ export const testProfile = {
 
 The comment above it stays as it is. The arithmetic that forces this value is in step 5 below; `4s >= 2 x 200ms` keeps `SseConfig.load`'s `require` satisfied, and `npm test` starting the app at all is the proof.
 
-- [ ] **Step 2: Run the node suite to confirm the profile is still valid**
+- [x] **Step 2: Run the node suite to confirm the profile is still valid**
 
 Run: `npm test`
 
 Expected: 12/12 passing. A rejected profile fails at app startup with the `require`'s message, surfaced through the harness's captured output.
 
-- [ ] **Step 3: Write the two reveal cases**
+- [x] **Step 3: Write the two reveal cases**
 
 Append to `e2e/room.spec.js`:
 
@@ -789,7 +789,7 @@ test('an auto-revealed round stays revealed when a straggler arrives', async ({ 
 
 Waiting for Carol's row before asserting is what makes these deterministic. Both assertions are about something *not* changing, and asserted directly after the join they would pass on a message that had not arrived yet, which for a `test.fail()` case fails the run.
 
-- [ ] **Step 4: Write the tally case**
+- [x] **Step 4: Write the tally case**
 
 Append to `e2e/room.spec.js`:
 
@@ -810,7 +810,7 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
 Nothing here asserts on the "Most voted estimation" card. With one vote each the tally is a tie, and its order then depends on the order `users` happens to be in, which differs between two pages in the same room.
 
-- [ ] **Step 5: Write the two reconnect list cases**
+- [x] **Step 5: Write the two reconnect list cases**
 
 Append to `e2e/room.spec.js`:
 
@@ -875,19 +875,19 @@ Alice is a participant here purely to be the observation point, which is also wh
 
 **The whole-branch review then extracted this case's setup, so read the code rather than the block above.** Everything from the three joins down to Bob's banner clearing now lives in a `departureWhileCut(join)` helper in `e2e/room.spec.js`, shared with a green control case that runs it and asserts nothing further. The reason is deviation 4's: a `test.fail()` case cannot police its own machinery, this case's machinery is the more fragile of the two, and sharing the helper is what stops the control drifting from the case it controls. It earned that on its first day, catching the reconnect-budget flake recorded in deviation 1, which inside the `test.fail()` case would have counted as an expected failure and said nothing.
 
-- [ ] **Step 6: Run the whole suite**
+- [x] **Step 6: Run the whole suite**
 
 Run: `npm run e2e`
 
 Expected: 24 passed (twelve cases in each project), of which 10 are reported as expected failures, five per project. A case reported as "expected to fail, but passed" is a real failure: either the app already behaves as intended, in which case the annotation is stale and the fix has landed, or the case is not asserting what it claims.
 
-- [ ] **Step 7: Run it again to check for flakes**
+- [x] **Step 7: Run it again to check for flakes**
 
 Run: `npm run e2e && npm run e2e`
 
 Expected: the same result twice. Report the wall-clock time of a run; the reconnect cases are the slow ones and the plan's budget for them is about 5s each.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add e2e/room.spec.js testkit/app.js
@@ -905,7 +905,7 @@ The last step, and the one that makes the annotations a ledger rather than a not
 
 **Interfaces:** none.
 
-- [ ] **Step 1: Add the two browser steps**
+- [x] **Step 1: Add the two browser steps**
 
 In `.github/workflows/ci.yml`, the existing node block becomes:
 
@@ -927,7 +927,7 @@ In `.github/workflows/ci.yml`, the existing node block becomes:
 
 Both engines are installed rather than Chromium alone: the reconnect cases are the heart of this suite and the two engines are already known to disagree on exactly this streaming edge. The steps go after the node tests, on the job that already staged the app.
 
-- [ ] **Step 2: Document the commands**
+- [x] **Step 2: Document the commands**
 
 In `README.md`'s `### Testing` section, after the paragraph about `coverageOff` and before the standalone stub paragraph, add:
 
@@ -948,13 +948,13 @@ drop the annotation in the same change.
 
 Use four-space indented blocks if the surrounding section uses them, or fenced blocks if it uses those. Match what is already there.
 
-- [ ] **Step 3: Verify the workflow parses**
+- [x] **Step 3: Verify the workflow parses**
 
 Run: `python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/ci.yml'))" && echo ok`
 
 Expected: `ok`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/ci.yml README.md
@@ -981,7 +981,7 @@ Two traps make this less trivial than it looks, and getting either wrong changes
 1. **The Bootstrap link carries `integrity` and `crossorigin="anonymous"`** (`index.html:5`). A fulfilled response must therefore be byte-identical, or Subresource Integrity rejects it, and must carry the upstream `Access-Control-Allow-Origin`, or the browser blocks the stylesheet as a CORS failure. So relay the upstream headers rather than setting only a content type.
 2. **`fetch` decompresses the body but leaves the header saying otherwise.** Relaying `content-encoding` or `content-length` alongside a decompressed body corrupts the response, the same class of bug the stub already avoids by stripping hop-by-hop headers.
 
-- [ ] **Step 1: Add the worker-scoped cache**
+- [x] **Step 1: Add the worker-scoped cache**
 
 In `e2e/fixtures.js`, above the `test.extend` call:
 
@@ -1028,7 +1028,7 @@ And as a fixture, beside `app` and `stub`:
   ],
 ```
 
-- [ ] **Step 2: Route every context through it**
+- [x] **Step 2: Route every context through it**
 
 The participants' contexts are made in `join`, and the smoke case uses Playwright's default `page`, which comes from the built-in `context` fixture. Both need the route, so override `context` as well:
 
@@ -1047,23 +1047,23 @@ and in `join`, immediately after `browser.newContext(...)`:
 
 adding `assets` to that fixture's dependencies.
 
-- [ ] **Step 3: Prove the cache is real, without committing the proof**
+- [x] **Step 3: Prove the cache is real, without committing the proof**
 
 Temporarily count the upstream fetches (a counter incremented beside the `fetch` call, logged at worker teardown), run the suite once, and record the number. Expect four per worker rather than two hundred per run: eight on CI, where `workers` is pinned to 2, and four times however many workers Playwright picks locally. Remove the instrumentation before committing.
 
 Then confirm the stylesheet still loads rather than being blocked as a CORS failure, which is the trap that would otherwise pass every structural selector while silently unstyling the page. In a scratch script or a temporary line, compare `page.evaluate(() => document.styleSheets.length)` with the route active against the same page without it. The two must agree. Record both numbers and remove the check.
 
-- [ ] **Step 4: Retire the retry**
+- [x] **Step 4: Retire the retry**
 
 In `playwright.config.js`, `retries: 0`, and rewrite the comment above it: retries existed to absorb CDN flakiness, the cache removes the CDN from the critical path, and `failOnFlakyTests` stays so that a `test.fail()` case flipping cannot be reported as flaky and exit 0.
 
-- [ ] **Step 5: Run the suite twice**
+- [x] **Step 5: Run the suite twice**
 
 Run: `npm run e2e && npm run e2e`
 
 Expected: 24 passed with 10 expected failures, twice, agreeing. Report both wall-clock times against the 45.6s baseline from before this task.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add e2e/fixtures.js playwright.config.js
