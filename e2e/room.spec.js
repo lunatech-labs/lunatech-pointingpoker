@@ -126,7 +126,6 @@ test('a departure is announced while another participant is cut', async ({ join 
 })
 
 test('a Show survives someone joining', async ({ join }) => {
-  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
   const alice = await join('Alice')
   await join('Bob')
 
@@ -141,7 +140,6 @@ test('a Show survives someone joining', async ({ join }) => {
 })
 
 test('an auto-revealed round stays revealed when a straggler arrives', async ({ join }) => {
-  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
   const alice = await join('Alice')
   const bob = await join('Bob')
 
@@ -168,7 +166,6 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
-  test.fail(true, 'step 1: a snapshot replaces the replay that pushes a second entry')
   const alice = await join('Alice')
   const bob = await join('Bob')
 
@@ -187,7 +184,6 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
 })
 
 test('a participant who departed during the gap is pruned on reconnect', async ({ join }) => {
-  test.fail(true, 'step 1: a snapshot is the whole list, so a departure cannot be missed')
   const { bob } = await departureWhileCut(join)
 
   await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
