@@ -111,6 +111,9 @@ async function waitForReady(baseUrl, failure) {
         await response.arrayBuffer()
         return
       }
+      // Release the socket; cancel() rejects if the body already errored, and this loop can
+      // run a few hundred times before the cap.
+      response.body?.cancel().catch(() => {})
     } catch {
       // Not up yet; the loop's own deadline is the only thing that gives up.
     }
