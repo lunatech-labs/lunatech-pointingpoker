@@ -10,16 +10,18 @@ import { startApp, freePort, READY_TIMEOUT_MS } from '../testkit/app.js'
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 test('a source file newer than the staged build refuses to run instead of testing it', async t => {
-  const marker = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
-  const original = fs.statSync(marker)
+  // A new file rather than a touched tracked one: a kill mid-test leaves this in git status,
+  // where a changed mtime would be invisible and git could not restore it anyway.
+  const probe = path.join(repoRoot, 'src', 'main', '.stale-probe')
+  fs.writeFileSync(probe, '')
   // A second into the future, so the guard sees it regardless of filesystem timestamp coarseness.
   const future = new Date(Date.now() + 1000)
-  fs.utimesSync(marker, future, future)
-  t.after(() => fs.utimesSync(marker, original.atime, original.mtime))
+  fs.utimesSync(probe, future, future)
+  t.after(() => fs.rmSync(probe, { force: true }))
 
   await assert.rejects(startApp(), error => {
     assert.match(error.message, /is stale/)
-    assert.match(error.message, /index\.html is newer/)
+    assert.match(error.message, /\.stale-probe is newer/)
     assert.match(error.message, /Universal\/stage/)
     return true
   })
