@@ -236,6 +236,31 @@ test('an edit committed with the check button reaches the other browser', async 
 
   await expect(issueBox(bob.page)).toHaveValue('PP-42')
   await expect(issueBox(alice.page)).toHaveValue('PP-42')
+
+  // Alice's own typed value cannot distinguish an applied snapshot from a blocked one, so
+  // move the room past it and require her to follow.
+  await issueButton(bob.page).click()
+  await issueBox(bob.page).fill('PP-43')
+  await issueButton(bob.page).click()
+  await expect(issueBox(alice.page)).toHaveValue('PP-43')
+})
+
+test('a commit that never blurred the box still lets the room resync it', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('PP-42')
+  // Stands in for macOS, where clicking a button moves no focus: dispatchEvent carries no
+  // mousedown, so no blur precedes the commit. A real click blurs first and masks a stuck guard.
+  await issueButton(alice.page).dispatchEvent('click')
+  // Proves the commit posted, so a failure below is the guard and not a dead synthetic click.
+  await expect(issueBox(bob.page)).toHaveValue('PP-42')
+
+  await issueButton(bob.page).click()
+  await issueBox(bob.page).fill('PP-43')
+  await issueButton(bob.page).click()
+  await expect(issueBox(alice.page)).toHaveValue('PP-43')
 })
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {

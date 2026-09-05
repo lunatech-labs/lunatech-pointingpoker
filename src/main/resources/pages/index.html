@@ -469,6 +469,7 @@
         doLeave: function () {
           localStorage.clear();
           this.inRoom = false;
+          this.issueFocused = false;
           this.votesSummary = [],
           this.user.estimation = "";
           this.users = [],
@@ -476,6 +477,8 @@
         },
         doEdit: function () {
           this.editing = false;
+          // Removing the focused input fires no blur, so release the guard here or it sticks.
+          this.issueFocused = false;
           axios.post('/rooms/' + this.roomId + '/edit-issue', { issue: this.currentIssue })
           .catch(function (error) {
             console.log(error);
