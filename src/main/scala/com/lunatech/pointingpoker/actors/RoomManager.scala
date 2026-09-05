@@ -143,7 +143,7 @@ object RoomManager:
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
           case ConnectionFailure(roomId, userId, ref, t) =>
-            context.log.error("ConnectionFailure: {}", t)
+            context.log.error("ConnectionFailure for room {} user {}", roomId, userId, t)
             data.rooms
               .get(roomId)
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
