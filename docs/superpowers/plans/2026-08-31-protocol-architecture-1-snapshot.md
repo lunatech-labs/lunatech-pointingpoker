@@ -102,9 +102,10 @@ rebased or merged by this plan.
 
 **Testkit, modified, per deviation 1:**
 
-- `testkit/app.js` `startApp` refuses to run against a staged build older than
-  its sources.
-- `test/startup.test.js` Gains the case that pins that refusal.
+- `package.json` `pretest` and `pree2e` hooks stage before either suite runs.
+- `.github/workflows/ci.yml` Loses its own stage step, and runs `npm test`.
+- `testkit/app.js`, `test/startup.test.js` The staleness guard and its case,
+  added and then removed within this branch.
 
 **Tests, deleted:**
 
@@ -140,15 +141,30 @@ branch and never reaches `main`, which squash-merges.
 Each of these is a decision this plan did not anticipate. They are listed so a
 reviewer can reject one without re-deriving it.
 
-1. **`testkit/app.js` refuses to run against a stale stage**, against this plan's
-   own file list, and `test/startup.test.js` pins the refusal. The harness runs
-   the staged launcher, not `sbt run`, so a client change that is never restaged
-   is tested in its previous form and the suite reports green on code that is not
+1. **`npm test` and `npm run e2e` stage before they run**, against this plan's own
+   file list, which touches `package.json`, `testkit/app.js`,
+   `test/startup.test.js`, the README and the CI workflow. The harness runs the
+   staged launcher, not `sbt run`, so a client change that is never restaged is
+   tested in its previous form and the suite reports green on code that is not
    under test. Task 5 is a client-only task, which is exactly where that silently
-   costs a real result. The guard compares the newest mtime under `src/main`,
-   `build.sbt` and `project` against the launcher and refuses with the restage
-   command rather than rebuilding, since a test run that silently invokes `sbt`
-   would turn a 3 second suite into a minute on a cold build.
+   costs a real result.
+
+   **This landed twice, and the first answer was wrong.** It first shipped as a
+   guard: `startApp` compared the newest mtime under `src/main`, `build.sbt` and
+   `project` against the launcher and refused with the restage command rather
+   than rebuilding, on the grounds that a test run silently invoking `sbt` would
+   turn a 3 second suite into a minute on a cold build. Two things undid that.
+   The measured cost of a no-op stage is 4.4 seconds, not a minute. And the
+   guard's own test had to make the real source tree look stale for the duration
+   of one `startApp` call, which `node --test` can overlap with
+   `reproduction.test.js`'s own `startApp` in a parallel worker: measured at 2
+   failures in 36 runs, each one reporting a stale stage against whichever case
+   was unlucky. Staging from an npm pre-hook makes staleness unrepresentable
+   instead of detectable, so the guard, its test and that flake are all gone. The
+   cost is about 4 seconds per `npm test`, which the product owner accepted on
+   2026-09-05 on the grounds that it is a fixed cost against a suite that will
+   grow. `node --test` or `npx playwright test` invoked directly still skip the
+   hook, which the README now says.
 2. **A fifth browser case, and a follow-up assertion on one of task 6's four.**
    Task 5 step 1's focus guard has no reset other than a `blur` event, and
    `doEdit` removes the focused input by setting `editing` false. Browsers fire no
@@ -1662,7 +1678,7 @@ Step 1 is done when all of the following hold. Do not merge or rebase: the stack
 lands as one ordered pack after step 2 and the user drives it.
 
 - `sbt scalafmtCheckAll` clean, `sbt test` green.
-- `npm test` green, 15 cases.
+- `npm test` green, 14 cases.
 - `npm run e2e` green, 32 passed and exactly 2 expected failures, 34 results in
   total, both failures the step 3 tally case in its two engines.
 - `git status --short` empty.

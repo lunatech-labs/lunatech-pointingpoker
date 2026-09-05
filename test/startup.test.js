@@ -1,31 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
 import net from 'node:net'
-import path from 'node:path'
 import { once } from 'node:events'
-import { fileURLToPath } from 'node:url'
 import { startApp, freePort, READY_TIMEOUT_MS } from '../testkit/app.js'
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-test('a source file newer than the staged build refuses to run instead of testing it', async t => {
-  // A new file rather than a touched tracked one: a kill mid-test leaves this in git status,
-  // where a changed mtime would be invisible and git could not restore it anyway.
-  const probe = path.join(repoRoot, 'src', 'main', '.stale-probe')
-  fs.writeFileSync(probe, '')
-  // A second into the future, so the guard sees it regardless of filesystem timestamp coarseness.
-  const future = new Date(Date.now() + 1000)
-  fs.utimesSync(probe, future, future)
-  t.after(() => fs.rmSync(probe, { force: true }))
-
-  await assert.rejects(startApp(), error => {
-    assert.match(error.message, /is stale/)
-    assert.match(error.message, /\.stale-probe is newer/)
-    assert.match(error.message, /Universal\/stage/)
-    return true
-  })
-})
 
 // Above the readiness cap, so a regression fails this assertion rather than being cancelled
 // by the runner before it can report why.
