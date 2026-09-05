@@ -15,6 +15,9 @@ import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookiePair
 import org.apache.pekko.http.scaladsl.model.headers.SameSite
+import org.apache.pekko.http.scaladsl.model.headers.`Cache-Control`
+import org.apache.pekko.http.scaladsl.model.headers.CacheDirectives.`no-cache`
+import org.apache.pekko.http.scaladsl.model.headers.RawHeader
 import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
@@ -123,16 +126,23 @@ class API(
                   roomManager.ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
                 ) {
                   case Success(Room.Resolved(userId, name)) =>
-                    complete(
-                      SSE.source(
-                        roomManager.toClassic,
-                        roomId,
-                        userId,
-                        name,
-                        token,
-                        sseConfig.retryMillis
+                    // Proxies that buffer a response body turn SSE into batches or silence;
+                    // X-Accel-Buffering is nginx's opt-out and README records the rest.
+                    respondWithHeaders(
+                      `Cache-Control`(`no-cache`),
+                      RawHeader("X-Accel-Buffering", "no")
+                    ) {
+                      complete(
+                        SSE.source(
+                          roomManager.toClassic,
+                          roomId,
+                          userId,
+                          name,
+                          token,
+                          sseConfig.retryMillis
+                        )
                       )
-                    )
+                    }
                   case Success(Room.Unresolved) =>
                     log.debug("Session token did not resolve for room {}", roomId)
                     complete(StatusCodes.Unauthorized)

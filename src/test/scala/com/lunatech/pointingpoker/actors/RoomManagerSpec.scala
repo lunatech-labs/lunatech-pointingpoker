@@ -275,5 +275,32 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       roomProbe.expectNoMessage()
     }
+
+    "keep a member's vote when ConnectToRoom re-registers them after a reconnect" in {
+      val roomId        = UUID.randomUUID()
+      val userId        = UUID.randomUUID()
+      val token         = Room.SessionToken.mint()
+      val firstProbe    = TestProbe()(testKit.system.classicSystem)
+      val secondProbe   = TestProbe()(testKit.system.classicSystem)
+      val roomRef       = testKit.spawn(Room(roomId))
+      val responseProbe = testKit.createTestProbe[Room.Response]()
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val managerRef    = testKit.spawn(
+        RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomRef)), responseProbe.ref)
+      )
+
+      managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, firstProbe.ref)
+      // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
+      // managerRef is guaranteed applied before Vote is sent directly to roomRef below.
+      firstProbe.expectMsgType[RoomSnapshot]
+      roomRef ! Room.Vote(token, "5")
+      managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, secondProbe.ref)
+      // Same barrier as above, so GetData below cannot race the reconnect's Join.
+      secondProbe.expectMsgType[RoomSnapshot]
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val users = dataProbe.expectMessageType[Room.DataStatus].data.users
+      users.map(u => (u.voted, u.estimation)) mustBe List((true, "5"))
+    }
   }
 end RoomManagerSpec

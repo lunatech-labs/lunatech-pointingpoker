@@ -82,13 +82,13 @@ directly in the new frontend.
 
 - [ ] Roles: voting participant vs. observer, self-service switching, excluding
       observers from vote counts and status indicators.
-- [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
+- [x] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
       become real backend logic. **Moves into step 1**, where `round.revealed` is
       set by `Show` and by the vote that completes the round, and every snapshot
       carries it. It lands as a latch rather than as a standing derivation, which
       takes the auto-reveal half of the item below with it; section 3 of that spec
-      says why. Check this off when that lands.
+      says why.
 - [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
       longer a product decision.** `round.revealed` is set by `Show` and by the
       vote that completes the round, and cleared only by `clear()` or `reVote()`;
@@ -103,18 +103,20 @@ directly in the new frontend.
       either destroy the round or make everyone vote again.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
-      replay now goes out as a single batched message instead of one send per
-      event, removing the one systematic, room-size-scaling burst against the
-      outbound buffer; the source switched to `OverflowStrategy.fail` with a small
-      non-zero buffer, since a zero-size buffer turned out to bypass whichever
-      overflow strategy is configured entirely rather than applying it at a
-      zero-element threshold. A failed connection self-heals through the client's
-      existing reconnect-and-replay path, now on an explicit `retry` interval this
-      app controls instead of each browser's own unpinned default. A grace period
-      before a disconnect is announced (`Room.Leave`/`ConfirmLeave`) keeps an
-      ordinary reconnect invisible to the rest of the room instead of showing as a
+      replay went out as a single batched message instead of one send per event,
+      removing the one systematic, room-size-scaling burst against the outbound
+      buffer; the source switched to `OverflowStrategy.fail` with a small non-zero
+      buffer, since a zero-size buffer turned out to bypass whichever overflow
+      strategy is configured entirely rather than applying it at a zero-element
+      threshold. A failed connection self-healed through the client's existing
+      reconnect-and-replay path, on an explicit `retry` interval this app controls
+      instead of each browser's own unpinned default. A grace period before a
+      disconnect is announced (`Room.Leave`/`ConfirmLeave`) keeps an ordinary
+      reconnect invisible to the rest of the room instead of showing as a
       leave-then-rejoin flicker. See
-      `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`.
+      `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`. Step 1 of
+      the protocol re-architecture superseded both mechanisms: the batched replay
+      by a single `RoomSnapshot`, and `fail` by `dropHead`.
 - [ ] Re-vote refinement: prior-vote tracking, confirm-vs-change distinction, the
       pre/post-reveal visibility rules from the spec. The current `ReVote` command
       is a stub.
@@ -178,6 +180,43 @@ directly in the new frontend.
       above gets judged. The item is to decide what operations actually needs,
       an activity signal that does not depend on debug-level noise, and set the
       level once that exists.
+- [ ] Usage metrics as structured log lines, so tuning stops being guesswork.
+      Two shapes. Per-event lines on room created, room stopped with its lifetime
+      and peak participants, member joined, member pruned, vote cast, and round
+      revealed with whether Show or the latch did it. Then a cumulative summary
+      once an hour, which is roughly one line per meeting, skipped entirely when
+      the interval saw no activity so an idle deployment stays quiet. One stable
+      prefix and `key=value` pairs after it, so grep and awk are the whole
+      toolchain and nothing needs a dashboard to be useful.
+      **Log no participant names.** They are user-entered and are real names in
+      practice. The first question below needs to know that two members shared a
+      name, not what the name was, so emit a boolean.
+      Four questions, in priority order: how often a member is pruned while
+      another member shares its name, which is the ghost rate in
+      `docs/known-issues.md` that nobody can currently size; how long rooms live
+      and how long they sit idle before dying; participants per room and rounds
+      per session; and how often a round is revealed by Show rather than by the
+      vote latch. Each of those is a number some existing decision was guessed
+      at, and `config/SseConfig.scala` says so about its own, calling them
+      "heuristics, not measured figures".
+      **This blocks nothing and must not be made to.** Emitting the lines is
+      additive and depends on no other step; acting on what they say needs weeks
+      of accumulation, and the two are separate work. In particular step 4 does
+      not wait for it: that step already reasons its way to a two-hour idle
+      timeout, and the protocol spec makes it "the only value this design makes
+      configurable", so a later correction is a deploy rather than a release.
+      Gating step 4 would also gate step 6 behind it, which is the fix for the
+      ghost this instrumentation exists to measure, so the gate would delay the
+      thing it is trying to inform. Ship the lines whenever convenient and let
+      the data catch up.
+      Do not expect a fast answer. At one or two meetings a week for one team,
+      even a month is a handful of sessions, which will not size a rare event.
+      The ghost rate becomes real only across every team using the tool, on a
+      timescale of months. Counters live in memory and reset on deploy, which
+      matches rooms doing the same and caps how much any single window can say.
+      This also unblocks the logging policy item above, whose open question is an
+      activity signal that does not depend on debug-level noise. These lines are
+      that signal, at INFO.
 
 ## Backlog: suggested, not yet prioritized
 
