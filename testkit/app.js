@@ -8,8 +8,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const launcher = path.join(repoRoot, 'target', 'universal', 'stage', 'bin', 'pointingpoker')
+const stageDir = path.join(repoRoot, 'target', 'universal', 'stage')
+const launcher = path.join(stageDir, 'bin', 'pointingpoker')
 const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
+
+// Everything Universal/stage turns into the launcher. `project` holds the build definition, whose
+// own `target` output is skipped below because it is always newer than what it produced.
+const stageInputs = [
+  path.join(repoRoot, 'src', 'main'),
+  path.join(repoRoot, 'build.sbt'),
+  path.join(repoRoot, 'project')
+]
 
 export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
@@ -34,10 +43,38 @@ export async function freePort() {
   return port
 }
 
+// Newest mtime under a path, with its own file, skipping sbt output directories.
+function newest(target, skipTargetDirs = true) {
+  let stat
+  try {
+    stat = fs.statSync(target)
+  } catch {
+    return null
+  }
+  if (!stat.isDirectory()) return { mtimeMs: stat.mtimeMs, file: target }
+  let found = null
+  for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
+    if (skipTargetDirs && entry.isDirectory() && entry.name === 'target') continue
+    const hit = newest(path.join(target, entry.name), skipTargetDirs)
+    if (hit && (!found || hit.mtimeMs > found.mtimeMs)) found = hit
+  }
+  return found
+}
+
 export async function startApp({ port, env = {} } = {}) {
   // Fail here rather than spending the readiness cap on a file that is not there.
   if (!fs.existsSync(launcher)) {
     throw new Error(`${launcher} is missing. Run: ${STAGE_COMMAND}`)
+  }
+  // `npm run e2e` does not stage, so without this a source change since the last stage gives a
+  // green run against the previous binary, which is worse than no run at all.
+  const staged = newest(stageDir, false)
+  const source = stageInputs
+    .map(input => newest(input))
+    .reduce((a, b) => (a && b && a.mtimeMs > b.mtimeMs ? a : b || a), null)
+  if (staged && source && source.mtimeMs > staged.mtimeMs) {
+    const culprit = path.relative(repoRoot, source.file)
+    throw new Error(`${stageDir} is stale: ${culprit} is newer. Run: ${STAGE_COMMAND}`)
   }
   const chosen = port ?? (await freePort())
   const child = spawn(launcher, [], {

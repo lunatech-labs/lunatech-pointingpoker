@@ -15,8 +15,12 @@ import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}
 
 object SSE:
 
-  // dropHead makes 1 hold the newest snapshot; larger only stores staler ones. Never 0: it
-  // silently drops without consulting the strategy, so the client goes quiet with no reconnect.
+  // Source.actorRef tolerates bufferSize + 1 elements in flight, one already current downstream
+  // plus this many queued, so a stalled client receives one stale snapshot before the newest.
+  // Established empirically twice, by 08-24's backpressure work and again by the snapshot
+  // migration, so do not re-derive it. Under dropHead 1 is the right size, since a larger buffer
+  // only stores staler snapshots. Never 0: that special-cases to an unconditional silent drop
+  // that never consults the strategy, so the client goes quiet with no failure and no reconnect.
   val bufferSize = 1
 
   /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default

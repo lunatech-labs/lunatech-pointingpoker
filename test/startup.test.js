@@ -1,8 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import net from 'node:net'
+import path from 'node:path'
 import { once } from 'node:events'
+import { fileURLToPath } from 'node:url'
 import { startApp, freePort, READY_TIMEOUT_MS } from '../testkit/app.js'
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+test('a source file newer than the staged build refuses to run instead of testing it', async t => {
+  const marker = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
+  const original = fs.statSync(marker)
+  // A second into the future, so the guard sees it regardless of filesystem timestamp coarseness.
+  const future = new Date(Date.now() + 1000)
+  fs.utimesSync(marker, future, future)
+  t.after(() => fs.utimesSync(marker, original.atime, original.mtime))
+
+  await assert.rejects(startApp(), error => {
+    assert.match(error.message, /is stale/)
+    assert.match(error.message, /index\.html is newer/)
+    assert.match(error.message, /Universal\/stage/)
+    return true
+  })
+})
 
 // Above the readiness cap, so a regression fails this assertion rather than being cancelled
 // by the runner before it can report why.
