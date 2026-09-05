@@ -16,9 +16,8 @@ import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}
 object SSE:
 
   // Source.actorRef tolerates bufferSize + 1 in flight, so a stalled client gets one stale
-  // snapshot then the newest; found empirically twice, so do not re-derive it. 1 is right under
-  // dropHead, since larger only stores staler ones. Never 0: it silently drops without ever
-  // consulting the strategy, so the client goes quiet with no failure and no reconnect.
+  // snapshot then the newest; found empirically twice, so do not re-derive it. Never 0: it
+  // silently drops without consulting the strategy, leaving the client quiet with no reconnect.
   val bufferSize = 1
 
   /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default
