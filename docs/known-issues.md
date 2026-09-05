@@ -86,11 +86,17 @@ roadmap item instead of leaving it here as stale history.
   stream simply ending. But the room does not notice either one until a write to
   that dead stream fails, and absent other traffic the only writes are the
   15-second heartbeats, with the first one after a close only drawing the peer's
-  reset. The step 0 browser suite measured about 31 seconds from a tab close to
-  detection with no other room activity, or about 1.7 seconds if two broadcasts
-  happen to follow the close, and only then does the 6-second grace period run.
-  A participant closing their tab mid-meeting can show as present for far longer
-  than 6 seconds afterward, not up to 6.
+  reset. So detection lands one to two heartbeats after the close, depending on
+  where in the cycle it fell: 16 to 31 seconds with no other room activity, or
+  about a second if two broadcasts happen to follow the close. The 6-second grace
+  period runs after that, which in production means a closed tab is announced 22
+  to 37 seconds later, or about 7 with that traffic. The step 0 browser suite
+  measured the worst case at 31.7 seconds to announce, against the 600ms grace
+  period its test profile carried then. A participant closing their tab
+  mid-meeting can show as present for far longer than 6 seconds afterward, not up
+  to 6. Quote the range rather than a midpoint: a single figure gets remembered as
+  a ceiling, and 16.7 seconds from that suite's table has been, though it is the
+  nudged case at the old test grace period and nearer 22 in production.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
@@ -131,6 +137,16 @@ roadmap item instead of leaving it here as stale history.
   What remains on a reload is a sub-second gap where the member is absent, since
   `pagehide` fires there too and nothing distinguishes it from a close, accepted
   deliberately in that design. Remove this entry when that lands.
+
+  **A heartbeat reduction was weighed as a stopgap and rejected on 2026-09-05.**
+  At 5 seconds the announce window falls from 22 to 37 seconds down to about 11
+  to 17, so it shrinks the ghost rather than closing it, at three times the
+  heartbeat traffic, and step 6 is expected within one to two weeks, which is not
+  long enough for enough ceremonies to run into it. The trigger for reconsidering
+  is step 6 slipping well past that window, or a team committing to a number a
+  ghost's vote skewed. Note the dependency the estimate carries: step 6 sits
+  behind steps 2 to 5 in the recorded order, so the stopgap becomes worth
+  revisiting if that order holds but the schedule does not.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
