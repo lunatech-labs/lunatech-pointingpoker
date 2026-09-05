@@ -223,8 +223,8 @@ object Room:
     }
 
   private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
-    // The Join to publish hop still races a new connection's downstream demand; 08-24's
-    // empirical finding stands, so re-check it if this chain is ever restructured.
+    // The Join to publish hop races a new connection's demand, benign while dropHead leaves a
+    // newer full snapshot. 08-24 measured it under fail; re-check if that guarantee changes.
     context.log.debug("Publishing to {} users", data.users.size)
     data.users.foreach(user => user.ref ! RoomSnapshot.of(data, user.id))
     data
