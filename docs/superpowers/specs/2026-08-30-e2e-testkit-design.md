@@ -341,13 +341,19 @@ that job already has a JVM and a warm build:
 - uses: actions/setup-node@v5
   with:
     node-version: '24'
+- name: install node dependencies
+  run: npm ci
 - name: node tests
   run: npm test
-- name: install the browser suite
-  run: npm ci && npx playwright install --with-deps chromium firefox
+- name: install the browsers
+  run: npx playwright install --with-deps chromium firefox
 - name: browser tests
   run: npm run e2e
 ```
+
+Dependencies install before either suite. `npm test` would survive without them,
+since the node suite imports only built-ins and `testkit/`, but nothing enforces
+that and the browser suite needs the local `playwright` binary regardless.
 
 The stage step is gone from CI because `npm test` and `npm run e2e` each stage
 through an npm pre-hook, so CI and a developer's machine run the same path.

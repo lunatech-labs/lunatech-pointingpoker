@@ -165,6 +165,14 @@ reviewer can reject one without re-deriving it.
    2026-09-05 on the grounds that it is a fixed cost against a suite that will
    grow. `node --test` or `npx playwright test` invoked directly still skip the
    hook, which the README now says.
+
+   `npm ci` also moves above the node tests, which it followed only because the
+   step 0 branches landed in that order: the node steps arrived when the suite
+   had no dependencies and no install step existed, and the browser branch later
+   added one where it needed it. `npm test` survives without `node_modules`
+   because the node suite imports only built-ins and `testkit/`, but nothing
+   enforces that, and the first test file to import a package would fail in CI
+   alone. A cache hit costs about a second.
 2. **A fifth browser case, and a follow-up assertion on one of task 6's four.**
    Task 5 step 1's focus guard has no reset other than a `blur` event, and
    `doEdit` removes the focused input by setting `editing` false. Browsers fire no
