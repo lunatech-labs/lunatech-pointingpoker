@@ -97,6 +97,26 @@ roadmap item instead of leaving it here as stale history.
   a reload is a new participant to the room and the previous one lingers for
   the grace period: the user watches their own name sit in the participant list
   twice.
+
+  **The ghost is not merely visible, its vote is counted, and that is the half
+  worth acting on.** Observed manually and reproduced on 2026-09-05: a
+  participant who votes, loses their tab, and rejoins inside the detection
+  window leaves an entry that still carries `voted = true` and its estimation.
+  With one live voter on 5 plus that ghost also on 5, the summary reports 5
+  with a count of 2, so "Most voted estimation" is computed partly from a
+  session nobody is sitting at. A team can commit to the wrong number on it.
+  The replacement entry, having not voted, also blocks server-side auto-reveal
+  until it votes or the ghost is pruned. **Step 3's voted-only tally does not
+  help here**, which is worth stating because it looks like it should: the
+  ghost's `voted` flag is true, so it survives that filter. Only an identity
+  that does not duplicate fixes it.
+
+  One thing that does hold, and only because of step 1: pruning the ghost
+  cannot disclose the round. A ghost that never voted, alongside members who
+  all have, satisfies a re-derived everyone-has-voted predicate the instant it
+  is removed. The reveal latch means a membership change reveals nothing, so
+  the pruning is safe. This is the invariant earning its keep in a case no test
+  covers.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which closes both forms by different means. A deliberate close fires
