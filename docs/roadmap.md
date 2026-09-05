@@ -180,6 +180,32 @@ directly in the new frontend.
       above gets judged. The item is to decide what operations actually needs,
       an activity signal that does not depend on debug-level noise, and set the
       level once that exists.
+- [ ] Usage metrics as structured log lines, so tuning stops being guesswork.
+      Two shapes. Per-event lines on room created, room stopped with its lifetime
+      and peak participants, member joined, member pruned, vote cast, and round
+      revealed with whether Show or the latch did it. Then a cumulative summary
+      once an hour, which is roughly one line per meeting, skipped entirely when
+      the interval saw no activity so an idle deployment stays quiet. One stable
+      prefix and `key=value` pairs after it, so grep and awk are the whole
+      toolchain and nothing needs a dashboard to be useful.
+      **Log no participant names.** They are user-entered and are real names in
+      practice. The first question below needs to know that two members shared a
+      name, not what the name was, so emit a boolean.
+      Four questions, in priority order: how often a member is pruned while
+      another member shares its name, which is the ghost rate in
+      `docs/known-issues.md` that nobody can currently size; how long rooms live
+      and how long they sit idle before dying; participants per room and rounds
+      per session; and how often a round is revealed by Show rather than by the
+      vote latch. Each of those is a number some existing decision was guessed
+      at, and `config/SseConfig.scala` says so about its own, calling them
+      "heuristics, not measured figures".
+      **The trigger is step 4**, which replaces stop-when-empty with an idle
+      timeout and so needs somebody to invent a duration. Instrumenting first
+      turns that invention into a measurement. Counters live in memory and reset
+      on deploy, which matches rooms doing the same.
+      This also unblocks the logging policy item above, whose open question is an
+      activity signal that does not depend on debug-level noise. These lines are
+      that signal, at INFO.
 
 ## Backlog: suggested, not yet prioritized
 
