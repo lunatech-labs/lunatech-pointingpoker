@@ -139,7 +139,7 @@ roadmap item instead of leaving it here as stale history.
   deliberately in that design. Remove this entry when that lands.
 
   **A heartbeat reduction was weighed as a stopgap and rejected on 2026-09-05.**
-  At 5 seconds the announce window falls from 22 to 37 seconds down to about 11
+  At 5 seconds the announce window falls from 22 to 37 seconds down to about 12
   to 17, so it shrinks the ghost rather than closing it, at three times the
   heartbeat traffic, and step 6 is expected within one to two weeks, which is not
   long enough for enough ceremonies to run into it. The trigger for reconsidering
