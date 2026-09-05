@@ -1,8 +1,10 @@
 # SSE Backpressure and Reconnect Hygiene
 
 Date: 2026-08-24
-Status: Implemented. This is a retrospective record, not a pre-implementation
-plan: the change was scoped and approved incrementally in conversation rather
+Status: Implemented, decisions since superseded; see the "Disposition of
+existing specs" table in `2026-08-31-protocol-target-architecture-design.md`.
+This is a retrospective record, not a pre-implementation plan: the change was
+scoped and approved incrementally in conversation rather
 than through the spec-first process used for larger work, since it modified
 existing code in two files rather than introducing a new subsystem. It's
 written down after the fact because the investigation produced several
