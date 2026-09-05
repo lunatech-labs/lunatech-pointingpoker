@@ -183,3 +183,12 @@ Response-scanning appliances are the harder case, since they may buffer to
 inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
 and the testing section above says how to run it.
 
+**A restart ends every room, and open tabs need a reload.** Rooms and the
+sessions that reach them live in the process's memory, so a deploy takes them
+with it. A tab that was open across the restart does not fail silently: its next
+SSE attempt gets a 401 because the token no longer resolves, and the page shows
+"Your session has ended. Please reload the page to rejoin." Reloading is the
+whole recovery, since there is no state to migrate and nothing to drain. This is
+also why the wire format carries no version field: no client outlives the server
+that served it, so there is no old client to negotiate with.
+
