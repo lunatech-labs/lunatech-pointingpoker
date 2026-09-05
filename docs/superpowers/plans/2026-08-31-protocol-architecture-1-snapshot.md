@@ -97,7 +97,14 @@ rebased or merged by this plan.
 - `src/test/scala/.../sse/SSESpec.scala` The batching case goes with `mapConcat`,
   and the overflow case inverts to `dropHead`.
 - `src/test/scala/.../APISpec.scala` Gains the anti-buffering header assertion.
-- `e2e/room.spec.js` Four `test.fail()` annotations go, three cases are added.
+- `e2e/room.spec.js` Four `test.fail()` annotations go, and four cases are added
+  at task 6. Deviation 2 adds a fifth and extends one of the four.
+
+**Testkit, modified, per deviation 1:**
+
+- `testkit/app.js` `startApp` refuses to run against a staged build older than
+  its sources.
+- `test/startup.test.js` Gains the case that pins that refusal.
 
 **Tests, deleted:**
 
@@ -128,6 +135,38 @@ branch and never reaches `main`, which squash-merges.
 
 ---
 
+## Deviations from the plan, and why
+
+Each of these is a decision this plan did not anticipate. They are listed so a
+reviewer can reject one without re-deriving it.
+
+1. **`testkit/app.js` refuses to run against a stale stage**, against this plan's
+   own file list, and `test/startup.test.js` pins the refusal. The harness runs
+   the staged launcher, not `sbt run`, so a client change that is never restaged
+   is tested in its previous form and the suite reports green on code that is not
+   under test. Task 5 is a client-only task, which is exactly where that silently
+   costs a real result. The guard compares the newest mtime under `src/main`,
+   `build.sbt` and `project` against the launcher and refuses with the restage
+   command rather than rebuilding, since a test run that silently invokes `sbt`
+   would turn a 3 second suite into a minute on a cold build.
+2. **A fifth browser case, and a follow-up assertion on one of task 6's four.**
+   Task 5 step 1's focus guard has no reset other than a `blur` event, and
+   `doEdit` removes the focused input by setting `editing` false. Browsers fire no
+   blur when a focused element leaves the DOM, so the guard survives the commit
+   and `applySnapshot` returns `prev.currentIssue` for the rest of the session,
+   which is the freeze the known-issues entry says the focus guard was chosen to
+   avoid. On Linux and Windows the mousedown on the commit button blurs first and
+   hides this; on macOS, where clicking a button moves no focus, it does not.
+   `doLeave` strands the flag the same way across a rejoin. Both now clear it.
+   Task 6's committed-edit case could not catch this, because Alice's own typed
+   value reads the same whether the snapshot applied or was blocked, so it gains a
+   follow-up edit by the other browser. The new case commits through
+   `dispatchEvent('click')`, which carries no mousedown and therefore reproduces
+   the macOS sequence on any platform: it failed in both engines before the fix
+   and passes after.
+
+---
+
 ## Task 1: Anti-buffering headers and the deployment note
 
 Independent of the protocol change, so it goes first and can be reviewed on its
@@ -143,7 +182,7 @@ own. It closes the "SSE reverse-proxy buffering is undocumented" known issue.
 - Consumes: nothing.
 - Produces: nothing other tasks read.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Extend the existing case in `APISpec.scala`. Replace it wholesale:
 
@@ -161,12 +200,12 @@ Extend the existing case in `APISpec.scala`. Replace it wholesale:
       }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec -- -z \"open an SSE events stream\""`
 Expected: FAIL, `None was not equal to Some("no-cache")`.
 
-- [ ] **Step 3: Add the headers**
+- [x] **Step 3: Add the headers**
 
 In `API.scala`, add to the imports beside the existing `headers` imports:
 
@@ -196,12 +235,12 @@ Replace the `Success(Room.Resolved(...))` branch at `:125-135`:
                     }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `sbt scalafmtAll && sbt "testOnly com.lunatech.pointingpoker.APISpec"`
 Expected: PASS, all cases.
 
-- [ ] **Step 5: Write the deployment note**
+- [x] **Step 5: Write the deployment note**
 
 `README.md` ends at `### Deployment` with no body. Append under it:
 
@@ -229,7 +268,7 @@ inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
 and the testing section above says how to run it.
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/main/scala/com/lunatech/pointingpoker/API.scala \
@@ -260,7 +299,7 @@ what a mid-branch commit holds.
   - `Room.RoomData.joinUser(user: User): RoomData` now preserves the existing
     entry's `voted` and `estimation`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `RoomSpec.scala`, inside the `"Room Actor" should { ... }` block:
 
@@ -400,12 +439,12 @@ construction:
 `RoomManagerSpec` needs `import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData`
 and `import org.apache.pekko.testkit.TestProbe` if they are not already present.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomSpec com.lunatech.pointingpoker.actors.RoomManagerSpec"`
 Expected: FAIL to compile, `value revealed is not a member of RoomData`.
 
-- [ ] **Step 3: Add the field, the latch and the fix**
+- [x] **Step 3: Add the field, the latch and the fix**
 
 In `Room.scala`, change the `RoomData` case class and the three methods.
 `revealed` goes immediately before `pendingSessions` so no positional
@@ -475,7 +514,7 @@ broadcast for now, since the client is still on events until task 5:
             case None => Behaviors.same
 ```
 
-- [ ] **Step 4: Run the whole Scala suite**
+- [x] **Step 4: Run the whole Scala suite**
 
 Run: `sbt scalafmtAll && sbt test`
 Expected: PASS. Existing cases construct `RoomData` with named arguments or
@@ -484,7 +523,7 @@ Expected: PASS. Existing cases construct `RoomData` with named arguments or
 and only one voted, so `revealed` must still be `false`; a failure there means
 the latch predicate is wrong, not the test.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/main/scala/com/lunatech/pointingpoker/actors/Room.scala \
@@ -511,7 +550,7 @@ Pure addition. Nothing sends one yet, so the build and every test stay green.
   - `RoomSnapshot.of(data: Room.RoomData, forUser: UUID): RoomSnapshot`
   - `given Encoder[RoomSnapshot]`, which task 4's `SSE.source` uses.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `src/test/scala/com/lunatech/pointingpoker/actors/RoomSnapshotSpec.scala`:
 
@@ -606,12 +645,12 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 end RoomSnapshotSpec
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomSnapshotSpec"`
 Expected: FAIL to compile, `Not found: RoomSnapshot`.
 
-- [ ] **Step 3: Write the type**
+- [x] **Step 3: Write the type**
 
 Create `src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala`:
 
@@ -665,12 +704,12 @@ end RoomSnapshot
 `sortWith` with an explicit `compareTo` rather than `sortBy(_.id)`, so the order
 does not depend on an implicit `Ordering[UUID]` being resolved.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `sbt scalafmtAll && sbt test`
 Expected: PASS, the new spec and every existing one.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala \
@@ -706,7 +745,7 @@ unaffected, and `npm run e2e` fails because the page still parses
   - `Room.RoomData.editIssue(issue: String): RoomData`, having lost the `userId`
     argument it took only to write `issueLastEditBy`.
 
-- [ ] **Step 1: Rewrite RoomSpec onto snapshots**
+- [x] **Step 1: Rewrite RoomSpec onto snapshots**
 
 This is the largest part of the task. Every `userProbe.expectMsg(List(RoomEvent(...)))`
 becomes an assertion on a `RoomSnapshot`. Add a helper to the `RoomSpec`
@@ -992,13 +1031,13 @@ Finally, update the imports at the top of `RoomSpec.scala`: drop
 `import RoomEvent.MessageType` and add `TestProbe` to the companion helper's
 signature if it is not already imported.
 
-- [ ] **Step 2: Run RoomSpec to verify it fails**
+- [x] **Step 2: Run RoomSpec to verify it fails**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomSpec"`
 Expected: FAIL to compile, `Not found: type RoomSnapshot` in the helper and
 `value publish is not a member of Room`.
 
-- [ ] **Step 3: Swap the room actor**
+- [x] **Step 3: Swap the room actor**
 
 In `Room.scala`, delete the `import RoomEvent.MessageType` line and add nothing
 in its place. Remove `issueLastEditBy` from `RoomData` and simplify `editIssue`:
@@ -1090,7 +1129,7 @@ the reveal is stored state.
 Leave the long explanatory comments on `Leave` and `ConfirmLeave` in place. They
 describe the grace-period timer, which this task does not touch.
 
-- [ ] **Step 4: Swap the SSE source**
+- [x] **Step 4: Swap the SSE source**
 
 In `SSE.scala`, change the import line to
 `import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}` and
@@ -1129,7 +1168,7 @@ Replace the `bufferSize` comment and the source:
 
 `.mapConcat(identity)` is gone: a snapshot is one element and one frame.
 
-- [ ] **Step 5: Delete the unreachable overflow branch**
+- [x] **Step 5: Delete the unreachable overflow branch**
 
 In `RoomManager.scala`, delete `import org.apache.pekko.stream.BufferOverflowException`
 at `:10` and collapse the handler at `:146-161`:
@@ -1146,7 +1185,7 @@ at `:10` and collapse the handler at `:146-161`:
 Overflow no longer fails the stream, so the self-healing-path rationale has
 nothing left to describe.
 
-- [ ] **Step 6: Delete RoomEvent and the retired spec**
+- [x] **Step 6: Delete RoomEvent and the retired spec**
 
 ```bash
 git rm src/main/scala/com/lunatech/pointingpoker/actors/RoomEvent.scala \
@@ -1157,7 +1196,7 @@ git rm src/main/scala/com/lunatech/pointingpoker/actors/RoomEvent.scala \
 silently reconnects, which is exactly the behaviour `dropHead` removes. Porting
 it would mean asserting the opposite of what it was written to prove.
 
-- [ ] **Step 7: Rewrite SSESpec**
+- [x] **Step 7: Rewrite SSESpec**
 
 Replace the whole file body's imports and cases. The `wire()` helper is
 unchanged. Drop `import com.lunatech.pointingpoker.actors.RoomEvent.MessageType`
@@ -1203,14 +1242,14 @@ Update the retry case to send a snapshot rather than a list:
     }
 ```
 
-- [ ] **Step 8: Run the whole Scala suite**
+- [x] **Step 8: Run the whole Scala suite**
 
 Run: `sbt scalafmtAll && sbt test`
 Expected: PASS. If `RoomManagerSpec`'s `"connect user to room"` or
 `"handle connection failure..."` fail on a probe message type, change their
 `expectMsg` calls to `expectMsgType[RoomSnapshot]`.
 
-- [ ] **Step 9: Confirm the declared breakage is only what was declared**
+- [x] **Step 9: Confirm the declared breakage is only what was declared**
 
 Run: `npm test`
 Expected: PASS, 14/14. These cover the stub and startup and never parse a room
@@ -1221,7 +1260,7 @@ Expected: FAIL. The page still branches on `message.messageType`, which no
 longer exists, so participants never render. This is the window task 5 closes.
 Confirm the failures are that and not something else before continuing.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add -A src/main src/test
@@ -1252,7 +1291,7 @@ would turn the suite red from the other direction.
   unit test would uniquely buy is `me` being undefined and nothing can reach that
   until step 6's leave endpoint.
 
-- [ ] **Step 1: Add the focus guard to the editable input**
+- [x] **Step 1: Add the focus guard to the editable input**
 
 `index.html:192`, the input inside `v-if="editing"`. The readonly input at `:201`
 gets no handlers, so focusing it does not arm the guard:
@@ -1261,7 +1300,7 @@ gets no handlers, so focusing it does not arm the guard:
                     <input type="text" placeholder="Current issue" class="form-control" v-model="currentIssue" v-on:focus="issueFocused = true" v-on:blur="issueFocused = false">
 ```
 
-- [ ] **Step 2: Add issueFocused and drop the remembered userId**
+- [x] **Step 2: Add issueFocused and drop the remembered userId**
 
 In the `data` block at `:335-356`, add `issueFocused` and remove `id` from
 `user`:
@@ -1284,7 +1323,7 @@ goes with them. `/join`'s response body keeps `userId` until step 6, where tapir
 describes the endpoint; nothing reads it in between and the status is what
 confirms the call.
 
-- [ ] **Step 3: Write applySnapshot**
+- [x] **Step 3: Write applySnapshot**
 
 Insert it just above `var app = new Vue({`, at `:333`:
 
@@ -1313,7 +1352,7 @@ Insert it just above `var app = new Vue({`, at `:333`:
 keeps `estimation` while `clear()` clears both, so "an estimation showing but
 not counted as voted" is the re-vote state and nothing else.
 
-- [ ] **Step 4: Replace the eight handlers with one**
+- [x] **Step 4: Replace the eight handlers with one**
 
 In `doJoin`, replace everything from `var userId = response.data.userId;` at
 `:386` through the closing `};` of `onmessage` at `:471`. The `onopen` and
@@ -1348,14 +1387,14 @@ In `doJoin`, replace everything from `var userId = response.data.userId;` at
             };
 ```
 
-- [ ] **Step 5: Delete the two retired methods**
+- [x] **Step 5: Delete the two retired methods**
 
 Remove `updateSummary` at `:546-552` and `allVoted` at `:553-555`. The tally is
 `applySnapshot`'s job now, and reveal comes from the server. Leave
 `showUserEstimation` exactly as it is: it re-points at `hasEstimation` at step 2,
 not here. Take care with the trailing comma on the method before them.
 
-- [ ] **Step 6: Flip the four annotations**
+- [x] **Step 6: Flip the four annotations**
 
 In `e2e/room.spec.js`, delete these four lines and nothing else:
 
@@ -1367,10 +1406,10 @@ In `e2e/room.spec.js`, delete these four lines and nothing else:
 **Leave `:158` in place.** That one is annotated to step 3, and the tally still
 counts every participant.
 
-- [ ] **Step 7: Run the browser suite**
+- [x] **Step 7: Run the browser suite**
 
 Run: `sbt "; coverageOff; Universal/stage" && npm run e2e`
-Expected: PASS, 32 passed with 2 expected failures, 34 results in total. Both
+Expected: PASS, 22 passed with 2 expected failures, 24 results in total. Both
 projects run every file, so the expected-failure count drops from 10 to 2 as four
 of the five annotated cases turn real in two engines each.
 
@@ -1378,7 +1417,7 @@ If `'a participant who departed during the gap is pruned on reconnect'` still
 fails, the cause is the shared `departureWhileCut` helper rather than the
 snapshot: check that Bob's restore actually reconnects before asserting.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/main/resources/pages/index.html e2e/room.spec.js
@@ -1401,7 +1440,7 @@ vote-survival assertion step 0 deliberately could not make.
   `connectionLost`, `connectionAlert`.
 - Produces: nothing other tasks read.
 
-- [ ] **Step 1: Add the vote-survival case**
+- [x] **Step 1: Add the vote-survival case**
 
 Append to `e2e/room.spec.js`. Step 0 could not write this: a reconnecting
 browser kept its own `user.estimation` and every other browser kept its stale
@@ -1432,7 +1471,7 @@ test('a vote survives its own reconnect', async ({ join }) => {
 The final `toContainText` is reachable because both participants have now voted,
 which latches the reveal server-side.
 
-- [ ] **Step 2: Add the two issue-input cases**
+- [x] **Step 2: Add the two issue-input cases**
 
 ```javascript
 test('the issue box resyncs once the editor loses focus', async ({ join }) => {
@@ -1466,7 +1505,7 @@ test('an edit committed with the check button reaches the other browser', async 
 })
 ```
 
-- [ ] **Step 3: Add the re-vote confirmation case**
+- [x] **Step 3: Add the re-vote confirmation case**
 
 This is the one covering `ownVoteConfirmed`'s derivation, which the 08-28 design
 covered with a unit test that did not survive into the current spec:
@@ -1495,13 +1534,13 @@ and Alice voting alone latches the reveal, so it is present by the time this
 clicks it. The class name is misspelled in the page as
 `estimation-button-uncomfirmed`; match the page, and leave the spelling to step 8.
 
-- [ ] **Step 4: Run the browser suite**
+- [x] **Step 4: Run the browser suite**
 
 Run: `npm run e2e`
-Expected: PASS, 40 passed with 2 expected failures, 42 results in total. Four new
+Expected: PASS, 30 passed with 2 expected failures, 32 results in total. Four new
 cases in two engines each.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add e2e/room.spec.js
@@ -1524,7 +1563,7 @@ most likely to be forgotten.
 - Consumes: nothing.
 - Produces: nothing.
 
-- [ ] **Step 1: Rewrite the messaging section**
+- [x] **Step 1: Rewrite the messaging section**
 
 `README.md:6-37` describes `RoomEvent` and lists eight `messageType` values.
 Replace from `### Messaging` through the heartbeat paragraph:
@@ -1567,7 +1606,7 @@ connection is not closed by the server's idle timeout.
 Also correct the `/rooms/{roomId}/events` row of the API table, which still says
 the stream carries events.
 
-- [ ] **Step 2: Remove the four closed known issues**
+- [x] **Step 2: Remove the four closed known issues**
 
 Delete these entire entries from `docs/known-issues.md`, each of which says
 "Remove this entry when that lands":
@@ -1583,7 +1622,7 @@ Delete these entire entries from `docs/known-issues.md`, each of which says
 Check the surrounding entries for cross-references to any of the four before
 deleting, and repair them rather than leaving a dangling pointer.
 
-- [ ] **Step 3: Check off the roadmap item**
+- [x] **Step 3: Check off the roadmap item**
 
 In `docs/roadmap.md:85-91`, tick `Server-authoritative auto-reveal`, which says
 "Check this off when that lands":
@@ -1596,7 +1635,7 @@ In `docs/roadmap.md:85-91`, tick `Server-authoritative auto-reveal`, which says
 moved into step 1. What is still open is whether a revealed round should survive
 a `reVote`, plus the paired undo and re-hide.
 
-- [ ] **Step 4: Verify the whole gate**
+- [x] **Step 4: Verify the whole gate**
 
 Run: `sbt scalafmtCheckAll && sbt test && npm test && npm run e2e`
 Expected: all green.
@@ -1604,10 +1643,11 @@ Expected: all green.
 Run: `git status --short`
 Expected: empty.
 
-Confirm that the only files changed under `src/` are the seven this plan names,
-and that no file outside `src/`, `e2e/`, `docs/` and `README.md` was touched.
+Confirm that the only files changed under `src/main` are the seven this plan
+names, and that no file outside `src/`, `e2e/`, `docs/` and `README.md` was
+touched other than the two deviation 1 declares.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/known-issues.md docs/roadmap.md
@@ -1622,9 +1662,9 @@ Step 1 is done when all of the following hold. Do not merge or rebase: the stack
 lands as one ordered pack after step 2 and the user drives it.
 
 - `sbt scalafmtCheckAll` clean, `sbt test` green.
-- `npm test` green, 14 cases.
-- `npm run e2e` green, 40 passed and exactly 2 expected failures, both of them
-  the step 3 tally case in its two engines.
+- `npm test` green, 15 cases.
+- `npm run e2e` green, 32 passed and exactly 2 expected failures, 34 results in
+  total, both failures the step 3 tally case in its two engines.
 - `git status --short` empty.
 - `RoomEvent.scala` and `BackpressureReconnectSpec.scala` are gone, and no file
   references them.
