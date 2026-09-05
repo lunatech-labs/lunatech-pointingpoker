@@ -199,10 +199,21 @@ directly in the new frontend.
       vote latch. Each of those is a number some existing decision was guessed
       at, and `config/SseConfig.scala` says so about its own, calling them
       "heuristics, not measured figures".
-      **The trigger is step 4**, which replaces stop-when-empty with an idle
-      timeout and so needs somebody to invent a duration. Instrumenting first
-      turns that invention into a measurement. Counters live in memory and reset
-      on deploy, which matches rooms doing the same.
+      **This blocks nothing and must not be made to.** Emitting the lines is
+      additive and depends on no other step; acting on what they say needs weeks
+      of accumulation, and the two are separate work. In particular step 4 does
+      not wait for it: that step already reasons its way to a two-hour idle
+      timeout, and the protocol spec makes it "the only value this design makes
+      configurable", so a later correction is a deploy rather than a release.
+      Gating step 4 would also gate step 6 behind it, which is the fix for the
+      ghost this instrumentation exists to measure, so the gate would delay the
+      thing it is trying to inform. Ship the lines whenever convenient and let
+      the data catch up.
+      Do not expect a fast answer. At one or two meetings a week for one team,
+      even a month is a handful of sessions, which will not size a rare event.
+      The ghost rate becomes real only across every team using the tool, on a
+      timescale of months. Counters live in memory and reset on deploy, which
+      matches rooms doing the same and caps how much any single window can say.
       This also unblocks the logging policy item above, whose open question is an
       activity signal that does not depend on debug-level noise. These lines are
       that signal, at INFO.
