@@ -70,7 +70,7 @@ rebased or merged by this plan.
   `joinUser` preserves vote state; `publish` replaces `broadcast`;
   `setupNewUser` goes.
 - `actors/RoomManager.scala` The `BufferOverflowException` branch of
-  `ConnectionFailure` goes, leaving the generic error log.
+  `ConnectionFailure` goes, leaving the error log that deviation 3 extends.
 - `sse/SSE.scala` Element type becomes `RoomSnapshot`, `mapConcat` goes,
   `OverflowStrategy.fail` becomes `dropHead`.
 - `API.scala` The SSE route gains `Cache-Control: no-cache` and
@@ -192,6 +192,18 @@ reviewer can reject one without re-deriving it.
    `dispatchEvent('click')`, which carries no mousedown and therefore reproduces
    the macOS sequence on any platform: it failed in both engines before the fix
    and passes after.
+3. **The `ConnectionFailure` log line gains the room and user ids and the
+   throwable itself.** The design declared only the deletion of the
+   `BufferOverflowException` branch, "leaving the generic error log as the whole
+   handler", and that branch turned out to be the only path logging `userId`
+   and `roomId`: deleting it narrowed what a failed stream reports rather than
+   leaving that unchanged. The surviving line also passed the throwable as a
+   format argument, and SLF4J extracts a trailing throwable only when the
+   placeholder count is lower than the argument count, so one `{}` against one
+   argument rendered it through `toString` and dropped the stack trace.
+   `RoomManagerSpec`'s existing `ConnectionFailure` case already supplies a
+   `RuntimeException`, and it now prints both ids and the full trace;
+   `Main.scala:49` was already using the correct shape.
 
 ---
 
@@ -1093,8 +1105,8 @@ Replace `broadcast` and `setupNewUser` at `:251-274` with one function:
 
 ```scala
   private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
-    // The Join to publish hop still races a new connection's downstream demand; 08-24's
-    // empirical finding stands, so re-check it if this chain is ever restructured.
+    // The Join to publish hop races a new connection's demand, benign while dropHead leaves a
+    // newer full snapshot. 08-24 measured it under fail; re-check if that guarantee changes.
     context.log.debug("Publishing to {} users", data.users.size)
     data.users.foreach(user => user.ref ! RoomSnapshot.of(data, user.id))
     data
@@ -1203,7 +1215,7 @@ at `:10` and collapse the handler at `:146-161`:
 
 ```scala
           case ConnectionFailure(roomId, userId, ref, t) =>
-            context.log.error("ConnectionFailure: {}", t)
+            context.log.error("ConnectionFailure for room {} user {}", roomId, userId, t)
             data.rooms
               .get(roomId)
               .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
@@ -1511,6 +1523,8 @@ test('the issue box resyncs once the editor loses focus', async ({ join }) => {
 
   // Any publish carries the issue, so a vote by anyone would clobber an unguarded box.
   await vote(bob.page, '5')
+  // Require the snapshot to have landed: toHaveValue passes on its first poll otherwise.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 
   await issueBox(alice.page).blur()
