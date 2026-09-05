@@ -1424,7 +1424,7 @@ counts every participant.
 
 - [x] **Step 7: Run the browser suite**
 
-Run: `sbt "; coverageOff; Universal/stage" && npm run e2e`
+Run: `npm run e2e`
 Expected: PASS, 22 passed with 2 expected failures, 24 results in total. Both
 projects run every file, so the expected-failure count drops from 10 to 2 as four
 of the five annotated cases turn real in two engines each.
