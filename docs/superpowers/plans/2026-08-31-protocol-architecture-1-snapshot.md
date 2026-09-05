@@ -100,12 +100,15 @@ rebased or merged by this plan.
 - `e2e/room.spec.js` Four `test.fail()` annotations go, and four cases are added
   at task 6. Deviation 2 adds a fifth and extends one of the four.
 
-**Testkit, modified, per deviation 1:**
+**Build, modified, per deviation 1:**
 
 - `package.json` `pretest` and `pree2e` hooks stage before either suite runs.
-- `.github/workflows/ci.yml` Loses its own stage step, and runs `npm test`.
-- `testkit/app.js`, `test/startup.test.js` The staleness guard and its case,
-  added and then removed within this branch.
+- `.github/workflows/ci.yml` Loses its own stage step, runs `npm test`, and
+  installs node dependencies before it.
+
+`testkit/app.js` and `test/startup.test.js` carried the staleness guard and its
+case for part of this branch and end it byte-for-byte as they began, so they are
+not listed above.
 
 **Tests, deleted:**
 
@@ -142,8 +145,9 @@ Each of these is a decision this plan did not anticipate. They are listed so a
 reviewer can reject one without re-deriving it.
 
 1. **`npm test` and `npm run e2e` stage before they run**, against this plan's own
-   file list, which touches `package.json`, `testkit/app.js`,
-   `test/startup.test.js`, the README and the CI workflow. The harness runs the
+   file list, which touches `package.json`, the README and the CI workflow, and
+   leaves `testkit/app.js` and `test/startup.test.js` as it found them. The
+   harness runs the
    staged launcher, not `sbt run`, so a client change that is never restaged is
    tested in its previous form and the suite reports green on code that is not
    under test. Task 5 is a client-only task, which is exactly where that silently

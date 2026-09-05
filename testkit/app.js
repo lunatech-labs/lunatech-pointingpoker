@@ -8,8 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const stageDir = path.join(repoRoot, 'target', 'universal', 'stage')
-const launcher = path.join(stageDir, 'bin', 'pointingpoker')
+const launcher = path.join(repoRoot, 'target', 'universal', 'stage', 'bin', 'pointingpoker')
 const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
 
 export const READY_TIMEOUT_MS = 30_000
