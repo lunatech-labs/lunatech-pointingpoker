@@ -217,6 +217,8 @@ test('the issue box resyncs once the editor loses focus', async ({ join }) => {
 
   // Any publish carries the issue, so a vote by anyone would clobber an unguarded box.
   await vote(bob.page, '5')
+  // Require the snapshot to have landed: toHaveValue passes on its first poll otherwise.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 
   await issueBox(alice.page).blur()
