@@ -3,7 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "stage": "sbt \"; coverageOff; Universal/stage\"",
+    "pretest": "npm run stage",
     "test": "node --test \"test/**/*.test.js\"",
+    "pree2e": "npm run stage",
     "e2e": "playwright test"
   },
   "devDependencies": {

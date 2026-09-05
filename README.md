@@ -97,12 +97,17 @@ sbt test
 
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
-and a harness that starts the packaged app. The reproduction half needs the app staged first:
+and a harness that starts the packaged app:
 
 ```
-sbt "; coverageOff; Universal/stage"
 npm test
 ```
+
+Both node suites run the staged binary rather than `sbt run`, so both stage first. `npm test`
+and `npm run e2e` each do that themselves through an npm pre-hook calling `npm run stage`, which
+is `sbt "; coverageOff; Universal/stage"`. A no-op stage costs about four seconds. Invoke
+`node --test` or `npx playwright test` directly and you skip the hook, which means you test
+whatever was staged last.
 
 `coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
 session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
@@ -116,7 +121,6 @@ Firefox, one app and one stub per Playwright worker:
 npm ci
 npx playwright install-deps chromium firefox
 npx playwright install chromium firefox
-sbt "; coverageOff; Universal/stage"
 npm run e2e
 ```
 

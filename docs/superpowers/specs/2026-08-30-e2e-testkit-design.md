@@ -162,7 +162,8 @@ Running the staged binary rather than `sbt run` is deliberate: it starts in
 about two seconds instead of paying sbt's startup per run, it is a single
 process so teardown is a clean signal rather than reaping a forked child, and
 it is the same artifact Docker ships. The cost is one `sbt Universal/stage`
-before the suite, which the documented command and the CI step both perform.
+before the suite, which `npm test` and `npm run e2e` each perform themselves
+through an npm pre-hook, measured at about four seconds when nothing changed.
 
 **The app's own invariants validate the test profile.** `SseConfig.load`
 throws on a violated `require`, so a profile that breaks a relationship
@@ -337,25 +338,26 @@ Steps appended to the existing `test` job rather than a second sbt job, since
 that job already has a JVM and a warm build:
 
 ```yaml
-- name: stage the app for the node tests
-  run: sbt "; coverageOff; Universal/stage"
 - uses: actions/setup-node@v5
   with:
     node-version: '24'
 - name: node tests
-  run: node --test "test/**/*.test.js"
+  run: npm test
 - name: install the browser suite
   run: npm ci && npx playwright install --with-deps chromium firefox
 - name: browser tests
   run: npm run e2e
 ```
 
-`coverageOff` is insurance rather than a requirement in these two invocations.
+The stage step is gone from CI because `npm test` and `npm run e2e` each stage
+through an npm pre-hook, so CI and a developer's machine run the same path.
+
+`coverageOff` is insurance rather than a requirement in that invocation.
 Enabling coverage is a session setting, so a fresh `sbt` recompiles without
 instrumentation regardless, the changed `scalacOptions` invalidating Zinc's
-analysis. It earns its place only if the two are ever collapsed into one shell,
-where the instrumented classes are packaged and no scoverage runtime is staged
-beside them to satisfy the calls.
+analysis. It earns its place only if a stage is ever run from the shell that ran
+`qa`, where the instrumented classes are packaged and no scoverage runtime is
+staged beside them to satisfy the calls.
 
 The glob is not interchangeable with the directory: on Node 24 `node --test
 test/` exits 1 with a spurious failing case, so keep the quoted pattern, which
