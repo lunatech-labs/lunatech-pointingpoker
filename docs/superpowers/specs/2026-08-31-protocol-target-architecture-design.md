@@ -107,10 +107,11 @@ Every argument below was checked against the code rather than carried over.
    not free. What snapshots add is that every connect answers with it, where the
    event protocol needs a `Show` synthesized into the replay beside the
    `EditIssue` one `setupNewUser` already fabricates.
-5. **The pre-reveal vote leak is real and orthogonal to the proxy.**
-   `Room.scala:144-148` broadcasts an estimation to every participant the moment
-   it is cast; the client merely hides it. It reaches the wire in two places,
-   there and `setupNewUser`'s replay, so the event protocol could fix it too.
+5. **The pre-reveal vote leak was real and orthogonal to the proxy.**
+   `Room.scala:144-148` broadcast an estimation to every participant the moment
+   it was cast and the client merely hid it, until step 2 withheld it in the
+   build. It reached the wire in two places, there and `setupNewUser`'s replay,
+   so the event protocol could have fixed it too.
    What snapshots add is that there is one place where state becomes wire, so
    redaction sits at a choke point a field added in a year cannot forget. Under
    events the audit is not two places once, it is two places per feature. See
@@ -1405,8 +1406,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   `users` entry, so a case asserting that a vote outlives a reconnect passes on
   stale client state while the room has already reset that participant, and it
   would stay green through the very change it looks like it guards. That
-  assertion arrives at step 1 with Problem A's fix, alongside the `RoomSpec`
-  cases moved onto `ConnectToRoom` for the same reason.
+  assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
+  recommended above did not follow it: step 1 added a `ConnectToRoom` case in
+  `RoomManagerSpec` for the same reason instead.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
   to the room once the editor loses focus, and an edit committed with the check
