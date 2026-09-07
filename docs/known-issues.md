@@ -284,20 +284,6 @@ roadmap item instead of leaving it here as stale history.
   that step. The trigger for pulling it earlier is anyone actually losing an
   edit in a real ceremony. Remove this entry when step 8 lands.
 
-### Pre-reveal estimations are broadcast to every participant
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala`
-  (`RoomSnapshot.of`, which copies every participant's `estimation` into the
-  projection built for every recipient).
-- **Issue:** An estimation is sent to every participant the moment it is cast,
-  and the client merely declines to render it until votes are revealed. Anyone
-  with devtools open can read their colleagues' votes before the reveal, which
-  is the anchoring effect hidden voting exists to prevent.
-- **Resolution:** Scheduled as step 2 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which builds each snapshot per recipient and redacts other participants'
-  estimations until the room reveals. Remove this entry when that lands.
-
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
