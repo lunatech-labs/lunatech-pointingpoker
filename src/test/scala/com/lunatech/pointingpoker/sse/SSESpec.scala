@@ -37,10 +37,18 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   private def snapshot(userId: UUID, issue: String) =
     RoomSnapshot(
-      userId,
-      issue,
-      false,
-      List(RoomSnapshot.Participant(userId, "Alice", false, false, ""))
+      you = userId,
+      currentIssue = issue,
+      votesRevealed = false,
+      users = List(
+        RoomSnapshot.Participant(
+          id = userId,
+          name = "Alice",
+          voted = false,
+          hasEstimation = false,
+          estimation = ""
+        )
+      )
     )
 
   "SSE.source" should {
