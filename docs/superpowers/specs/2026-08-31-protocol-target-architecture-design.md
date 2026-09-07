@@ -86,8 +86,8 @@ rather than a flicker, and retained sessions at step 5 are its fix.
 
 Every argument below was checked against the code rather than carried over.
 
-1. **Two live bugs that only a snapshot makes unreachable.**
-   `index.html:404` pushes on `init` unconditionally, and `:411-419` pushes on
+1. **Two bugs, live before step 1, that only a snapshot makes unreachable.**
+   `index.html:404` pushed on `init` unconditionally, and `:411-419` pushed on
    `join` for any id but your own. A transparent `EventSource` retry reuses the
    same JS object, so `ref.users` is never cleared while `setupNewUser` re-sends
    `init` plus one `join` per participant: every participant duplicates.
@@ -397,8 +397,8 @@ one read path, one contract test and one invariant are worth more than the
 bytes.
 
 **`hasEstimation` exists because redaction would otherwise change what the table
-renders.** `showUserEstimation` (`index.html:556-558`) reads the estimation
-string to drive the hidden-value icon, and blanking other participants'
+renders.** `showUserEstimation` (`index.html:556-558` before step 1) read the
+estimation string to drive the hidden-value icon, and blanking other participants'
 estimations makes that predicate false for everyone but the recipient. The field
 is computed from the unredacted value so the table renders exactly as it does
 today. Against the state model in section 3 that is the entry existing in
@@ -553,7 +553,7 @@ exists for.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
-while `clear()` clears both (`Room.scala:85-89`), so "has an estimation, is not
+while `clear()` clears both (`Room.scala:97-102`), so "has an estimation, is not
 counted as voted" is a state the current code holds and the wire format
 distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
 three things break at once: `ownVoteConfirmed` in section 5 is always true and
@@ -870,7 +870,7 @@ has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:487-491`), and the retry lands on a freshly created room.
+(`index.html:445-449`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
 rejoin." (`index.html:430-443`) and waits for a reload. That is worse than a
@@ -1228,7 +1228,7 @@ the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
 Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:335-356`), so the step 1 call site assigns it wholesale and adapts
+(`index.html:353-374`), so the step 1 call site assigns it wholesale and adapts
 the one that does not: `userEstimation` onto `user.estimation`, which the template
 binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
 
@@ -1244,7 +1244,7 @@ Three details are load-bearing rather than polish:
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
   commit button (`index.html:191-207`), and its only writers are `showEdit`
-  (`:366-368`) and `doEdit` (`:519-520`), so as a guard it lasts until the user
+  (`:384-386`) and `doEdit` (`:478-486`), so as a guard it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1297,7 +1297,7 @@ Three details are load-bearing rather than polish:
   `votesRevealed`, but it is the kind of thing a reader spots and mistakes for a
   bug, so it is stated rather than left to be rediscovered.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
-  keeps `estimation` while `clear()` clears both (`Room.scala:85-89`), so "I
+  keeps `estimation` while `clear()` clears both (`Room.scala:97-102`), so "I
   have an estimation showing but the server does not consider me voted" is
   exactly the revote state and nothing else. The optimistic assignment in
   `vote()` stays, and corrects itself on the next publish rather than promptly:
@@ -1597,7 +1597,7 @@ refs, and one snapshot shared across a member's connections, arrive with step 4.
 Here a user has exactly one ref, since `joinUser` replaces the whole entry on a
 reconnect rather than accumulating. `voted` on the wire is `User.voted`,
 already the confirmed flag since `reVote()` keeps `estimation`
-(`Room.scala:85-89`), and step 2's `hasEstimation` is `estimation.nonEmpty`
+(`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
 **`applySnapshot`'s tally keeps counting every participant here**, matching
