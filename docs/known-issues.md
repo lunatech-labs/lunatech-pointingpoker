@@ -217,9 +217,8 @@ roadmap item instead of leaving it here as stale history.
   behaviour, so there the room URL is the capability. Nothing escapes into HTML
   either: the page renders all three through Vue interpolation or `v-model` and
   uses no `v-html`. So this is a data-quality gap rather than an authorization
-  or injection one. Body size
-  falls back to the pekko-http default, `application.conf` configuring no
-  parsing limits.
+  or injection one. Body size falls back to the pekko-http default,
+  `application.conf` configuring no parsing limits.
 
   One case is already scheduled to change behaviour. `RoomSnapshot`'s
   `hasEstimation` is `estimation.nonEmpty`, so an empty estimation reads as
@@ -441,23 +440,31 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:**
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  across its 47 prefixed `file:line` citations and 5 bare-form ones.
+  across its `file:line` citations.
 - **Issue:** The design was written against the pre-step-1 codebase and cites it
-  throughout. Step 1 moved about 130 lines of `index.html` and 137 of
-  `Room.scala`, so a citation can now land on unrelated code while reading as
-  current. Step 2 swept the 15 `index.html` sites and corrected the three that
-  cited `Room.scala:85-89` for `clear()` and `reVote()`, which are at
-  `:97-102`. That leaves 29 prefixed sites unverified, in `Room.scala` (13),
-  `RoomManager.scala` (6), `SSE.scala` (5), `API.scala` (2), `RoomSpec.scala`
-  (2) and `Requests.scala` (1), plus 3 bare-form ones.
+  throughout. Step 1 rewrote much of `index.html` and `Room.scala`, so a
+  citation can now land on unrelated code while still reading as current. Step 2
+  swept the `index.html` citations, and corrected `clear()` with `reVote()`
+  (`Room.scala:97-102`, cited three times as `:85-89`) and `RoomSpec`'s
+  hand-constructed reconnect and `Room.Running` sites (`:194`, `:237`, `:256`,
+  cited as `:185`, `:231`, `:257`). Citations into `Room.scala`,
+  `RoomManager.scala`, `SSE.scala`, `API.scala` and the rest of `RoomSpec.scala`
+  are unverified.
+
+  A sweep has to match three shapes, and missing one is how step 2's first sweep
+  went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
+  was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
+  given here on purpose. Three review rounds produced a different count each
+  time, and the count was never what a sweep needed.
 
   Two traps are worth naming, both of which caught the step 2 sweep. Checking
   what sits at the cited line is not enough: the question is whether the
   sentence's claim is true of it, and two citations passed the first check and
   failed the second. And some citations describe the pre-step-1 code on purpose,
   as part of arguing why the design is what it is, so renumbering those makes
-  the prose false rather than current; five in `index.html` were left alone for
-  that reason.
+  the prose false rather than current. Several in `index.html` were left alone
+  for that reason, as was the `Room.scala` pair in the design's own step 1
+  paragraph, which lists what step 1 removed.
 - **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
