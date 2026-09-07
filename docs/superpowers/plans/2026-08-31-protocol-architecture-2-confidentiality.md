@@ -109,6 +109,33 @@ that would break it arrives too late to have watched.
 
 ---
 
+## Deviations from the plan, and why
+
+Listed so a reviewer can reject one without re-deriving it.
+
+1. **The reload case models a rejoin, because this plan's premise about a reload
+   was wrong.** It claimed no rejoin follows, "since `created()` only opens the
+   join form". `created()` also calls `doJoin()` whenever `localStorage` holds
+   both a room id and a name (`index.html:522-524`), which it does after any
+   join, so a reload rejoins immediately and `POST /join` mints a second id for
+   the same person. That is the ghost-participant entry already in
+   `docs/known-issues.md`, and it made the case fail deterministically in both
+   engines on a roster assertion that expected Carol gone.
+
+   Rather than delete the case or fake a departure by clearing `localStorage`
+   first, which would be the close case under another name, the helper now takes
+   the settled-roster assertion as a callback: the close case waits for no Carol,
+   the reload case for Carol listed twice and then once. The confidentiality
+   assertions stay shared, which is what the helper is for.
+
+   Two costs, both accepted. Today the reload case is the weaker of the two,
+   because the last non-voter is replaced rather than removed, so a re-derived
+   reveal predicate would be caught by the close case alone. And step 6's
+   idempotent `/join` removes the duplicate, so its `toHaveCount(2)` becomes
+   `1` throughout and that step has to revisit the expectation.
+
+---
+
 ## Task 1: Per-recipient redaction and `hasEstimation`
 
 **Files:**
@@ -425,7 +452,7 @@ the same thing and only the departure differs:
 ```js
 // Carol never votes and then leaves, which a re-derived everyone-has-voted predicate would
 // answer by revealing the room. Shared so the two departure modes cannot drift apart.
-async function stragglerDepartsWithVotesHidden(join, depart) {
+async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   const alice = await join('Alice')
   const bob = await join('Bob')
   const carol = await join('Carol')
@@ -439,7 +466,7 @@ async function stragglerDepartsWithVotesHidden(join, depart) {
   await vote(bob.page, '3')
   await expect(summaryTable(alice.page)).toBeHidden()
 
-  await depart(carol)
+  await depart(carol, alice)
 
   // The app notices a dead stream only when a write to it fails, and the first write after a
   // close only draws the reset, so two commits stand in for the heartbeat 15s away. Issue
@@ -453,12 +480,11 @@ async function stragglerDepartsWithVotesHidden(join, depart) {
     await expect(issueBox(bob.page)).toHaveValue(issue)
   }
 
-  // 25s for the reason the leave case above records: if detection ever falls back to the 15s
-  // heartbeat the removal lands at about 20.1s, just outside a tighter cap.
-  await expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 25_000 })
+  // What the pruned roster looks like differs by departure mode, so each case brings its own.
+  await prunedRoster(alice)
 
-  // The room is now two members who have both voted, reached by a departure rather than by a
-  // vote, so the latch must leave it hidden.
+  // Both remaining members have voted, reached by a departure rather than by a vote, so the
+  // latch must leave the room hidden.
   for (const page of [alice.page, bob.page]) {
     await expect(summaryTable(page)).toBeHidden()
   }
@@ -468,23 +494,38 @@ async function stragglerDepartsWithVotesHidden(join, depart) {
 }
 
 test('a straggler closing their tab leaves the votes hidden', async ({ join }) => {
-  await stragglerDepartsWithVotesHidden(join, carol => carol.close())
+  await stragglerDepartsWithVotesHidden(
+    join,
+    carol => carol.close(),
+    // 25s for the reason the leave case above records: if detection ever falls back to the
+    // 15s heartbeat the removal lands at about 20.1s, just outside a tighter cap.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 25_000 })
+  )
 })
 
 test('a straggler reloading leaves the votes hidden', async ({ join }) => {
-  // A reload is a departure to the server and no rejoin follows, since created() only opens
-  // the join form. Harmless today and hostile from step 6, where a beacon removes the member.
-  await stragglerDepartsWithVotesHidden(join, carol => carol.page.reload())
+  await stragglerDepartsWithVotesHidden(
+    join,
+    // created() rejoins from localStorage, so a reload is a departure plus an immediate new
+    // participant and /join mints a second id: Carol is listed twice until the prune.
+    async (carol, alice) => {
+      await carol.page.reload()
+      await expect(participantRow(alice.page, 'Carol')).toHaveCount(2)
+    },
+    // Step 6's idempotent join removes the duplicate, so this count becomes 1 throughout and
+    // this expectation is one the step has to revisit.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1, { timeout: 25_000 })
+  )
 })
 ```
 
 - [ ] **Step 2: Run them to verify they pass**
 
 Run: `npm run e2e -- --grep "leaves the votes hidden"`
-Expected: PASS, four runs across the two projects. A failure on the `toHaveCount(0)`
-line is the departure never being noticed, which is a test problem: check that
+Expected: PASS, four runs across the two projects. A failure on either roster
+count is the departure never being noticed, which is a test problem: check that
 both issue commits reached Bob. A failure on `summaryTable` being visible is the
-real thing this case exists to catch, and means something re-derives the reveal.
+real thing these cases exist to catch, and means something re-derives the reveal.
 
 - [ ] **Step 3: Run the whole browser suite**
 
