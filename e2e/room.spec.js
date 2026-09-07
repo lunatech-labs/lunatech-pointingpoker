@@ -221,6 +221,8 @@ test('a straggler closing their tab leaves the votes hidden', async ({ join }) =
 })
 
 test('a straggler reloading leaves the votes hidden', async ({ join }) => {
+  // Vacuous today: the replacement Carol never votes, so every assertion below holds regardless
+  // of redaction. Kept for step 6, where a beacon removes her instead of replacing her.
   await stragglerDepartsWithVotesHidden(
     join,
     // created() rejoins from localStorage, so a reload is a departure plus an immediate new

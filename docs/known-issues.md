@@ -121,8 +121,10 @@ roadmap item instead of leaving it here as stale history.
   cannot disclose the round. A ghost that never voted, alongside members who
   all have, satisfies a re-derived everyone-has-voted predicate the instant it
   is removed. The reveal latch means a membership change reveals nothing, so
-  the pruning is safe. This is the invariant earning its keep in a case no test
-  covers.
+  the pruning is safe. `e2e/room.spec.js`'s straggler-close case now covers
+  this invariant directly. Its reload sibling only covers it vacuously, for
+  the reason recorded on that case: the replacement participant a reload
+  creates has never voted either.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which closes both forms by different means. A deliberate close fires

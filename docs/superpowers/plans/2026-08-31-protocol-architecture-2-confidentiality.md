@@ -70,7 +70,7 @@ that eventually lands it.
 
 **Tests, modified:**
 
-- `src/test/scala/.../actors/RoomSnapshotSpec.scala` Five redaction cases, and
+- `src/test/scala/.../actors/RoomSnapshotSpec.scala` Seven redaction cases, and
   `hasEstimation` added to the serialized field set.
 - `src/test/scala/.../actors/RoomSpec.scala` The two cases that assert one
   participant's estimation in another's snapshot now assert the withholding.
@@ -157,7 +157,7 @@ Listed so a reviewer can reject one without re-deriving it.
   - `hiddenMark(row)` in `e2e/fixtures.js`, the withheld-value icon in a
     participant row.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `RoomSnapshotSpec.scala`, inside the `"RoomSnapshot.of" should { ... }`
 block. The `user` helper at `:21` already takes `(id, name, voted, estimation)`:
@@ -292,7 +292,7 @@ needs the new argument:
     )
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `sbt test`
 Expected: FAIL to compile, `value hasEstimation is not a member of RoomSnapshot.Participant`
@@ -300,7 +300,7 @@ in `RoomSnapshotSpec` and `RoomSpec`, and a wrong-arity `Participant` in
 `SSESpec`. A compile failure is the expected red here: the field does not exist
 yet, so no case can run.
 
-- [ ] **Step 3: Add the field and the redaction**
+- [x] **Step 3: Add the field and the redaction**
 
 In `RoomSnapshot.scala`, add `hasEstimation` to `Participant` between `voted` and
 `estimation`, matching the spec's field order because that order is the JSON key
@@ -342,7 +342,7 @@ Replace `of` and the comment above it:
     )
 ```
 
-- [ ] **Step 4: Run the whole Scala suite**
+- [x] **Step 4: Run the whole Scala suite**
 
 Run: `sbt scalafmtAll && sbt test`
 Expected: PASS, every spec. If `RoomManagerSpec` fails, it is asserting a
@@ -350,7 +350,7 @@ participant's estimation somewhere this plan did not find; redact-or-assert is
 the same decision as in `RoomSpec` above, and the recipient's own row is the one
 that keeps its value.
 
-- [ ] **Step 5: Write the failing browser case for the withheld-value icon**
+- [x] **Step 5: Write the failing browser case for the withheld-value icon**
 
 Add the locator to `e2e/fixtures.js`, beside `votedMark` at `:164`:
 
@@ -381,7 +381,7 @@ test('a cast vote shows as withheld in the other browser until the reveal', asyn
 })
 ```
 
-- [ ] **Step 6: Run it to verify it fails**
+- [x] **Step 6: Run it to verify it fails**
 
 Run: `npm run e2e -- --grep "shows as withheld"`
 Expected: FAIL in both projects on `hiddenMark` expecting 1 and receiving 0. The
@@ -389,7 +389,7 @@ server now sends `""` for Alice's estimation and `showUserEstimation` still read
 that string, so the icon is gone. This is the regression the client change
 repairs, and it is why this case is written before it.
 
-- [ ] **Step 7: Repoint the client predicate**
+- [x] **Step 7: Repoint the client predicate**
 
 In `index.html`, replace `showUserEstimation` at `:507-509`:
 
@@ -403,7 +403,7 @@ In `index.html`, replace `showUserEstimation` at `:507-509`:
 redacted, so `userEstimation` and `ownVoteConfirmed` are unaffected, and the
 tally stays as step 1 left it.
 
-- [ ] **Step 8: Run both suites to verify they pass**
+- [x] **Step 8: Run both suites to verify they pass**
 
 Run: `npm run e2e`
 Expected: PASS in both projects, with the one `test.fail()` case
@@ -413,7 +413,7 @@ expected failure. That annotation belongs to step 3 and must not be touched here
 Run: `npm test`
 Expected: PASS. These cover the stub and startup and never parse a room payload.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala \
@@ -442,7 +442,7 @@ in the PR rather than treating a passing new test as a mistake.
   `summaryTable` fixtures.
 - Produces: nothing other tasks read.
 
-- [ ] **Step 1: Write the two cases**
+- [x] **Step 1: Write the two cases**
 
 Add to `e2e/room.spec.js`, after
 `'an auto-revealed round stays revealed when a straggler arrives'`. The helper
@@ -517,7 +517,7 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
 })
 ```
 
-- [ ] **Step 2: Run them to verify they pass**
+- [x] **Step 2: Run them to verify they pass**
 
 Run: `npm run e2e -- --grep "leaves the votes hidden"`
 Expected: PASS, four runs across the two projects. A failure on either roster
@@ -525,14 +525,14 @@ count is the departure never being noticed, which is a test problem: check that
 both issue commits reached Bob. A failure on `summaryTable` being visible is the
 real thing these cases exist to catch, and means something re-derives the reveal.
 
-- [ ] **Step 3: Run the whole browser suite**
+- [x] **Step 3: Run the whole browser suite**
 
 Run: `npm run e2e`
 Expected: PASS, with the step 3 `test.fail()` case still expected-failing. The
 suite gains about 35 seconds per project, which is worth stating in the PR since
 the two new cases are the slowest in it after the reconnect ones.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add e2e/room.spec.js
@@ -551,7 +551,7 @@ git commit -m "test(e2e): pin that a straggler's departure reveals nothing"
 - Consumes: nothing.
 - Produces: nothing other tasks read.
 
-- [ ] **Step 1: Remove the known-issues entry**
+- [x] **Step 1: Remove the known-issues entry**
 
 Delete the whole `### Pre-reveal estimations are broadcast to every participant`
 section, its three bullets included. Its own resolution says to remove it when
@@ -561,7 +561,7 @@ Leave every other entry alone. In particular the ghost-participant entry's
 paragraph about the tally counting a ghost's vote stays exactly as it is: that
 disclosure is post-reveal and step 6 owns it.
 
-- [ ] **Step 2: Document the redaction**
+- [x] **Step 2: Document the redaction**
 
 In `README.md`, add `hasEstimation` to the JSON example at `:20-27`, keeping the
 key order the encoder produces:
@@ -594,7 +594,7 @@ mark a withheld vote. `voted` is the confirmed flag, so `voted: false` with
 `hasEstimation: true` is a participant who has been asked to re-vote.
 ```
 
-- [ ] **Step 3: Verify no other document claims the old behaviour**
+- [x] **Step 3: Verify no other document claims the old behaviour**
 
 Run: `grep -rn "hidden client-side\|only hidden\|broadcast to every participant" README.md docs/`
 Expected: matches only inside
@@ -602,7 +602,7 @@ Expected: matches only inside
 the plan files, which are the design record and describe the problem in the past
 tense by design. Do not edit the specs.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/known-issues.md README.md
@@ -613,11 +613,12 @@ git commit -m "docs: record that a snapshot is redacted for its recipient"
 
 ## Verification before opening the PR
 
-- [ ] `sbt scalafmtAll && sbt test` passes.
-- [ ] `npm test` passes.
-- [ ] `npm run e2e` passes in both projects, with exactly one expected failure,
-      the step 3 tally case.
-- [ ] `git log --oneline` shows three commits, and the branch is still based on
+- [x] `sbt scalafmtAll && sbt test` passes.
+- [x] `npm test` passes.
+- [x] `npm run e2e` passes in both projects, with exactly two expected
+      failures: the step 3 tally case, reported once per project.
+- [ ] `git log --oneline` shows seven commits, four of them the plan and its
+      own corrections, and the branch is still based on
       `20260831.protocol_architecture_1_snapshot`. Do not rebase or retarget it:
       the stack merges in one ordered pass and the base moves then, not now.
 - [ ] The PR body states what waits on this (nothing; steps 3 and 5 are its
