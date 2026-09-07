@@ -361,6 +361,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       joinerView.you mustBe newUser.id
       joinerView.currentIssue mustBe issue
       joinerView.users.map(_.id).toSet mustBe Set(newUser.id, user.id, user2.id)
+      // Mid-round: the joiner is handed the roster without anyone's outstanding estimation.
+      joinerView.users.filterNot(_.id == newUser.id).map(_.estimation) mustBe List("", "")
       // One message, not a replay: the catch-up and the announcement are the same send.
       newUserProbe.expectNoMessage()
 
