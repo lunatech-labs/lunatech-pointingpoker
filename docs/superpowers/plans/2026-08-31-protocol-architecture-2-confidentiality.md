@@ -335,6 +335,15 @@ Listed so a reviewer can reject one without re-deriving it.
     dated its first item and left the third reading as pending work. The
     known-issues entry covers claims as well as citations now.
 
+    A fifth review found the worst of that shape, which four passes and this
+    step had walked past: the design's argument list still said the pre-reveal
+    leak was live and hidden only by the client, which is the defect this step
+    closed, under a citation close enough to be believed. It is dated, and so is
+    the section 6 sentence that still had step 1 moving the `RoomSpec` cases
+    onto `ConnectToRoom`. The entry names both shapes now, since an argument
+    paragraph describing a closed defect is not the same shape as a step
+    paragraph describing unfinished work.
+
 ---
 
 ## Task 1: Per-recipient redaction and `hasEstimation`

@@ -456,8 +456,11 @@ roadmap item instead of leaving it here as stale history.
   reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
   a case in `RoomManagerSpec` instead and left those two as they were, so the
   sentence now describes code that a correct citation leads straight to. That
-  one is annotated. Others of the same shape, a step's paragraph describing what
-  it would do rather than what it did, are unswept.
+  one is annotated. So is the argument list's item 5, which described the
+  pre-reveal leak as live after step 2 closed it. Those are two shapes, not one:
+  a step's paragraph saying what it would do rather than what it did, and an
+  argument paragraph describing a defect a later step has since closed. Both are
+  unswept beyond the two annotated here.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
