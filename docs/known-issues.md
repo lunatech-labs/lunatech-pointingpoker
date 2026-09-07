@@ -345,13 +345,17 @@ roadmap item instead of leaving it here as stale history.
   own row and the post-reveal table are unaffected. A larger wire change would
   degrade less kindly, and nothing detects the mismatch, since the wire carries
   no version field.
-- **Resolution:** Stays open, unscheduled. `no-store` or `no-cache` on the two
-  `getFromFile` routes closes it at the cost of a page fetch per load. Step 8 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  the frontend rewrite, brings build tooling and would be the natural place for
-  fingerprinted assets, but nothing schedules either fix. The trigger is a wire
-  change whose stale-page symptom is worse than a missing icon, or an observed
-  report of one.
+- **Resolution:** Open, and worth folding into step 6 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
+  `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
+  is then always revalidated, costing one conditional request that answers 304
+  with no body, where `no-store` would re-send all 19.7KB per load. The header
+  and its directive are already imported at `API.scala:18-19` for the SSE
+  response, so it is one line, and step 6 already touches these routes to add
+  the leave endpoint and make `/join` idempotent. Doing it on its own branch
+  instead would add an `API.scala` conflict to the stack's ordered rebase for a
+  symptom that is currently one missing icon. Step 8's frontend rewrite would
+  close it structurally with fingerprinted assets if step 6 does not.
 
 ### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
 
