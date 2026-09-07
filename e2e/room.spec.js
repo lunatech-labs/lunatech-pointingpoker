@@ -169,6 +169,74 @@ test('an auto-revealed round stays revealed when a straggler arrives', async ({ 
   await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
 })
 
+// Carol never votes and then leaves, which a re-derived everyone-has-voted predicate would
+// answer by revealing the room. Shared so the two departure modes cannot drift apart.
+async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const carol = await join('Carol')
+  // Everyone must have seen all three, or the removal assertion below passes on a row that
+  // was never rendered.
+  for (const page of [alice.page, bob.page]) {
+    await expect(participantRows(page)).toHaveCount(3)
+  }
+
+  await vote(alice.page, '5')
+  await vote(bob.page, '3')
+  await expect(summaryTable(alice.page)).toBeHidden()
+
+  await depart(carol, alice)
+
+  // The app notices a dead stream only when a write to it fails, and the first write after a
+  // close only draws the reset, so two commits stand in for the heartbeat 15s away. Issue
+  // edits and not votes: a vote after Carol's removal could reveal the round legitimately,
+  // which is the accepted residual rather than the failure this case is watching for.
+  for (const issue of ['PP-1', 'PP-2']) {
+    await issueButton(alice.page).click()
+    await issueBox(alice.page).fill(issue)
+    await issueButton(alice.page).click()
+    // Bob's box is the proof the publish went out, and therefore that Carol was written to.
+    await expect(issueBox(bob.page)).toHaveValue(issue)
+  }
+
+  // What the pruned roster looks like differs by departure mode, so each case brings its own.
+  await prunedRoster(alice)
+
+  // Both remaining members have voted, reached by a departure rather than by a vote, so the
+  // latch must leave the room hidden.
+  for (const page of [alice.page, bob.page]) {
+    await expect(summaryTable(page)).toBeHidden()
+  }
+  await expect(participantRow(alice.page, 'Bob')).not.toContainText('3')
+  await expect(participantRow(bob.page, 'Alice')).not.toContainText('5')
+  await expect(hiddenMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+}
+
+test('a straggler closing their tab leaves the votes hidden', async ({ join }) => {
+  await stragglerDepartsWithVotesHidden(
+    join,
+    carol => carol.close(),
+    // 25s for the reason the leave case above records: if detection ever falls back to the
+    // 15s heartbeat the removal lands at about 20.1s, just outside a tighter cap.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 25_000 })
+  )
+})
+
+test('a straggler reloading leaves the votes hidden', async ({ join }) => {
+  await stragglerDepartsWithVotesHidden(
+    join,
+    // created() rejoins from localStorage, so a reload is a departure plus an immediate new
+    // participant and /join mints a second id: Carol is listed twice until the prune.
+    async (carol, alice) => {
+      await carol.page.reload()
+      await expect(participantRow(alice.page, 'Carol')).toHaveCount(2)
+    },
+    // Step 6's idempotent join removes the duplicate, so this count becomes 1 throughout and
+    // this expectation is one the step has to revisit.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1, { timeout: 25_000 })
+  )
+})
+
 test('the tally counts only the votes that were cast', async ({ join }) => {
   test.fail(true, 'step 3: a voted-only tally, landing with the template guard beside it')
   const alice = await join('Alice')
