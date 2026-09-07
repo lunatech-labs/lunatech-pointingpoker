@@ -159,6 +159,8 @@ export const participantRows = page =>
     .locator('table')
     .filter({ has: page.getByRole('columnheader', { name: 'Voted' }) })
     .locator('tbody tr')
+// not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
+// strict mode violation, so a row assertion cannot pass vacuously and needs no existence pin.
 export const participantRow = (page, name) => participantRows(page).filter({ hasText: name })
 // An empty <i> has no size, so count it rather than asking whether it is visible.
 export const votedMark = row => row.locator('td').first().locator('svg, i')
