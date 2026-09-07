@@ -685,7 +685,7 @@ git commit -m "docs: record that a snapshot is redacted for its recipient"
 - [x] `npm test` passes.
 - [x] `npm run e2e` passes in both projects, with exactly two expected
       failures: the step 3 tally case, reported once per project.
-- [ ] `git log --oneline` shows the code commits above plus this plan and its
+- [x] `git log --oneline` shows the code commits above plus this plan and its
       corrections, and the branch is still based on
       `20260831.protocol_architecture_1_snapshot`. No count is stated here on
       purpose: it goes stale on every commit, including the ordered rebase that
