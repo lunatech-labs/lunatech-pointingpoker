@@ -89,10 +89,10 @@ Every argument below was checked against the code rather than carried over.
 1. **Two bugs, live before step 1, that only a snapshot makes unreachable.**
    `index.html:404` pushed on `init` unconditionally, and `:411-419` pushed on
    `join` for any id but your own. A transparent `EventSource` retry reuses the
-   same JS object, so `ref.users` is never cleared while `setupNewUser` re-sends
-   `init` plus one `join` per participant: every participant duplicates.
-   Separately, that replay lists only present users and never says who left, so
-   a participant who departed during the gap is never pruned. Applying complete
+   same JS object, so `ref.users` was never cleared while `setupNewUser` re-sent
+   `init` plus one `join` per participant: every participant duplicated.
+   Separately, that replay listed only present users and never said who left, so
+   a participant who departed during the gap was never pruned. Applying complete
    state cannot duplicate, and an absent participant is absent.
 2. **Reconnects did not go away.** Laptop sleep, wifi handoff, mobile networks,
    a deploy, and `OverflowStrategy.fail` at `SSE.scala:54`. The proxy was one
@@ -365,9 +365,9 @@ frame sizes above, and unlike `version` it has a consumer on day one.
 
 The client stops needing to remember its own id at all, and that has a
 consequence on the other side of the wire worth following through. `/join`'s
-`userId` has no reader left once the event handlers go, its only consumers being
-`index.html:412` and `:431`, both inside the block step 1 deletes. So
-`JoinResponse.userId` becomes a field with no consumer, which is the same rule
+`userId` had no reader left once the event handlers went, its only consumers
+having been `index.html:412` and `:431`, both inside the block step 1 deleted.
+So `JoinResponse.userId` became a field with no consumer, which is the same rule
 that dropped `version`. The **response body** goes at step 6, where tapir
 describes the endpoint, because a response contract belongs to the step that
 rewrites endpoints rather than to the one that changes the wire. Between step 1
@@ -397,14 +397,15 @@ one read path, one contract test and one invariant are worth more than the
 bytes.
 
 **`hasEstimation` exists because redaction would otherwise change what the table
-renders.** `showUserEstimation` (`index.html:556-558` before step 1) read the
-estimation string to drive the hidden-value icon, and blanking other participants'
-estimations makes that predicate false for everyone but the recipient. The field
-is computed from the unredacted value so the table renders exactly as it does
-today. Against the state model in section 3 that is the entry existing in
-`round.estimates` at all, where `voted` is that entry's `confirmed` flag; the two
-coincide except in the re-vote state, which is the whole reason both fields are
-here.
+renders.** Before step 2, `showUserEstimation` read the estimation string to
+drive the hidden-value icon (`index.html:556-558` when this was written,
+`:507-509` after step 1 moved it), so blanking other participants' estimations
+would have made that predicate false for everyone but the recipient. The field
+is computed from the unredacted value, so the table renders exactly as it did
+before the redaction. Against the state model in section 3 that is the entry
+existing in `round.estimates` at all, where `voted` is that entry's `confirmed`
+flag; the two coincide except in the re-vote state, which is the whole reason
+both fields are here.
 
 Step 2's `estimation.nonEmpty` stand-in has one divergence the target model does
 not: an empty estimation, which nothing validates (`Requests.scala:18`) and only
@@ -1366,7 +1367,7 @@ lost on the way.
 
 `RoomSpec`'s existing cases remain the behaviour specification. Its reconnect
 tests hand-construct the reconnecting user via `user.copy(ref = ...)`
-(`RoomSpec.scala:185`, `:280`), which preserves vote state by construction and
+(`RoomSpec.scala:194`, `:280`), which preserves vote state by construction and
 therefore never exercised the real `ConnectToRoom` path; they should go through
 `ConnectToRoom` so they would catch a regression. That lands at step 1, beside
 Problem A's fix, since vote loss on reconnect is the regression they would have
@@ -1736,7 +1737,7 @@ and `ConfirmLeave`, and with them go `RoomResponseWrapper` (`:27`), its handler
 `roomResponseWrapper` parameter threaded through `receiveBehaviour` and its seven
 recursive calls. That takes `RoomManager.receiveBehaviour` from three parameters
 to two. Most of the test churn is mechanical probe wiring, only
-`RoomSpec.scala:231` and `:257` asserting on a value, and step 4 is rewriting
+`RoomSpec.scala:237` and `:256` asserting on a value, and step 4 is rewriting
 those cases for the split regardless. **Step 6's leave endpoint does not revive
 this**: its reply is an ask answered to the HTTP route, carrying the
 applied / not-a-member results the ask pattern is for, so a `Response` ADT
