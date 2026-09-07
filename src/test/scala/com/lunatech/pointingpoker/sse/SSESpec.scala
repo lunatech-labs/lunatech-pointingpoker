@@ -36,7 +36,12 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
   end wire
 
   private def snapshot(userId: UUID, issue: String) =
-    RoomSnapshot(userId, issue, false, List(RoomSnapshot.Participant(userId, "Alice", false, "")))
+    RoomSnapshot(
+      userId,
+      issue,
+      false,
+      List(RoomSnapshot.Participant(userId, "Alice", false, false, ""))
+    )
 
   "SSE.source" should {
 

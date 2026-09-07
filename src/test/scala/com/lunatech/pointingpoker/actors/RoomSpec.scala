@@ -58,6 +58,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(u => (u.voted, u.estimation)) mustBe List((false, ""), (false, ""))
+        snapshot.users.map(_.hasEstimation) mustBe List(false, false)
 
       dataProbe.expectMessage(
         Room.DataStatus(data =
@@ -86,8 +87,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(_.voted) mustBe List(false, false)
-        // The estimations survive, which is what makes the client's re-vote state derivable.
-        snapshot.users.map(_.estimation).toSet mustBe Set("3", "5")
+        // The estimations survive a re-vote, and hasEstimation is now what carries that,
+        // since the values themselves reach nobody but their owner.
+        snapshot.users.map(_.hasEstimation) mustBe List(true, true)
+        snapshot.users.find(_.id == member.id).map(_.estimation) mustBe Some(member.estimation)
+        snapshot.users.filterNot(_.id == member.id).map(_.estimation) mustBe List("")
+      end for
     }
 
     "publish a revealed room on ShowVotes" in {
@@ -122,7 +127,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         snapshot.you mustBe member.id
         val voter = snapshot.users.find(_.id == user.id)
         voter.map(_.voted) mustBe Some(true)
-        voter.map(_.estimation) mustBe Some(estimation)
+        voter.map(_.hasEstimation) mustBe Some(true)
+        // Unrevealed, so the value itself is in the voter's own snapshot and no other.
+        voter.map(_.estimation) mustBe Some(if member.id == user.id then estimation else "")
 
       dataProbe.expectMessage(
         Room.DataStatus(data =

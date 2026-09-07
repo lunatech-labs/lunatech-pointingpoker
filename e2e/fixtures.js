@@ -162,6 +162,9 @@ export const participantRows = page =>
 export const participantRow = (page, name) => participantRows(page).filter({ hasText: name })
 // An empty <i> has no size, so count it rather than asking whether it is visible.
 export const votedMark = row => row.locator('td').first().locator('svg, i')
+// The withheld-value icon in the estimation cell, counted rather than asked about for the
+// same reason as votedMark: an empty <i> has no size.
+export const hiddenMark = row => row.locator('td').nth(2).locator('svg, i')
 // Any alert, for asserting a reconnect cleared the banner: filtering by text would report
 // hidden when it merely switched to the terminal "session has ended" message.
 export const connectionAlert = page => page.getByRole('alert')

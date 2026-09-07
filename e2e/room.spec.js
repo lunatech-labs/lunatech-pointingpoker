@@ -9,6 +9,7 @@ import {
   issueBox,
   issueButton,
   votedMark,
+  hiddenMark,
   vote
 } from './fixtures.js'
 
@@ -43,6 +44,22 @@ test('a straggler keeps the votes hidden until Show is pressed', async ({ join }
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(summaryTable(bob.page)).toBeVisible()
   await expect(participantRow(bob.page, 'Alice')).toContainText('5')
+})
+
+test('a cast vote shows as withheld in the other browser until the reveal', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  const aliceOnBob = participantRow(bob.page, 'Alice')
+  await expect(votedMark(aliceOnBob)).toHaveCount(1)
+  // Redaction blanks the estimation, so this marker can only come from hasEstimation.
+  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
+  await expect(aliceOnBob).not.toContainText('5')
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(aliceOnBob).toContainText('5')
+  await expect(hiddenMark(aliceOnBob)).toHaveCount(0)
 })
 
 test('the participant list follows a join and a leave', async ({ join }) => {

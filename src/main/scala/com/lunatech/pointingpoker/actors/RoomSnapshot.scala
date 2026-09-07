@@ -22,6 +22,7 @@ object RoomSnapshot:
       id: UUID,
       name: String,
       voted: Boolean,
+      hasEstimation: Boolean,
       estimation: String
   )
 
@@ -30,8 +31,8 @@ object RoomSnapshot:
 
   given Encoder[RoomSnapshot] = deriveEncoder[RoomSnapshot]
 
-  // forUser is the identity this was built for, so who it was redacted for and who the
-  // client thinks it is cannot silently disagree. Step 2 makes the redaction real.
+  // forUser is both the identity this was built for and the only one whose estimation it
+  // discloses before the reveal, so redaction and identity cannot disagree.
   def of(data: RoomData, forUser: UUID): RoomSnapshot =
     RoomSnapshot(
       you = forUser,
@@ -39,6 +40,16 @@ object RoomSnapshot:
       votesRevealed = data.revealed,
       users = data.users
         .sortWith((a, b) => a.id.compareTo(b.id) < 0)
-        .map(u => Participant(u.id, u.name, u.voted, u.estimation))
+        .map { u =>
+          val disclose = data.revealed || u.id == forUser
+          Participant(
+            id = u.id,
+            name = u.name,
+            voted = u.voted,
+            // From the unredacted value: the client's hidden-value icon reads this, not the string.
+            hasEstimation = u.estimation.nonEmpty,
+            estimation = if disclose then u.estimation else ""
+          )
+        }
     )
 end RoomSnapshot

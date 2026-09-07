@@ -81,10 +81,76 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       json.asObject.map(_.keys.toList) mustBe Some(
         List("you", "currentIssue", "votesRevealed", "users")
       )
-      // hasEstimation is step 2 and history is step 9; a field with no consumer must not travel.
+      // history is step 9; a field with no consumer must not travel.
       json.hcursor.downField("users").downArray.keys.map(_.toList) mustBe Some(
-        List("id", "name", "voted", "estimation")
+        List("id", "name", "voted", "hasEstimation", "estimation")
       )
+    }
+
+    "withhold another participant's estimation until the room reveals" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob))
+
+      val forAlice = RoomSnapshot.of(data, alice.id)
+      forAlice.users.find(_.id == alice.id).map(_.estimation) mustBe Some("5")
+      forAlice.users.find(_.id == bob.id).map(_.estimation) mustBe Some("")
+
+      val forBob = RoomSnapshot.of(data, bob.id)
+      forBob.users.find(_.id == bob.id).map(_.estimation) mustBe Some("13")
+      forBob.users.find(_.id == alice.id).map(_.estimation) mustBe Some("")
+    }
+
+    "keep a withheld estimation out of the serialized frame entirely" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob))
+
+      // The property is about the wire, not the projection: devtools is the threat.
+      (RoomSnapshot.of(data, alice.id).asJson.noSpaces must not).include("\"13\"")
+    }
+
+    "hand every estimation over once the room has revealed" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob), revealed = true)
+
+      RoomSnapshot.of(data, alice.id).users.map(_.estimation).toSet mustBe Set("5", "13")
+    }
+
+    "say that another participant has an estimation without saying what it is" in {
+      val alice = user(UUID.randomUUID(), "Alice", false, "")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob))
+
+      val bobsRow = RoomSnapshot.of(data, alice.id).users.find(_.id == bob.id)
+      // Computed from the unredacted value, so the hidden-value icon renders as it does today.
+      bobsRow.map(_.hasEstimation) mustBe Some(true)
+      bobsRow.map(_.estimation) mustBe Some("")
+      RoomSnapshot.of(data, alice.id).users.find(_.id == alice.id).map(_.hasEstimation) mustBe
+        Some(false)
+    }
+
+    "distinguish a re-vote from a clear on another participant's row" in {
+      val alice    = user(UUID.randomUUID(), "Alice", false, "")
+      val revoting = user(UUID.randomUUID(), "Revoting", false, "13")
+      val cleared  = user(UUID.randomUUID(), "Cleared", false, "")
+      val data     = RoomData.empty.copy(users = List(alice, revoting, cleared))
+
+      val snapshot = RoomSnapshot.of(data, alice.id)
+      // voted false with hasEstimation true is the re-vote state, and it has to survive
+      // redaction or every row looks cleared.
+      snapshot.users.find(_.id == revoting.id).map(_.hasEstimation) mustBe Some(true)
+      snapshot.users.find(_.id == cleared.id).map(_.hasEstimation) mustBe Some(false)
+    }
+
+    "withhold every estimation from a snapshot built for someone who is not a member" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob))
+
+      // publish iterates connections, so a departing tab can still be handed one snapshot.
+      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation) mustBe List("", "")
     }
   }
 end RoomSnapshotSpec
