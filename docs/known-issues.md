@@ -212,10 +212,12 @@ roadmap item instead of leaving it here as stale history.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
   text, and that one is room-wide rather than confined to the sender's own row.
-  Each endpoint still requires a session token resolving to a member of the
-  room, so this is not an authorization hole, and nothing escapes into HTML: the
-  page renders all three through Vue interpolation or `v-model` and uses no
-  `v-html`, so it is a data-quality gap rather than an injection one. Body size
+  `/vote` and `/edit-issue` require a session token resolving to a member of the
+  room; `/join` requires only a room id, open joining being the intended
+  behaviour, so there the room URL is the capability. Nothing escapes into HTML
+  either: the page renders all three through Vue interpolation or `v-model` and
+  uses no `v-html`. So this is a data-quality gap rather than an authorization
+  or injection one. Body size
   falls back to the pekko-http default, `application.conf` configuring no
   parsing limits.
 
@@ -434,6 +436,32 @@ roadmap item instead of leaving it here as stale history.
   dropped or narrowed rather than bounded. That wants measuring on a runner, not
   reasoning about, and it belongs with whoever next touches CI. Remove this entry
   when the step is bounded or retired.
+
+### The target design's file citations are stale wherever step 1 moved the code
+
+- **Where:**
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  across its 47 prefixed `file:line` citations and 5 bare-form ones.
+- **Issue:** The design was written against the pre-step-1 codebase and cites it
+  throughout. Step 1 moved about 130 lines of `index.html` and 137 of
+  `Room.scala`, so a citation can now land on unrelated code while reading as
+  current. Step 2 swept the 15 `index.html` sites and corrected the three that
+  cited `Room.scala:85-89` for `clear()` and `reVote()`, which are at
+  `:97-102`. That leaves 29 prefixed sites unverified, in `Room.scala` (13),
+  `RoomManager.scala` (6), `SSE.scala` (5), `API.scala` (2), `RoomSpec.scala`
+  (2) and `Requests.scala` (1), plus 3 bare-form ones.
+
+  Two traps are worth naming, both of which caught the step 2 sweep. Checking
+  what sits at the cited line is not enough: the question is whether the
+  sentence's claim is true of it, and two citations passed the first check and
+  failed the second. And some citations describe the pre-step-1 code on purpose,
+  as part of arguing why the design is what it is, so renumbering those makes
+  the prose false rather than current; five in `index.html` were left alone for
+  that reason.
+- **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
+  whoever opens the next step is best placed to sweep the files that step
+  touches, verifying the claim and not only the line. Remove this entry once the
+  remaining citations have been verified.
 
 ## Traceability note
 
