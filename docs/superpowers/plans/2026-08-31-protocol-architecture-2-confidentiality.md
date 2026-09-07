@@ -60,8 +60,10 @@ that eventually lands it.
 
 - `actors/RoomSnapshot.scala` `Participant` gains `hasEstimation`, and `of`
   withholds an estimation from every recipient but its owner until
-  `data.revealed`. This is the whole server change: one function, which is the
-  choke-point property section 2 argues the projection exists for.
+  `data.revealed`. This is the whole behaviour change: one function, which is
+  the choke-point property section 2 argues the projection exists for.
+- `actors/Room.scala` Comment only, in `publish`: recipient and redaction target
+  are one value here, and `RoomSpec`'s two-probe cases guard that. Deviation 4.
 
 **Client, modified:**
 
@@ -70,12 +72,14 @@ that eventually lands it.
 
 **Tests, modified:**
 
-- `src/test/scala/.../actors/RoomSnapshotSpec.scala` Seven redaction cases, and
-  `hasEstimation` added to the serialized field set.
+- `src/test/scala/.../actors/RoomSnapshotSpec.scala` Seven redaction cases,
+  `hasEstimation` added to the serialized field set, and the field set pinned on
+  a redacted frame's rows too. Deviation 6.
 - `src/test/scala/.../actors/RoomSpec.scala` The two cases that assert one
   participant's estimation in another's snapshot now assert the withholding.
 - `src/test/scala/.../sse/SSESpec.scala` Its `snapshot` helper constructs a
-  `Participant`, so it takes the new argument.
+  `Participant`, so it takes the new argument, and now names every argument it
+  passes. Deviation 7.
 - `e2e/fixtures.js` A `hiddenMark` locator beside `votedMark`.
 - `e2e/room.spec.js` One case for the icon the redaction would otherwise remove,
   and two for the confidentiality property.
@@ -83,9 +87,11 @@ that eventually lands it.
 **Docs, modified:**
 
 - `docs/known-issues.md` The "Pre-reveal estimations are broadcast to every
-  participant" entry is removed.
-- `README.md` The snapshot example gains `hasEstimation` and the messaging
-  section says what is withheld.
+  participant" entry is removed, the ghost-participant entry loses a claim the
+  browser cases falsified, and a cached-page entry is added. Deviations 3 and 8.
+- `README.md` The snapshot example gains `hasEstimation`, the messaging section
+  says what is withheld, and the restart paragraph stops claiming no client
+  outlives the server. Deviation 8.
 
 `docs/roadmap.md` is not touched. Hidden voting is not a roadmap feature, it is
 the behaviour the app already claimed to have.
@@ -128,11 +134,71 @@ Listed so a reviewer can reject one without re-deriving it.
    the reload case for Carol listed twice and then once. The confidentiality
    assertions stay shared, which is what the helper is for.
 
-   Two costs, both accepted. Today the reload case is the weaker of the two,
-   because the last non-voter is replaced rather than removed, so a re-derived
-   reveal predicate would be caught by the close case alone. And step 6's
-   idempotent `/join` removes the duplicate, so its `toHaveCount(2)` becomes
-   `1` throughout and that step has to revisit the expectation.
+   Two costs, both accepted. Today the reload case is vacuous for the latch,
+   because the last non-voter is replaced rather than removed, so no re-derived
+   reveal predicate would fire and the close case carries the property alone.
+   And step 6's idempotent `/join` removes the duplicate, so its
+   `toHaveCount(2)` becomes `1` throughout and that step has to revisit the
+   expectation.
+
+2. **A seventh `RoomSnapshotSpec` case was added**, `"disclose every estimation
+   to a non-member once the room has revealed"`. The sixth case pins the
+   withholding for a non-member and a reader could take that as the whole rule,
+   so its post-reveal twin states that the disclosure there is intentional:
+   those values are public in the room and the recipient held a valid room
+   token. File Structure was updated to say seven cases; this section was not.
+
+3. **`docs/known-issues.md`'s ghost-participant entry was edited**, against Task
+   3 Step 1's "Leave every other entry alone". The paragraph that instruction
+   names, the tally counting a ghost's vote, is untouched. What changed is a
+   claim the new browser cases falsified: the entry said no test covered
+   pruning-cannot-disclose, and the straggler-close case now covers it directly.
+
+4. **`Room.scala` was modified**, against File Structure's "This is the whole
+   server change: one function". Comment only. `publish` now says that its
+   recipient and its redaction target are one value, and names `RoomSpec`'s
+   two-probe cases as the guard step 4 has to keep once a connections map turns
+   that pairing into a lookup. The two lines sit above `data.users.foreach`
+   rather than at the head of the method, so they do not stack with the
+   pre-existing dropHead pair into a four-line block.
+
+5. **This plan's non-member snippet claimed `publish` iterates connections.** It
+   iterates `users` today, which makes that case unreachable rather than live,
+   and the landed comment says so. The snippet in task 1 has been corrected.
+
+6. **The redacted frame's field set is pinned, beyond the one-line edit this
+   plan described.** The plan changed only the participant key list in
+   `"serialize exactly the agreed field set"`, whose fixture is revealed with a
+   single participant who is also the recipient, so no key-list assertion ran on
+   a redacted frame and its shape rested on a substring check that would still
+   pass if the key were dropped. `"keep a withheld estimation out of the
+   serialized frame entirely"` now asserts both rows' key lists on the frame it
+   already builds. Asserting one row would have been order-dependent, since rows
+   sort by random UUID and the owner's row is disclosed.
+
+   Recorded with it, since it is the reason that assertion matters: neither
+   browser case pins server redaction. `index.html:308` renders another
+   participant's value only under `v-if="votesRevealed"`, so the helper's
+   `not.toContainText` and `hiddenMark` assertions hold with or without
+   redaction. `RoomSnapshotSpec` and `RoomSpec` pin the wire; the browser cases
+   pin the latch and the icon.
+
+7. **`SSESpec`'s `snapshot` helper names every argument** of both `RoomSnapshot`
+   and `Participant`, where this plan had it take the new one positionally.
+   `voted` and `hasEstimation` are adjacent booleans and `of` already constructs
+   with named arguments, so the helper matches it rather than leaving a silent
+   transposition for a later edit to hit. Both values are `false` today and no
+   case in that file reads either, so this buys nothing now and removes a hazard
+   from the next change.
+
+8. **The README's version-field claim was qualified and `known-issues.md` gained
+   an entry.** The README said no client outlives the server that served it. No
+   session does, but the page is served with `Last-Modified` and `ETag` and no
+   `Cache-Control`, measured against the staged build, so a cached page can
+   outlive a deploy. At this step that costs a missing withheld-value marker
+   until the page revalidates, because the step 1 page's `showUserEstimation`
+   reads an `estimation` this step blanks. The new entry records the window and
+   what would close it; nothing is scheduled.
 
 ---
 
@@ -225,7 +291,8 @@ block. The `user` helper at `:21` already takes `(id, name, voted, estimation)`:
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
       val data  = RoomData.empty.copy(users = List(alice, bob))
 
-      // publish iterates connections, so a departing tab can still be handed one snapshot.
+      // Unreachable today: publish iterates users. Step 4's connections let a departing tab
+      // still be handed one snapshot.
       RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation) mustBe List("", "")
     }
 ```
@@ -529,8 +596,9 @@ real thing these cases exist to catch, and means something re-derives the reveal
 
 Run: `npm run e2e`
 Expected: PASS, with the step 3 `test.fail()` case still expected-failing. The
-suite gains about 35 seconds per project, which is worth stating in the PR since
-the two new cases are the slowest in it after the reconnect ones.
+suite gains about 14 seconds per project, 13.8s in chromium and 14.9s in
+firefox, which is worth stating in the PR. Both land inside the existing 6 to 8
+second reconnect and departure cluster rather than above it.
 
 - [x] **Step 4: Commit**
 
