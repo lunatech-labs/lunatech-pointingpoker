@@ -691,6 +691,6 @@ git commit -m "docs: record that a snapshot is redacted for its recipient"
       purpose: it goes stale on every commit, including the ordered rebase that
       lands the stack. Do not rebase or retarget the branch: the stack merges in
       one ordered pass and the base moves then, not now.
-- [ ] The PR body states what waits on this (nothing; steps 3 and 5 are its
+- [x] The PR body states what waits on this (nothing; steps 3 and 5 are its
       independent siblings and step 4 wants both 2 and 3 first), and that task
       2's cases were green on arrival.
