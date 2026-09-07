@@ -223,6 +223,8 @@ object Room:
     }
 
   private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
+    // Recipient and redaction target are one value here, so the pairing holds by construction.
+    // Step 4's connections map makes it a lookup; RoomSpec's two-probe cases are its guard.
     // The Join to publish hop races a new connection's demand, benign while dropHead leaves a
     // newer full snapshot. 08-24 measured it under fail; re-check if that guarantee changes.
     context.log.debug("Publishing to {} users", data.users.size)

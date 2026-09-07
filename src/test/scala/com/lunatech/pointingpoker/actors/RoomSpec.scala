@@ -82,6 +82,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.ReVote(user.token)
 
+      // The other half of publish's pairing guard; the vote case above carries the note.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
         snapshot.you mustBe member.id
@@ -122,6 +123,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Vote(user.token, estimation)
       roomRef ! Room.GetData(dataProbe.ref)
 
+      // Two probes, not one: this is the guard on publish pairing each snapshot with its own
+      // recipient, so step 4's connections map ports it rather than replacing it.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
         snapshot.you mustBe member.id
