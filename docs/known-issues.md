@@ -436,7 +436,7 @@ roadmap item instead of leaving it here as stale history.
   reasoning about, and it belongs with whoever next touches CI. Remove this entry
   when the step is bounded or retired.
 
-### The target design's file citations are stale wherever step 1 moved the code
+### The target design's citations and step claims go stale as its steps land
 
 - **Where:**
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
@@ -446,10 +446,18 @@ roadmap item instead of leaving it here as stale history.
   citation can now land on unrelated code while still reading as current. Step 2
   swept the `index.html` citations, and corrected `clear()` with `reVote()`
   (`Room.scala:97-102`, cited three times as `:85-89`) and `RoomSpec`'s
-  hand-constructed reconnect and `Room.Running` sites (`:194`, `:237`, `:256`,
-  cited as `:185`, `:231`, `:257`). Citations into `Room.scala`,
-  `RoomManager.scala`, `SSE.scala`, `API.scala` and the rest of `RoomSpec.scala`
-  are unverified.
+  hand-constructed reconnect and `Room.Running` sites (`RoomSpec.scala:194`,
+  `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
+  `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
+  unverified. `RoomSpec.scala`'s four are all in the two sentences above.
+
+  Claims go stale the same way, and a correct line number makes one more
+  convincing rather than less. The design recommends that two `RoomSpec`
+  reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
+  a case in `RoomManagerSpec` instead and left those two as they were, so the
+  sentence now describes code that a correct citation leads straight to. That
+  one is annotated. Others of the same shape, a step's paragraph describing what
+  it would do rather than what it did, are unswept.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
