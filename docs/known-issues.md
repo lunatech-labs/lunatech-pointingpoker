@@ -202,6 +202,37 @@ roadmap item instead of leaving it here as stale history.
   should be addressed as its own piece of work if abuse becomes a real
   concern, not patched endpoint-by-endpoint as new symptoms show up.
 
+### No request payload is validated on any endpoint that takes one
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala:8`, `:18`
+  and `:23`, and the three routes that consume them in
+  `src/main/scala/com/lunatech/pointingpoker/API.scala:91` (`/join`), `:163`
+  (`/vote`) and `:198` (`/edit-issue`). `create-room` takes no body.
+- **Issue:** Every request body is a bare `String` with no constraint on it.
+  `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
+  accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
+  text, and that one is room-wide rather than confined to the sender's own row.
+  Each endpoint still requires a session token resolving to a member of the
+  room, so this is not an authorization hole, and nothing escapes into HTML: the
+  page renders all three through Vue interpolation or `v-model` and uses no
+  `v-html`, so it is a data-quality gap rather than an injection one. Body size
+  falls back to the pekko-http default, `application.conf` configuring no
+  parsing limits.
+
+  One case is already scheduled to change behaviour. `RoomSnapshot`'s
+  `hasEstimation` is `estimation.nonEmpty`, so an empty estimation reads as
+  voted with no estimation, and step 4 re-expresses the field as the entry
+  existing in `round.estimates`, which gives that same row the withheld-value
+  icon. The target design records that beside `hasEstimation`.
+- **Resolution:** Unscheduled, and the estimation half cannot close before the
+  `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
+  notion of a valid estimation, the card values being hardcoded in the client
+  (`index.html:356`). Step 6 describes the endpoints with tapir, which buys
+  types and shape rather than values, so an empty string satisfies the schema
+  there too unless a validator is declared, which nothing plans. As with the
+  rate-limiting entry above, the underlying gap is broader than any one symptom
+  and wants its own piece of work rather than a patch per endpoint.
+
 ### A disconnection outlasting the grace period forces a page reload
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
