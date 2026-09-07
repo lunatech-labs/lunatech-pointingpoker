@@ -90,12 +90,13 @@ that eventually lands it.
 
 - `docs/known-issues.md` The "Pre-reveal estimations are broadcast to every
   participant" entry is removed, the ghost-participant entry loses a claim the
-  browser cases falsified, and entries are added for the cached page and for
-  unvalidated request payloads. Deviations 3, 8 and 11.
+  browser cases falsified, and entries are added for the cached page, for
+  unvalidated request payloads and for the design's stale citations. Deviations
+  3, 8, 11 and 12.
 - `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` One
   qualification, where the design claims `voted` and `hasEstimation` coincide
-  outside the re-vote state, and the `index.html` citations step 1 left stale.
-  Deviation 11.
+  outside the re-vote state, and the citations step 1 left stale in `index.html`
+  and one in `Room.scala`. Deviations 11 and 12.
 - `README.md` The snapshot example gains `hasEstimation`, the messaging section
   says what is withheld, and the restart paragraph stops claiming no client
   outlives the server. Deviation 8.
@@ -233,9 +234,9 @@ Listed so a reviewer can reject one without re-deriving it.
     block.
 
 11. **The target design was qualified and `known-issues.md` gained a second
-    entry.** The design is not in this plan's file set at all, and the entry is
-    against Task 3 Step 1's "Leave every other entry alone", as deviation 3 also
-    is. The design claimed under
+    entry.** Both cross an instruction: the design against Task 3 Step 3's "Do
+    not edit the specs", and the entry against Task 3 Step 1's "Leave every
+    other entry alone", as deviation 3 also is. The design claimed under
     `hasEstimation` that `voted` and `hasEstimation` "coincide except in the
     re-vote state". True of `round.estimates`, false of this step's
     `estimation.nonEmpty`: an empty estimation, which nothing validates and only
@@ -247,13 +248,23 @@ Listed so a reviewer can reject one without re-deriving it.
     estimation half cannot close before the roadmap's `scale` item.
 
     A pass over the design's twelve `index.html` citations went with it, step 1
-    having deleted enough of that file to move them. Six were already right.
-    Four sites cited `:472-485` for the "Your session has ended" state, which is
-    produced by the `onerror` handler at `:430-443`; `doLeave` is at `:469-477`
-    and not `:511-518`, which are now `created()`; `doJoin`'s `EventSource`
-    assignment is `:404` and not `:388`, which matters because a step 8 claim
-    rests on it; and `allVoted()` no longer exists at all, so its citation now
-    says where it stood before step 1.
+    having deleted enough of that file to move them. Three were already right,
+    six were repaired and three were left alone. Four sites cited `:472-485` for
+    the "Your session has ended" state, which the `onerror` handler produces at
+    `:430-443`; the join failure's "Could not join the room" is at `:445-449`
+    and not `:487-491`, now `doCopy`; the Vue `data` block is `:353-374` and not
+    `:335-356`, now `applySnapshot`, which mattered most, the passage
+    contrasting the two; `doLeave` is at `:469-477` and not `:511-518`, now
+    `created()`; `doJoin`'s `EventSource` assignment is `:404` and not `:388`,
+    which matters because a step 8 claim rests on it; and `allVoted()` no longer
+    exists at all, so its citation says where it stood before step 1. Two
+    bare-form citations in the same passage went with them, `showEdit` at
+    `:384-386` and `doEdit` at `:478-486`.
+
+    The first sweep matched only the `index.html:`-prefixed form, so it missed
+    the bare ones, and it passed two citations as correct by checking what sits
+    at the line rather than what the sentence claims about it. A second review
+    caught all four.
 
     Five citations were deliberately left pointing at code that has moved, since
     each describes what the client did before step 1 as part of arguing why the
@@ -262,16 +273,34 @@ Listed so a reviewer can reject one without re-deriving it.
     argument, and `:412` with `:431` in the `JoinResponse.userId` passage.
     Renumbering those would make the prose false rather than current. So `:404`
     now appears twice with two eras, 1267 lines apart in sections that name
-    theirs, which is a smaller cost than an unverifiable claim.
+    theirs, which is a smaller cost than an unverifiable claim. Two of the five
+    read as present-tense claims about today's code, so those sentences are past
+    tense now: the era is stated rather than inferred, a sentence reading as
+    current being what invites the renumber that would falsify it.
 
     The design's known-issues disposition also stopped claiming that
     `docs/known-issues.md` is written to match its table. It matched when
-    written and has drifted since, three rows having closed and left that file
-    while steps 0 to 2 added four entries that are not rows, this step's
-    payload-validation entry being the fourth. The table is now described as the
+    written and has drifted since, five rows having closed and left that file
+    while steps 0 to 2 added six entries that are not rows, two of them this
+    step's: payload validation and the design's stale citations. The table is now described as the
     disposition at the time of writing, to be reconciled by entry rather than by
     count, which is a claim later steps cannot falsify. Its "ten of the
     fourteen" is about the table itself and stays correct.
+
+12. **One `Room.scala` citation was corrected and the rest of the drift was
+    recorded rather than swept.** A second review showed the citation problem is
+    not confined to `index.html`: the design cites `Room.scala:85-89` three
+    times for `clear()` and `reVote()`, which are at `:97-102`, `:85-89` now
+    being inside `vote()`. Those three are corrected, since they were measured
+    wrong.
+
+    The remaining 29 prefixed sites and 3 bare-form ones are recorded in
+    `docs/known-issues.md` instead. `index.html` was swept because it sat in the
+    paragraph the qualification above was already editing; `RoomManager.scala`
+    and `SSE.scala` have no connection to confidentiality, and verifying 35
+    claims is a documentation task the size of a small step, which does not
+    belong inside this one. The entry names the two traps that caught the first
+    sweep, so the next step does not repeat them.
 
 ---
 
