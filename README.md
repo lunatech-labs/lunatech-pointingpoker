@@ -202,6 +202,8 @@ with it. A tab that was open across the restart does not fail silently: its next
 SSE attempt gets a 401 because the token no longer resolves, and the page shows
 "Your session has ended. Please reload the page to rejoin." Reloading is the
 whole recovery, since there is no state to migrate and nothing to drain. This is
-also why the wire format carries no version field: no client outlives the server
-that served it, so there is no old client to negotiate with.
+also why the wire format carries no version field: no session outlives the server
+that served it. The page is a separate artifact, served with no `Cache-Control`,
+so a cached one can outlive a deploy. `docs/known-issues.md` records that window
+and the cosmetic symptom it has today.
 

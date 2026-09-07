@@ -328,6 +328,31 @@ roadmap item instead of leaving it here as stale history.
   it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
   nothing updates `@playwright/test` today.
 
+### A cached page can outlive the server that served it
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala:66` and `:72`
+  (`getFromFile(apiConfig.indexPath)`); `src/main/resources/pages/index.html`.
+- **Issue:** Measured against the staged build, the page is served with
+  `Last-Modified` and `ETag` and no `Cache-Control`, so a browser may apply
+  heuristic freshness and reuse the stored page without revalidating. A deploy
+  can therefore pair the previous page with the new server. Sessions do die with
+  the process, but the page is a separate artifact, which is the gap in the
+  README's restart paragraph. The `Cache-Control: no-cache` at `API.scala:132`
+  covers the SSE response only. Today the symptom is cosmetic: against a step 2
+  server the step 1 page's `showUserEstimation` reads `u.estimation`, which is
+  `""` for another participant before the reveal, so the withheld-value marker
+  is missing from other rows until the page revalidates, while the recipient's
+  own row and the post-reveal table are unaffected. A larger wire change would
+  degrade less kindly, and nothing detects the mismatch, since the wire carries
+  no version field.
+- **Resolution:** Stays open, unscheduled. `no-store` or `no-cache` on the two
+  `getFromFile` routes closes it at the cost of a page fetch per load. Step 8 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  the frontend rewrite, brings build tooling and would be the natural place for
+  fingerprinted assets, but nothing schedules either fix. The trigger is a wire
+  change whose stale-page symptom is worse than a missing icon, or an observed
+  report of one.
+
 ### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
