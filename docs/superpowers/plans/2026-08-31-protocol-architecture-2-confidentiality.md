@@ -247,9 +247,10 @@ Listed so a reviewer can reject one without re-deriving it.
     in, no request payload on any endpoint being validated, and says that the
     estimation half cannot close before the roadmap's `scale` item.
 
-    A pass over the design's twelve `index.html` citations went with it, step 1
-    having deleted enough of that file to move them. Three were already right,
-    six were repaired and three were left alone. Four sites cited `:472-485` for
+    A pass over the design's `index.html` citations went with it, step 1 having
+    deleted enough of that file to move them. What changed, and what was dated
+    instead, is listed below rather than counted: three rounds of counting these
+    produced three different answers. Four sites cited `:472-485` for
     the "Your session has ended" state, which the `onerror` handler produces at
     `:430-443`; the join failure's "Could not join the room" is at `:445-449`
     and not `:487-491`, now `doCopy`; the Vue `data` block is `:353-374` and not
@@ -264,43 +265,64 @@ Listed so a reviewer can reject one without re-deriving it.
     The first sweep matched only the `index.html:`-prefixed form, so it missed
     the bare ones, and it passed two citations as correct by checking what sits
     at the line rather than what the sentence claims about it. A second review
-    caught all four.
+    caught all four. A third found the bare-form inventory itself undercounted,
+    a third shape with no colon at all (`` `231-233` ``), and three sites in no
+    bucket, which is why the known-issues entry names the shapes and gives no
+    totals.
 
-    Five citations were deliberately left pointing at code that has moved, since
+    Some citations were deliberately left pointing at code that has moved, since
     each describes what the client did before step 1 as part of arguing why the
     design is what it is: `showUserEstimation` reading the estimation string in
     the paragraph qualified above, `:404` with `:411-419` in the two-bugs
     argument, and `:412` with `:431` in the `JoinResponse.userId` passage.
     Renumbering those would make the prose false rather than current. So `:404`
     now appears twice with two eras, 1267 lines apart in sections that name
-    theirs, which is a smaller cost than an unverifiable claim. Two of the five
-    read as present-tense claims about today's code, so those sentences are past
-    tense now: the era is stated rather than inferred, a sentence reading as
-    current being what invites the renumber that would falsify it.
+    theirs, which is a smaller cost than an unverifiable claim. The design's own
+    step 1 paragraph is left the same way: its `Room.scala:96-97` and `:234`
+    cite `issueLastEditBy` and an `editIssue` argument that step 1 removed, so
+    the sentence is retrospective and the citations belong to the file it
+    describes.
+
+    Those sentences read as claims about today's code, so they are past tense
+    now: the era is stated rather than inferred, a sentence reading as current
+    being what invites the renumber that would falsify it. The two-bugs
+    paragraph had a past-tense heading over present-tense mechanism, and the
+    `JoinResponse.userId` passage described step 1's deletions in the future
+    tense, which is the more misleading of the two now that step 1 has landed.
+    `showUserEstimation`'s needed more than a tense. It read the estimation
+    string until step 2, not step 1, which only moved it, and its second clause
+    asserted in the present that blanking makes the predicate false, which this
+    step made untrue by pointing the predicate at `hasEstimation`. The whole
+    sentence now sits in one era and carries both locations.
 
     The design's known-issues disposition also stopped claiming that
     `docs/known-issues.md` is written to match its table. It matched when
     written and has drifted since, five rows having closed and left that file
-    while steps 0 to 2 added six entries that are not rows, two of them this
-    step's: payload validation and the design's stale citations. The table is now described as the
+    while steps 0 to 2 added six entries that are not rows, three of them this
+    step's: the cached page, payload validation and the design's stale
+    citations, as File Structure above says. The table is now described as the
     disposition at the time of writing, to be reconciled by entry rather than by
     count, which is a claim later steps cannot falsify. Its "ten of the
     fourteen" is about the table itself and stays correct.
 
-12. **One `Room.scala` citation was corrected and the rest of the drift was
-    recorded rather than swept.** A second review showed the citation problem is
-    not confined to `index.html`: the design cites `Room.scala:85-89` three
-    times for `clear()` and `reVote()`, which are at `:97-102`, `:85-89` now
-    being inside `vote()`. Those three are corrected, since they were measured
-    wrong.
+12. **Citations outside `index.html` were corrected where measured wrong, and
+    the rest of the drift was recorded rather than swept.** Later reviews showed
+    the problem is not confined to `index.html`. `clear()` with `reVote()` is at
+    `Room.scala:97-102`, cited three times as `:85-89`, which is now inside
+    `vote()`. `RoomSpec`'s hand-constructed reconnect is at `:194` and not
+    `:185`, now a bare `UUID.randomUUID()`, and its `Room.Running` assertions
+    are `:237` and `:256` and not `:231` and `:257`, now a comment and a blank
+    line. Those two sentences are present tense about today's tests, so unlike
+    the retrospective ones they had to be corrected rather than dated.
 
-    The remaining 29 prefixed sites and 3 bare-form ones are recorded in
-    `docs/known-issues.md` instead. `index.html` was swept because it sat in the
-    paragraph the qualification above was already editing; `RoomManager.scala`
-    and `SSE.scala` have no connection to confidentiality, and verifying 35
-    claims is a documentation task the size of a small step, which does not
-    belong inside this one. The entry names the two traps that caught the first
-    sweep, so the next step does not repeat them.
+    The rest is recorded in `docs/known-issues.md` instead. `index.html` was
+    swept because it sat in the paragraph the qualification above was already
+    editing; `RoomManager.scala` and `SSE.scala` have no connection to
+    confidentiality, and verifying every remaining claim is a documentation task
+    the size of a small step, which does not belong inside this one. The entry
+    names the three citation shapes and the two traps rather than a total, since
+    three rounds of counting produced three different answers and none of them
+    was what a sweep needs.
 
 ---
 
