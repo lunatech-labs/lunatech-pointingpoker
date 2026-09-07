@@ -97,9 +97,9 @@ Every argument below was checked against the code rather than carried over.
 2. **Reconnects did not go away.** Laptop sleep, wifi handoff, mobile networks,
    a deploy, and `OverflowStrategy.fail` at `SSE.scala:54`. The proxy was one
    cause among several.
-3. **`OverflowStrategy.dropHead` becomes correct.** A superseded snapshot is
-   safe to discard; a dropped event is unrecoverable. This retires the only
-   reconnect the app inflicts on itself, which is what the 08-24 grace period
+3. **`OverflowStrategy.dropHead` became correct.** A superseded snapshot is
+   safe to discard; a dropped event was unrecoverable. That retired the only
+   reconnect the app inflicted on itself, which is what the 08-24 grace period
    exists to absorb.
 4. **Reveal state on resync** closes as one stored flag carried as one snapshot
    field, ending an open known issue. It lands as a latch rather than as a
@@ -1371,7 +1371,9 @@ tests hand-construct the reconnecting user via `user.copy(ref = ...)`
 therefore never exercised the real `ConnectToRoom` path; they should go through
 `ConnectToRoom` so they would catch a regression. That lands at step 1, beside
 Problem A's fix, since vote loss on reconnect is the regression they would have
-caught.
+caught. Step 1 met this differently: it added `RoomManagerSpec.scala:279`,
+which drives the real path, and left these two cases hand-constructing, so they
+still read as described here.
 
 **`BackpressureReconnectSpec` is retired at step 1, not ported.** Its single case
 asserts that a stalled client's stream fails and silently reconnects, which is the
