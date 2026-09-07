@@ -95,8 +95,8 @@ that eventually lands it.
   3, 8, 11 and 12.
 - `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` One
   qualification, where the design claims `voted` and `hasEstimation` coincide
-  outside the re-vote state, and the citations step 1 left stale in `index.html`
-  and one in `Room.scala`. Deviations 11 and 12.
+  outside the re-vote state, and the citations step 1 left stale in
+  `index.html`, `Room.scala` and `RoomSpec.scala`. Deviations 11 and 12.
 - `README.md` The snapshot example gains `hasEstimation`, the messaging section
   says what is withheld, and the restart paragraph stops claiming no client
   outlives the server. Deviation 8.
@@ -250,8 +250,8 @@ Listed so a reviewer can reject one without re-deriving it.
     A pass over the design's `index.html` citations went with it, step 1 having
     deleted enough of that file to move them. What changed, and what was dated
     instead, is listed below rather than counted: three rounds of counting these
-    produced three different answers. Four sites cited `:472-485` for
-    the "Your session has ended" state, which the `onerror` handler produces at
+    produced three different answers. Four sites cited `:472-485` for the "Your
+    session has ended" state, which the `onerror` handler produces at
     `:430-443`; the join failure's "Could not join the room" is at `:445-449`
     and not `:487-491`, now `doCopy`; the Vue `data` block is `:353-374` and not
     `:335-356`, now `applySnapshot`, which mattered most, the passage
@@ -265,10 +265,10 @@ Listed so a reviewer can reject one without re-deriving it.
     The first sweep matched only the `index.html:`-prefixed form, so it missed
     the bare ones, and it passed two citations as correct by checking what sits
     at the line rather than what the sentence claims about it. A second review
-    caught all four. A third found the bare-form inventory itself undercounted,
-    a third shape with no colon at all (`` `231-233` ``), and three sites in no
-    bucket, which is why the known-issues entry names the shapes and gives no
-    totals.
+    caught all four. A third found the list of bare ones short too, a third
+    shape with no colon at all (`` `231-233` ``), and citations the sweep had
+    not accounted for anywhere. That is why the known-issues entry names the
+    shapes rather than a total.
 
     Some citations were deliberately left pointing at code that has moved, since
     each describes what the client did before step 1 as part of arguing why the
@@ -323,6 +323,17 @@ Listed so a reviewer can reject one without re-deriving it.
     names the three citation shapes and the two traps rather than a total, since
     three rounds of counting produced three different answers and none of them
     was what a sweep needs.
+
+    A fourth review found the same drift one level up, in a claim rather than a
+    number. The design recommends converting two `RoomSpec` reconnect cases to
+    drive `ConnectToRoom` at step 1; step 1 added a `RoomManagerSpec` case
+    instead and left those two hand-constructing. Correcting `:185` to `:194`
+    above made that worse, the citation now leading a reader who trusts the
+    sentence straight to the construction it says should be gone, so the
+    sentence records what step 1 actually did. The numbered list of why the
+    migration stands is past tense throughout for the same reason: this step had
+    dated its first item and left the third reading as pending work. The
+    known-issues entry covers claims as well as citations now.
 
 ---
 
