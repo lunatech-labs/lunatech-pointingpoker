@@ -76,11 +76,13 @@ that eventually lands it.
   `hasEstimation` added to the serialized field set, and the field set pinned on
   a redacted frame's rows too. Deviation 6.
 - `src/test/scala/.../actors/RoomSpec.scala` The two cases that assert one
-  participant's estimation in another's snapshot now assert the withholding.
+  participant's estimation in another's snapshot now assert the withholding, and
+  the joiner case pins it mid-round. Deviation 9.
 - `src/test/scala/.../sse/SSESpec.scala` Its `snapshot` helper constructs a
   `Participant`, so it takes the new argument, and now names every argument it
   passes. Deviation 7.
-- `e2e/fixtures.js` A `hiddenMark` locator beside `votedMark`.
+- `e2e/fixtures.js` A `hiddenMark` locator beside `votedMark`, and a note on
+  what `not.toContainText` requires of a row locator. Deviation 10.
 - `e2e/room.spec.js` One case for the icon the redaction would otherwise remove,
   and two for the confidentiality property.
 
@@ -88,7 +90,12 @@ that eventually lands it.
 
 - `docs/known-issues.md` The "Pre-reveal estimations are broadcast to every
   participant" entry is removed, the ghost-participant entry loses a claim the
-  browser cases falsified, and a cached-page entry is added. Deviations 3 and 8.
+  browser cases falsified, and entries are added for the cached page and for
+  unvalidated request payloads. Deviations 3, 8 and 11.
+- `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` One
+  qualification, where the design claims `voted` and `hasEstimation` coincide
+  outside the re-vote state, and the `index.html` citations step 1 left stale.
+  Deviation 11.
 - `README.md` The snapshot example gains `hasEstimation`, the messaging section
   says what is withheld, and the restart paragraph stops claiming no client
   outlives the server. Deviation 8.
@@ -146,7 +153,9 @@ Listed so a reviewer can reject one without re-deriving it.
    withholding for a non-member and a reader could take that as the whole rule,
    so its post-reveal twin states that the disclosure there is intentional:
    those values are public in the room and the recipient held a valid room
-   token. File Structure was updated to say seven cases; this section was not.
+   token. File Structure was updated to say seven cases; Task 1 Step 1's snippet
+   still lists six, since a plan records what was planned and this entry is what
+   records the addition.
 
 3. **`docs/known-issues.md`'s ghost-participant entry was edited**, against Task
    3 Step 1's "Leave every other entry alone". The paragraph that instruction
@@ -199,6 +208,70 @@ Listed so a reviewer can reject one without re-deriving it.
    until the page revalidates, because the step 1 page's `showUserEstimation`
    reads an `estimation` this step blanks. The new entry records the window and
    what would close it; nothing is scheduled.
+
+9. **`RoomSpec`'s joiner case asserts the withholding**, beyond the two cases
+   Task 1 declares (`:48-91` and `:107-132`). `"publish the whole room to a
+   joiner and to everyone already in it"` builds a round in flight, one member
+   holding `"5"` with `revealed` false, and before this step it handed the joiner
+   that value. It asserted only the id set, so the scenario a confidentiality
+   reader looks for first was the one place the property went unstated.
+   `RoomSnapshotSpec` already proves it for member and non-member recipients in
+   both reveal states, so this buys legibility rather than coverage. On the
+   joiner's view only: member-to-member redaction is what the vote and re-vote
+   cases carry, and a third copy would cost step 4 a second port.
+
+10. **`e2e/fixtures.js` gained a note on `not.toContainText`**, beyond the
+    `hiddenMark` locator this plan declares. Two reviews in a row read the four
+    `.not.toContainText` sites as able to pass on a row that does not exist, and
+    proposed pinning each one with a count. Measured against Playwright 1.62.1,
+    the assertion needs exactly one match: zero fails as `element(s) not found`
+    and two as a strict mode violation, since `.not` inverts a mismatch and not a
+    resolution failure. The belief is true of `not.toBeVisible()`, which is where
+    it comes from, so the note sits above `participantRow` rather than in this
+    plan, which a reader of that file never opens. Above `participantRow` and not
+    beside `votedMark`, so it does not stack with that comment into a four-line
+    block.
+
+11. **The target design was qualified and `known-issues.md` gained a second
+    entry.** The design is not in this plan's file set at all, and the entry is
+    against Task 3 Step 1's "Leave every other entry alone", as deviation 3 also
+    is. The design claimed under
+    `hasEstimation` that `voted` and `hasEstimation` "coincide except in the
+    re-vote state". True of `round.estimates`, false of this step's
+    `estimation.nonEmpty`: an empty estimation, which nothing validates and only
+    a hand-written `POST /vote` produces, reads as voted with no estimation, so
+    step 4 gives that row the shield icon when it re-expresses the field. The
+    design is qualified where the claim is made rather than annotated elsewhere,
+    since step 4 is built from it. The new entry records the wider gap it sits
+    in, no request payload on any endpoint being validated, and says that the
+    estimation half cannot close before the roadmap's `scale` item.
+
+    A pass over the design's twelve `index.html` citations went with it, step 1
+    having deleted enough of that file to move them. Six were already right.
+    Four sites cited `:472-485` for the "Your session has ended" state, which is
+    produced by the `onerror` handler at `:430-443`; `doLeave` is at `:469-477`
+    and not `:511-518`, which are now `created()`; `doJoin`'s `EventSource`
+    assignment is `:404` and not `:388`, which matters because a step 8 claim
+    rests on it; and `allVoted()` no longer exists at all, so its citation now
+    says where it stood before step 1.
+
+    Five citations were deliberately left pointing at code that has moved, since
+    each describes what the client did before step 1 as part of arguing why the
+    design is what it is: `showUserEstimation` reading the estimation string in
+    the paragraph qualified above, `:404` with `:411-419` in the two-bugs
+    argument, and `:412` with `:431` in the `JoinResponse.userId` passage.
+    Renumbering those would make the prose false rather than current. So `:404`
+    now appears twice with two eras, 1267 lines apart in sections that name
+    theirs, which is a smaller cost than an unverifiable claim.
+
+    The design's known-issues disposition also stopped claiming that
+    `docs/known-issues.md` is written to match its table. It matched when
+    written and has drifted since, three rows having closed and left that file
+    while steps 0 to 2 added four entries that are not rows, this step's
+    payload-validation entry being the fourth. The table is now described as the
+    disposition at the time of writing, to be reconciled by entry rather than by
+    count, which is a claim later steps cannot falsify. Its "ten of the
+    fourteen" is about the table itself and stays correct.
 
 ---
 
