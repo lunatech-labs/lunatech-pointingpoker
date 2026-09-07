@@ -468,10 +468,8 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
 
   await depart(carol, alice)
 
-  // The app notices a dead stream only when a write to it fails, and the first write after a
-  // close only draws the reset, so two commits stand in for the heartbeat 15s away. Issue
-  // edits and not votes: a vote after Carol's removal could reveal the round legitimately,
-  // which is the accepted residual rather than the failure this case is watching for.
+  // Two commits stand in for the heartbeat 15s away: a dead stream shows only on a failed
+  // write. Edits, not votes, since a vote after the prune could reveal the round legitimately.
   for (const issue of ['PP-1', 'PP-2']) {
     await issueButton(alice.page).click()
     await issueBox(alice.page).fill(issue)
