@@ -149,8 +149,19 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
       val data  = RoomData.empty.copy(users = List(alice, bob))
 
-      // publish iterates connections, so a departing tab can still be handed one snapshot.
+      // Unreachable today: publish iterates users. Step 4's connections let a departing tab
+      // still be handed one snapshot.
       RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation) mustBe List("", "")
+    }
+
+    "disclose every estimation to a non-member once the room has revealed" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", true, "13")
+      val data  = RoomData.empty.copy(users = List(alice, bob), revealed = true)
+
+      // Intentional: post-reveal values are public in the room, and this recipient held a
+      // valid room token.
+      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation).toSet mustBe Set("5", "13")
     }
   }
 end RoomSnapshotSpec
