@@ -406,6 +406,12 @@ today. Against the state model in section 3 that is the entry existing in
 coincide except in the re-vote state, which is the whole reason both fields are
 here.
 
+Step 2's `estimation.nonEmpty` stand-in has one divergence the target model does
+not: an empty estimation, which nothing validates (`Requests.scala:18`) and only
+a hand-written `POST /vote` produces, reads as voted with no estimation, where
+an entry would exist. Step 4 gains the shield icon on that row when it
+re-expresses the field, which it should expect rather than discover.
+
 **The wire name is `votesRevealed`, not `revealed`.** Under the latch in section 3
 the two carry the same meaning, so the only reason for two names is that
 `votesRevealed` is what the client already calls it and renaming that buys nothing.
@@ -867,7 +873,7 @@ answers 500, the client says "Could not join the room. Please try again."
 (`index.html:487-491`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:472-485`) and waits for a reload. That is worse than a
+rejoin." (`index.html:430-443`) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -907,7 +913,7 @@ to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:472-485`). Rejoining automatically under the remembered name belongs
+(`index.html:430-443`). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -1067,7 +1073,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:472-485`). The retry interval
+  Please reload the page to rejoin." (`index.html:430-443`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1136,7 +1142,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:472-485`). What clearing would buy
+  "Your session has ended" state (`index.html:430-443`). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1317,7 +1323,7 @@ running would manufacture the interleaving hazard described below.
 
 **The rule needs no "unless I am the one leaving" guard, and adding one would
 hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:511-518`), so no snapshot follows, and a
+own stream as its last act (`index.html:469-477`), so no snapshot follows, and a
 beacon fires only on a page being discarded, which has no live document to rejoin
 from. The one path that does deliver a snapshot naming its recipient as a
 non-member is the replacement page in section 4's late-beacon race, and there
@@ -1348,7 +1354,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:388`) and only `doLeave` closes. Step 8's
+closing the previous one (`index.html:404`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil until step 6, whose rejoin is the first
@@ -1614,9 +1620,10 @@ the vote fields they already touch. That flag is Problem E.
 Section 3 has the reasoning; the part that matters here is that writing it as
 `revealed || everyUserHasVoted` at publish time would make a departure reveal the
 round, which step 2 then turns into a disclosure rather than a display toggle. So
-`Vote` is the only thing besides `ShowVotes` that may set it. It retires today's
-client-side `allVoted()` (`index.html:553-554`), which is what makes the two
-reveal cases step 0 marked `test.fail()` intended rather than regressions.
+`Vote` is the only thing besides `ShowVotes` that may set it. It retires the
+client-side `allVoted()` that stood at `index.html:553-554` before this step,
+which is what makes the two reveal cases step 0 marked `test.fail()` intended
+rather than regressions.
 
 **Problem A is fixed here too.** `RoomManager.ConnectToRoom` builds the `User`
 it sends with `InitialVoteState`/`InitialEstimation` (`RoomManager.scala:81-84`)
@@ -1864,8 +1871,11 @@ reasoning behind each move rather than as work outstanding.
 
 ## Known issues disposition
 
-Ten of the fourteen open entries close on this path. `docs/known-issues.md` is
-already written to match this table. Five of the rows are marked **new**: they
+Ten of the fourteen open entries close on this path. The table is the
+disposition as of this design's writing, and `docs/known-issues.md` matched it
+then: rows close and leave that file as steps land, and steps add entries of
+their own that are not rows here, so reconcile the two by entry and not by
+count. Five of the rows are marked **new**: they
 were surfaced by this design work rather than inherited, three having been
 recorded only inside the 08-28 spec now marked superseded and two recorded nowhere
 at all. That ratio is the honest measure of how much of this was discovery rather
