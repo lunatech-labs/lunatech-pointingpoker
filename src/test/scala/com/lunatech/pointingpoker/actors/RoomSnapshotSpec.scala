@@ -106,8 +106,14 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
       val data  = RoomData.empty.copy(users = List(alice, bob))
 
+      val json = RoomSnapshot.of(data, alice.id).asJson
       // The property is about the wire, not the projection: devtools is the threat.
-      (RoomSnapshot.of(data, alice.id).asJson.noSpaces must not).include("\"13\"")
+      (json.noSpaces must not).include("\"13\"")
+      val rows = json.hcursor.downField("users").values.toList.flatten
+      // The key stays, empty: the wire keeps estimation a String that is always present.
+      rows.flatMap(_.asObject.map(_.keys.toList)) mustBe List.fill(2)(
+        List("id", "name", "voted", "hasEstimation", "estimation")
+      )
     }
 
     "hand every estimation over once the room has revealed" in {
