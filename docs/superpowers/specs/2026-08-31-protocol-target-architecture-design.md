@@ -1495,7 +1495,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:330`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:344`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
@@ -1558,6 +1558,12 @@ Added, each with the step it lands at so nothing here is unassigned:
   crossed a re-vote with a reveal, and in every round the table and the summary
   happened to agree. It also carries the one thing a fresh-room case cannot: what a
   round leaves behind, which the final reveal after a `clear` is there to check.
+
+  It also extends the withheld-value case through a re-vote, which closes the last
+  of the three places that choose between `voted` and `hasEstimation` without a
+  test that tells the two apart. `showUserEstimation` is correct there and was
+  correct before this, but step 4 re-expresses that field as an entry in
+  `round.estimates`, so the state it is correct in is worth pinning first.
 
   With it comes `expectSummaryMatchesTable`, asserting the two renderings agree,
   compared as multisets so the undecided tie order stays unpinned. Every reveal
