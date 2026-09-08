@@ -10,7 +10,7 @@ async function upstream(handler) {
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   return {
-    url: `http://localhost:${server.address().port}`,
+    url: `http://127.0.0.1:${server.address().port}`,
     async close() {
       server.closeAllConnections()
       server.close()
@@ -48,7 +48,7 @@ function get(url, options = {}) {
       resolve(result)
     })
   })
-  return { req, done }
+  return { req, done, result }
 }
 
 test('pass-through delivers bytes as they are written, not at the end', async t => {
@@ -199,4 +199,109 @@ test('pass-through does not leave the client hanging when upstream dies mid-body
 
   assert.ok(result, 'the downstream response never ended, so a real client would hang')
   assert.equal(Buffer.concat(result.chunks).toString(), 'data: first\n\n')
+})
+
+// Waits until a stream has actually opened, so a cut is aimed at a live connection rather
+// than at a request that has not reached the stub yet.
+async function opened(pending, ms = 2000) {
+  const deadline = Date.now() + ms
+  while (Date.now() < deadline) {
+    if (pending.result.firstByteAt !== null) return
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  throw new Error('the stream never produced a first byte')
+}
+
+test('a cut destroys the live streams carrying that cookie, and only those', async t => {
+  let sawAbort
+  const aborted = new Promise(resolve => {
+    sawAbort = resolve
+  })
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write('data: hello\n\n')
+    // This is what makes the app observe the disconnect and schedule Leave.
+    if (req.headers.cookie === 'session=bob') res.on('close', () => sawAbort(true))
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  const bob = get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=bob' } })
+  const alice = get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=alice' } })
+  t.after(() => alice.req.destroy())
+  await opened(bob)
+  await opened(alice)
+
+  stub.cut('bob')
+
+  const result = await within(bob.done, 3000)
+  assert.ok(result, 'the cut request was still open 3s later')
+  assert.ok(result.error, 'the socket is destroyed rather than left hanging')
+  const timeout = new Promise(resolve => setTimeout(() => resolve(false), 2000))
+  assert.equal(await Promise.race([aborted, timeout]), true, 'the app must see the disconnect')
+  assert.equal(await within(alice.done, 300), null, 'another session must stay connected')
+})
+
+test('a request carrying a cut cookie is refused without reaching upstream', async t => {
+  let reached = 0
+  const up = await upstream((req, res) => {
+    reached += 1
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('ok')
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  stub.cut('bob')
+  const refused = await within(
+    get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=bob' } }).done,
+    3000
+  )
+
+  assert.ok(refused, 'the refused request was still open 3s later')
+  assert.equal(refused.response, null, 'not even headers may reach the client')
+  assert.ok(refused.error)
+  // A retry that reached the app would rejoin the room and reset its own grace period.
+  assert.equal(reached, 0)
+
+  const allowed = await get(`${stub.baseUrl}/x`, { headers: { cookie: 'session=alice' } }).done
+  assert.equal(allowed.response.statusCode, 200)
+  assert.equal(reached, 1)
+})
+
+test('cut refuses an empty match rather than cutting every connection', async t => {
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('ok')
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  assert.throws(() => stub.cut(''), /non-empty cookie match/)
+})
+
+test('restore lets a cut cookie through again', async t => {
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('ok')
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  stub.cut('bob')
+  stub.restore('bob')
+  const single = await get(`${stub.baseUrl}/x`, { headers: { cookie: 'session=bob' } }).done
+  assert.equal(single.response.statusCode, 200)
+
+  stub.cut('bob')
+  stub.cut('alice')
+  stub.restore()
+  for (const who of ['bob', 'alice']) {
+    const result = await get(`${stub.baseUrl}/x`, { headers: { cookie: `session=${who}` } }).done
+    assert.equal(result.response.statusCode, 200, `${who} was still cut`)
+  }
 })

@@ -26,10 +26,16 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
   if (target.protocol !== 'http:' || target.pathname !== '/') {
     throw new Error(`upstream must be a plain http origin with no path, got ${upstream}`)
   }
-  const state = { buffering }
+  const state = { buffering, cuts: new Set(), live: new Set() }
 
   const server = http.createServer((req, res) => {
     if (req.url.startsWith('/__stub/buffering')) return toggle(req, res, state)
+    const cookie = req.headers.cookie ?? ''
+    // Refused without opening upstream: a retry that reached the app would rejoin the room.
+    if (isCut(state, cookie)) return void res.destroy()
+    const entry = { cookie, res }
+    state.live.add(entry)
+    res.on('close', () => state.live.delete(entry))
     // Read once per request: a toggle affects later requests, never one already in flight.
     if (state.buffering) forwardBuffered(req, res, target, deadlineMs)
     else forwardStreaming(req, res, target)
@@ -41,10 +47,25 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
 
   return {
     port,
-    baseUrl: `http://localhost:${port}`,
+    // 127.0.0.1 rather than localhost, since the server binds that family only.
+    baseUrl: `http://127.0.0.1:${port}`,
     deadlineMs,
     setBuffering(on) {
       state.buffering = Boolean(on)
+    },
+    // Stands in for an appliance that has killed one client's connections: destroys the live
+    // ones carrying this cookie value and refuses new ones until restore().
+    cut(match) {
+      // An empty match is includes() in every cookie, cutting the whole stub, not one session.
+      if (!match) {
+        throw new Error(`cut() expected a non-empty cookie match, got ${JSON.stringify(match)}`)
+      }
+      state.cuts.add(match)
+      for (const entry of state.live) if (entry.cookie.includes(match)) entry.res.destroy()
+    },
+    restore(match) {
+      if (match === undefined) state.cuts.clear()
+      else state.cuts.delete(match)
     },
     async close() {
       server.closeAllConnections()
@@ -82,6 +103,11 @@ function relayHeaders(upstreamHeaders) {
   const headers = { ...upstreamHeaders }
   for (const name of HOP_BY_HOP) delete headers[name]
   return headers
+}
+
+function isCut(state, cookie) {
+  for (const match of state.cuts) if (cookie.includes(match)) return true
+  return false
 }
 
 function forwardStreaming(req, res, target) {

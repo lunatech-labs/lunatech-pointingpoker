@@ -11,18 +11,21 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const launcher = path.join(repoRoot, 'target', 'universal', 'stage', 'bin', 'pointingpoker')
 const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
 
-const READY_TIMEOUT_MS = 30_000
+export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
+const OUTPUT_CAP_BYTES = 1 << 20
 
 // SseConfig.load's `require`s validate this at startup, so the profile does not get its own
 // copy of the rules. The heartbeat is hardcoded at 15s and cannot be turned down.
 export const testProfile = {
-  SSE_GRACE_PERIOD: '600ms',
+  SSE_GRACE_PERIOD: '4s',
   SSE_RETRY: '200ms'
 }
 
 export async function freePort() {
   const server = net.createServer()
+  // The literal address, matching the HOST the app is spawned with, so a probe and a bind
+  // cannot land on different families.
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const { port } = server.address()
@@ -41,7 +44,8 @@ export async function startApp({ port, env = {} } = {}) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env,
-      HOST: 'localhost',
+      // The literal address, so the bind family never depends on how a resolver orders localhost.
+      HOST: '127.0.0.1',
       PORT: String(chosen),
       // Without this the browser never returns the session cookie over plain HTTP and
       // every case fails with a 401 that looks like a session bug.
@@ -54,9 +58,19 @@ export async function startApp({ port, env = {} } = {}) {
     }
   })
 
+  // A tail, since the app logs every room broadcast at DEBUG and a worker runs many cases.
   const captured = []
-  child.stdout.on('data', chunk => captured.push(chunk))
-  child.stderr.on('data', chunk => captured.push(chunk))
+  let capturedBytes = 0
+  const keep = chunk => {
+    captured.push(chunk)
+    capturedBytes += chunk.length
+    // length > 1 so a single chunk over the cap is kept rather than leaving an empty log.
+    while (captured.length > 1 && capturedBytes > OUTPUT_CAP_BYTES) {
+      capturedBytes -= captured.shift().length
+    }
+  }
+  child.stdout.on('data', keep)
+  child.stderr.on('data', keep)
   const output = () => Buffer.concat(captured).toString()
 
   let exited = null
@@ -73,7 +87,8 @@ export async function startApp({ port, env = {} } = {}) {
 
   const failure = () => {
     if (spawnError) return `${launcher} could not be spawned: ${spawnError.message}`
-    if (exited) return `the app exited before it became ready (code ${exited.code}, signal ${exited.signal})`
+    if (exited)
+      return `the app exited before it became ready (code ${exited.code}, signal ${exited.signal})`
     return null
   }
 
@@ -85,7 +100,7 @@ export async function startApp({ port, env = {} } = {}) {
     clearTimeout(hard)
   }
 
-  const baseUrl = `http://localhost:${chosen}`
+  const baseUrl = `http://127.0.0.1:${chosen}`
   try {
     await waitForReady(baseUrl, failure)
   } catch (reason) {
@@ -108,6 +123,9 @@ async function waitForReady(baseUrl, failure) {
         await response.arrayBuffer()
         return
       }
+      // Release the socket; cancel() rejects if the body already errored, and this loop can
+      // run a few hundred times before the cap.
+      response.body?.cancel().catch(() => {})
     } catch {
       // Not up yet; the loop's own deadline is the only thing that gives up.
     }

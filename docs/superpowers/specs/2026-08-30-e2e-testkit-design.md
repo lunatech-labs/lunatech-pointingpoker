@@ -42,9 +42,14 @@ sentence that bundles both.
 
 In: the stub, the harness, the Playwright fixtures, `package.json`, the
 `node --test` plumbing, CI steps gating everything here, the stub unit tests,
-the reproduction, and the browser suite step 0 of the target architecture
+the reproduction, the harness's own startup case, and the browser suite step 0
+of the target architecture
 specifies: a smoke case, five behavioural cases, and four `test.fail()`
-characterization cases.
+characterization cases. Twelve shipped, seven green and five `test.fail()`.
+These counts are what this spec asked for and are left as written; the
+Playwright plan's case table is the record of what landed, mapping each of the
+twelve to the sentence that asks for it and naming the step that owns every
+case deliberately left out.
 
 Out: cases for behaviour that does not exist yet, which arrive with the step
 that creates it.
@@ -52,7 +57,7 @@ that creates it.
 ## Approaches considered
 
 **Stub as a reverse proxy in front of the app (chosen).** The browser points
-at `localhost:STUB`, which forwards to `localhost:APP`. Everything, page, SSE
+at `127.0.0.1:STUB`, which forwards to `127.0.0.1:APP`. Everything, page, SSE
 and POSTs, travels through it. No CONNECT, no browser proxy configuration.
 
 **Stub as a forward proxy via Playwright's `proxy` option.** Closer to how a
@@ -173,7 +178,7 @@ Every value arrives by environment variable. No new configuration surface.
 
 | Variable | Test | Production |
 | --- | --- | --- |
-| `SSE_GRACE_PERIOD` | 600ms | 6s |
+| `SSE_GRACE_PERIOD` | 4s | 6s |
 | `SSE_RETRY` | 200ms | 2000ms |
 
 **Two variables, not the ten an earlier draft of this section tabled.** The
@@ -187,7 +192,7 @@ depend on turning it down. The profile grows again at step 4, which makes the
 actor idle timeout configurable and will want it turned right down to test
 stop-after-idle.
 
-One invariant is left, and it is the one the app actually enforces: `600 >=
+One invariant is left, and it is the one the app actually enforces: `4000 >=
 2x200`, against `SseConfig.load`'s `require` that the grace period be at least
 twice the retry. That `require` throwing is what validates the profile, which
 is section 2's point rather than a second mechanism.
@@ -205,7 +210,10 @@ otherwise cost an afternoon:
   plain HTTP and every case fails with a 401 that looks like a session bug.
 - `INDEX_PATH` as an absolute path, because `application.conf`'s default is
   repo-relative and the staged binary does not run from the repo root.
-- `HOST=localhost`.
+- `HOST=127.0.0.1`, the literal address and not `localhost`, so the JVM's bind
+  and node's readiness probe cannot resolve to different families. Node prefers
+  `::1` for `localhost` and the JVM takes `127.0.0.1`, which works on undici's
+  fallback and hides a family mismatch behind a failed connect per request.
 
 ### 4. Fixtures
 
@@ -216,6 +224,7 @@ testkit/stub.js
 testkit/app.js
 test/stub.test.js         # node --test
 test/reproduction.test.js # node --test
+test/startup.test.js      # node --test
 e2e/fixtures.js
 e2e/smoke.spec.js
 e2e/room.spec.js
@@ -225,7 +234,7 @@ Three shallow directories named for what they hold: `testkit/` is machinery,
 `test/` is what `node --test` runs, `e2e/` is what Playwright runs. Nothing
 imports backwards. `playwright.config.js` sets `testDir: 'e2e'` so the two
 runners cannot pick up each other's files, and `.gitignore` gains
-`node_modules/` and `test-results/`.
+`node_modules/`, `test-results/` and `playwright-report/`.
 
 `app` and `stub` are worker-scoped fixtures, one pair per worker, on ports
 allocated by binding to 0. This costs a JVM per worker and buys the ability to
@@ -288,6 +297,15 @@ which is most of what makes them evidence rather than a restatement of what the
 stub was built to do. Holding it open also keeps the member from leaving, since
 a departed member's token stops resolving and the buffered request would get
 that same finite 401.
+
+**`test/startup.test.js`**, the harness against a port already taken. Asserts
+that `startApp` rejects with an exit rather than with a readiness timeout, and
+that it does so well inside the 30s cap. It exists because the failure it pins
+was live: `Main` discarded `API.run()`'s future, so a bind failure left a
+server-less JVM running, `failure()` saw no exit, and the conflict surfaced
+after 31s as "the app did not answer", blaming a slow machine. Added by review
+rather than by the original design, and verified to fail against the behaviour
+it replaced.
 
 **`e2e/smoke.spec.js`**, Playwright, pass-through. Load the page through the
 stub, join a room, reach the room view. Proves the harness drives the real app,
@@ -372,7 +390,7 @@ unbounded SSE stream is already the input that makes it fail.
 rather than at step 8, which needs them later for the connection module's
 tests and will find them already present.
 
-Two follow-ups this creates, both recorded rather than scheduled: the
-`README.md` needs the two commands (`npm test`, and `sbt Universal/stage`
-before `npm run e2e`), and `.gitignore` needs `node_modules` and
-`test-results/`.
+Two follow-ups this created, both since landed: `README.md` gained the
+commands, in the fuller form `sbt "; coverageOff; Universal/stage"` with the
+reasoning beside them, and `.gitignore` gained `node_modules/`,
+`test-results/` and `playwright-report/`.
