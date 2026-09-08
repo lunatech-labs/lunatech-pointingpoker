@@ -58,6 +58,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(u => (u.voted, u.estimation)) mustBe List((false, ""), (false, ""))
+        snapshot.users.map(_.hasEstimation) mustBe List(false, false)
 
       dataProbe.expectMessage(
         Room.DataStatus(data =
@@ -81,13 +82,18 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.ReVote(user.token)
 
+      // The other half of publish's pairing guard; the vote case above carries the note.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
         snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(_.voted) mustBe List(false, false)
-        // The estimations survive, which is what makes the client's re-vote state derivable.
-        snapshot.users.map(_.estimation).toSet mustBe Set("3", "5")
+        // The estimations survive a re-vote, and hasEstimation is now what carries that,
+        // since the values themselves reach nobody but their owner.
+        snapshot.users.map(_.hasEstimation) mustBe List(true, true)
+        snapshot.users.find(_.id == member.id).map(_.estimation) mustBe Some(member.estimation)
+        snapshot.users.filterNot(_.id == member.id).map(_.estimation) mustBe List("")
+      end for
     }
 
     "publish a revealed room on ShowVotes" in {
@@ -117,12 +123,16 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Vote(user.token, estimation)
       roomRef ! Room.GetData(dataProbe.ref)
 
+      // Two probes, not one: this is the guard on publish pairing each snapshot with its own
+      // recipient, so step 4's connections map ports it rather than replacing it.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
         val snapshot = expectSnapshot(probe)
         snapshot.you mustBe member.id
         val voter = snapshot.users.find(_.id == user.id)
         voter.map(_.voted) mustBe Some(true)
-        voter.map(_.estimation) mustBe Some(estimation)
+        voter.map(_.hasEstimation) mustBe Some(true)
+        // Unrevealed, so the value itself is in the voter's own snapshot and no other.
+        voter.map(_.estimation) mustBe Some(if member.id == user.id then estimation else "")
 
       dataProbe.expectMessage(
         Room.DataStatus(data =
@@ -351,6 +361,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       joinerView.you mustBe newUser.id
       joinerView.currentIssue mustBe issue
       joinerView.users.map(_.id).toSet mustBe Set(newUser.id, user.id, user2.id)
+      // Mid-round: the joiner is handed the roster without anyone's outstanding estimation.
+      joinerView.users.filterNot(_.id == newUser.id).map(_.estimation) mustBe List("", "")
       // One message, not a replay: the catch-up and the announcement are the same send.
       newUserProbe.expectNoMessage()
 

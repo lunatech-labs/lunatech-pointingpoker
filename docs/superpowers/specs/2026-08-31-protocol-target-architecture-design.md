@@ -86,20 +86,20 @@ rather than a flicker, and retained sessions at step 5 are its fix.
 
 Every argument below was checked against the code rather than carried over.
 
-1. **Two live bugs that only a snapshot makes unreachable.**
-   `index.html:404` pushes on `init` unconditionally, and `:411-419` pushes on
+1. **Two bugs, live before step 1, that only a snapshot makes unreachable.**
+   `index.html:404` pushed on `init` unconditionally, and `:411-419` pushed on
    `join` for any id but your own. A transparent `EventSource` retry reuses the
-   same JS object, so `ref.users` is never cleared while `setupNewUser` re-sends
-   `init` plus one `join` per participant: every participant duplicates.
-   Separately, that replay lists only present users and never says who left, so
-   a participant who departed during the gap is never pruned. Applying complete
+   same JS object, so `ref.users` was never cleared while `setupNewUser` re-sent
+   `init` plus one `join` per participant: every participant duplicated.
+   Separately, that replay listed only present users and never said who left, so
+   a participant who departed during the gap was never pruned. Applying complete
    state cannot duplicate, and an absent participant is absent.
 2. **Reconnects did not go away.** Laptop sleep, wifi handoff, mobile networks,
    a deploy, and `OverflowStrategy.fail` at `SSE.scala:54`. The proxy was one
    cause among several.
-3. **`OverflowStrategy.dropHead` becomes correct.** A superseded snapshot is
-   safe to discard; a dropped event is unrecoverable. This retires the only
-   reconnect the app inflicts on itself, which is what the 08-24 grace period
+3. **`OverflowStrategy.dropHead` became correct.** A superseded snapshot is
+   safe to discard; a dropped event was unrecoverable. That retired the only
+   reconnect the app inflicted on itself, which is what the 08-24 grace period
    exists to absorb.
 4. **Reveal state on resync** closes as one stored flag carried as one snapshot
    field, ending an open known issue. It lands as a latch rather than as a
@@ -107,10 +107,11 @@ Every argument below was checked against the code rather than carried over.
    not free. What snapshots add is that every connect answers with it, where the
    event protocol needs a `Show` synthesized into the replay beside the
    `EditIssue` one `setupNewUser` already fabricates.
-5. **The pre-reveal vote leak is real and orthogonal to the proxy.**
-   `Room.scala:144-148` broadcasts an estimation to every participant the moment
-   it is cast; the client merely hides it. It reaches the wire in two places,
-   there and `setupNewUser`'s replay, so the event protocol could fix it too.
+5. **The pre-reveal vote leak was real and orthogonal to the proxy.**
+   `Room.scala:144-148` broadcast an estimation to every participant the moment
+   it was cast and the client merely hid it, until step 2 withheld it in the
+   build. It reached the wire in two places, there and `setupNewUser`'s replay,
+   so the event protocol could have fixed it too.
    What snapshots add is that there is one place where state becomes wire, so
    redaction sits at a choke point a field added in a year cannot forget. Under
    events the audit is not two places once, it is two places per feature. See
@@ -365,9 +366,9 @@ frame sizes above, and unlike `version` it has a consumer on day one.
 
 The client stops needing to remember its own id at all, and that has a
 consequence on the other side of the wire worth following through. `/join`'s
-`userId` has no reader left once the event handlers go, its only consumers being
-`index.html:412` and `:431`, both inside the block step 1 deletes. So
-`JoinResponse.userId` becomes a field with no consumer, which is the same rule
+`userId` had no reader left once the event handlers went, its only consumers
+having been `index.html:412` and `:431`, both inside the block step 1 deleted.
+So `JoinResponse.userId` became a field with no consumer, which is the same rule
 that dropped `version`. The **response body** goes at step 6, where tapir
 describes the endpoint, because a response contract belongs to the step that
 rewrites endpoints rather than to the one that changes the wire. Between step 1
@@ -397,14 +398,21 @@ one read path, one contract test and one invariant are worth more than the
 bytes.
 
 **`hasEstimation` exists because redaction would otherwise change what the table
-renders.** `showUserEstimation` (`index.html:556-558`) reads the estimation
-string to drive the hidden-value icon, and blanking other participants'
-estimations makes that predicate false for everyone but the recipient. The field
-is computed from the unredacted value so the table renders exactly as it does
-today. Against the state model in section 3 that is the entry existing in
-`round.estimates` at all, where `voted` is that entry's `confirmed` flag; the two
-coincide except in the re-vote state, which is the whole reason both fields are
-here.
+renders.** Before step 2, `showUserEstimation` read the estimation string to
+drive the hidden-value icon (`index.html:556-558` when this was written,
+`:507-509` after step 1 moved it), so blanking other participants' estimations
+would have made that predicate false for everyone but the recipient. The field
+is computed from the unredacted value, so the table renders exactly as it did
+before the redaction. Against the state model in section 3 that is the entry
+existing in `round.estimates` at all, where `voted` is that entry's `confirmed`
+flag; the two coincide except in the re-vote state, which is the whole reason
+both fields are here.
+
+Step 2's `estimation.nonEmpty` stand-in has one divergence the target model does
+not: an empty estimation, which nothing validates (`Requests.scala:18`) and only
+a hand-written `POST /vote` produces, reads as voted with no estimation, where
+an entry would exist. Step 4 gains the shield icon on that row when it
+re-expresses the field, which it should expect rather than discover.
 
 **The wire name is `votesRevealed`, not `revealed`.** Under the latch in section 3
 the two carry the same meaning, so the only reason for two names is that
@@ -547,7 +555,7 @@ exists for.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
-while `clear()` clears both (`Room.scala:85-89`), so "has an estimation, is not
+while `clear()` clears both (`Room.scala:97-102`), so "has an estimation, is not
 counted as voted" is a state the current code holds and the wire format
 distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
 three things break at once: `ownVoteConfirmed` in section 5 is always true and
@@ -864,10 +872,10 @@ has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:487-491`), and the retry lands on a freshly created room.
+(`index.html:445-449`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:472-485`) and waits for a reload. That is worse than a
+rejoin." (`index.html:430-443`) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -907,7 +915,7 @@ to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:472-485`). Rejoining automatically under the remembered name belongs
+(`index.html:430-443`). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -1067,7 +1075,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:472-485`). The retry interval
+  Please reload the page to rejoin." (`index.html:430-443`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1136,7 +1144,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:472-485`). What clearing would buy
+  "Your session has ended" state (`index.html:430-443`). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1222,7 +1230,7 @@ the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
 Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:335-356`), so the step 1 call site assigns it wholesale and adapts
+(`index.html:353-374`), so the step 1 call site assigns it wholesale and adapts
 the one that does not: `userEstimation` onto `user.estimation`, which the template
 binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
 
@@ -1238,7 +1246,7 @@ Three details are load-bearing rather than polish:
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
   commit button (`index.html:191-207`), and its only writers are `showEdit`
-  (`:366-368`) and `doEdit` (`:519-520`), so as a guard it lasts until the user
+  (`:384-386`) and `doEdit` (`:478-486`), so as a guard it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1291,7 +1299,7 @@ Three details are load-bearing rather than polish:
   `votesRevealed`, but it is the kind of thing a reader spots and mistakes for a
   bug, so it is stated rather than left to be rediscovered.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
-  keeps `estimation` while `clear()` clears both (`Room.scala:85-89`), so "I
+  keeps `estimation` while `clear()` clears both (`Room.scala:97-102`), so "I
   have an estimation showing but the server does not consider me voted" is
   exactly the revote state and nothing else. The optimistic assignment in
   `vote()` stays, and corrects itself on the next publish rather than promptly:
@@ -1317,7 +1325,7 @@ running would manufacture the interleaving hazard described below.
 
 **The rule needs no "unless I am the one leaving" guard, and adding one would
 hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:511-518`), so no snapshot follows, and a
+own stream as its last act (`index.html:469-477`), so no snapshot follows, and a
 beacon fires only on a page being discarded, which has no live document to rejoin
 from. The one path that does deliver a snapshot naming its recipient as a
 non-member is the replacement page in section 4's late-beacon race, and there
@@ -1348,7 +1356,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:388`) and only `doLeave` closes. Step 8's
+closing the previous one (`index.html:404`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil until step 6, whose rejoin is the first
@@ -1360,11 +1368,13 @@ lost on the way.
 
 `RoomSpec`'s existing cases remain the behaviour specification. Its reconnect
 tests hand-construct the reconnecting user via `user.copy(ref = ...)`
-(`RoomSpec.scala:185`, `:280`), which preserves vote state by construction and
+(`RoomSpec.scala:194`, `:280`), which preserves vote state by construction and
 therefore never exercised the real `ConnectToRoom` path; they should go through
 `ConnectToRoom` so they would catch a regression. That lands at step 1, beside
 Problem A's fix, since vote loss on reconnect is the regression they would have
-caught.
+caught. Step 1 met this differently: it added `RoomManagerSpec.scala:279`,
+which drives the real path, and left these two cases hand-constructing, so they
+still read as described here.
 
 **`BackpressureReconnectSpec` is retired at step 1, not ported.** Its single case
 asserts that a stalled client's stream fails and silently reconnects, which is the
@@ -1396,8 +1406,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   `users` entry, so a case asserting that a vote outlives a reconnect passes on
   stale client state while the room has already reset that participant, and it
   would stay green through the very change it looks like it guards. That
-  assertion arrives at step 1 with Problem A's fix, alongside the `RoomSpec`
-  cases moved onto `ConnectToRoom` for the same reason.
+  assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
+  recommended above did not follow it: step 1 added a `ConnectToRoom` case in
+  `RoomManagerSpec` for the same reason instead.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
   to the room once the editor loses focus, and an edit committed with the check
@@ -1591,7 +1602,7 @@ refs, and one snapshot shared across a member's connections, arrive with step 4.
 Here a user has exactly one ref, since `joinUser` replaces the whole entry on a
 reconnect rather than accumulating. `voted` on the wire is `User.voted`,
 already the confirmed flag since `reVote()` keeps `estimation`
-(`Room.scala:85-89`), and step 2's `hasEstimation` is `estimation.nonEmpty`
+(`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
 **`applySnapshot`'s tally keeps counting every participant here**, matching
@@ -1614,9 +1625,10 @@ the vote fields they already touch. That flag is Problem E.
 Section 3 has the reasoning; the part that matters here is that writing it as
 `revealed || everyUserHasVoted` at publish time would make a departure reveal the
 round, which step 2 then turns into a disclosure rather than a display toggle. So
-`Vote` is the only thing besides `ShowVotes` that may set it. It retires today's
-client-side `allVoted()` (`index.html:553-554`), which is what makes the two
-reveal cases step 0 marked `test.fail()` intended rather than regressions.
+`Vote` is the only thing besides `ShowVotes` that may set it. It retires the
+client-side `allVoted()` that stood at `index.html:553-554` before this step,
+which is what makes the two reveal cases step 0 marked `test.fail()` intended
+rather than regressions.
 
 **Problem A is fixed here too.** `RoomManager.ConnectToRoom` builds the `User`
 it sends with `InitialVoteState`/`InitialEstimation` (`RoomManager.scala:81-84`)
@@ -1729,7 +1741,7 @@ and `ConfirmLeave`, and with them go `RoomResponseWrapper` (`:27`), its handler
 `roomResponseWrapper` parameter threaded through `receiveBehaviour` and its seven
 recursive calls. That takes `RoomManager.receiveBehaviour` from three parameters
 to two. Most of the test churn is mechanical probe wiring, only
-`RoomSpec.scala:231` and `:257` asserting on a value, and step 4 is rewriting
+`RoomSpec.scala:237` and `:256` asserting on a value, and step 4 is rewriting
 those cases for the split regardless. **Step 6's leave endpoint does not revive
 this**: its reply is an ask answered to the HTTP route, carrying the
 applied / not-a-member results the ask pattern is for, so a `Response` ADT
@@ -1864,8 +1876,11 @@ reasoning behind each move rather than as work outstanding.
 
 ## Known issues disposition
 
-Ten of the fourteen open entries close on this path. `docs/known-issues.md` is
-already written to match this table. Five of the rows are marked **new**: they
+Ten of the fourteen open entries close on this path. The table is the
+disposition as of this design's writing, and `docs/known-issues.md` matched it
+then: rows close and leave that file as steps land, and steps add entries of
+their own that are not rows here, so reconcile the two by entry and not by
+count. Five of the rows are marked **new**: they
 were surfaced by this design work rather than inherited, three having been
 recorded only inside the 08-28 spec now marked superseded and two recorded nowhere
 at all. That ratio is the honest measure of how much of this was discovery rather

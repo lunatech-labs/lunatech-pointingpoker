@@ -159,9 +159,14 @@ export const participantRows = page =>
     .locator('table')
     .filter({ has: page.getByRole('columnheader', { name: 'Voted' }) })
     .locator('tbody tr')
+// not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
+// strict mode violation, so a row assertion cannot pass vacuously and needs no existence pin.
 export const participantRow = (page, name) => participantRows(page).filter({ hasText: name })
 // An empty <i> has no size, so count it rather than asking whether it is visible.
 export const votedMark = row => row.locator('td').first().locator('svg, i')
+// The withheld-value icon in the estimation cell, counted rather than asked about for the
+// same reason as votedMark: an empty <i> has no size.
+export const hiddenMark = row => row.locator('td').nth(2).locator('svg, i')
 // Any alert, for asserting a reconnect cleared the banner: filtering by text would report
 // hidden when it merely switched to the terminal "session has ended" message.
 export const connectionAlert = page => page.getByRole('alert')

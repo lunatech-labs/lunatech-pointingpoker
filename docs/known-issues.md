@@ -121,8 +121,10 @@ roadmap item instead of leaving it here as stale history.
   cannot disclose the round. A ghost that never voted, alongside members who
   all have, satisfies a re-derived everyone-has-voted predicate the instant it
   is removed. The reveal latch means a membership change reveals nothing, so
-  the pruning is safe. This is the invariant earning its keep in a case no test
-  covers.
+  the pruning is safe. `e2e/room.spec.js`'s straggler-close case now covers
+  this invariant directly. Its reload sibling only covers it vacuously, for
+  the reason recorded on that case: the replacement participant a reload
+  creates has never voted either.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which closes both forms by different means. A deliberate close fires
@@ -199,6 +201,38 @@ roadmap item instead of leaving it here as stale history.
   rate limiting anywhere in this API, is broader than any one symptom and
   should be addressed as its own piece of work if abuse becomes a real
   concern, not patched endpoint-by-endpoint as new symptoms show up.
+
+### No request payload is validated on any endpoint that takes one
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala:8`, `:18`
+  and `:23`, and the three routes that consume them in
+  `src/main/scala/com/lunatech/pointingpoker/API.scala:91` (`/join`), `:163`
+  (`/vote`) and `:198` (`/edit-issue`). `create-room` takes no body.
+- **Issue:** Every request body is a bare `String` with no constraint on it.
+  `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
+  accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
+  text, and that one is room-wide rather than confined to the sender's own row.
+  `/vote` and `/edit-issue` require a session token resolving to a member of the
+  room; `/join` requires only a room id, open joining being the intended
+  behaviour, so there the room URL is the capability. Nothing escapes into HTML
+  either: the page renders all three through Vue interpolation or `v-model` and
+  uses no `v-html`. So this is a data-quality gap rather than an authorization
+  or injection one. Body size falls back to the pekko-http default,
+  `application.conf` configuring no parsing limits.
+
+  One case is already scheduled to change behaviour. `RoomSnapshot`'s
+  `hasEstimation` is `estimation.nonEmpty`, so an empty estimation reads as
+  voted with no estimation, and step 4 re-expresses the field as the entry
+  existing in `round.estimates`, which gives that same row the withheld-value
+  icon. The target design records that beside `hasEstimation`.
+- **Resolution:** Unscheduled, and the estimation half cannot close before the
+  `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
+  notion of a valid estimation, the card values being hardcoded in the client
+  (`index.html:356`). Step 6 describes the endpoints with tapir, which buys
+  types and shape rather than values, so an empty string satisfies the schema
+  there too unless a validator is declared, which nothing plans. As with the
+  rate-limiting entry above, the underlying gap is broader than any one symptom
+  and wants its own piece of work rather than a patch per endpoint.
 
 ### A disconnection outlasting the grace period forces a page reload
 
@@ -284,20 +318,6 @@ roadmap item instead of leaving it here as stale history.
   that step. The trigger for pulling it earlier is anyone actually losing an
   edit in a real ceremony. Remove this entry when step 8 lands.
 
-### Pre-reveal estimations are broadcast to every participant
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala`
-  (`RoomSnapshot.of`, which copies every participant's `estimation` into the
-  projection built for every recipient).
-- **Issue:** An estimation is sent to every participant the moment it is cast,
-  and the client merely declines to render it until votes are revealed. Anyone
-  with devtools open can read their colleagues' votes before the reveal, which
-  is the anchoring effect hidden voting exists to prevent.
-- **Resolution:** Scheduled as step 2 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which builds each snapshot per recipient and redacts other participants'
-  estimations until the room reveals. Remove this entry when that lands.
-
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
@@ -339,6 +359,35 @@ roadmap item instead of leaving it here as stale history.
   these assets anyway, so it is worth deciding with step 8 rather than ahead of
   it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
   nothing updates `@playwright/test` today.
+
+### A cached page can outlive the server that served it
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala:66` and `:72`
+  (`getFromFile(apiConfig.indexPath)`); `src/main/resources/pages/index.html`.
+- **Issue:** Measured against the staged build, the page is served with
+  `Last-Modified` and `ETag` and no `Cache-Control`, so a browser may apply
+  heuristic freshness and reuse the stored page without revalidating. A deploy
+  can therefore pair the previous page with the new server. Sessions do die with
+  the process, but the page is a separate artifact, which is the gap in the
+  README's restart paragraph. The `Cache-Control: no-cache` at `API.scala:132`
+  covers the SSE response only. Today the symptom is cosmetic: against a step 2
+  server the step 1 page's `showUserEstimation` reads `u.estimation`, which is
+  `""` for another participant before the reveal, so the withheld-value marker
+  is missing from other rows until the page revalidates, while the recipient's
+  own row and the post-reveal table are unaffected. A larger wire change would
+  degrade less kindly, and nothing detects the mismatch, since the wire carries
+  no version field.
+- **Resolution:** Open, and worth folding into step 6 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
+  `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
+  is then always revalidated, costing one conditional request that answers 304
+  with no body, where `no-store` would re-send all 19.7KB per load. The header
+  and its directive are already imported at `API.scala:18-19` for the SSE
+  response, so it is one line, and step 6 already touches these routes to add
+  the leave endpoint and make `/join` idempotent. Doing it on its own branch
+  instead would add an `API.scala` conflict to the stack's ordered rebase for a
+  symptom that is currently one missing icon. Step 8's frontend rewrite would
+  close it structurally with fingerprinted assets if step 6 does not.
 
 ### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
 
@@ -386,6 +435,51 @@ roadmap item instead of leaving it here as stale history.
   dropped or narrowed rather than bounded. That wants measuring on a runner, not
   reasoning about, and it belongs with whoever next touches CI. Remove this entry
   when the step is bounded or retired.
+
+### The target design's citations and step claims go stale as its steps land
+
+- **Where:**
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  across its `file:line` citations.
+- **Issue:** The design was written against the pre-step-1 codebase and cites it
+  throughout. Step 1 rewrote much of `index.html` and `Room.scala`, so a
+  citation can now land on unrelated code while still reading as current. Step 2
+  swept the `index.html` citations, and corrected `clear()` with `reVote()`
+  (`Room.scala:97-102`, cited three times as `:85-89`) and `RoomSpec`'s
+  hand-constructed reconnect and `Room.Running` sites (`RoomSpec.scala:194`,
+  `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
+  `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
+  unverified. `RoomSpec.scala`'s four are all in the two sentences above.
+
+  Claims go stale the same way, and a correct line number makes one more
+  convincing rather than less. The design recommends that two `RoomSpec`
+  reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
+  a case in `RoomManagerSpec` instead and left those two as they were, so the
+  sentence now describes code that a correct citation leads straight to. That
+  one is annotated. So is the argument list's item 5, which described the
+  pre-reveal leak as live after step 2 closed it. Those are two shapes, not one:
+  a step's paragraph saying what it would do rather than what it did, and an
+  argument paragraph describing a defect a later step has since closed. Both are
+  unswept beyond the two annotated here.
+
+  A sweep has to match three shapes, and missing one is how step 2's first sweep
+  went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
+  was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
+  given here on purpose. Three review rounds produced a different count each
+  time, and the count was never what a sweep needed.
+
+  Two traps are worth naming, both of which caught the step 2 sweep. Checking
+  what sits at the cited line is not enough: the question is whether the
+  sentence's claim is true of it, and two citations passed the first check and
+  failed the second. And some citations describe the pre-step-1 code on purpose,
+  as part of arguing why the design is what it is, so renumbering those makes
+  the prose false rather than current. Several in `index.html` were left alone
+  for that reason, as was the `Room.scala` pair in the design's own step 1
+  paragraph, which lists what step 1 removed.
+- **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
+  whoever opens the next step is best placed to sweep the files that step
+  touches, verifying the claim and not only the line. Remove this entry once the
+  remaining citations have been verified.
 
 ## Traceability note
 

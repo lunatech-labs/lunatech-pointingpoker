@@ -505,7 +505,7 @@
           });
         },
         showUserEstimation: function(u) {
-          return u.estimation && u.estimation !== "" && !this.votesRevealed;
+          return u.hasEstimation && !this.votesRevealed;
         }
       },
       created() {

@@ -22,6 +22,7 @@ reconstructs state from a sequence. Json example:
             "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
             "name": "John Doe",
             "voted": true,
+            "hasEstimation": true,
             "estimation": "5"
         }
     ]
@@ -32,6 +33,14 @@ reconstructs state from a sequence. Json example:
 which participant it is. `users` is ordered by `id`, the same order for every
 recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
 that completes the round, and cleared by `Clear` and `Re-vote`.
+
+**Each snapshot is redacted for its recipient.** While `votesRevealed` is false,
+`estimation` carries a value only for the participant the snapshot was built for
+and is `""` for everyone else, so a colleague's vote is not on the wire before
+the reveal rather than merely unrendered. `hasEstimation` says that a
+participant holds an estimation without saying which, which is what lets a client
+mark a withheld vote. `voted` is the confirmed flag, so `voted: false` with
+`hasEstimation: true` is a participant who has been asked to re-vote.
 
 The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
 connection is not closed by the server's idle timeout.
@@ -193,6 +202,8 @@ with it. A tab that was open across the restart does not fail silently: its next
 SSE attempt gets a 401 because the token no longer resolves, and the page shows
 "Your session has ended. Please reload the page to rejoin." Reloading is the
 whole recovery, since there is no state to migrate and nothing to drain. This is
-also why the wire format carries no version field: no client outlives the server
-that served it, so there is no old client to negotiate with.
+also why the wire format carries no version field: no session outlives the server
+that served it. The page is a separate artifact, served with no `Cache-Control`,
+so a cached one can outlive a deploy. `docs/known-issues.md` records that window
+and the cosmetic symptom it has today.
 
