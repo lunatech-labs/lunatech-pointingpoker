@@ -2,24 +2,42 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.duration.FiniteDuration
+
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
 import org.apache.pekko.actor.ActorRef as UntypedRef
 import com.lunatech.pointingpoker.actors
-import com.lunatech.pointingpoker.websocket.WSMessage
-import com.lunatech.pointingpoker.websocket.WSMessage.MessageType
 
 object RoomManager:
 
   sealed trait Command
-  case class CreateRoom(replyTo: ActorRef[Response])             extends Command
-  case class IncomeWSMessage(message: WSMessage)                 extends Command
-  case object UnsupportedWSMessage                               extends Command
-  case class WSCompleted(roomId: UUID, userId: UUID)             extends Command
-  case class WSFailure(t: Throwable)                             extends Command
-  case class CompleteWS()                                        extends Command
-  case class ConnectToRoom(message: WSMessage, user: UntypedRef) extends Command
-  case class RoomResponseWrapper(response: Room.Response)        extends Command
+  case class CreateRoom(replyTo: ActorRef[Response])                          extends Command
+  case class ConnectionCompleted(roomId: UUID, userId: UUID, ref: UntypedRef) extends Command
+  case class ConnectionFailure(roomId: UUID, userId: UUID, ref: UntypedRef, t: Throwable)
+      extends Command
+  case class ConnectToRoom(
+      roomId: UUID,
+      userId: UUID,
+      name: String,
+      token: Room.SessionToken,
+      ref: UntypedRef
+  ) extends Command
+  case class RoomResponseWrapper(response: Room.Response) extends Command
+  case class Vote(roomId: UUID, token: Option[Room.SessionToken], estimation: String)
+      extends Command
+  case class Show(roomId: UUID, token: Option[Room.SessionToken])   extends Command
+  case class Clear(roomId: UUID, token: Option[Room.SessionToken])  extends Command
+  case class Revote(roomId: UUID, token: Option[Room.SessionToken]) extends Command
+  case class EditIssue(roomId: UUID, token: Option[Room.SessionToken], issue: String)
+      extends Command
+  case class RequestSession(roomId: UUID, name: String, replyTo: ActorRef[Room.SessionMinted])
+      extends Command
+  case class ValidateToken(
+      roomId: UUID,
+      token: Room.SessionToken,
+      replyTo: ActorRef[Room.TokenResolution]
+  ) extends Command
 
   sealed trait Response
   case class RoomId(value: String) extends Response
@@ -35,96 +53,111 @@ object RoomManager:
   object RoomManagerData:
     val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[UUID, ActorRef[Room.Command]])
 
-  def apply(): Behavior[Command] =
+  def apply(gracePeriod: FiniteDuration = Room.defaultGracePeriod): Behavior[Command] =
     Behaviors.setup[Command] { context =>
       val roomResponseActor: ActorRef[Room.Response] =
         context.messageAdapter(response => RoomResponseWrapper(response))
-      receiveBehaviour(RoomManagerData.empty, roomResponseActor)
+      receiveBehaviour(RoomManagerData.empty, roomResponseActor, gracePeriod)
     }
 
   private[actors] def receiveBehaviour(
       data: RoomManagerData,
-      roomResponseWrapper: ActorRef[Room.Response]
+      roomResponseWrapper: ActorRef[Room.Response],
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
         message match
           case CreateRoom(replyTo) =>
             val roomId    = UUID.randomUUID()
-            val roomActor = createRoom(roomId, context)
+            val roomActor = createRoom(roomId, context, gracePeriod)
             val newData   = data.addRoom(roomId, roomActor)
 
             context.watch(roomActor)
             replyTo ! RoomId(roomId.toString)
-            receiveBehaviour(newData, roomResponseWrapper)
-          case ConnectToRoom(message, user) =>
+            receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
+          case ConnectToRoom(roomId, userId, name, token, ref) =>
+            data.rooms.get(roomId).foreach { room =>
+              room ! Room.Join(
+                Room.User(userId, name, InitialVoteState, InitialEstimation, ref, token)
+              )
+            }
+            Behaviors.same
+          case RequestSession(roomId, name, replyTo) =>
             data.rooms
-              .get(message.roomId)
+              .get(roomId)
               .fold {
-                val roomActor = createRoom(message.roomId, context)
+                val roomActor = createRoom(roomId, context, gracePeriod)
                 context.watch(roomActor)
-                val newData = data.addRoom(message.roomId, roomActor)
-                roomActor ! Room.Join(
-                  Room
-                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
-                )
-                receiveBehaviour(newData, roomResponseWrapper)
+                val newData = data.addRoom(roomId, roomActor)
+                roomActor ! Room.RequestSession(name, replyTo)
+                receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
               } { room =>
-                room ! Room.Join(
-                  Room
-                    .User(message.userId, message.extra, InitialVoteState, InitialEstimation, user)
-                )
+                room ! Room.RequestSession(name, replyTo)
                 Behaviors.same
               }
+          case ValidateToken(roomId, token, replyTo) =>
+            data.rooms.get(roomId) match
+              case Some(room) => room ! Room.ValidateToken(token, replyTo)
+              case None       => replyTo ! Room.Unresolved
+            Behaviors.same
           case RoomResponseWrapper(response) =>
             response match
               case Room.Running(_)      => Behaviors.same
               case Room.Stopped(roomId) =>
                 val newData = data.removeRoom(roomId)
-                receiveBehaviour(newData, roomResponseWrapper)
-          case IncomeWSMessage(message) =>
-            data.rooms.get(message.roomId).foreach(handleIncomeMessage(_, message, context))
+                receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
+          case Vote(roomId, token, estimation) =>
+            for
+              room <- data.rooms.get(roomId)
+              t    <- token
+            do room ! Room.Vote(t, estimation)
             Behaviors.same
-          case UnsupportedWSMessage =>
-            context.log.error("UnsupportedWSMessage received")
+          case Show(roomId, token) =>
+            for
+              room <- data.rooms.get(roomId)
+              t    <- token
+            do room ! Room.ShowVotes(t)
             Behaviors.same
-          case WSCompleted(roomId, userId) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, roomResponseWrapper))
+          case Clear(roomId, token) =>
+            for
+              room <- data.rooms.get(roomId)
+              t    <- token
+            do room ! Room.ClearVotes(t)
             Behaviors.same
-          case WSFailure(t) =>
-            context.log.error("WSFailure: {}", t)
+          case Revote(roomId, token) =>
+            for
+              room <- data.rooms.get(roomId)
+              t    <- token
+            do room ! Room.ReVote(t)
             Behaviors.same
-          case CompleteWS() =>
-            context.log.error("CompleteWS: should never be received")
+          case EditIssue(roomId, token, issue) =>
+            for
+              room <- data.rooms.get(roomId)
+              t    <- token
+            do room ! Room.EditIssue(t, issue)
+            Behaviors.same
+          case ConnectionCompleted(roomId, userId, ref) =>
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
+            Behaviors.same
+          case ConnectionFailure(roomId, userId, ref, t) =>
+            context.log.error("ConnectionFailure for room {} user {}", roomId, userId, t)
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Leave(userId, ref, roomResponseWrapper))
             Behaviors.same
       }
       .receiveSignal { case (_, Terminated(ref)) =>
         val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
-        receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper)
+        receiveBehaviour(RoomManagerData(leftoverRooms), roomResponseWrapper, gracePeriod)
       }
 
   private[actors] def createRoom(
       roomId: UUID,
-      context: ActorContext[Command]
+      context: ActorContext[Command],
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod
   ): ActorRef[Room.Command] =
-    context.spawn(actors.Room(roomId), name = roomId.toString)
-
-  private[actors] def handleIncomeMessage(
-      room: ActorRef[Room.Command],
-      message: WSMessage,
-      context: ActorContext[Command]
-  ): Unit =
-    message.messageType match
-      case MessageType.Init => // Should never arrive here
-        context.log.error("Received Init MessageType []", message)
-      case MessageType.Join => // Should be handle by ConnectToRoom
-        context.log.error("Received Join MessageType []", message)
-      case MessageType.Leave => // Should never arrive here
-        context.log.error("Received Leave MessageType []", message)
-      case MessageType.EditIssue => room ! Room.EditIssue(message.userId, message.extra)
-      case MessageType.Vote      => room ! Room.Vote(message.userId, message.extra)
-      case MessageType.Show      => room ! Room.ShowVotes(message.userId)
-      case MessageType.Clear     => room ! Room.ClearVotes(message.userId)
-      case MessageType.Revote    => room ! Room.ReVote(message.userId)
-  end handleIncomeMessage
+    context.spawn(actors.Room(roomId, gracePeriod = gracePeriod), name = roomId.toString)
 end RoomManager
