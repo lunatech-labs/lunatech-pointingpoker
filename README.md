@@ -7,31 +7,31 @@ This project provides an HTTP + Server-Sent-Events (SSE) based pointing poker se
 
 Clients send commands as plain HTTP POST requests (see the API table below). The
 server pushes room updates the other way, over a long-lived SSE stream opened on
-`GET /rooms/{roomId}/events`. Each pushed event carries one `RoomEvent` JSON
-object as its `data` payload. Json example:
+`GET /rooms/{roomId}/events`. Every pushed message carries one complete
+`RoomSnapshot` as its `data` payload, built for the participant receiving it.
+There is one message type, so a client applies whatever arrives and never
+reconstructs state from a sequence. Json example:
 
 ```json
 {
-    "messageType": "join",
-    "roomId": "42c31270-6eaa-4dd7-adfc-b7c131022597",
-    "userId": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
-    "extra": "John Doe"
+    "you": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+    "currentIssue": "PP-42",
+    "votesRevealed": false,
+    "users": [
+        {
+            "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+            "name": "John Doe",
+            "voted": true,
+            "estimation": "5"
+        }
+    ]
 }
 ```
 
-Possible values for messageType:
-* "init"
-* "join"
-* "vote"
-* "show"
-* "revote"
-* "clear"
-* "leave"
-* "edit_issue"
-
-`roomId` and `userId` should be `UUID`.
-
-`extra` value depends `messageType`.
+`you` is the identity the snapshot was built for, so a client never has to infer
+which participant it is. `users` is ordered by `id`, the same order for every
+recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
+that completes the round, and cleared by `Clear` and `Re-vote`.
 
 The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
 connection is not closed by the server's idle timeout.
@@ -45,7 +45,7 @@ Available endpoints:
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
 |`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId and a session, returns `{"userId": "..."}`, and sets a room-scoped session cookie |
-|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
+|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
 |`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
@@ -97,12 +97,17 @@ sbt test
 
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
-and a harness that starts the packaged app. The reproduction half needs the app staged first:
+and a harness that starts the packaged app:
 
 ```
-sbt "; coverageOff; Universal/stage"
 npm test
 ```
+
+Both node suites run the staged binary rather than `sbt run`, so both stage first. `npm test`
+and `npm run e2e` each do that themselves through an npm pre-hook calling `npm run stage`, which
+is `sbt "; coverageOff; Universal/stage"`. A no-op stage costs about four seconds. Invoke
+`node --test` or `npx playwright test` directly and you skip the hook, which means you test
+whatever was staged last.
 
 `coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
 session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
@@ -116,7 +121,6 @@ Firefox, one app and one stub per Playwright worker:
 npm ci
 npx playwright install-deps chromium firefox
 npx playwright install chromium firefox
-sbt "; coverageOff; Universal/stage"
 npm run e2e
 ```
 
@@ -162,4 +166,33 @@ Without this, `/join` will appear to succeed but every subsequent request will g
 `401`, since the cookie set by `/join` never comes back on `/events`.
 
 ### Deployment
+
+**Do not let a reverse proxy buffer the SSE response.** The server pushes room
+updates over a long-lived `text/event-stream` on `GET /rooms/{roomId}/events`. A
+proxy that buffers response bodies holds those frames until its buffer fills or
+the connection closes, so the room appears frozen and then updates in a burst.
+The symptom looks like a server bug and is not one.
+
+The app sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` on that
+response, which nginx honours. Other proxies need their own setting:
+
+| Proxy | Setting |
+|-------|---------|
+| nginx | Honours `X-Accel-Buffering: no`. Otherwise `proxy_buffering off;` in the location block |
+| Apache `mod_proxy` | `mod_proxy_http` does not buffer responses by default. No `mod_deflate` on this path |
+| HAProxy | Buffers responses but streams them, so no change is needed |
+| Envoy | No response buffering by default. Do not enable the buffer filter on this route |
+
+Response-scanning appliances are the harder case, since they may buffer to
+inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
+and the testing section above says how to run it.
+
+**A restart ends every room, and open tabs need a reload.** Rooms and the
+sessions that reach them live in the process's memory, so a deploy takes them
+with it. A tab that was open across the restart does not fail silently: its next
+SSE attempt gets a 401 because the token no longer resolves, and the page shows
+"Your session has ended. Please reload the page to rejoin." Reloading is the
+whole recovery, since there is no state to migrate and nothing to drain. This is
+also why the wire format carries no version field: no client outlives the server
+that served it, so there is no old client to negotiate with.
 

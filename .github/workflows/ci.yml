@@ -31,20 +31,18 @@ jobs:
       - name: Codecov
         uses: codecov/codecov-action@v7
 
-      - name: stage the app for the node tests
-        run: sbt "; coverageOff; Universal/stage"
-
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: 'npm'
 
-      - name: node tests
-        run: node --test "test/**/*.test.js"
-
       # --no-audit drops the registry call that once stalled for npm's full 300s fetch-timeout.
       - name: install node dependencies
         run: npm ci --prefer-offline --no-audit --no-fund --fetch-timeout=60000
+
+      # npm test stages first through its pre-hook, so CI has no stage step of its own.
+      - name: node tests
+        run: npm test
 
       # The browsers are ~120MB a run; the lockfile hash retires the cache on a playwright bump.
       - uses: actions/cache@v6

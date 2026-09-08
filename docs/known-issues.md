@@ -72,20 +72,6 @@ roadmap item instead of leaving it here as stale history.
   and it deliberately adds no TTL: the leak is a hundred bytes per abandoned tab
   in a room whose lifetime is now bounded. Remove this entry when step 4 lands.
 
-### SSE reverse-proxy buffering is undocumented
-
-- **Where:** `README.md` / deployment notes (no dedicated section exists).
-- **Issue:** A common way SSE silently breaks in production is a reverse proxy
-  (nginx by default) buffering the response, so pushed events arrive in batches or
-  not at all until the buffer fills. Nothing in the code sets `Cache-Control:
-  no-cache`, and nothing in the docs mentions `X-Accel-Buffering: no` or the
-  equivalent for whatever proxy fronts this in deployment.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` on the SSE
-  response and adds a deployment note to `README.md`. Remove this entry when that
-  lands.
-
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -100,17 +86,43 @@ roadmap item instead of leaving it here as stale history.
   stream simply ending. But the room does not notice either one until a write to
   that dead stream fails, and absent other traffic the only writes are the
   15-second heartbeats, with the first one after a close only drawing the peer's
-  reset. The step 0 browser suite measured about 31 seconds from a tab close to
-  detection with no other room activity, or about 1.7 seconds if two broadcasts
-  happen to follow the close, and only then does the 6-second grace period run.
-  A participant closing their tab mid-meeting can show as present for far longer
-  than 6 seconds afterward, not up to 6.
+  reset. So detection lands one to two heartbeats after the close, depending on
+  where in the cycle it fell: 16 to 31 seconds with no other room activity, or
+  about a second if two broadcasts happen to follow the close. The 6-second grace
+  period runs after that, which in production means a closed tab is announced 22
+  to 37 seconds later, or about 7 with that traffic. The step 0 browser suite
+  measured the worst case at 31.7 seconds to announce, against the 600ms grace
+  period its test profile carried then. A participant closing their tab
+  mid-meeting can show as present for far longer than 6 seconds afterward, not up
+  to 6. Quote the range rather than a midpoint: a single figure gets remembered as
+  a ceiling, and 16.7 seconds from that suite's table has been, though it is the
+  nudged case at the old test grace period and nearer 22 in production.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
   a reload is a new participant to the room and the previous one lingers for
   the grace period: the user watches their own name sit in the participant list
   twice.
+
+  **The ghost is not merely visible, its vote is counted, and that is the half
+  worth acting on.** Observed manually and reproduced on 2026-09-05: a
+  participant who votes, loses their tab, and rejoins inside the detection
+  window leaves an entry that still carries `voted = true` and its estimation.
+  With one live voter on 5 plus that ghost also on 5, the summary reports 5
+  with a count of 2, so "Most voted estimation" is computed partly from a
+  session nobody is sitting at. A team can commit to the wrong number on it.
+  The replacement entry, having not voted, also blocks server-side auto-reveal
+  until it votes or the ghost is pruned. **Step 3's voted-only tally does not
+  help here**, which is worth stating because it looks like it should: the
+  ghost's `voted` flag is true, so it survives that filter. Only an identity
+  that does not duplicate fixes it.
+
+  One thing that does hold, and only because of step 1: pruning the ghost
+  cannot disclose the round. A ghost that never voted, alongside members who
+  all have, satisfies a re-derived everyone-has-voted predicate the instant it
+  is removed. The reveal latch means a membership change reveals nothing, so
+  the pruning is safe. This is the invariant earning its keep in a case no test
+  covers.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which closes both forms by different means. A deliberate close fires
@@ -125,6 +137,16 @@ roadmap item instead of leaving it here as stale history.
   What remains on a reload is a sub-second gap where the member is absent, since
   `pagehide` fires there too and nothing distinguishes it from a close, accepted
   deliberately in that design. Remove this entry when that lands.
+
+  **A heartbeat reduction was weighed as a stopgap and rejected on 2026-09-05.**
+  At 5 seconds the announce window falls from 22 to 37 seconds down to about 12
+  to 17, so it shrinks the ghost rather than closing it, at three times the
+  heartbeat traffic, and step 6 is expected within one to two weeks, which is not
+  long enough for enough ceremonies to run into it. The trigger for reconsidering
+  is step 6 slipping well past that window, or a team committing to a number a
+  ghost's vote skewed. Note the dependency the estimate carries: step 6 sits
+  behind steps 2 to 5 in the recorded order, so the stopgap becomes worth
+  revisiting if that order holds but the schedule does not.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
@@ -148,25 +170,6 @@ roadmap item instead of leaving it here as stale history.
   having observed one makes a sequence number machinery bought against an
   unmeasured risk. It stays cheap to add, being live state re-derived per
   session, so the trigger is someone actually seeing a reordered command.
-
-### Resync doesn't replay whether votes are currently revealed
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`); `src/main/resources/pages/index.html` (`votesRevealed`).
-- **Issue:** `setupNewUser`'s catch-up replay reconstructs participants,
-  votes, and the current issue for a (re)connecting client, but has no
-  equivalent of a `Show` replay: whether votes are currently revealed isn't
-  part of the resync. A client that reconnects mid-session, after a dropped
-  connection or a page reload, has no way to know votes are already shown until,
-  if ever, a subsequent `Show`/`Clear` happens to arrive live.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  where every snapshot carries `votesRevealed`: a stored flag set by `Show` and by
-  the vote that completes the round, rather than a predicate re-derived per publish.
-  Remove this entry when that lands.
-  Phase 4's "server-authoritative auto-reveal" item in `docs/roadmap.md` is
-  closed by the same change, since reveal becomes real backend logic rather than
-  a client-only derivation.
 
 ### No rate limiting on mutating room endpoints
 
@@ -246,36 +249,46 @@ roadmap item instead of leaving it here as stale history.
   not the requirement and because an extra non-voting member would block
   server-side auto-reveal for the whole room. Remove this entry when that lands.
 
-### A transparently reconnecting client duplicates every known participant
+### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
 
-- **Where:** `src/main/resources/pages/index.html` (the `init` and `join`
-  handlers); `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`).
-- **Issue:** `EventSource`'s automatic retry reuses the same JS object, so
-  `ref.users` is never cleared, while the server replays `init` plus one `join`
-  per participant on every reconnect. The handlers push unconditionally, so
-  every participant appears twice, three times, once per reconnect.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
-  Applying a complete snapshot cannot duplicate. Remove this entry when that
-  lands.
+- **Where:** `src/main/resources/pages/index.html` (`showEdit` and `doEdit`, the
+  `issueFocused` handlers on the editable input, and `applySnapshot`'s
+  `prev.issueFocused ? prev.currentIssue : s.currentIssue`).
+- **Issue:** Two halves of one trap, both observed manually on 2026-09-05.
 
-### A participant who departs during a reconnect gap is never pruned
+  Under snapshots every publish carries the current issue, so an in-progress
+  edit is guarded by whether the editable input holds focus. The guard works
+  while it does. But typing is local until committed, so the moment the box
+  loses focus the next publish resets it to the room's committed value. The
+  trigger is therefore any room activity at all, a vote, a clear, a re-vote or
+  a join, and not merely a second person editing the title. Switching windows
+  counts as losing focus, since browsers blur the focused element when the
+  window does, so alt-tabbing away to copy a ticket title is enough to lose the
+  draft while away. Focus was chosen over the `editing` flag deliberately: a
+  guard keyed on `editing` would last until the user pressed the commit button,
+  so opening the editor and clicking away would stop applying issue updates for
+  the rest of the session, which is worse.
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`setupNewUser`).
-- **Issue:** The catch-up replay lists the participants who are present and
-  never says who left, so a reconnecting client keeps anyone who departed while
-  it was disconnected. Same root cause as the entry above, opposite direction.
-- **Resolution:** Scheduled as step 1 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
-  Under a snapshot an absent participant is absent. Remove this entry when that
-  lands.
+  The second half is the sharper one. `editing` is set true only by `showEdit`
+  and false only by `doEdit`, which posts, so there is no cancel. A user parked
+  in edit mode whose draft has been replaced by the room's value can only leave
+  edit mode by pressing the check, which re-posts that value. Approving the
+  external change is the only exit.
+- **Resolution:** Deferred, with the product owner's reasoning recorded on
+  2026-09-05: one product owner drives a ceremony, so the concurrent-edit case
+  is rare. Note the exposure is wider than that case, per the trigger above.
+  Scheduled as step 8 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  the frontend rewrite, whose section 5 already assigns both an explicit cancel
+  and a "someone else changed the issue while you were editing" affordance to
+  that step. The trigger for pulling it earlier is anyone actually losing an
+  edit in a real ceremony. Remove this entry when step 8 lands.
 
 ### Pre-reveal estimations are broadcast to every participant
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (the `Vote` broadcast, and `setupNewUser`'s replay of `u.estimation`).
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomSnapshot.scala`
+  (`RoomSnapshot.of`, which copies every participant's `estimation` into the
+  projection built for every recipient).
 - **Issue:** An estimation is sent to every participant the moment it is cast,
   and the client merely declines to render it until votes are revealed. Anyone
   with devtools open can read their colleagues' votes before the reveal, which
@@ -327,29 +340,22 @@ roadmap item instead of leaving it here as stale history.
   it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
   nothing updates `@playwright/test` today.
 
-### The SSE buffer-overflow test races its own demand
+### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
-  ("fail the stream when the buffer overflows, instead of silently dropping events").
-- **Issue:** The case sends five batches with `!`, then calls `probe.request(5)`
-  before `expectError()`. Both the sends and the demand are asynchronous with
-  respect to the stream, so when the demand reaches it before all five batches
-  land, the buffer drains instead of overflowing and the case sees an `OnNext`
-  where it expects an error. Observed once, on the first attempt of run
-  33850382115, where the delivered element carried the first vote; two re-runs of
-  the same commit passed. Test-only, with no production behaviour implicated, but
-  the failure lands in `sbt qa`, which gates every step after it, so a flake takes
-  the whole job red and costs a manual re-run.
-- **Resolution:** Stays open, deferred rather than unscheduled. The likely fix is
-  dropping `probe.request(5)`, since an overflow failure propagates downstream
-  without demand and the assertion then holds with nothing to race. That narrows
-  what the case proves, from "overflow fails even under demand" to "overflow fails
-  with none", which is what the comment above it intends but is still a change of
-  contract worth its own review and worth backing with a looped run rather than one
-  green build. It is not being done now because the spec, stub and browser-suite
-  branches are stacked on `main` and deliver as one pack once steps 1 and 2 are
-  ready, so a test change landing underneath them buys a cascading rebase across
-  the stack against a cost of one re-run. Remove this entry when the fix lands.
+  ("keep a stalled client's stream open and hand it the newest snapshot, not a
+  stale queued one").
+- **Issue:** The case sends five snapshots with no demand yet granted, then calls
+  `probe.expectNoMessage(300.millis)` before requesting demand, so that all five
+  sends have landed and been resolved by `dropHead` before the assertion runs.
+  That wait is a deliberate wall-clock settle, not a synchronization primitive
+  like the barriers used elsewhere in this suite.
+- **Resolution:** Accepted as-is. The wait can only fail safe: if fewer than five
+  sends have landed by the time demand arrives, the surviving element is a
+  lower-numbered issue than expected, and the assertion goes red rather than
+  passing on a race. No arrangement of timings produces a green result out of a
+  broken `dropHead`, so the 300ms settle costs a small amount of suite time
+  against a real synchronization primitive and buys nothing in return.
 
 ### The browser suite's apt step is unbounded and now dominates the CI job
 

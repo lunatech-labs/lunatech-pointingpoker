@@ -126,7 +126,6 @@ test('a departure is announced while another participant is cut', async ({ join 
 })
 
 test('a Show survives someone joining', async ({ join }) => {
-  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
   const alice = await join('Alice')
   await join('Bob')
 
@@ -141,7 +140,6 @@ test('a Show survives someone joining', async ({ join }) => {
 })
 
 test('an auto-revealed round stays revealed when a straggler arrives', async ({ join }) => {
-  test.fail(true, 'step 1: revealed becomes a stored latch instead of a client-side allVoted()')
   const alice = await join('Alice')
   const bob = await join('Bob')
 
@@ -168,7 +166,6 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
-  test.fail(true, 'step 1: a snapshot replaces the replay that pushes a second entry')
   const alice = await join('Alice')
   const bob = await join('Bob')
 
@@ -187,8 +184,100 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
 })
 
 test('a participant who departed during the gap is pruned on reconnect', async ({ join }) => {
-  test.fail(true, 'step 1: a snapshot is the whole list, so a departure cannot be missed')
   const { bob } = await departureWhileCut(join)
 
   await expect(participantRow(bob.page, 'Carol')).toHaveCount(0, { timeout: 2000 })
+})
+
+test('a vote survives its own reconnect', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(bob.page, '8')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  // The room's own state, not Bob's stale copy: Alice never disconnected, so her row for
+  // Bob is redrawn from a snapshot published after the reconnect.
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1, { timeout: 10_000 })
+  await expect(participantRow(alice.page, 'Bob')).toContainText('8')
+})
+
+test('the issue box resyncs once the editor loses focus', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('Alice is still typing')
+
+  // Any publish carries the issue, so a vote by anyone would clobber an unguarded box.
+  await vote(bob.page, '5')
+  // Require the snapshot to have landed: toHaveValue passes on its first poll otherwise.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
+
+  await issueBox(alice.page).blur()
+  await vote(bob.page, '3')
+  await expect(issueBox(alice.page)).toHaveValue('')
+})
+
+test('an edit committed with the check button reaches the other browser', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('PP-42')
+  // The guard keys on focus, and pressing the button blurs first: a guard scoped to
+  // `editing` instead would tear out this button on that very blur.
+  await issueButton(alice.page).click()
+
+  await expect(issueBox(bob.page)).toHaveValue('PP-42')
+  await expect(issueBox(alice.page)).toHaveValue('PP-42')
+
+  // Alice's own typed value cannot distinguish an applied snapshot from a blocked one, so
+  // move the room past it and require her to follow.
+  await issueButton(bob.page).click()
+  await issueBox(bob.page).fill('PP-43')
+  await issueButton(bob.page).click()
+  await expect(issueBox(alice.page)).toHaveValue('PP-43')
+})
+
+test('a commit that never blurred the box still lets the room resync it', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issueButton(alice.page).click()
+  await issueBox(alice.page).fill('PP-42')
+  // Stands in for macOS, where clicking a button moves no focus: dispatchEvent carries no
+  // mousedown, so no blur precedes the commit. A real click blurs first and masks a stuck guard.
+  await issueButton(alice.page).dispatchEvent('click')
+  // Proves the commit posted, so a failure below is the guard and not a dead synthetic click.
+  await expect(issueBox(bob.page)).toHaveValue('PP-42')
+
+  await issueButton(bob.page).click()
+  await issueBox(bob.page).fill('PP-43')
+  await issueButton(bob.page).click()
+  await expect(issueBox(alice.page)).toHaveValue('PP-43')
+})
+
+test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
+  const alice = await join('Alice')
+  const selected = alice.page.locator('.estimation-button-selected')
+  const unconfirmed = alice.page.locator('.estimation-button-uncomfirmed')
+
+  await vote(alice.page, '5')
+  await expect(selected).toHaveText('5')
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  // reVote clears voted and keeps estimation, which is the only state this styling means.
+  await expect(unconfirmed).toHaveText('5')
+  await expect(selected).toHaveCount(0)
+
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(unconfirmed).toHaveCount(0)
 })
