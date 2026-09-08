@@ -8,6 +8,13 @@ itself gets updated as work lands rather than drifting out of sync with reality.
 Phases are ordered by dependency, not just importance: several later items only
 make sense once an earlier one exists.
 
+`docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
+supersedes the phases below with a ten-step ordered path numbered from zero, and
+each item here notes the step that absorbs it. Steps 0 to 6 close every
+documented defect; 7 is a usability improvement and 8 and 9 are product work.
+Items that stay in a phase are product decisions built on that target rather
+than steps toward it.
+
 ## Phase 1: Transport + identity foundation
 
 This unlocks everything else, since the security fix (item 2 below) only makes
@@ -31,29 +38,37 @@ inside a long-lived socket payload.
       `create-room`, so `Room`/`RoomManager` can reply with a real result (applied /
       room not found / not a member) instead of the API always answering `204`
       regardless of what happened. Natural to build alongside the identity
-      validation above, since both need the same request/response plumbing. To be
-      studied in its own follow-up PR rather than bundled into the identity work
-      blindly.
+      validation above, since both need the same request/response plumbing.
+      **Becomes step 6**, alongside idempotent `/join` and the explicit leave
+      endpoint.
 
-## Phase 2: Durable session identity
+## Phase 2: Room identity
 
-Independent of Phase 1, can run in parallel.
+Reduced to one item. The target design establishes that teams pin one room URL
+for years and want blank state at the start of each meeting, so what was wanted
+here was slug stability rather than durable state.
 
-- [ ] Durable `sessions` store (slug, scale, created_at) so a session survives a
-      process restart and weeks of inactivity. Today a `Room` actor and all its
-      state die the moment the last person leaves.
-- [ ] Slug-based session ids replacing raw UUIDs (normalization, custom name, or
-      auto-generated adjective-noun).
-- [ ] Reject unknown slugs (404) instead of the current behavior of silently
-      creating an empty room for any UUID.
-- [ ] Add a `scale` concept to the domain model (fibonacci vs. t-shirt, fixed at
-      creation). Doesn't exist today; everyone gets the same hardcoded client-side
-      list.
+- [ ] Slug-based room ids replacing raw UUIDs, auto-generated three-word names
+      (for example `nice-brave-otter`), unique among the rooms currently in
+      memory. **Becomes step 7.**
+
+Dropped from this phase, recorded so the reasoning is not re-derived:
+
+- *Durable `sessions` store*, so a session survives a restart and weeks of
+  inactivity. Dropped entirely. Nothing is persisted; the trigger that reopens it
+  is someone wanting round history across sessions.
+- *Reject unknown slugs (404)*. Dropped with the store, and reclassified: silent
+  auto-create is what the pinned-URL usage actually wants. See
+  `docs/known-issues.md`.
+- *A `scale` concept in the domain model*. Moved to the end of the backlog below.
+  Not customer-asked, and the target design demonstrates it fits as an additive
+  field whenever it is wanted.
 
 ## Phase 3: Frontend framework rewrite
 
-Do this after Phase 1 is proven on the current page, so a new framework and a new
-transport aren't being debugged at the same time.
+**Becomes step 8**, which waits on steps 1 and 6. Do this after the protocol is
+proven on the current page, so a new framework and a new transport aren't being
+debugged at the same time.
 
 - [ ] Migrate off Vue 2 (tentatively Vue 3, framework choice still open).
 - [ ] Component structure, TypeScript, build tooling, automated tests.
@@ -69,24 +84,23 @@ directly in the new frontend.
       observers from vote counts and status indicators.
 - [ ] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
-      become real backend logic. Scheduled as Problem E of
-      `docs/superpowers/specs/2026-08-28-sse-snapshot-protocol-design.md` (PR 1),
-      which moves the rule to `RoomData.isRevealed` and carries the result in the
-      room snapshot. Check this off when that lands.
-- [ ] Latched reveal, deliberately separated from the item above. That change
-      moves "everyone voted" to the server without altering what it means, so
-      reveal stays a live derivation over the current participant set and can flip
-      either way when that set changes mid-round: a participant joining an
-      auto-revealed room hides the votes again, and the last non-voter leaving
-      reveals them with no facilitator action. Both are today's behaviour, kept
-      deliberately so a connectivity fix does not smuggle in a product change.
-      Latching means `vote()` setting `revealed = true` once every participant has
-      voted, so reveal becomes a one-way door until `clear()` or `reVote()` reopens
-      it. It is roughly one line plus dropping the stored-flag term from that
-      spec's `visibleState`, and the two characterization tests it would invert are
-      already named there. Worth doing on its own so the behaviour change is
-      reviewed as one, and a natural companion to the re-vote refinement and
-      timer-based fallback reveal items below, which both touch the same rule.
+      become real backend logic. **Moves into step 1**, where `round.revealed` is
+      set by `Show` and by the vote that completes the round, and every snapshot
+      carries it. It lands as a latch rather than as a standing derivation, which
+      takes the auto-reveal half of the item below with it; section 3 of that spec
+      says why. Check this off when that lands.
+- [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
+      longer a product decision.** `round.revealed` is set by `Show` and by the
+      vote that completes the round, and cleared only by `clear()` or `reVote()`;
+      the accidental un-reveal closes at step 1 with it. Section 3 of that spec
+      owns the reasoning, including why a live derivation over the participant set
+      was reversed, the residual it leaves (a departure followed by a vote from
+      someone still present) and the option not taken. Do not restate it here.
+      What is still a product question is whether a revealed round should survive a
+      `reVote`. That part still synergizes with the observer role above, since an
+      observer changes what "everyone has voted" means. **Ship what remains with the
+      backlog's undo/re-hide**, since the exits that survive (`clear`, `reVote`)
+      either destroy the round or make everyone vote again.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
       replay now goes out as a single batched message instead of one send per
@@ -106,15 +120,37 @@ directly in the new frontend.
       is a stub.
 - [ ] Results display polish: pin `?`/`Infinity`, highlight lowest/highest
       estimate, group participants by estimate, tap-to-highlight interaction.
+- [ ] A facilitator-recorded round outcome: teams often resolve a split by
+      talking it out rather than re-voting, and the app has no concept of a
+      settled estimate at all. A command plus a snapshot field. New here, and
+      **step 9** pairs it with the item below. The interaction for selecting the
+      estimate is not defined yet; what is fixed is that it acts on a round whose
+      estimates every participant can already see.
 - [ ] Round history within a session (running list of context to final estimate
-      per round).
+      per round), held in memory on the room and gone when it stops. **Becomes
+      step 9** together with the recorded outcome above, since a settled estimate
+      you cannot look back at is half a feature. Only a revealed round enters it:
+      the record travels to every participant unredacted, so a round nobody
+      revealed would leak its own vote spread.
+- [ ] Copy/export round history at end of session. Promoted from the backlog to
+      sit with step 9: with history held only in memory this is the sole way to
+      keep a session's rounds, which makes it part of the feature rather than a
+      convenience beside it.
 - [ ] Timer-based fallback reveal (auto-reveal after a configurable timeout
-      regardless of stragglers).
+      regardless of stragglers). **The least settled item in this phase**, and
+      unlike its neighbours not just a field plus a predicate: it needs a timer, a
+      publish on a transition nobody commanded, and four open product decisions.
+      Does it run for every round or not always; does the facilitator start it;
+      what duration and is it fixed, per room or per round; and can a running
+      countdown be cancelled when discussion breaks out. The countdown is also the
+      first roadmap item wanting a UI surface of its own.
 
 ## Phase 5: Lower priority / hardening
 
 - [ ] Idle indicator (flag a user inactive after roughly one minute of no input,
-      broadcast to the room).
+      broadcast to the room). A field on the wire, but not only a field: it needs
+      server-side activity tracking, a timer, and a publish on a transition
+      nobody commanded.
 - [ ] Room-creation hardening (rate limiting, caps on unauthenticated room
       creation).
 - [ ] Garbage collection for abandoned or never-joined rooms. Not in the original
@@ -123,12 +159,14 @@ directly in the new frontend.
       (`actors/RoomManager.scala`), but `POST /create-room` no longer requires a
       completed join to keep a room alive, so an abandoned tab, a network failure
       before `/join`, or stray traffic can accumulate rooms that live for the life
-      of the process. Becomes more pressing once Phase 2 makes sessions durable
-      across restarts, since an idle-expiry policy will be needed there too. See
-      `docs/known-issues.md`.
+      of the process. **Absorbed by step 4**, which stops a room two to four hours
+      after its last connection goes, joined or not. See `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,
-      not by oversight.
+      not by oversight. More load-bearing than it looks now that nothing is
+      persisted: a restart takes presence, the round, the current issue and the
+      session's history at once, so scheduling deploys outside meeting hours is
+      the actual mitigation.
 
 ## Backlog: suggested, not yet prioritized
 
@@ -137,22 +175,36 @@ directly in the new frontend.
       within roughly 2x the heartbeat interval (~30-40s), instead of relying
       solely on `EventSource.onerror` (which only fires once the browser's
       networking stack itself gives up, and doesn't reliably or quickly catch
-      a real client-side network drop — confirmed by manual testing: killing
+      a real client-side network drop, confirmed by manual testing: killing
       the server surfaces the banner promptly, but simulating offline via
       browser devtools does not). This is newly possible because SSE
       heartbeats arrive as actual `message` events visible to app code
       (`index.html`'s `onmessage`); the old WebSocket transport's ping/pong
       keepalive frames were invisible to JavaScript, so this watchdog wasn't
       buildable under the old transport at all. Not a migration regression,
-      an improvement the transport swap unlocked.
+      an improvement the transport swap unlocked. It is also the only thing that
+      would catch a page restored from the back/forward cache holding a stream
+      that is dead but silent, so step 8 should arm it on `pageshow`.
 - [ ] Per-user command sequencing/idempotency to guard against HTTP POST
-      reordering (see `docs/known-issues.md`).
-- [ ] Copy/export round history at end of session.
+      reordering (see `docs/known-issues.md`). Stays here deliberately: under a
+      snapshot protocol a reordering is visible rather than silently divergent,
+      and one has never been observed. The trigger is someone seeing one.
 - [ ] Presentation/TV-mode read-only view for screen sharing.
-- [ ] Custom voting scale beyond fibonacci/t-shirt.
 - [ ] Keyboard shortcuts for voting.
 - [ ] Per-session auto-reveal toggle (some teams may want manual-only reveal).
-- [ ] Undo/re-hide after an accidental reveal.
+- [ ] Undo/re-hide after an accidental reveal. Pairs with what remains of Phase
+      4's latched reveal. The accidental un-reveal that exists today closes at
+      step 1 instead, where reveal becomes a latch.
+
+Deliberately at the end of the backlog, neither being customer-asked:
+
+- [ ] A `scale` concept in the domain model (fibonacci vs. t-shirt, fixed at
+      creation), and custom scales beyond those. Moved down from Phase 2 on the
+      product owner's own second thoughts about whether it is wanted. Nothing
+      about waiting makes it harder: an additive wire field, an optional
+      `create-room` body field and a client render change. It is also what would
+      give an estimation an ordinal, which Phase 4's highlight-lowest-and-highest
+      needs and currently takes from the client's hardcoded card order.
 
 ## Considered and set aside
 

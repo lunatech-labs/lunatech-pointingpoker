@@ -1,7 +1,10 @@
 # SSE + HTTP POST Transport (replaces WebSocket)
 
 Date: 2026-08-18
-Status: Approved design, pending implementation plan
+Status: Implemented (`a423c504`), historical. Its post-implementation note
+remains the record of why `userId` exposure widened; see the "Transport"
+section of
+`docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
 
 ## Purpose
 
