@@ -1551,6 +1551,26 @@ Added, each with the step it lands at so nothing here is unassigned:
   pointer, and a still frame cannot show that, so being wrong there is invisible
   in the diff and in a screenshot alike.
 
+  Step 3b adds a case of a different kind, in `e2e/session.spec.js`: one meeting
+  rather than one feature, four participants across five rounds, asserting at every
+  reveal. It exists because of the suite's shape rather than any one omission. Each
+  case beside it starts from a fresh room and exercises a single behaviour, so none
+  crossed a re-vote with a reveal, and in every round the table and the summary
+  happened to agree. It also carries the one thing a fresh-room case cannot: what a
+  round leaves behind, which the final reveal after a `clear` is there to check.
+
+  With it comes `expectSummaryMatchesTable`, asserting the two renderings agree,
+  compared as multisets so the undecided tie order stays unpinned. Every reveal
+  asserts a row count before the invariant and never the invariant alone: before
+  the snapshot lands both sides are empty and agree.
+
+  **A characterization case arrives green, so it was verified by breaking the code
+  rather than by watching it fail.** Twice: reintroducing the `voted` filter fails
+  the session at its second reveal, and doubling every tally count, which leaves
+  every row count correct, fails the invariant and nothing else. The second is the
+  argument for the invariant existing beside the counts at all, and the pair is
+  what a red phase would otherwise have given.
+
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
   room cookie: two tabs on the same room resolving to one participant, with a vote
@@ -1639,7 +1659,7 @@ of what the probe is being kept for.
 
 ## The ordered path
 
-Eleven steps, numbered from zero, one of them lettered because it was added
+Twelve steps, numbered from zero, two of them lettered because they were added
 after the rest. The numbers are labels rather than a queue; each states what it
 actually waits on. Line counts are rough. Which steps get an implementation plan
 is a separate question, answered by `docs/superpowers/plans/README.md` rather
@@ -1652,6 +1672,7 @@ than by size alone.
 | 2 Pre-reveal vote confidentiality | 1 |
 | 3 Vote summary correction | 1 |
 | 3a The reveal closes the round | 1 |
+| 3b Session case and the summary invariant | 3a |
 | 4 State split, plus stop-after-idle | 1 and 5 |
 | 5 Retained sessions | 1 |
 | 6 The write path becomes real | 4 |
@@ -1659,8 +1680,8 @@ than by size alone.
 | 8 Frontend rewrite | 1 and 6 |
 | 9 Recorded value and round history | 8 |
 
-One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 5, 4, 6, 7, 8,
-9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is fixed
+One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 3b, 5, 4, 6, 7,
+8, 9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is fixed
 beyond the table is that 2, 3 and 3a precede 4, for the reason under step 3.
 Step 3a is lettered rather than numbered because it was not one of the ten this
 design started with: it came out of using step 3, and the letter keeps it beside
@@ -1844,6 +1865,19 @@ room on any vote that left somebody out, and nothing replaced that behaviour or
 argued against it. So this is a decision the path owed rather than a change of
 mind, and section 3 records both the rule and the straggler exception rejected
 with it.
+
+**Step 3b. A session case, and the summary invariant.** One browser case walking
+a whole meeting, plus a helper asserting that a revealed summary is the tally of
+the estimations the table is showing, used at every reveal that has one. Waits on
+3a, not for tooling but because the sequence it walks is only settled once a
+revealed round refuses votes. About 90 lines of tests and no production code.
+
+Not in the original ten either, and it comes from the same defect step 3's own fix
+does. The tally read `voted` where it wanted `hasEstimation`, and the suite could
+not have caught that however many tally cases it held: a test only tells those two
+fields apart if some participant sits in the single state where they differ, which
+through the UI only a re-vote produces. Length is what reaches such a state and an
+invariant is what catches it once there, so this step is both rather than either.
 
 **It is a behaviour change users notice, and the one in this path with no defect
 behind it.** Everything else here closes something recorded; this closes a

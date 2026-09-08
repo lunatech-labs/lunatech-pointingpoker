@@ -6,6 +6,7 @@ import {
   participantRow,
   participantRows,
   card,
+  expectSummaryMatchesTable,
   frozenNotice,
   revealedCell,
   summaryTable,
@@ -251,6 +252,7 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   // Before step 3 Bob's empty estimation was a row of its own, and could out-count a real one.
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('a Show during a re-vote still tallies the estimations on the table', async ({ join }) => {
@@ -270,6 +272,7 @@ test('a Show during a re-vote still tallies the estimations on the table', async
   // The summary sits beside that table and has to count what it displays.
   await expect(participantRow(alice.page, 'Bob')).toContainText('5')
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('an empty estimation posted directly is not a summary row', async ({ join, room }) => {

@@ -176,6 +176,22 @@ export const connectionAlert = page => page.getByRole('alert')
 // The transient banner specifically, so a terminally dead session is not read as a blip.
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
+// The summary and the participant table are two renderings of one set, so a revealed round has
+// to show the same estimations in both. Compared as multisets, since the order of a tie is
+// undecided and known-issues says so; asserting it here would pin a rule nobody has chosen.
+export const expectSummaryMatchesTable = async page => {
+  const tally = {}
+  for (const row of await participantRows(page).all()) {
+    const estimation = (await row.locator('td').nth(2).innerText()).trim()
+    if (estimation !== '') tally[estimation] = (tally[estimation] || 0) + 1
+  }
+  const summary = []
+  for (const row of await summaryTable(page).locator('tbody tr').all()) {
+    const [value, count] = await row.locator('td').allInnerTexts()
+    summary.push([value.trim(), Number(count.trim())])
+  }
+  expect(summary.sort()).toEqual(Object.entries(tally).sort())
+}
 // A card by its face value, for asserting its state rather than pressing it.
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
 export const vote = (page, value) => card(page, value).click()
