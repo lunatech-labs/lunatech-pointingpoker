@@ -247,13 +247,30 @@ test('a Show during a re-vote still tallies the estimations on the table', async
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
 })
 
+test('an empty estimation posted directly is not a summary row', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  // Nothing validates the estimation, so this sets voted with nothing in it: the one state
+  // where the confirmation flag and the estimation disagree in the other direction.
+  const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
+  expect(posted.status()).toBe(204)
+
+  // Every user has now voted, so the room reveals itself and needs no Show.
+  await expect(summaryTable(alice.page)).toBeVisible()
+  // Bob counts as voted and still must not be a row: the confirmation flag would admit him.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+})
+
 test('a Show in a room where nobody voted renders no summary', async ({ join }) => {
   const alice = await join('Alice')
   await join('Bob')
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  // The reveal has to be shown to have landed, or the assertion below passes on a snapshot
-  // that never arrived. An empty tally under a votesRevealed-only condition is a render error.
+  // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
+  // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
   await expect(revealedCell(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(summaryTable(alice.page)).toBeHidden()
 
