@@ -7,31 +7,40 @@ This project provides an HTTP + Server-Sent-Events (SSE) based pointing poker se
 
 Clients send commands as plain HTTP POST requests (see the API table below). The
 server pushes room updates the other way, over a long-lived SSE stream opened on
-`GET /rooms/{roomId}/events`. Each pushed event carries one `RoomEvent` JSON
-object as its `data` payload. Json example:
+`GET /rooms/{roomId}/events`. Every pushed message carries one complete
+`RoomSnapshot` as its `data` payload, built for the participant receiving it.
+There is one message type, so a client applies whatever arrives and never
+reconstructs state from a sequence. Json example:
 
 ```json
 {
-    "messageType": "join",
-    "roomId": "42c31270-6eaa-4dd7-adfc-b7c131022597",
-    "userId": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
-    "extra": "John Doe"
+    "you": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+    "currentIssue": "PP-42",
+    "votesRevealed": false,
+    "users": [
+        {
+            "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
+            "name": "John Doe",
+            "voted": true,
+            "hasEstimation": true,
+            "estimation": "5"
+        }
+    ]
 }
 ```
 
-Possible values for messageType:
-* "init"
-* "join"
-* "vote"
-* "show"
-* "revote"
-* "clear"
-* "leave"
-* "edit_issue"
+`you` is the identity the snapshot was built for, so a client never has to infer
+which participant it is. `users` is ordered by `id`, the same order for every
+recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
+that completes the round, and cleared by `Clear` and `Re-vote`.
 
-`roomId` and `userId` should be `UUID`.
-
-`extra` value depends `messageType`.
+**Each snapshot is redacted for its recipient.** While `votesRevealed` is false,
+`estimation` carries a value only for the participant the snapshot was built for
+and is `""` for everyone else, so a colleague's vote is not on the wire before
+the reveal rather than merely unrendered. `hasEstimation` says that a
+participant holds an estimation without saying which, which is what lets a client
+mark a withheld vote. `voted` is the confirmed flag, so `voted: false` with
+`hasEstimation: true` is a participant who has been asked to re-vote.
 
 The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
 connection is not closed by the server's idle timeout.
@@ -45,7 +54,7 @@ Available endpoints:
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
 |`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId and a session, returns `{"userId": "..."}`, and sets a room-scoped session cookie |
-|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
+|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
 |`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
@@ -87,6 +96,71 @@ This app is going through a multi-PR modernization effort. See
 [`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
 found along the way that are not yet scheduled or fixed.
 
+### Testing
+
+The Scala suite:
+
+```
+sbt test
+```
+
+There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
+stub buffering proxy that reproduces the response-scanning appliance a customer reported,
+and a harness that starts the packaged app:
+
+```
+npm test
+```
+
+Both node suites run the staged binary rather than `sbt run`, so both stage first. `npm test`
+and `npm run e2e` each do that themselves through an npm pre-hook calling `npm run stage`, which
+is `sbt "; coverageOff; Universal/stage"`. A no-op stage costs about four seconds. Invoke
+`node --test` or `npx playwright test` directly and you skip the hook, which means you test
+whatever was staged last.
+
+`coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
+session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
+It earns its place if you ever stage from the same sbt shell that ran `qa`, where the
+instrumented classes do get packaged and no scoverage runtime is staged to satisfy them.
+
+The browser suite under `e2e/` drives the same packaged app through the stub in Chromium and
+Firefox, one app and one stub per Playwright worker:
+
+```
+npm ci
+npx playwright install-deps chromium firefox
+npx playwright install chromium firefox
+npm run e2e
+```
+
+Cases that pin behaviour the app gets wrong today are marked `test.fail()` and annotated with
+the step that fixes each, so the suite is green until a fix lands and then reports its own
+annotation as stale. A case annotated for step N is expected to flip when step N lands, and one
+that still fails after that step is a case to investigate rather than an annotation to leave. A
+case reported as "expected to fail, but passed" means the fix arrived: drop the annotation in
+the same change.
+
+The stub also runs standalone, so the failure can be reproduced by hand. Start the app with
+plain-HTTP cookies, or the room will fail to populate for the unrelated reason in "Running
+locally" below and the reproduction will look successful when it is not:
+
+```
+SECURE_COOKIES=false sbt run
+UPSTREAM=http://localhost:8080 node testkit/stub.js --buffering
+```
+
+It prints its own address; point a browser at that instead of the app. The page itself still
+loads, because it is a finite response the stub releases whole. What fails is the room: the
+browser stays on the Create page and never displays the room at all, since the client switches
+views only when the first SSE message arrives and the stream never ends, so the stub releases
+nothing and destroys the connection at its deadline. That is the customer's reported symptom,
+against a modelled appliance rather than a measured one: the stub's deadline is a placeholder
+rather than a measurement of theirs. It is also why the reproduction test asserts against
+`/rooms/{roomId}/events` rather than `/`. Buffering can be switched at runtime with
+`/__stub/buffering?mode=on` and `?mode=off`, which affects later requests rather than ones
+already in flight. Recovering needs no reload: `EventSource` retries on its own, so the page
+moves from Create to the room a second or two after `?mode=off`.
+
 ### Running locally
 
 `SECURE_COOKIES` defaults to `true`, which marks the session cookie `Secure` (the
@@ -101,4 +175,35 @@ Without this, `/join` will appear to succeed but every subsequent request will g
 `401`, since the cookie set by `/join` never comes back on `/events`.
 
 ### Deployment
+
+**Do not let a reverse proxy buffer the SSE response.** The server pushes room
+updates over a long-lived `text/event-stream` on `GET /rooms/{roomId}/events`. A
+proxy that buffers response bodies holds those frames until its buffer fills or
+the connection closes, so the room appears frozen and then updates in a burst.
+The symptom looks like a server bug and is not one.
+
+The app sets `Cache-Control: no-cache` and `X-Accel-Buffering: no` on that
+response, which nginx honours. Other proxies need their own setting:
+
+| Proxy | Setting |
+|-------|---------|
+| nginx | Honours `X-Accel-Buffering: no`. Otherwise `proxy_buffering off;` in the location block |
+| Apache `mod_proxy` | `mod_proxy_http` does not buffer responses by default. No `mod_deflate` on this path |
+| HAProxy | Buffers responses but streams them, so no change is needed |
+| Envoy | No response buffering by default. Do not enable the buffer filter on this route |
+
+Response-scanning appliances are the harder case, since they may buffer to
+inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
+and the testing section above says how to run it.
+
+**A restart ends every room, and open tabs need a reload.** Rooms and the
+sessions that reach them live in the process's memory, so a deploy takes them
+with it. A tab that was open across the restart does not fail silently: its next
+SSE attempt gets a 401 because the token no longer resolves, and the page shows
+"Your session has ended. Please reload the page to rejoin." Reloading is the
+whole recovery, since there is no state to migrate and nothing to drain. This is
+also why the wire format carries no version field: no session outlives the server
+that served it. The page is a separate artifact, served with no `Cache-Control`,
+so a cached one can outlive a deploy. `docs/known-issues.md` records that window
+and the cosmetic symptom it has today.
 
