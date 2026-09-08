@@ -6,3 +6,6 @@ updates:
       interval: "weekly"
       time: "07:00"
       timezone: "Europe/Amsterdam"
+    # Ends in a paren, so dependabot appends the colon itself.
+    commit-message:
+      prefix: "build(deps)"
