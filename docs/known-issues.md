@@ -473,6 +473,14 @@ roadmap item instead of leaving it here as stale history.
   `docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` (`:8`, `:47-48`,
   `:318`) is outside this entry's scope and still reads as live.
 
+  A fourth kind, also unswept, is a delivered plan describing code that no longer exists:
+  `docs/superpowers/plans/2026-08-31-protocol-architecture-0-playwright.md:876`
+  says the `departureWhileCut` helper is "shared with a green control case",
+  which step 3 removed, and it says so under a heading directing the reader to
+  trust it over the block above. Its case table at `:40-41` lists both deleted
+  controls as green, which is correct as a record of what step 0 was told to
+  build. The plan is delivered, so this is recorded rather than edited.
+
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are

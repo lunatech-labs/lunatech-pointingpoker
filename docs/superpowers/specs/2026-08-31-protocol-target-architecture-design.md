@@ -989,11 +989,10 @@ that already exists**, because `applySnapshot`'s tally produces
 reuses the live summary's rendering, and later views (highest and lowest,
 majority, most voted) are additive. It is section 3's join taken at the moment of
 the append, over the estimations present rather than the confirmations, so it
-counts the voters
-the snapshot was showing and equals the client's own `votesSummary` by
-construction rather than by both sides tallying carefully; a voter who leaves
-between the reveal and the append drops out of the record, which is the
-direction the participant list moves anyway. And **`recordedValue` is a
+counts the voters the snapshot was showing and equals the client's own
+`votesSummary` by construction rather than by both sides tallying carefully; a
+voter who leaves between the reveal and the append drops out of the record, which
+is the direction the participant list moves anyway. And **`recordedValue` is a
 product gap rather than a storage choice**:
 teams often resolve a split by talking it out rather than re-voting, and the app
 has no concept of a settled estimate at all, so it implies a facilitator command
@@ -1277,11 +1276,11 @@ Three details are load-bearing rather than polish:
   during that round trip reverts the displayed text until their own edit lands.
   Step 6's ask-pattern reply is what makes the second reportable, the same way it is
   for a failed vote.
-- **The tally counts whoever has an estimation, which is the set the table
-  beside it renders.** Before step 3 it counted every user, so a non-voter's
-  empty string became a summary row, and in a revealed room with stragglers it
-  could win the count and render as the "Most voted estimation". Fixing it makes
-  the tally able to be empty, so the summary block's condition became
+- **The tally counts whoever has an estimation, which is exactly the non-blank
+  cells the table beside it shows.** Before step 3 it counted every user, so a
+  non-voter's empty string became a summary row, and in a revealed room with
+  stragglers it could win the count and render as the "Most voted estimation".
+  Fixing it makes the tally able to be empty, so the summary block's condition became
   `v-if="votesRevealed && votesSummary.length"`
   (`index.html:259`). That guard is reachable by two clicks (Show in a room where
   nobody voted), not defensive.
@@ -1294,19 +1293,23 @@ Three details are load-bearing rather than polish:
   neither, and the guard above then hid the block outright. There is a second
   state, an empty estimation from a hand-written `POST /vote`, where `voted`
   admits precisely the blank row this bullet exists to delete. The rule that
-  settles it is that the summary and the participant table are two renderings of
-  one set, so they read the same field.
+  settles it is that the summary counts exactly the non-blank estimation cells
+  the table beside it displays, so the filter is the non-empty test on the
+  estimation, which is what `hasEstimation` is. The two do not read one field:
+  at reveal the table renders `u.estimation` for every user, and its only read
+  of `hasEstimation`, `showUserEstimation`, is false whenever the summary is on
+  screen.
 
   **The two had to land in the same step, and the reason is stronger than
   tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:270`), so
   under `v-if="votesRevealed"` alone an empty tally is a render error rather than
   an empty box. That was unreachable only because the buggy all-user tally was
   never empty while anyone was in the room, and the one path that empties
-  `votesSummary` (`clear`) also clears `votesRevealed`. So the voted-only filter
-  without the guard would have been a regression this design introduced, not a
-  pre-existing bug left standing, which is why the filter was annotated in the
-  `applySnapshot` block above as arriving at step 3 rather than with the rest of
-  that function at step 1.
+  `votesSummary` (`clear`) also clears `votesRevealed`. So the filter without the
+  guard would have been a regression this design introduced, not a pre-existing
+  bug left standing, which is why the filter was annotated in the `applySnapshot`
+  block above as arriving at step 3 rather than with the rest of that function at
+  step 1.
 
   Note that once redaction lands, the tally is meaningless before reveal: every
   other participant's `estimation` is `""`, so voted participants all collapse
@@ -1424,7 +1427,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:274`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:310`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
@@ -1638,13 +1641,14 @@ already the confirmed flag since `reVote()` keeps `estimation`
 (`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
-**`applySnapshot`'s tally kept counting every participant here**, matching the
-`updateSummary` it replaced, and the filter waited for step 3 to land it
-together with the template guard. Moving it forward was the trap: the summary
-block dereferences `votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a
-voted-only tally without that guard turns Show in a room where nobody voted into
-a render error. Section 5 has the detail. Every key of the returned object was
-already its target shape; that one line of the body was not.
+**`applySnapshot`'s tally keeps counting every participant here**, matching
+today's `updateSummary`, and the filter waits for step 3 to land it together
+with the template guard. Do not move it forward: the summary block dereferences
+`votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a filtered tally
+without that guard turns Show in a room where nobody voted into a render error.
+Section 5 has the detail. Every key of the returned object is already its target
+shape; this one line of the body is not. Step 3 has since landed both, filtering
+on `hasEstimation`.
 
 **The stored `revealed` flag does not exist today and this step adds it**, which
 is the mapping worth stating outright. `ShowVotes` broadcasts and returns
@@ -1711,19 +1715,19 @@ and 50. Separate because it wants a reviewer thinking about what is on the wire
 rather than how state is shaped.
 
 **Step 3. Vote summary correction.** A tally over the estimations present, plus
-the template guard.
-Waits on step 1, independent of step 2. About 5 and 25. Separate because it is
-the one change a user notices as a different answer rather than better plumbing.
+the template guard. Waits on step 1, independent of step 2. About 5 and 25.
+Separate because it is the one change a user notices as a different answer rather
+than better plumbing.
 **Its two halves are atomic**, and this is the one place in the path where
 shipping half a step breaks the app rather than leaving it unimproved: section 5
 says why the filter without the guard is a render error.
 
 **Steps 2 and 3 should land before step 4, not merely after step 1.** Both are
 specified in terms of today's `RoomData`, as step 1 is: `hasEstimation` is
-`estimation.nonEmpty` and the tally reads `User.voted`. Taking step 4 first does
-not break them, but it re-expresses both against `round.estimates` and costs the
-translation twice. Step 2 in particular wants to be early on its own merit, being
-the confidentiality fix.
+`estimation.nonEmpty` and the tally reads the estimation, not the confirmation.
+Taking step 4 first does not break them, but it re-expresses both against
+`round.estimates` and costs the translation twice. Step 2 in particular wants to
+be early on its own merit, being the confidentiality fix.
 
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, replacing the room actor's

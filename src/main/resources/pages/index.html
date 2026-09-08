@@ -254,7 +254,7 @@
                 </div>
               </div>
 
-              <!-- The length guard is not defensive: a voted-only tally is empty after a Show
+              <!-- The length guard is not defensive: a filtered tally is empty after a Show
                    in a room where nobody voted, and votesSummary[0][0] below would throw. -->
               <div class="row mt-4" v-if="votesRevealed && votesSummary.length">
                 <div class="col">
