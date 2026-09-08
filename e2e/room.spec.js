@@ -5,6 +5,7 @@ import {
   connectionLost,
   participantRow,
   participantRows,
+  revealedCell,
   summaryTable,
   issueBox,
   issueButton,
@@ -238,7 +239,6 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
 })
 
 test('the tally counts only the votes that were cast', async ({ join }) => {
-  test.fail(true, 'step 3: a voted-only tally, landing with the template guard beside it')
   const alice = await join('Alice')
   await join('Bob')
 
@@ -246,8 +246,24 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(summaryTable(alice.page)).toBeVisible()
 
-  // Today Bob's empty estimation is a row of its own.
+  // Before step 3 Bob's empty estimation was a row of its own, and could out-count a real one.
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+})
+
+test('a Show in a room where nobody voted renders no summary', async ({ join }) => {
+  const alice = await join('Alice')
+  await join('Bob')
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  // The reveal has to be shown to have landed, or the assertion below passes on a snapshot
+  // that never arrived. An empty tally under a votesRevealed-only condition is a render error.
+  await expect(revealedCell(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(summaryTable(alice.page)).toBeHidden()
+
+  // The block still renders once there is something to tally, so the guard is not a dead end.
+  await vote(alice.page, '5')
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {

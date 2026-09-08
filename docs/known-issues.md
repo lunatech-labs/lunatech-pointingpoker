@@ -228,7 +228,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:356`). Step 6 describes the endpoints with tapir, which buys
+  (`index.html:360`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom

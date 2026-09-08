@@ -872,10 +872,10 @@ has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:445-449`), and the retry lands on a freshly created room.
+(`index.html:449-453`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:430-443`) and waits for a reload. That is worse than a
+rejoin." (`index.html:434-447`) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -915,7 +915,7 @@ to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:430-443`). Rejoining automatically under the remembered name belongs
+(`index.html:434-447`). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -984,11 +984,12 @@ RoundRecord   issue, recordedValue: Option[String], distribution: List[(String, 
 Three things about the shape. **No personal data**, since per-participant
 estimates are rarely the interesting part of a retrospective view and their
 absence keeps retention an ordinary question. **The distribution matches code
-that already exists**, because `updateSummary` produces `Object.entries(tally)`,
-which is exactly `[(score, count)]`, so a history view reuses the live summary's
-rendering, and later views (highest and lowest, majority, most voted) are
-additive. It is section 3's join taken at the moment of the append, so it counts
-the participants the snapshot was showing and equals the client's own
+that already exists**, because `applySnapshot`'s tally produces
+`Object.entries(tally)`, which is exactly `[(score, count)]`, so a history view
+reuses the live summary's rendering, and later views (highest and lowest,
+majority, most voted) are additive. It is section 3's join taken at the moment of
+the append, over confirmed estimates only since step 3, so it counts the
+participants the snapshot was showing and equals the client's own
 `votesSummary` by construction rather than by both sides tallying carefully; a
 voter who leaves between the reveal and the append drops out of the record, which
 is the direction the participant list moves anyway. And **`recordedValue` is a
@@ -1075,7 +1076,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:430-443`). The retry interval
+  Please reload the page to rejoin." (`index.html:434-447`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1144,7 +1145,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:430-443`). What clearing would buy
+  "Your session has ended" state (`index.html:434-447`). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1208,7 +1209,7 @@ left is the brief gap recorded with the leave endpoint above.
 export function applySnapshot(prev, s) {
   const me = s.users.find(u => u.id === s.you);
   const tally = {};
-  // The `u.voted` filter arrives at step 3, with the template guard it requires.
+  // Step 3 added the `u.voted` filter, with the template guard it requires.
   for (const u of s.users) if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   return {
     inRoom: true,
@@ -1230,7 +1231,7 @@ the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
 Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:353-374`), so the step 1 call site assigns it wholesale and adapts
+(`index.html:357-378`), so the step 1 call site assigns it wholesale and adapts
 the one that does not: `userEstimation` onto `user.estimation`, which the template
 binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
 
@@ -1246,7 +1247,7 @@ Three details are load-bearing rather than polish:
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
   commit button (`index.html:191-207`), and its only writers are `showEdit`
-  (`:384-386`) and `doEdit` (`:478-486`), so as a guard it lasts until the user
+  (`:388-390`) and `doEdit` (`:482-490`), so as a guard it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1274,22 +1275,22 @@ Three details are load-bearing rather than polish:
   during that round trip reverts the displayed text until their own edit lands.
   Step 6's ask-pattern reply is what makes the second reportable, the same way it is
   for a failed vote.
-- **The tally counts only participants who have voted.** Today
-  `updateSummary` tallies every user, so a non-voter's empty string becomes a
-  summary row and in a revealed room with stragglers can win the count and
-  render as the "Most voted estimation". Fixing it makes the tally able to be
-  empty, so the summary block's condition becomes
-  `v-if="votesRevealed && votesSummary.length"`. That guard is reachable by two
-  clicks (Show in a room where nobody voted), not defensive.
+- **The tally counts only participants who have voted.** Before step 3 it
+  counted every user, so a non-voter's empty string became a summary row and in
+  a revealed room with stragglers could win the count and render as the "Most
+  voted estimation". Fixing it makes the tally able to be empty, so the summary
+  block's condition became `v-if="votesRevealed && votesSummary.length"`
+  (`index.html:259`). That guard is reachable by two clicks (Show in a room where
+  nobody voted), not defensive.
 
-  **The two must land in the same step, and the reason is stronger than
-  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:268`)
-  under `v-if="votesRevealed"` alone, so an empty tally is a render error rather
-  than an empty box. Today that is unreachable only because the buggy all-user
-  tally is never empty while anyone is in the room, and the one path that empties
+  **The two had to land in the same step, and the reason is stronger than
+  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:270`), so
+  under `v-if="votesRevealed"` alone an empty tally is a render error rather than
+  an empty box. That was unreachable only because the buggy all-user tally was
+  never empty while anyone was in the room, and the one path that empties
   `votesSummary` (`clear`) also clears `votesRevealed`. So the voted-only filter
-  without the guard is a regression this design would introduce, not a
-  pre-existing bug left standing, which is why the filter is annotated in the
+  without the guard would have been a regression this design introduced, not a
+  pre-existing bug left standing, which is why the filter was annotated in the
   `applySnapshot` block above as arriving at step 3 rather than with the rest of
   that function at step 1.
 
@@ -1325,7 +1326,7 @@ running would manufacture the interleaving hazard described below.
 
 **The rule needs no "unless I am the one leaving" guard, and adding one would
 hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:469-477`), so no snapshot follows, and a
+own stream as its last act (`index.html:473-481`), so no snapshot follows, and a
 beacon fires only on a page being discarded, which has no live document to rejoin
 from. The one path that does deliver a snapshot naming its recipient as a
 non-member is the replacement page in section 4's late-beacon race, and there
@@ -1356,7 +1357,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:404`) and only `doLeave` closes. Step 8's
+closing the previous one (`index.html:408`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil until step 6, whose rejoin is the first
@@ -1422,6 +1423,13 @@ Added, each with the step it lands at so nothing here is unassigned:
   otherwise break it unwatched. There is deliberately no case for the grace timer
   the leave endpoint makes redundant: a timer that fires into a no-op has nothing
   observable to assert on, and `RoomSpec` is where it would belong if anywhere.
+
+  Step 3 adds the case its template guard requires, a Show in a room where nobody
+  voted rendering no summary rather than throwing, and un-marks the non-voter
+  tally case step 0 wrote as `test.fail()`. It waits on the estimation cell's
+  value div, which exists only while the round is revealed, before asserting the
+  summary is absent: a hidden summary is also what a reveal that never arrived
+  looks like, and every other signal of a reveal is a vote nobody has cast.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1605,13 +1613,13 @@ already the confirmed flag since `reVote()` keeps `estimation`
 (`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
-**`applySnapshot`'s tally keeps counting every participant here**, matching
-today's `updateSummary`, and the voted-only filter waits for step 3 to land it
-together with the template guard. Do not move it forward: the summary block
-dereferences `votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a
+**`applySnapshot`'s tally kept counting every participant here**, matching the
+`updateSummary` it replaced, and the voted-only filter waited for step 3 to land
+it together with the template guard. Moving it forward was the trap: the summary
+block dereferences `votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a
 voted-only tally without that guard turns Show in a room where nobody voted into
-a render error. Section 5 has the detail. Every key of the returned object is
-already its target shape; this one line of the body is not.
+a render error. Section 5 has the detail. Every key of the returned object was
+already its target shape; that one line of the body was not.
 
 **The stored `revealed` flag does not exist today and this step adds it**, which
 is the mapping worth stating outright. `ShowVotes` broadcasts and returns
