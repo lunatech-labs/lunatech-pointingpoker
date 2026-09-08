@@ -112,10 +112,10 @@ roadmap item instead of leaving it here as stale history.
   with a count of 2, so "Most voted estimation" is computed partly from a
   session nobody is sitting at. A team can commit to the wrong number on it.
   The replacement entry, having not voted, also blocks server-side auto-reveal
-  until it votes or the ghost is pruned. **Step 3's voted-only tally does not
-  help here**, which is worth stating because it looks like it should: the
-  ghost's `voted` flag is true, so it survives that filter. Only an identity
-  that does not duplicate fixes it.
+  until it votes or the ghost is pruned. **Step 3's tally does not help here**,
+  which is worth stating because it looks like it should: the ghost carries a
+  confirmed estimation, so it survives the filter on either field. Only an
+  identity that does not duplicate fixes it.
 
   One thing that does hold, and only because of step 1: pruning the ghost
   cannot disclose the round. A ghost that never voted, alongside members who
@@ -228,7 +228,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:360`). Step 6 describes the endpoints with tapir, which buys
+  (`index.html:361`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -494,13 +494,13 @@ roadmap item instead of leaving it here as stale history.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
-- **Where:** `src/main/resources/pages/index.html:352`, the `votesSummary` sort,
+- **Where:** `src/main/resources/pages/index.html:353`, the `votesSummary` sort,
   read at `:270` under the "Most voted estimation" heading at `:264`.
 - **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
-  the rest in insertion order. Against the cards at `:360` that puts `0` to `89`
+  the rest in insertion order. Against the cards at `:361` that puts `0` to `89`
   first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
   `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
   `0.5` and `?` is decided by `s.users` iteration order, the one case not

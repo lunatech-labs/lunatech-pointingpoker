@@ -400,7 +400,7 @@ bytes.
 **`hasEstimation` exists because redaction would otherwise change what the table
 renders.** Before step 2, `showUserEstimation` read the estimation string to
 drive the hidden-value icon (`index.html:556-558` when this was written,
-`:511-513` after step 1 moved it), so blanking other participants' estimations
+`:512-514` after step 1 moved it), so blanking other participants' estimations
 would have made that predicate false for everyone but the recipient. The field
 is computed from the unredacted value, so the table renders exactly as it did
 before the redaction. Against the state model in section 3 that is the entry
@@ -872,10 +872,10 @@ has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:449-453`), and the retry lands on a freshly created room.
+(`index.html:450-454`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:434-447`) and waits for a reload. That is worse than a
+rejoin." (`index.html:435-448`) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -915,7 +915,7 @@ to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:434-447`). Rejoining automatically under the remembered name belongs
+(`index.html:435-448`). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -988,7 +988,8 @@ that already exists**, because `applySnapshot`'s tally produces
 `Object.entries(tally)`, which is exactly `[(score, count)]`, so a history view
 reuses the live summary's rendering, and later views (highest and lowest,
 majority, most voted) are additive. It is section 3's join taken at the moment of
-the append, over confirmed estimates only since step 3, so it counts the voters
+the append, over the estimations present rather than the confirmations, so it
+counts the voters
 the snapshot was showing and equals the client's own `votesSummary` by
 construction rather than by both sides tallying carefully; a voter who leaves
 between the reveal and the append drops out of the record, which is the
@@ -1076,7 +1077,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:434-447`). The retry interval
+  Please reload the page to rejoin." (`index.html:435-448`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1145,7 +1146,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:434-447`). What clearing would buy
+  "Your session has ended" state (`index.html:435-448`). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1209,8 +1210,9 @@ left is the brief gap recorded with the leave endpoint above.
 export function applySnapshot(prev, s) {
   const me = s.users.find(u => u.id === s.you);
   const tally = {};
-  // Step 3 added the `u.voted` filter, with the template guard it requires.
-  for (const u of s.users) if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
+  // Step 3 added this filter, with the template guard it requires.
+  for (const u of s.users)
+    if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   return {
     inRoom: true,
     users: s.users,
@@ -1231,7 +1233,7 @@ the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
 Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:357-378`), so the step 1 call site assigns it wholesale and adapts
+(`index.html:358-379`), so the step 1 call site assigns it wholesale and adapts
 the one that does not: `userEstimation` onto `user.estimation`, which the template
 binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
 
@@ -1247,7 +1249,7 @@ Three details are load-bearing rather than polish:
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
   commit button (`index.html:191-207`), and its only writers are `showEdit`
-  (`:388-390`) and `doEdit` (`:482-490`), so as a guard it lasts until the user
+  (`:389-391`) and `doEdit` (`:483-491`), so as a guard it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1275,13 +1277,25 @@ Three details are load-bearing rather than polish:
   during that round trip reverts the displayed text until their own edit lands.
   Step 6's ask-pattern reply is what makes the second reportable, the same way it is
   for a failed vote.
-- **The tally counts only participants who have voted.** Before step 3 it
-  counted every user, so a non-voter's empty string became a summary row and in
-  a revealed room with stragglers could win the count and render as the "Most
-  voted estimation". Fixing it makes the tally able to be empty, so the summary
-  block's condition became `v-if="votesRevealed && votesSummary.length"`
+- **The tally counts whoever has an estimation, which is the set the table
+  beside it renders.** Before step 3 it counted every user, so a non-voter's
+  empty string became a summary row, and in a revealed room with stragglers it
+  could win the count and render as the "Most voted estimation". Fixing it makes
+  the tally able to be empty, so the summary block's condition became
+  `v-if="votesRevealed && votesSummary.length"`
   (`index.html:259`). That guard is reachable by two clicks (Show in a room where
   nobody voted), not defensive.
+
+  **Written first as `u.voted`, which was wrong**, and found by using the app
+  rather than by review. `voted` is the confirmation flag, and it parts company
+  with `hasEstimation` in exactly one state anyone reaches: the re-vote, where
+  `reVote` keeps every estimation and clears every confirmation. A Show during
+  one therefore rendered a table showing both values beside a summary counting
+  neither, and the guard above then hid the block outright. There is a second
+  state, an empty estimation from a hand-written `POST /vote`, where `voted`
+  admits precisely the blank row this bullet exists to delete. The rule that
+  settles it is that the summary and the participant table are two renderings of
+  one set, so they read the same field.
 
   **The two had to land in the same step, and the reason is stronger than
   tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:270`), so
@@ -1326,7 +1340,7 @@ running would manufacture the interleaving hazard described below.
 
 **The rule needs no "unless I am the one leaving" guard, and adding one would
 hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:473-481`), so no snapshot follows, and a
+own stream as its last act (`index.html:474-482`), so no snapshot follows, and a
 beacon fires only on a page being discarded, which has no live document to rejoin
 from. The one path that does deliver a snapshot naming its recipient as a
 non-member is the replacement page in section 4's late-beacon race, and there
@@ -1357,7 +1371,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:408`) and only `doLeave` closes. Step 8's
+closing the previous one (`index.html:409`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil until step 6, whose rejoin is the first
@@ -1434,6 +1448,12 @@ Added, each with the step it lands at so nothing here is unassigned:
   looks like, and every other signal of a reveal is a vote nobody has cast. It
   then votes and asserts the summary returns, since the absence on its own would
   be satisfied just as well by a guard that suppressed the block for good.
+
+  It adds a second case for the field the filter reads, which is what the first
+  round of this step got wrong: a Show during a re-vote, where the table shows
+  both estimations and the summary has to count them. It waits on the summary
+  being hidden after the Re-vote, since that is what proves the re-vote arrived
+  before the Show rather than after it.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1619,8 +1639,8 @@ already the confirmed flag since `reVote()` keeps `estimation`
 rather than an entry existing in a map.
 
 **`applySnapshot`'s tally kept counting every participant here**, matching the
-`updateSummary` it replaced, and the voted-only filter waited for step 3 to land
-it together with the template guard. Moving it forward was the trap: the summary
+`updateSummary` it replaced, and the filter waited for step 3 to land it
+together with the template guard. Moving it forward was the trap: the summary
 block dereferences `votesSummary[0][0]` under `v-if="votesRevealed"` alone, so a
 voted-only tally without that guard turns Show in a room where nobody voted into
 a render error. Section 5 has the detail. Every key of the returned object was
@@ -1690,7 +1710,8 @@ better answered here, against a header that exists, than assumed at step 0.
 and 50. Separate because it wants a reviewer thinking about what is on the wire
 rather than how state is shaped.
 
-**Step 3. Vote summary correction.** Voted-only tally plus the template guard.
+**Step 3. Vote summary correction.** A tally over the estimations present, plus
+the template guard.
 Waits on step 1, independent of step 2. About 5 and 25. Separate because it is
 the one change a user notices as a different answer rather than better plumbing.
 **Its two halves are atomic**, and this is the one place in the path where

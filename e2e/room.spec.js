@@ -228,6 +228,25 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
 })
 
+test('a Show during a re-vote still tallies the estimations on the table', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '3')
+  await vote(bob.page, '5')
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  // Hidden again is the proof the re-vote landed before the Show below.
+  await expect(summaryTable(alice.page)).toBeHidden()
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  // A re-vote keeps the estimations and only clears confirmation, so the table shows both.
+  // The summary sits beside that table and has to count what it displays.
+  await expect(participantRow(alice.page, 'Bob')).toContainText('5')
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+})
+
 test('a Show in a room where nobody voted renders no summary', async ({ join }) => {
   const alice = await join('Alice')
   await join('Bob')

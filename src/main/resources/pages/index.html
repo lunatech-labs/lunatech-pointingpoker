@@ -337,9 +337,10 @@
     function applySnapshot(prev, s) {
       var me = s.users.find(u => u.id === s.you);
       var tally = {};
-      // Only cast votes, so a non-voter's empty estimation is not a row and cannot out-count one.
+      // Whoever has an estimation, which is what the table beside this renders. Not u.voted:
+      // that drops a re-vote in progress, where the value stands and the confirmation does not.
       s.users.forEach(u => {
-        if (u.voted) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
+        if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
       });
       return {
         inRoom: true,
