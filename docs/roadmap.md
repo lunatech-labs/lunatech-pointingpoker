@@ -107,12 +107,12 @@ directly in the new frontend.
 - [ ] Show the previous estimate beside the current one once a round has been
       re-voted, so the room can see who moved and which way. Comes out of step 3a:
       with a revealed round refusing votes, changing your mind is a Re-vote, which
-      makes the second answers a deliberate act worth reading against the first.
+      makes the second answer a deliberate act worth reading against the first.
       `reVote()` already keeps `estimation` server-side, so what is missing is
       carrying the previous value on the wire, rendering it, and deciding what
       `clear` does to it. Wants the new frontend rather than the Vue 2 table.
-- [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
-      causes rather than compensating for them: a joining user's full catch-up
+- [x] Guarantee SSE broadcast delivery before latched reveal is trustworthy.
+      Fixed the causes rather than compensating for them: a joining user's catch-up
       replay went out as a single batched message instead of one send per event,
       removing the one systematic, room-size-scaling burst against the outbound
       buffer; the source switched to `OverflowStrategy.fail` with a small non-zero

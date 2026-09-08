@@ -523,12 +523,68 @@ roadmap item instead of leaving it here as stale history.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
   are all defensible, and the third is worth weighing since the table already
   shows it. Whoever builds step 9's history views should decide it there:
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:988-990`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1014-1016`
   already lists highest and lowest, majority, and most voted as additive views
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
   over is the count-only comparator and the stable sort, not `Object.entries`
   order. Remove this entry once a rule is chosen and implemented.
+
+### A vote refused by a revealed round is silent, and can read as accepted
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`
+  (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
+  (`/vote` answering `NoContent` whatever happens) and
+  `src/main/resources/pages/index.html:516-521` (`vote()`'s optimistic flag).
+- **Issue:** Step 3a made a revealed round refuse every vote, and nothing tells
+  the participant. The two things that should stop the click before it happens,
+  the `disabled` binding on the cards and `vote()`'s early return, both read
+  `votesRevealed`, which only refreshes over SSE. A client whose stream is dead
+  therefore still has a live deck over a closed round, and `POST /vote` returns
+  `204` either way.
+
+  What makes it worse than a no-op is the optimistic assignment. Take a
+  participant with a re-vote pending, so `voted` is false, `estimation` is still
+  `5`, and card 5 shows in the pale unconfirmed style. Their stream is cut and the
+  "Connection to the room was lost" banner is up. Somebody else presses Show.
+  They click 8: `vote()` sets `ownVoteConfirmed = true`, and because the
+  selected-card branch keys on `e === user.estimation` it is **card 5** that turns
+  the confirmed dark red, for a vote of 8 that never landed. No snapshot arrives
+  to correct it, because the stream that would carry it is the one that is down.
+  Before step 3a that vote landed, so this is a new way to be wrong rather than a
+  new way to be stuck.
+- **Resolution:** Scheduled as step 6 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  whose ask pattern gives `/vote` a real result and makes the refusal reportable
+  when it happens, which is what section 5 already says the reply is for. The POST
+  travels over HTTP and works when the SSE stream does not, so the answer reaches
+  precisely the client that cannot see the state. What is left after that is
+  general: a client with a dead stream is stale in every respect, which is the
+  backlog's connection-liveness watchdog and not this entry. Remove this entry
+  when step 6 lands.
+
+### A reload during a revealed round locks the participant out of it
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`RequestSession`'s fresh `userId` per call) and
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`.
+- **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
+  as a new member with no estimation. Since step 3a a revealed round refuses every
+  vote, including a first one, so that member cannot vote at all until somebody
+  presses Re-vote or Clear. The rule intends exactly this for someone who joins
+  after the reveal, and a reloader is not that person: they were in the round a
+  second earlier.
+
+  It is reachable by following the app's own advice. A session that outlives its
+  room, or a stream that fails terminally, produces "Your session has ended.
+  Please reload the page to rejoin." (`index.html:447-460`), and the reload drops
+  them into a round they can only watch.
+- **Resolution:** Scheduled as step 6, whose idempotent `/join` resolves the
+  existing cookie rather than minting over it, so a reload returns as the same
+  member holding the same estimation instead of as a stranger with none. That
+  leaves only the rule working as designed: somebody who genuinely had not voted
+  when the round was revealed stays out of it until Re-vote. Remove this entry
+  when step 6 lands.
 
 ## Traceability note
 
