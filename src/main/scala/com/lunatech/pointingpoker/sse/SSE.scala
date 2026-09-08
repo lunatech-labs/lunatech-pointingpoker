@@ -11,19 +11,13 @@ import org.apache.pekko.actor.ActorRef
 import org.apache.pekko.http.scaladsl.model.sse.ServerSentEvent
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
-import com.lunatech.pointingpoker.actors.{Room, RoomEvent, RoomManager}
-import com.lunatech.pointingpoker.actors.RoomEvent.given
+import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}
 
 object SSE:
 
-  // Source.actorRef tolerates bufferSize + 1 elements in flight before OverflowStrategy
-  // engages (one already "current", plus this many queued behind it) - confirmed
-  // empirically, since a bufferSize of 0 special-cases to an unconditional silent drop
-  // that never consults the strategy at all, rather than "zero tolerance under the
-  // strategy" as the name might suggest. 1 covers two ordinary actions landing close
-  // together; a rarer larger coincidence (e.g. a mass departure) is left to fall through
-  // to OverflowStrategy.fail below and self-heal via reconnect + full resync, which is
-  // already the intended path, not a degraded one.
+  // Source.actorRef tolerates bufferSize + 1 in flight, so a stalled client gets one stale
+  // snapshot then the newest; found empirically twice, so do not re-derive it. Never 0: it
+  // silently drops without consulting the strategy, leaving the client quiet with no reconnect.
   val bufferSize = 1
 
   /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default
@@ -47,11 +41,11 @@ object SSE:
       retryMillis: Int = defaultRetryMillis
   )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
-      .actorRef[List[RoomEvent]](
+      .actorRef[RoomSnapshot](
         completionMatcher,
         failureMatcher,
         bufferSize,
-        OverflowStrategy.fail
+        OverflowStrategy.dropHead
       )
       .mapMaterializedValue { user =>
         roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, user)
@@ -64,8 +58,7 @@ object SSE:
         }
         user
       }
-      .mapConcat(identity)
-      .map(event => ServerSentEvent(data = event.asJson.noSpaces, retry = Some(retryMillis)))
+      .map(snapshot => ServerSentEvent(data = snapshot.asJson.noSpaces, retry = Some(retryMillis)))
       .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 
   // No message ever completes the stream from the outside; it ends only via
