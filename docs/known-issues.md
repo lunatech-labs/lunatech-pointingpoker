@@ -321,7 +321,7 @@ roadmap item instead of leaving it here as stale history.
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
-  `:5`, `:84`, `:330` and `:331`); `e2e/fixtures.js` (the `assets` fixture).
+  `:5`, `:84`, `:332` and `:333`); `e2e/fixtures.js` (the `assets` fixture).
 - **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
   `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
   load, so an outage at any of the three takes the app down and nothing is

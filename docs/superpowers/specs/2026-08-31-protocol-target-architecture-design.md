@@ -400,7 +400,7 @@ bytes.
 **`hasEstimation` exists because redaction would otherwise change what the table
 renders.** Before step 2, `showUserEstimation` read the estimation string to
 drive the hidden-value icon (`index.html:556-558` when this was written,
-`:507-509` after step 1 moved it), so blanking other participants' estimations
+`:511-513` after step 1 moved it), so blanking other participants' estimations
 would have made that predicate false for everyone but the recipient. The field
 is computed from the unredacted value, so the table renders exactly as it did
 before the redaction. Against the state model in section 3 that is the entry
