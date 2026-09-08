@@ -176,7 +176,11 @@ export const connectionAlert = page => page.getByRole('alert')
 // The transient banner specifically, so a terminally dead session is not read as a blip.
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
-export const vote = (page, value) =>
-  page.getByRole('button', { name: value, exact: true }).click()
+// A card by its face value, for asserting its state rather than pressing it.
+export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
+export const vote = (page, value) => card(page, value).click()
+// The line under the deck that says why the cards are frozen, keyed on its text rather than its
+// lock, which is the same choice votedMark and hiddenMark explain.
+export const frozenNotice = page => page.getByText('The round is revealed')
 
 export { expect }

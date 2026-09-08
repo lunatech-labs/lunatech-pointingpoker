@@ -100,7 +100,17 @@ directly in the new frontend.
       `reVote`. That part still synergizes with the observer role above, since an
       observer changes what "everyone has voted" means. **Ship what remains with the
       backlog's undo/re-hide**, since the exits that survive (`clear`, `reVote`)
-      either destroy the round or make everyone vote again.
+      either destroy the round or make everyone vote again. Step 3a settled the
+      neighbouring question and not this one: a revealed round now refuses every
+      vote, so nothing lands between the reveal and a `reVote`. Whether the reveal
+      survives that `reVote` is still open.
+- [ ] Show the previous estimate beside the current one once a round has been
+      re-voted, so the room can see who moved and which way. Comes out of step 3a:
+      with a revealed round refusing votes, changing your mind is a Re-vote, which
+      makes the second answers a deliberate act worth reading against the first.
+      `reVote()` already keeps `estimation` server-side, so what is missing is
+      carrying the previous value on the wire, rendering it, and deciding what
+      `clear` does to it. Wants the new frontend rather than the Vue 2 table.
 - [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
       causes rather than compensating for them: a joining user's full catch-up
       replay went out as a single batched message instead of one send per event,

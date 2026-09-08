@@ -61,10 +61,16 @@
         border-color: var(--lt-medium-red-color);
         min-width: 4em;
       }
-      .estimation-button:hover {
+      .estimation-button:not(:disabled):hover {
         background-color: var(--lt-medium-red-color);
         color: var(--lt-white-color);
         border-color: var(--lt-medium-red-color);
+      }
+      /* Bootstrap fades a disabled .btn to .65 already; restated so a frozen deck does not
+         depend on the CDN stylesheet, and the cursor is ours either way. */
+      .estimation-button:disabled {
+        opacity: .65;
+        cursor: not-allowed;
       }
       .estimation-button-selected {
         background-color: var(--lt-dark-red-color);
@@ -228,9 +234,15 @@
                 <div class="col">
                   <div class="row">
                     <div class="col" v-for="e in estimationValues">
-                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation && ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
-                      <button type="button" class="btn estimation-button estimation-button-uncomfirmed m-1" v-if="e === user.estimation && !ownVoteConfirmed" v-on:click="vote(e)">{{ e }}</button>
-                      <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-selected m-1" v-if="e === user.estimation && ownVoteConfirmed" v-bind:disabled="votesRevealed" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button estimation-button-uncomfirmed m-1" v-if="e === user.estimation && !ownVoteConfirmed" v-bind:disabled="votesRevealed" v-on:click="vote(e)">{{ e }}</button>
+                      <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-bind:disabled="votesRevealed" v-on:click="vote(e)">{{ e }}</button>
+                    </div>
+                  </div>
+                  <div class="row" v-if="votesRevealed">
+                    <div class="col text-muted m-1">
+                      <i data-feather="lock"></i>
+                      <small>The round is revealed. Press Re-vote to open it again.</small>
                     </div>
                   </div>
                 </div>
@@ -503,6 +515,10 @@
           }, 2000);
         },
         vote: function (voteValue) {
+          // The server refuses it anyway; this only spares the doomed POST and the optimistic flag.
+          if (this.votesRevealed) {
+            return;
+          }
           this.ownVoteConfirmed = true;
           axios.post('/rooms/' + this.roomId + '/vote', { estimation: voteValue })
           .catch(function (error) {

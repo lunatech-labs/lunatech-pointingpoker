@@ -228,7 +228,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:361`). Step 6 describes the endpoints with tapir, which buys
+  (`index.html:373`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -321,7 +321,7 @@ roadmap item instead of leaving it here as stale history.
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
-  `:5`, `:84`, `:332` and `:333`); `e2e/fixtures.js` (the `assets` fixture).
+  `:5`, `:90`, `:344` and `:345`); `e2e/fixtures.js` (the `assets` fixture).
 - **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
   `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
   load, so an outage at any of the three takes the app down and nothing is
@@ -502,21 +502,21 @@ roadmap item instead of leaving it here as stale history.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
-- **Where:** `src/main/resources/pages/index.html:353`, the `votesSummary` sort,
-  read at `:270` under the "Most voted estimation" heading at `:264`.
+- **Where:** `src/main/resources/pages/index.html:365`, the `votesSummary` sort,
+  read at `:282` under the "Most voted estimation" heading at `:276`.
 - **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
-  the rest in insertion order. Against the cards at `:361` that puts `0` to `89`
+  the rest in insertion order. Against the cards at `:373` that puts `0` to `89`
   first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
   `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
   `0.5` and `?` is decided by `s.users` iteration order, the one case not
   determined by the values alone. A 2-2 split is an ordinary planning poker
   outcome, not an edge case. It is the same failure class as the non-voter tally
   step 3 fixed, the headline decided by something other than the votes, but a
-  good deal milder: the table at `:285-288` renders every row and count beside
-  the headline at `:264-270`, so the tie is visible to anyone who looks down
+  good deal milder: the table at `:297-300` renders every row and count beside
+  the headline at `:276-282`, so the tie is visible to anyone who looks down
   rather than hidden.
 - **Resolution:** Unscheduled, and deliberately not decided here, because the
   rule is a product question rather than a bug with one right answer.

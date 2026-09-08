@@ -79,16 +79,16 @@ object Room:
       this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
-      val voted = this.users.map { u =>
-        if userId == u.id then u.copy(voted = true, estimation = estimation)
-        else u
-      }
-      // A latch, so only a vote or ShowVotes reveals; a departure satisfying the same
-      // predicate must not, which is the disclosure step 2 exists to prevent.
-      this.copy(
-        users = voted,
-        revealed = this.revealed || (voted.nonEmpty && voted.forall(_.voted))
-      )
+      // The reveal closes the round: no vote lands, first or changed, until clear or reVote.
+      if this.revealed then this
+      else
+        val voted = this.users.map { u =>
+          if userId == u.id then u.copy(voted = true, estimation = estimation)
+          else u
+        }
+        // Still a latch: revealed is false here, and only a vote or ShowVotes sets it, so a
+        // departure satisfying the same predicate cannot reveal the round.
+        this.copy(users = voted, revealed = voted.nonEmpty && voted.forall(_.voted))
     end vote
 
     def show(): RoomData =

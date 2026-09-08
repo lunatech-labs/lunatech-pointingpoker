@@ -283,8 +283,10 @@ violations of one.
 3. **Only a revealed round enters `history`.** Its `distribution` is shared
    unredacted, so the gate is that every participant could already see every
    estimate. Section 3, "Round history".
-4. **Reveal is a latch, never re-derived at publish time.** A standing predicate
-   over a mutable member set lets a departure disclose the round. Section 3.
+4. **Reveal is a latch, never re-derived at publish time, and a revealed round
+   takes no votes.** A standing predicate over a mutable member set lets a
+   departure disclose the round, and a vote accepted after the reveal is one cast
+   with every other estimate in view. Section 3.
 5. **A `members` entry is created by `ConnectToRoom` and by nothing else.** A
    member who holds no connection and never votes makes `everyMemberHasVoted`
    unsatisfiable for the rest of the meeting. Sections 3 and 4.
@@ -400,7 +402,7 @@ bytes.
 **`hasEstimation` exists because redaction would otherwise change what the table
 renders.** Before step 2, `showUserEstimation` read the estimation string to
 drive the hidden-value icon (`index.html:556-558` when this was written,
-`:512-514` after step 1 moved it), so blanking other participants' estimations
+`:528-530` after step 1 moved it), so blanking other participants' estimations
 would have made that predicate false for everyone but the recipient. The field
 is computed from the unredacted value, so the table renders exactly as it did
 before the redaction. Against the state model in section 3 that is the entry
@@ -716,6 +718,30 @@ point of separating them.
 wire is that flag. Auto-reveal therefore moves server-side, from its current
 client-only home, as a transition rather than as a standing condition.
 
+**The reveal also closes the round, and `RoomData.vote` refuses everything while
+`revealed` is set.** Not a change to a confirmed estimate, not a first vote from
+a straggler, not a vote from somebody who joined after the reveal. Step 3a lands
+this; before it, a vote during a revealed round overwrote an estimate the whole
+room could already see, and the summary reordered under everyone with no record
+that anyone had moved.
+
+The straggler is deliberately not excepted, and the exception is the tempting
+one, since revealing to chase a straggler is a real flow it costs us. A
+participant who has committed to nothing and then picks with every other number
+in front of them is the purest form of the influence problem step 2 exists to
+prevent, so an exception would refuse the milder case and permit the stronger.
+One rule also needs no second sentence to explain, and the recovery is a button
+already on screen: `reVote` reopens the round for everyone, which is a
+room-level act rather than one person quietly adjusting. A nudge that does not
+disclose is the thing worth building instead, and it is not built here.
+
+**The refusal still publishes**, which is what the actor's `Vote` branch already
+does since `vote` returns unchanged data through the same `publish` call. That
+is the absence of a special case rather than a mechanism, and it is cheap
+insurance under the redundant-publish decision above: a client whose stream is
+stale enough to have missed the reveal corrects itself from the next snapshot
+either way, since the `ShowVotes` that closed the round published one too.
+
 **A standing `round.revealed || everyMemberHasVoted` would let a departure reveal
 the round, which is the one thing step 2 buys.** The predicate ranges over a
 mutable set, so shrinking the set satisfies it as readily as a vote does: remove
@@ -872,10 +898,10 @@ has already stopped. Neither is covered by `sawMessage`, since each can be the
 first message after a long idle and so has nothing prior to defer the tick with.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:450-454`), and the retry lands on a freshly created room.
+(`index.html:462-466`), and the retry lands on a freshly created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:435-448`) and waits for a reload. That is worse than a
+rejoin." (`index.html:447-460`) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -915,7 +941,7 @@ to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:435-448`). Rejoining automatically under the remembered name belongs
+(`index.html:447-460`). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -1076,7 +1102,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:435-448`). The retry interval
+  Please reload the page to rejoin." (`index.html:447-460`). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1145,7 +1171,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:435-448`). What clearing would buy
+  "Your session has ended" state (`index.html:447-460`). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1232,9 +1258,9 @@ the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
 Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:358-379`), so the step 1 call site assigns it wholesale and adapts
+(`index.html:370-391`), so the step 1 call site assigns it wholesale and adapts
 the one that does not: `userEstimation` onto `user.estimation`, which the template
-binds (`index.html:222`, `231-233`). Step 8 flattens that and the adapter goes.
+binds (`index.html:228`, `237-239`). Step 8 flattens that and the adapter goes.
 
 Three details are load-bearing rather than polish:
 
@@ -1247,8 +1273,8 @@ Three details are load-bearing rather than polish:
 
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
-  commit button (`index.html:191-207`), and its only writers are `showEdit`
-  (`:389-391`) and `doEdit` (`:483-491`), so as a guard it lasts until the user
+  commit button (`index.html:197-213`), and its only writers are `showEdit`
+  (`:401-403`) and `doEdit` (`:495-503`), so as a guard it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1282,7 +1308,7 @@ Three details are load-bearing rather than polish:
   stragglers it could win the count and render as the "Most voted estimation".
   Fixing it makes the tally able to be empty, so the summary block's condition became
   `v-if="votesRevealed && votesSummary.length"`
-  (`index.html:259`). That guard is reachable by two clicks (Show in a room where
+  (`index.html:271`). That guard is reachable by two clicks (Show in a room where
   nobody voted), not defensive.
 
   **Written first as `u.voted`, which was wrong**, and found by using the app
@@ -1301,7 +1327,7 @@ Three details are load-bearing rather than polish:
   screen.
 
   **The two had to land in the same step, and the reason is stronger than
-  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:270`), so
+  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:282`), so
   under `v-if="votesRevealed"` alone an empty tally is a render error rather than
   an empty box. That was unreachable only because the buggy all-user tally was
   never empty while anyone was in the room, and the one path that empties
@@ -1330,6 +1356,30 @@ Three details are load-bearing rather than polish:
 the redaction forces, and it is why the confidentiality step is not server-side
 only.
 
+**The deck is disabled while `votesRevealed`, and says why.** Step 3a binds
+`disabled` on the three card buttons, fades them at 65% with `cursor:
+not-allowed`, and puts one muted line under the deck: "The round is revealed.
+Press Re-vote to open it again." `vote()` returns early on the same flag, which
+spares a doomed POST rather than enforcing anything, since the server refuses
+regardless and the client's copy of the flag can be a round trip stale.
+
+The line carries a `data-feather` lock, which renders for a reason worth knowing
+before anyone adds or removes an icon here: `feather.replace()` runs once on the
+served DOM before Vue mounts, so the SVG it substitutes is part of the markup Vue
+then compiles, `v-if` subtrees included. Markup that never reaches the served
+HTML, an icon injected from script after load, is not replaced and renders as an
+empty `<i>`.
+
+Three details, all of them things that would otherwise be found by hand. The
+`disabled` attribute rather than a look-alike class, so the cards leave the tab
+order and a keyboard press stops too. `.estimation-button:hover` becomes
+`:not(:disabled):hover`, or a frozen card still swaps to red under the pointer
+and reads as live. And no tooltip, considered and dropped: a native `title` needs
+the whole wrapper apparatus, because a disabled button fires no mouse events and
+the pointer over one does not hover its parent either, and what it would say is
+the sentence already sitting under the deck. Step 8 revisits the affordance with
+real components.
+
 **A snapshot whose `you` is absent from `users` means the server no longer holds
 this identity as a member**, and the client treats it as a signal to rejoin
 rather than as a room to render. It lands at step 6, in today's client, because
@@ -1343,7 +1393,7 @@ running would manufacture the interleaving hazard described below.
 
 **The rule needs no "unless I am the one leaving" guard, and adding one would
 hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:474-482`), so no snapshot follows, and a
+own stream as its last act (`index.html:486-494`), so no snapshot follows, and a
 beacon fires only on a page being discarded, which has no live document to rejoin
 from. The one path that does deliver a snapshot naming its recipient as a
 non-member is the replacement page in section 4's late-beacon race, and there
@@ -1374,7 +1424,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:409`) and only `doLeave` closes. Step 8's
+closing the previous one (`index.html:421`) and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil until step 6, whose rejoin is the first
@@ -1427,7 +1477,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:310`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:330`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
@@ -1457,6 +1507,21 @@ Added, each with the step it lands at so nothing here is unassigned:
   both estimations and the summary has to count them. It waits on the summary
   being hidden after the Re-vote, since that is what proves the re-vote arrived
   before the Show rather than after it.
+
+  Step 3a took that second half out: it votes after a Show, which a revealed
+  round no longer accepts. What it proved is what the tally case proves anyway,
+  a summary rendering when there is something to tally, so nothing is lost but
+  the guard's own case now rests entirely on the revealed-cell wait.
+
+  Step 3a adds one browser case and three in `RoomSpec`. The browser case
+  asserts a card is disabled on the voter's page and on the straggler's, since
+  those are the two refusals and only one of them is a change, then presses
+  Re-vote and votes to prove the deck comes back. It waits on the caster's mark
+  clearing on the *other* page first: a Re-vote that reached only the presser
+  would leave the rest passing against a deck nobody else has seen reopen. The
+  `RoomSpec` three are an overwrite refused, a first vote refused, and a refused
+  vote still publishing. The last is the one worth having, since it pins the
+  absence of a special case that a later reader is otherwise likely to add.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1546,8 +1611,9 @@ of what the probe is being kept for.
 
 ## The ordered path
 
-Ten steps, numbered from zero. The numbers are labels rather than a queue; each
-states what it actually waits on. Line counts are rough.
+Eleven steps, numbered from zero, one of them lettered because it was added
+after the rest. The numbers are labels rather than a queue; each states what it
+actually waits on. Line counts are rough.
 
 | Step | Waits on |
 | --- | --- |
@@ -1555,6 +1621,7 @@ states what it actually waits on. Line counts are rough.
 | 1 Snapshot protocol | nothing, though safer after 0 |
 | 2 Pre-reveal vote confidentiality | 1 |
 | 3 Vote summary correction | 1 |
+| 3a The reveal closes the round | 1 |
 | 4 State split, plus stop-after-idle | 1 and 5 |
 | 5 Retained sessions | 1 |
 | 6 The write path becomes real | 4 |
@@ -1562,9 +1629,12 @@ states what it actually waits on. Line counts are rough.
 | 8 Frontend rewrite | 1 and 6 |
 | 9 Recorded value and round history | 8 |
 
-One landing sequence that satisfies all of it: **0, 1, 2, 3, 5, 4, 6, 7, 8, 9**.
-Steps 2, 3 and 5 are mutually independent, as are 7 and 8; what is fixed beyond
-the table is that 2 and 3 precede 4, for the reason under step 3.
+One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 5, 4, 6, 7, 8,
+9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is fixed
+beyond the table is that 2, 3 and 3a precede 4, for the reason under step 3.
+Step 3a is lettered rather than numbered because it was not one of the ten this
+design started with: it came out of using step 3, and the letter keeps it beside
+the reveal work it amends instead of taking a number that means something else.
 
 **Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
 a usability improvement, and 8 and 9 are product work whose case is the
@@ -1727,7 +1797,29 @@ specified in terms of today's `RoomData`, as step 1 is: `hasEstimation` is
 `estimation.nonEmpty` and the tally reads the estimation, not the confirmation.
 Taking step 4 first does not break them, but it re-expresses both against
 `round.estimates` and costs the translation twice. Step 2 in particular wants to
-be early on its own merit, being the confidentiality fix.
+be early on its own merit, being the confidentiality fix. Step 3a is the same
+argument again: its refusal is one line inside `RoomData.vote`, which step 4
+rewrites onto `round.estimates`.
+
+**Step 3a. The reveal closes the round.** `RoomData.vote` refuses every vote
+while `revealed` is set, the deck is disabled and says why, and the vote endpoint
+gains a result it cannot yet report. Waits on step 1, independent of steps 2, 3
+and 5. About 15 server lines, 10 client and 60 of tests.
+
+Not in the original ten. Step 3 fixed a tally computed from participants who had
+not voted; using it surfaced the neighbouring question, which is what a vote
+means once the room can already see every estimate. Step 1's latch had answered
+it by omission: it deleted the client's `allVoted()`, whose assignment re-hid the
+room on any vote that left somebody out, and nothing replaced that behaviour or
+argued against it. So this is a decision the path owed rather than a change of
+mind, and section 3 records both the rule and the straggler exception rejected
+with it.
+
+**It is a behaviour change users notice, and the one in this path with no defect
+behind it.** Everything else here closes something recorded; this closes a
+question. The visible loss is revealing to nudge a straggler, who is now locked
+out of the round rather than shown the numbers and asked to vote, and the
+recovery for anything at all is Re-vote.
 
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, replacing the room actor's
@@ -1809,6 +1901,12 @@ on a snapshot that does not name it as a member. Wants step 4 first, both so
 handlers are not rewritten twice and because the leave endpoint's rule reads the
 size of a member's connection set. About 190 and 175.
 
+**Its result set gains a third case from step 3a**, refused because the round is
+revealed, beside applied and not-a-member. That refusal exists from 3a onward and
+is unreportable until here, which is the same gap the failed vote in section 5
+describes: the disabled deck prevents the ordinary click, and the ask reply is
+what answers a click that raced the reveal or a request written by hand.
+
 tapir lands here rather than later because this step already rewrites all five
 command endpoints plus `/join`, `/events` and the leave endpoint it adds, so
 describing them once costs less than describing them twice. Closes Phase 1's outstanding item, the slow-departure
@@ -1845,6 +1943,12 @@ inheriting step 6's rejoin on a snapshot that does not name the client as a
 member, and client types checked against the server contract. Waits on steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
+
+**It also revisits step 3a's frozen deck**, which is fifteen lines of Bootstrap
+utility classes and a `:disabled` rule chosen because they are cheap in a page
+this step rewrites. A component library brings a tooltip primitive with a delay
+worth having, which is the affordance 3a considered and declined on the grounds
+that the bespoke version would be thrown away here.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the
@@ -1905,7 +2009,13 @@ reasoning behind each move rather than as work outstanding.
   convenience beside it.
 - Latched reveal is narrowed rather than moved. What stays in Phase 4 is whether a
   revealed round should survive a `reVote`, and it gains a note that it should ship
-  with the backlog's undo/re-hide. Today's accidental un-reveal closes at step 1.
+  with the backlog's undo/re-hide. Today's accidental un-reveal closes at step 1,
+  and step 3a closes the question next to it rather than this one.
+- Phase 4 gains an entry for showing the previous estimate beside the current one
+  after a `reVote`, which step 3a is what makes it worth having: once a revealed
+  round refuses votes, a changed mind is a room-level act, and the room's two
+  answers are worth reading together. Not built there and not here; it wants step
+  8's frontend.
 - The backlog's per-user command sequencing item stays in the backlog, with the
   reasoning under "Deferred, with triggers".
 - The backlog's client-side connection-liveness watchdog stays in the backlog,
