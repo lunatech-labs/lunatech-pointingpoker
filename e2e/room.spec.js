@@ -92,8 +92,8 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 })
 
-// Carol departs while Bob is cut, and Bob is back before his own removal fires. Shared so the
-// green control below cannot drift from the case it exists to control.
+// Carol departs while Bob is cut, and Bob is back before his own removal fires. Alice learns it
+// from a live broadcast once the grace period expires, Bob only from his reconnect snapshot.
 async function departureWhileCut(join) {
   const alice = await join('Alice')
   const bob = await join('Bob')
@@ -120,28 +120,6 @@ async function departureWhileCut(join) {
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
   return { alice, bob }
 }
-
-test('a cut stream reconnects and the room survives it', async ({ join }) => {
-  const alice = await join('Alice')
-  const bob = await join('Bob')
-
-  await bob.cut()
-  await expect(connectionLost(bob.page)).toBeVisible()
-  await bob.restore()
-  // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
-  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
-
-  // A vote landing on Bob's page proves his stream came back usable: the banner clearing above
-  // is only onopen firing, and says nothing about whether frames still arrive.
-  await vote(alice.page, '5')
-  await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
-    timeout: 10_000
-  })
-})
-
-test('a departure is announced while another participant is cut', async ({ join }) => {
-  await departureWhileCut(join)
-})
 
 test('a Show survives someone joining', async ({ join }) => {
   const alice = await join('Alice')
@@ -273,8 +251,11 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
   await bob.restore()
+  // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
+  // A vote landing on Bob's page proves his stream came back usable: the banner clearing above
+  // is only onopen firing, and says nothing about whether frames still arrive.
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000

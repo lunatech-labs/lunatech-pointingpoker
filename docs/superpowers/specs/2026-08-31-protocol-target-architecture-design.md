@@ -1410,7 +1410,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:293`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:274`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
