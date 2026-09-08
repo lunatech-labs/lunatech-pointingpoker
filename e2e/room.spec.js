@@ -131,8 +131,8 @@ test('a cut stream reconnects and the room survives it', async ({ join }) => {
   // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // A vote landing on Bob's page is the proof his stream came back usable. The two reconnect
-  // cases below cannot assert this themselves: test.fail() accepts a timeout as expected.
+  // A vote landing on Bob's page proves his stream came back usable: the banner clearing above
+  // is only onopen firing, and says nothing about whether frames still arrive.
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000

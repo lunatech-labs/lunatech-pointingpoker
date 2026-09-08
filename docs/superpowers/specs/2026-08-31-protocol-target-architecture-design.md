@@ -988,11 +988,11 @@ that already exists**, because `applySnapshot`'s tally produces
 `Object.entries(tally)`, which is exactly `[(score, count)]`, so a history view
 reuses the live summary's rendering, and later views (highest and lowest,
 majority, most voted) are additive. It is section 3's join taken at the moment of
-the append, over confirmed estimates only since step 3, so it counts the
-participants the snapshot was showing and equals the client's own
-`votesSummary` by construction rather than by both sides tallying carefully; a
-voter who leaves between the reveal and the append drops out of the record, which
-is the direction the participant list moves anyway. And **`recordedValue` is a
+the append, over confirmed estimates only since step 3, so it counts the voters
+the snapshot was showing and equals the client's own `votesSummary` by
+construction rather than by both sides tallying carefully; a voter who leaves
+between the reveal and the append drops out of the record, which is the
+direction the participant list moves anyway. And **`recordedValue` is a
 product gap rather than a storage choice**:
 teams often resolve a split by talking it out rather than re-voting, and the app
 has no concept of a settled estimate at all, so it implies a facilitator command
@@ -1409,7 +1409,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   would stay green through the very change it looks like it guards. That
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
-  `RoomManagerSpec` for the same reason instead.
+  `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:293`), so
+  the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
   to the room once the editor loses focus, and an edit committed with the check
@@ -1429,7 +1431,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   tally case step 0 wrote as `test.fail()`. It waits on the estimation cell's
   value div, which exists only while the round is revealed, before asserting the
   summary is absent: a hidden summary is also what a reveal that never arrived
-  looks like, and every other signal of a reveal is a vote nobody has cast.
+  looks like, and every other signal of a reveal is a vote nobody has cast. It
+  then votes and asserts the summary returns, since the absence on its own would
+  be satisfied just as well by a guard that suppressed the block for good.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1571,7 +1575,8 @@ regression during steps 1 to 3 still shows, and the moment a fix lands CI report
 the stale annotation rather than leaving anyone to notice. Those annotations are
 a small ledger of known-broken-until-step-N that will drift from the known-issues
 table; the annotation is the authority, being the one that fails the build when
-it goes stale.
+it goes stale. Steps 1 and 3 have since removed all five, so the ledger is now
+empty and the known-issues table is once again the only record.
 
 **The browser suite is gated in CI from this step**, which is a change to the
 08-30 design rather than a restatement of it, and the sentence above depends on
