@@ -1613,7 +1613,9 @@ of what the probe is being kept for.
 
 Eleven steps, numbered from zero, one of them lettered because it was added
 after the rest. The numbers are labels rather than a queue; each states what it
-actually waits on. Line counts are rough.
+actually waits on. Line counts are rough. Which steps get an implementation plan
+under `docs/superpowers/plans/` is a separate question, answered by the README
+there rather than by size alone.
 
 | Step | Waits on |
 | --- | --- |
