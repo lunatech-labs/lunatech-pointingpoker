@@ -504,6 +504,41 @@ roadmap item instead of leaving it here as stale history.
   touches, verifying the claim and not only the line. Remove this entry once the
   remaining citations have been verified.
 
+### A citation correct at one layer of a stack goes stale at the next
+
+- **Where:** `docs/known-issues.md` and
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  whenever a stacked branch inserts lines into a file that another layer cites.
+- **Issue:** A line-number citation is only true of the tree it was written
+  against. A branch stacked on top that inserts lines above the cited line
+  inherits a number that is now wrong, and since it never touched the citation,
+  the break does not appear in its own diff. Reading the diff cannot find it.
+  Only re-resolving the citation against the tree can. Rebasing makes it worse
+  rather than better: every parent that grows moves the child's targets again,
+  so one number can be corrected and go stale twice in an afternoon.
+
+  Two live instances, both found and fixed on 2026-09-08, and both already stale
+  before the rebase that surfaced them. The design's `e2e/room.spec.js`
+  vote-survival citation read `:294` on both children while the case sat at
+  `:313` on 3a and `:327` on 3b, and step 3's review then moved it again by
+  inserting a case above it. This file's pointer to the design's additive-views
+  passage read `:988-990` on 3a, where 3a's own additions had already carried the
+  passage to `:1014-1016`.
+
+  The failure is structural rather than careless, which is why discipline alone
+  has not held. Nothing in CI resolves a citation, `grep` cannot tell a stale
+  number from a current one, and the layer that breaks a citation is never the
+  layer that wrote it.
+- **Resolution:** Unscheduled, and discipline rather than tooling for now. Two
+  rules cover it. Sweep the citations in every file the branch changed rather
+  than the citations in the diff, and sweep as the branch's last act: step 3
+  swept second to last, and its final commit re-broke the very citation the
+  sweep had just fixed. Then re-sweep after every rebase, since a rebase moves
+  targets without touching a line of prose. A check that resolved
+  `` `file.ext:NN` `` against the tree would close this properly and belongs
+  with step 8's tooling if it is ever worth building. Remove this entry if that
+  check lands.
+
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
 - **Where:** `src/main/resources/pages/index.html:365`, the `votesSummary` sort,
