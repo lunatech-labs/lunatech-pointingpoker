@@ -207,6 +207,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
         mediaType.toString mustBe "text/event-stream"
+        // The stub cannot stand in for these: it buffers on its own flag and never reads
+        // the upstream response headers.
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
+        header("X-Accel-Buffering").map(_.value) mustBe Some("no")
       }
 
     "reject a malformed vote body with 400" in {
