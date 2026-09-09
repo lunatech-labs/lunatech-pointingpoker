@@ -203,7 +203,7 @@ field that means two things. The frontend is most of the lines and almost none
 of that risk, because a mistake there is visible on the screen. So the type
 system is bought for the small part, and Scala 3's is the better match for it:
 exhaustive matching on a command ADT is a compile error, and
-`opaque type SessionToken = UUID` (`Room.scala:14`) makes swapping a token for a
+`opaque type SessionToken = UUID` (`Room.scala:13`) makes swapping a token for a
 user id unrepresentable rather than merely unlikely. TypeScript's equivalents
 are a discriminated union with an explicit `never` assertion people forget and a
 branded type others cast through. Add no cutover, 1,434 lines of existing tests,
@@ -615,7 +615,7 @@ and clears `confirmed`, which is the state `Estimate` exists to express.
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
 relevant, scanning for a user still holding that exact ref and doing nothing if a
-reconnect replaced it (`Room.scala:182-225`). With connections in their own map
+reconnect replaced it (`Room.scala:163-201`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
 alone starts only if the set is now empty **and that member still exists**. A
@@ -644,7 +644,7 @@ accumulating: at most one timer per departure, and the tab that caused it is gon
 naming since nothing else now holds the invariant. Pekko guarantees that a
 cancelled or replaced timer's message is never received, even when it was already
 enqueued, by checking a generation counter on dequeue. That belongs to
-`Behaviors.withTimers`, which `Room` already uses (`Room.scala:111`, `202`);
+`Behaviors.withTimers`, which `Room` already uses (`Room.scala:121`, `183`);
 `context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
 so reaching for it instead would reintroduce exactly the race the check absorbed.
 
@@ -755,7 +755,7 @@ tab hits `pagehide` on a page that is being discarded, which a reload is and a
 back/forward cache entry is not, section 4 gating the beacon on `persisted` for
 the reason recorded there. So under a standing predicate one participant
 pressing F5 discloses the room's votes, unrecoverably, and today's six-second
-grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:208-225`) are what keep
+grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:189-201`) are what keep
 that from happening at present. Latching removes the unilateral trigger: a
 membership change on its own can no longer reveal anything, so the reload, the
 app switch, the slept laptop and the deliberate close all stop being reveals in

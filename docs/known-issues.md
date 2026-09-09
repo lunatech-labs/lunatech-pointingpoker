@@ -461,7 +461,13 @@ roadmap item instead of leaving it here as stale history.
   unverified. `RoomSpec.scala`'s four are all in the two sentences above. Step 3
   refreshed the `index.html` citations its own two hunks shifted. Step 5 swept
   the `Room.scala` citations, renumbering the command-path list its own diff
-  shifted and annotating the `ValidateToken` sentence whose code it deleted.
+  shifted, annotating the `ValidateToken` sentence whose code it deleted, and
+  renumbering four more that had already gone stale from further back in the
+  file's history, unrelated to this step's own diff: the `SessionToken` opaque
+  type line, the `Leave`/`ConfirmLeave` timer range twice over (once for the
+  keying, once for the stale-ref branch), and the `Behaviors.withTimers` pair,
+  all resolved against the pre-"Step 1: Snapshot protocol" file the design was
+  originally written from.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
