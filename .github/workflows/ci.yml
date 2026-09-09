@@ -61,7 +61,7 @@ jobs:
 
       # Not failure(): running on every build boots the action, so a bump that breaks its runtime
       # goes red here rather than on the first real e2e failure.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-artifacts
