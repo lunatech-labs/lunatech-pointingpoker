@@ -32,7 +32,9 @@ reconstructs state from a sequence. Json example:
 `you` is the identity the snapshot was built for, so a client never has to infer
 which participant it is. `users` is ordered by `id`, the same order for every
 recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
-that completes the round, and cleared by `Clear` and `Re-vote`.
+that completes the round, and cleared by `Clear` and `Re-vote`. While it is set the
+round is closed and the server discards any vote it receives, so a changed mind
+needs a `Clear` or a `Re-vote` rather than another vote.
 
 **Each snapshot is redacted for its recipient.** While `votesRevealed` is false,
 `estimation` carries a value only for the participant the snapshot was built for
@@ -61,8 +63,9 @@ Available endpoints:
 |`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires the session cookie               |
 |`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires the session cookie        |
 
-Command endpoints return `204 No Content`. An unknown `roomId`, or a missing/invalid
-session cookie, is a silent no-op.
+Command endpoints return `204 No Content`. An unknown `roomId`, a missing/invalid
+session cookie, and a vote arriving while the round is revealed are all silent
+no-ops.
 
 There is also a `GET /{roomId}` route that serves the same frontend index page,
 so a room link can be shared directly.

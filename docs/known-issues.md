@@ -228,7 +228,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:361`). Step 6 describes the endpoints with tapir, which buys
+  (`index.html:373`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -321,7 +321,7 @@ roadmap item instead of leaving it here as stale history.
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
-  `:5`, `:84`, `:332` and `:333`); `e2e/fixtures.js` (the `assets` fixture).
+  `:5`, `:90`, `:344` and `:345`); `e2e/fixtures.js` (the `assets` fixture).
 - **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
   `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
   load, so an outage at any of the three takes the app down and nothing is
@@ -370,13 +370,16 @@ roadmap item instead of leaving it here as stale history.
   can therefore pair the previous page with the new server. Sessions do die with
   the process, but the page is a separate artifact, which is the gap in the
   README's restart paragraph. The `Cache-Control: no-cache` at `API.scala:132`
-  covers the SSE response only. Today the symptom is cosmetic: against a step 2
-  server the step 1 page's `showUserEstimation` reads `u.estimation`, which is
-  `""` for another participant before the reveal, so the withheld-value marker
-  is missing from other rows until the page revalidates, while the recipient's
-  own row and the post-reveal table are unaffected. A larger wire change would
-  degrade less kindly, and nothing detects the mismatch, since the wire carries
-  no version field.
+  covers the SSE response only. The step 1 page against a step 2 server is
+  cosmetic: `showUserEstimation` reads `u.estimation`, which is `""` for another
+  participant before the reveal, so the withheld-value marker is missing from
+  other rows until the page revalidates, while the recipient's own row and the
+  post-reveal table are unaffected. Step 3a is already worse than that. A page
+  cached before it has no `disabled` binding on the cards and no early return in
+  `vote()`, so it presents a live deck over a closed round and discards every
+  click in silence. Nothing detects either mismatch, and a version field on the
+  wire would not have caught this one: step 3a changed which votes the server
+  accepts without changing the snapshot's shape at all.
 - **Resolution:** Open, and worth folding into step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
   `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
@@ -385,8 +388,9 @@ roadmap item instead of leaving it here as stale history.
   and its directive are already imported at `API.scala:18-19` for the SSE
   response, so it is one line, and step 6 already touches these routes to add
   the leave endpoint and make `/join` idempotent. Doing it on its own branch
-  instead would add an `API.scala` conflict to the stack's ordered rebase for a
-  symptom that is currently one missing icon. Step 8's frontend rewrite would
+  instead would add an `API.scala` conflict to the stack's ordered rebase, and
+  reaching the symptom at all needs a deploy to land between a page load and the
+  next vote, so step 6 is soon enough. Step 8's frontend rewrite would
   close it structurally with fingerprinted assets if step 6 does not.
 
 ### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
@@ -502,33 +506,132 @@ roadmap item instead of leaving it here as stale history.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
-- **Where:** `src/main/resources/pages/index.html:353`, the `votesSummary` sort,
-  read at `:270` under the "Most voted estimation" heading at `:264`.
+- **Where:** `src/main/resources/pages/index.html:365`, the `votesSummary` sort,
+  read at `:282` under the "Most voted estimation" heading at `:276`.
 - **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
-  the rest in insertion order. Against the cards at `:361` that puts `0` to `89`
+  the rest in insertion order. Against the cards at `:373` that puts `0` to `89`
   first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
   `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
   `0.5` and `?` is decided by `s.users` iteration order, the one case not
   determined by the values alone. A 2-2 split is an ordinary planning poker
   outcome, not an edge case. It is the same failure class as the non-voter tally
   step 3 fixed, the headline decided by something other than the votes, but a
-  good deal milder: the table at `:285-288` renders every row and count beside
-  the headline at `:264-270`, so the tie is visible to anyone who looks down
+  good deal milder: the table at `:297-300` renders every row and count beside
+  the headline at `:276-282`, so the tie is visible to anyone who looks down
   rather than hidden.
 - **Resolution:** Unscheduled, and deliberately not decided here, because the
   rule is a product question rather than a bug with one right answer.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
   are all defensible, and the third is worth weighing since the table already
   shows it. Whoever builds step 9's history views should decide it there:
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:988-990`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1014-1016`
   already lists highest and lowest, majority, and most voted as additive views
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
   over is the count-only comparator and the stable sort, not `Object.entries`
   order. Remove this entry once a rule is chosen and implemented.
+
+### A Show during a partial re-vote tallies two rounds as one distribution
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:100-102`
+  (`reVote` keeping every estimation) and `:86` (`vote` overwriting one), with the
+  tally at `src/main/resources/pages/index.html:355` read at `:276-282` under the
+  "Most voted estimation" heading.
+- **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
+  round that some participants have re-voted and others have not holds answers to
+  two different rounds at once. A Show there counts both. Alice, Bob and Carol
+  finish a round on 8, 8 and 3, somebody presses Re-vote, Carol re-votes to 5, and
+  a Show before Alice and Bob pick reports 8 as the most voted estimation: two
+  participants' answer to the previous round and nobody's answer to this one.
+  Since step 3a a revealed round refuses every vote (`Room.scala:83`), so the
+  holders of a stale value cannot replace it in place. The recovery is another
+  Re-vote, which reopens the round for everyone, or a Clear.
+
+  This follows from two deliberate decisions, which is why it is recorded rather
+  than fixed. `reVote` keeps the values so that an estimation without a
+  confirmation can mean a re-vote in progress, and the summary counts exactly the
+  non-blank estimation cells the table beside it displays, which
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1314-1327`
+  argues for and `e2e/room.spec.js:256` asserts. It is the same failure class as
+  the tie-break above, a headline decided by something other than this round's
+  votes, and it is mitigated the same way but only halfway: the table renders a
+  stale row with no check-circle (`index.html:318`), so anyone looking down from
+  the headline can see who has not confirmed. The distribution itself carries no
+  such mark, and it is the distribution that names the winner.
+- **Resolution:** The durable fix is the roadmap's unchecked entry for showing the
+  previous estimate beside the current one, which comes out of step 3a for this
+  reason: once a revealed round refuses votes, a changed mind is a room-level act
+  and the room's two answers are worth reading together. Neither scheduled step
+  closes it. Step 6 is about a refusal reaching the client that cast it, not about
+  which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
+  design's `:602-609` removes estimates only on `clear` or the round ending, with a
+  `reVote` leaving the values in place and clearing `confirmed`, which is the state
+  `Estimate` exists to express. Remove this entry once the previous estimate is
+  rendered beside the current one, or once a rule is chosen that clears an
+  estimation on `reVote`.
+
+### A vote refused by a revealed round is silent, and can read as accepted
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`
+  (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
+  (`/vote` answering `NoContent` whatever happens) and
+  `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
+  optimistic flag).
+- **Issue:** Step 3a made a revealed round refuse every vote, and nothing tells
+  the participant. The two things that should stop the click before it happens,
+  the `disabled` binding on the cards and `vote()`'s early return, both read
+  `votesRevealed`, which only refreshes over SSE. A client whose stream is dead
+  therefore still has a live deck over a closed round, and `POST /vote` returns
+  `204` either way.
+
+  What makes it worse than a no-op is the optimistic assignment, and what step 3a
+  changed there is not the display but what stands behind it. Take a
+  participant with a re-vote pending, so `voted` is false, `estimation` is still
+  `5`, and card 5 shows in the pale unconfirmed style. Their stream is cut and the
+  "Connection to the room was lost" banner is up. Somebody else presses Show.
+  They click 8: `vote()` sets `ownVoteConfirmed = true`, and because the
+  selected-card branch keys on `e === user.estimation` it is **card 5** that turns
+  the confirmed dark red, for a vote of 8 that never landed. No snapshot arrives
+  to correct it, because the stream that would carry it is the one that is down.
+  The false card is not new: before step 3a the same click painted the same card
+  5, since the stale `user.estimation` was all the branch ever had to key on. What
+  is new is that the vote of 8 no longer lands behind it, so what was a display
+  error on a dead stream is now a lost vote as well.
+- **Resolution:** Scheduled as step 6 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  whose ask pattern gives `/vote` a real result and makes the refusal reportable
+  when it happens, which is what section 5 already says the reply is for. The POST
+  travels over HTTP and works when the SSE stream does not, so the answer reaches
+  precisely the client that cannot see the state. What is left after that is
+  general: a client with a dead stream is stale in every respect, which is the
+  backlog's connection-liveness watchdog and not this entry. Remove this entry
+  when step 6 lands.
+
+### A reload during a revealed round locks the participant out of it
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`RequestSession`'s fresh `userId` per call) and
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`.
+- **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
+  as a new member with no estimation. Since step 3a a revealed round refuses every
+  vote, including a first one, so that member cannot vote at all until somebody
+  presses Re-vote or Clear. The rule intends exactly this for someone who joins
+  after the reveal, and a reloader is not that person: they were in the round a
+  second earlier.
+
+  It is reachable by following the app's own advice. A session that outlives its
+  room, or a stream that fails terminally, produces "Your session has ended.
+  Please reload the page to rejoin." (`index.html:447-460`), and the reload drops
+  them into a round they can only watch.
+- **Resolution:** Scheduled as step 6, whose idempotent `/join` resolves the
+  existing cookie rather than minting over it, so a reload returns as the same
+  member holding the same estimation instead of as a stranger with none. That
+  leaves only the rule working as designed: somebody who genuinely had not voted
+  when the round was revealed stays out of it until Re-vote. Remove this entry
+  when step 6 lands.
 
 ## Traceability note
 

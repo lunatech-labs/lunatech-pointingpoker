@@ -5,6 +5,8 @@ import {
   connectionLost,
   participantRow,
   participantRows,
+  card,
+  frozenNotice,
   revealedCell,
   summaryTable,
   issueBox,
@@ -148,6 +150,29 @@ test('an auto-revealed round stays revealed when a straggler arrives', async ({ 
   await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
 })
 
+test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  // Bob never voted, so this covers a first vote as well as Alice changing hers.
+  await expect(card(alice.page, '5')).toBeDisabled()
+  await expect(card(alice.page, '8')).toBeDisabled()
+  await expect(card(bob.page, '3')).toBeDisabled()
+  await expect(frozenNotice(bob.page)).toBeVisible()
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  // Alice's mark clearing on Bob's page is the proof the re-vote reached him, not just her.
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
+  await expect(frozenNotice(bob.page)).toBeHidden()
+
+  await vote(bob.page, '3')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+})
+
 // Carol never votes and then leaves, which a re-derived everyone-has-voted predicate would
 // answer by revealing the room. Shared so the two departure modes cannot drift apart.
 async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
@@ -273,11 +298,6 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
   // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
   await expect(revealedCell(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(summaryTable(alice.page)).toBeHidden()
-
-  // The block still renders once there is something to tally, so the guard is not a dead end.
-  await vote(alice.page, '5')
-  await expect(summaryTable(alice.page)).toBeVisible()
-  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {

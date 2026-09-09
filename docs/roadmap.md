@@ -82,6 +82,15 @@ directly in the new frontend.
 
 - [ ] Roles: voting participant vs. observer, self-service switching, excluding
       observers from vote counts and status indicators.
+- [ ] Show how many participants have voted, so a facilitator reads abstention
+      instead of counting check-circles. Comes out of step 3, which took the
+      non-voter out of the tally as a non-value: a count beside the distribution is
+      where that signal belongs, rather than a bucket inside it. Step 3a makes it
+      want to be readable before the reveal, since revealing to find out costs a
+      Re-vote. No protocol change, since `voted` is unredacted, so it is the new
+      frontend's to render. Depends on the roles item above for its denominator.
+      Which proportion means "unclear" is left to the facilitator on purpose: show
+      the number and stop there.
 - [x] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
       become real backend logic. **Moves into step 1**, where `round.revealed` is
@@ -100,9 +109,23 @@ directly in the new frontend.
       `reVote`. That part still synergizes with the observer role above, since an
       observer changes what "everyone has voted" means. **Ship what remains with the
       backlog's undo/re-hide**, since the exits that survive (`clear`, `reVote`)
-      either destroy the round or make everyone vote again.
-- [x] Guarantee SSE broadcast delivery before the above is trustworthy. Fixed the
-      causes rather than compensating for them: a joining user's full catch-up
+      either destroy the round or make everyone vote again. Step 3a settled the
+      neighbouring question and not this one: a revealed round now refuses every
+      vote, so nothing lands between the reveal and a `reVote`. Whether the reveal
+      survives that `reVote` is still open.
+- [ ] Show the previous estimate beside the current one once a round has been
+      re-voted, so the room can see who moved and which way. Comes out of step 3a:
+      with a revealed round refusing votes, changing your mind is a Re-vote, which
+      makes the second answer a deliberate act worth reading against the first.
+      `reVote()` keeps `estimation`, but only until that participant's next `vote`
+      overwrites it, which is exactly when both values are wanted, so the missing
+      piece is somewhere to keep the previous one rather than the wire and the
+      rendering alone. Decide what `clear` does to it too. Until it lands, a Show
+      during a partly re-voted round reports a distribution built from two rounds;
+      see `docs/known-issues.md`. Wants the new frontend rather than the Vue 2
+      table.
+- [x] Guarantee SSE broadcast delivery before latched reveal is trustworthy.
+      Fixed the causes rather than compensating for them: a joining user's catch-up
       replay went out as a single batched message instead of one send per event,
       removing the one systematic, room-size-scaling burst against the outbound
       buffer; the source switched to `OverflowStrategy.fail` with a small non-zero

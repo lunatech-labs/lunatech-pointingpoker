@@ -529,6 +529,54 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe false
     }
 
+    "refuse a vote that would overwrite a confirmed estimate in a revealed round" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", true, "5")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2), revealed = true)
+      )
+
+      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      data.users.map(u => (u.voted, u.estimation)) mustBe List((true, "3"), (true, "5"))
+      data.revealed mustBe true
+    }
+
+    "refuse a first vote in a revealed round, since the reveal closes it for everyone" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user, user2), revealed = true)
+      )
+
+      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      data.users.map(u => (u.voted, u.estimation)) mustBe List((true, "3"), (false, ""))
+      data.revealed mustBe true
+    }
+
+    "publish on a refused vote, the same as on one that lands" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (_, roomRef)      = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user), revealed = true)
+      )
+
+      roomRef ! Room.Vote(user.token, "8")
+
+      val snapshot = expectSnapshot(userProbe)
+      snapshot.votesRevealed mustBe true
+      snapshot.users.map(_.estimation) mustBe List("3")
+    }
+
     "keep a reconnecting user's vote instead of resetting it" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "5")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
