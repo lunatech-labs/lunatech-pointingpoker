@@ -378,7 +378,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
-    "mint a session and store it as pending on RequestSession" in {
+    "mint a session and store it on RequestSession" in {
       val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
@@ -389,12 +389,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus]
-      data.data.pendingSessions.get(minted.token) mustBe Some(
-        Room.PendingSession(minted.userId, "Alice")
+      data.data.sessions.get(minted.token) mustBe Some(
+        Room.Session(minted.userId, "Alice")
       )
     }
 
-    "resolve a pending session by token" in {
+    "resolve a session minted for a tab that has not connected" in {
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
@@ -412,7 +412,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(
         UUID.randomUUID(),
-        RoomData.empty.copy(users = List(user), pendingSessions = sessionsFor(user))
+        RoomData.empty.copy(users = List(user), sessions = sessionsFor(user))
       )
 
       roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
@@ -443,8 +443,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       val data = dataProbe.expectMessageType[Room.DataStatus]
       // Retained, so the member entry is no longer the token's only record.
-      data.data.pendingSessions.get(minted.token) mustBe Some(
-        Room.PendingSession(minted.userId, "Alice")
+      data.data.sessions.get(minted.token) mustBe Some(
+        Room.Session(minted.userId, "Alice")
       )
       data.data.users.map(_.id) must contain(minted.userId)
     }
@@ -458,7 +458,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         UUID.randomUUID(),
         RoomData.empty.copy(
           users = List(user, user2),
-          pendingSessions = sessionsFor(user, user2)
+          sessions = sessionsFor(user, user2)
         ),
         gracePeriod = 50.millis
       )
@@ -636,8 +636,8 @@ object RoomSpec:
     val user  = Room.User(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint())
     (user, probe)
 
-  def sessionsFor(users: Room.User*): Map[Room.SessionToken, Room.PendingSession] =
-    users.map(u => u.token -> Room.PendingSession(u.id, u.name)).toMap
+  def sessionsFor(users: Room.User*): Map[Room.SessionToken, Room.Session] =
+    users.map(u => u.token -> Room.Session(u.id, u.name)).toMap
 
   def createRoom(
       roomId: UUID,
