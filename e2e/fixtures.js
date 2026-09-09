@@ -180,6 +180,9 @@ export const connectionLost = page =>
 // to show the same estimations in both. Compared as multisets, since the order of a tie is
 // undecided and known-issues says so; asserting it here would pin a rule nobody has chosen.
 export const expectSummaryMatchesTable = async page => {
+  // Two empty renderings agree trivially, so this gate is what makes the comparison mean
+  // anything, and being retrying it also settles the DOM before the reads below, which are not.
+  await expect(summaryTable(page).locator('tbody tr')).not.toHaveCount(0)
   const tally = {}
   for (const row of await participantRows(page).all()) {
     const estimation = (await row.locator('td').nth(2).innerText()).trim()
@@ -187,7 +190,10 @@ export const expectSummaryMatchesTable = async page => {
   }
   const summary = []
   for (const row of await summaryTable(page).locator('tbody tr').all()) {
-    const [value, count] = await row.locator('td').allInnerTexts()
+    const cells = await row.locator('td').allInnerTexts()
+    // A third column would otherwise be dropped rather than compared.
+    expect(cells).toHaveLength(2)
+    const [value, count] = cells
     summary.push([value.trim(), Number(count.trim())])
   }
   expect(summary.sort()).toEqual(Object.entries(tally).sort())
