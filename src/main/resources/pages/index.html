@@ -254,7 +254,9 @@
                 </div>
               </div>
 
-              <div class="row mt-4" v-if="votesRevealed">
+              <!-- The length guard is not defensive: a filtered tally is empty after a Show
+                   in a room where nobody voted, and votesSummary[0][0] below would throw. -->
+              <div class="row mt-4" v-if="votesRevealed && votesSummary.length">
                 <div class="col">
                   <div class="summary-card">
                     <div class="row">
@@ -335,8 +337,11 @@
     function applySnapshot(prev, s) {
       var me = s.users.find(u => u.id === s.you);
       var tally = {};
-      // The u.voted filter arrives at step 3, with the template guard it requires.
-      s.users.forEach(u => { tally[u.estimation] = (tally[u.estimation] || 0) + 1; });
+      // Whoever has an estimation, which is what the table beside this renders. Not u.voted:
+      // that drops a re-vote in progress, where the value stands and the confirmation does not.
+      s.users.forEach(u => {
+        if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
+      });
       return {
         inRoom: true,
         users: s.users,

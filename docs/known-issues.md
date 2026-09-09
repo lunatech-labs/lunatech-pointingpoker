@@ -112,10 +112,10 @@ roadmap item instead of leaving it here as stale history.
   with a count of 2, so "Most voted estimation" is computed partly from a
   session nobody is sitting at. A team can commit to the wrong number on it.
   The replacement entry, having not voted, also blocks server-side auto-reveal
-  until it votes or the ghost is pruned. **Step 3's voted-only tally does not
-  help here**, which is worth stating because it looks like it should: the
-  ghost's `voted` flag is true, so it survives that filter. Only an identity
-  that does not duplicate fixes it.
+  until it votes or the ghost is pruned. **Step 3's tally does not help here**,
+  which is worth stating because it looks like it should: the ghost carries a
+  confirmed estimation, so it survives the filter on either field. Only an
+  identity that does not duplicate fixes it.
 
   One thing that does hold, and only because of step 1: pruning the ghost
   cannot disclose the round. A ghost that never voted, alongside members who
@@ -228,7 +228,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:356`). Step 6 describes the endpoints with tapir, which buys
+  (`index.html:361`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -321,7 +321,7 @@ roadmap item instead of leaving it here as stale history.
 ### The page and the browser suite depend on three public CDNs at runtime
 
 - **Where:** `src/main/resources/pages/index.html` (the four asset tags at
-  `:5`, `:84`, `:330` and `:331`); `e2e/fixtures.js` (the `assets` fixture).
+  `:5`, `:84`, `:332` and `:333`); `e2e/fixtures.js` (the `assets` fixture).
 - **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
   `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
   load, so an outage at any of the three takes the app down and nothing is
@@ -449,7 +449,8 @@ roadmap item instead of leaving it here as stale history.
   hand-constructed reconnect and `Room.Running` sites (`RoomSpec.scala:194`,
   `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
   `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
-  unverified. `RoomSpec.scala`'s four are all in the two sentences above.
+  unverified. `RoomSpec.scala`'s four are all in the two sentences above. Step 3
+  refreshed the `index.html` citations its own two hunks shifted.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
@@ -461,6 +462,24 @@ roadmap item instead of leaving it here as stale history.
   a step's paragraph saying what it would do rather than what it did, and an
   argument paragraph describing a defect a later step has since closed. Both are
   unswept beyond the two annotated here.
+
+  Step 3 swept the design's `e2e/room.spec.js` claims and found a third kind:
+  the `test.fail()` ledger, described as live in two passages that steps 1 and 3
+  between them emptied. Each gained a landed-state note rather than a re-tense.
+  Annotating is what the two above do, and it keeps the step sections in one
+  voice whether or not they have landed; re-tensing makes one paragraph read as
+  history while its siblings stay in the planning present, and a half-finished
+  one leaves a paragraph contradicting itself. The same claim in
+  `docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` (`:8`, `:47-48`,
+  `:318`) is outside this entry's scope and still reads as live.
+
+  A fourth kind, also unswept, is a delivered plan describing code that no longer exists:
+  `docs/superpowers/plans/2026-08-31-protocol-architecture-0-playwright.md:876`
+  says the `departureWhileCut` helper is "shared with a green control case",
+  which step 3 removed, and it says so under a heading directing the reader to
+  trust it over the block above. Its case table at `:40-41` lists both deleted
+  controls as green, which is correct as a record of what step 0 was told to
+  build. The plan is delivered, so this is recorded rather than edited.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
@@ -480,6 +499,36 @@ roadmap item instead of leaving it here as stale history.
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
   remaining citations have been verified.
+
+### A tied vote is broken by JavaScript key order, not by a rule anyone chose
+
+- **Where:** `src/main/resources/pages/index.html:353`, the `votesSummary` sort,
+  read at `:270` under the "Most voted estimation" heading at `:264`.
+- **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
+  `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
+  stable, so a tie falls through to `Object.entries` order. That order is not
+  insertion order: array-index keys come first in ascending numeric order, then
+  the rest in insertion order. Against the cards at `:361` that puts `0` to `89`
+  first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
+  `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
+  `0.5` and `?` is decided by `s.users` iteration order, the one case not
+  determined by the values alone. A 2-2 split is an ordinary planning poker
+  outcome, not an edge case. It is the same failure class as the non-voter tally
+  step 3 fixed, the headline decided by something other than the votes, but a
+  good deal milder: the table at `:285-288` renders every row and count beside
+  the headline at `:264-270`, so the tie is visible to anyone who looks down
+  rather than hidden.
+- **Resolution:** Unscheduled, and deliberately not decided here, because the
+  rule is a product question rather than a bug with one right answer.
+  Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
+  are all defensible, and the third is worth weighing since the table already
+  shows it. Whoever builds step 9's history views should decide it there:
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:988-990`
+  already lists highest and lowest, majority, and most voted as additive views
+  over the same `[(score, count)]` shape, so they would otherwise inherit this
+  tie-break by accident. The server builds `distribution` itself, so what carries
+  over is the count-only comparator and the stable sort, not `Object.entries`
+  order. Remove this entry once a rule is chosen and implemented.
 
 ## Traceability note
 

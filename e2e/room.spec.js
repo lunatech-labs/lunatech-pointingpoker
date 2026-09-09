@@ -5,6 +5,7 @@ import {
   connectionLost,
   participantRow,
   participantRows,
+  revealedCell,
   summaryTable,
   issueBox,
   issueButton,
@@ -91,8 +92,8 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 })
 
-// Carol departs while Bob is cut, and Bob is back before his own removal fires. Shared so the
-// green control below cannot drift from the case it exists to control.
+// Carol departs while Bob is cut, and Bob is back before his own removal fires. Alice learns it
+// from a live broadcast once the grace period expires, Bob only from his reconnect snapshot.
 async function departureWhileCut(join) {
   const alice = await join('Alice')
   const bob = await join('Bob')
@@ -119,28 +120,6 @@ async function departureWhileCut(join) {
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
   return { alice, bob }
 }
-
-test('a cut stream reconnects and the room survives it', async ({ join }) => {
-  const alice = await join('Alice')
-  const bob = await join('Bob')
-
-  await bob.cut()
-  await expect(connectionLost(bob.page)).toBeVisible()
-  await bob.restore()
-  // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
-  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
-
-  // A vote landing on Bob's page is the proof his stream came back usable. The two reconnect
-  // cases below cannot assert this themselves: test.fail() accepts a timeout as expected.
-  await vote(alice.page, '5')
-  await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
-    timeout: 10_000
-  })
-})
-
-test('a departure is announced while another participant is cut', async ({ join }) => {
-  await departureWhileCut(join)
-})
 
 test('a Show survives someone joining', async ({ join }) => {
   const alice = await join('Alice')
@@ -238,7 +217,6 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
 })
 
 test('the tally counts only the votes that were cast', async ({ join }) => {
-  test.fail(true, 'step 3: a voted-only tally, landing with the template guard beside it')
   const alice = await join('Alice')
   await join('Bob')
 
@@ -246,8 +224,60 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(summaryTable(alice.page)).toBeVisible()
 
-  // Today Bob's empty estimation is a row of its own.
+  // Before step 3 Bob's empty estimation was a row of its own, and could out-count a real one.
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+})
+
+test('a Show during a re-vote still tallies the estimations on the table', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '3')
+  await vote(bob.page, '5')
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  // Hidden again is the proof the re-vote landed before the Show below.
+  await expect(summaryTable(alice.page)).toBeHidden()
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  // A re-vote keeps the estimations and only clears confirmation, so the table shows both.
+  // The summary sits beside that table and has to count what it displays.
+  await expect(participantRow(alice.page, 'Bob')).toContainText('5')
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+})
+
+test('an empty estimation posted directly is not a summary row', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  // Nothing validates the estimation, so this sets voted with nothing in it: the one state
+  // where the confirmation flag and the estimation disagree in the other direction.
+  const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
+  expect(posted.status()).toBe(204)
+
+  // Every user has now voted, so the room reveals itself and needs no Show.
+  await expect(summaryTable(alice.page)).toBeVisible()
+  // Bob counts as voted and still must not be a row: the confirmation flag would admit him.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+})
+
+test('a Show in a room where nobody voted renders no summary', async ({ join }) => {
+  const alice = await join('Alice')
+  await join('Bob')
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
+  // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
+  await expect(revealedCell(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(summaryTable(alice.page)).toBeHidden()
+
+  // The block still renders once there is something to tally, so the guard is not a dead end.
+  await vote(alice.page, '5')
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -257,8 +287,11 @@ test('no duplicate participants after a reconnect', async ({ join }) => {
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
   await bob.restore()
+  // The banner clears on reopen, so its absence is the reconnect, retryable rather than timed.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
+  // A vote landing on Bob's page proves his stream came back usable: the banner clearing above
+  // is only onopen firing, and says nothing about whether frames still arrive.
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice').first())).toHaveCount(1, {
     timeout: 10_000
