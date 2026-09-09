@@ -183,6 +183,24 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
 })
 
+test('the reveal notice claims its space before the reveal', async ({ join }) => {
+  const alice = await join('Alice')
+  const showVotes = alice.page.getByRole('button', { name: 'Show votes' })
+  // Two rows, since a reveal adds the notice to one and the Re-vote button to the other. Neither
+  // may take height: the notice's row also sizes the estimation card.
+  const tops = async () => [
+    (await showVotes.boundingBox()).y,
+    (await participantRows(alice.page).first().boundingBox()).y
+  ]
+
+  // Nobody votes, so no summary block appears and what is left is the two in-place appearances.
+  const before = await tops()
+  await showVotes.click()
+  await expect(frozenNotice(alice.page)).toBeVisible()
+  await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
+  expect(await tops()).toEqual(before)
+})
+
 // A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
 // estimations, clear wipes them. Shared so the pair cannot drift apart.
 async function resetReArmsTheAutoReveal(join, reset) {
