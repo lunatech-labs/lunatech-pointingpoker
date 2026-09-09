@@ -525,6 +525,16 @@ roadmap item instead of leaving it here as stale history.
   passage read `:988-990` on 3a, where 3a's own additions had already carried the
   passage to `:1014-1016`.
 
+  A third, on 2026-09-09, and the first the re-sweep rule below caught rather
+  than preceded. Rebasing 3b onto 3a's review round carried the re-vote tally
+  case from `e2e/room.spec.js:256` to `:269`, leaving this file's pointer to it,
+  written on 3a, one case short. Its shape is worse than either above: `:256`
+  still holds a tally case, "the tally counts only the votes that were cast", so
+  the stale number resolves to something plausible rather than to nothing. The
+  check the entry above calls insufficient, looking at what sits on the cited
+  line, passes here. Only asking whether the sentence's claim is true of that
+  line fails it.
+
   The failure is structural rather than careless, which is why discipline alone
   has not held. Nothing in CI resolves a citation, `grep` cannot tell a stale
   number from a current one, and the layer that breaks a citation is never the
@@ -534,10 +544,16 @@ roadmap item instead of leaving it here as stale history.
   than the citations in the diff, and sweep as the branch's last act: step 3
   swept second to last, and its final commit re-broke the very citation the
   sweep had just fixed. Then re-sweep after every rebase, since a rebase moves
-  targets without touching a line of prose. A check that resolved
-  `` `file.ext:NN` `` against the tree would close this properly and belongs
-  with step 8's tooling if it is ever worth building. Remove this entry if that
-  check lands.
+  targets without touching a line of prose. Tooling could come sooner and
+  cheaper than first written here, but only scoped to what a script can know.
+  Resolving a citation is not automatable, since nothing tells a script what the
+  cited line ought to say, and verifying the claim rather than the line is the
+  part the entry above insists is the real work. What is automatable is narrower:
+  flag a citation when the cited file gained or lost lines above the cited line
+  after the citing prose was written. That is a git-based shift detector, it
+  would have caught the third instance above, and it needs nothing from step 8,
+  so it can be a CI step whenever someone wants one. It yields suspicions for a
+  human to check rather than verdicts. Remove this entry if that check lands.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
