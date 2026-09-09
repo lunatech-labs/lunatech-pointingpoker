@@ -453,21 +453,29 @@ roadmap item instead of leaving it here as stale history.
 - **Issue:** The design was written against the pre-step-1 codebase and cites it
   throughout. Step 1 rewrote much of `index.html` and `Room.scala`, so a
   citation can now land on unrelated code while still reading as current. Step 2
-  swept the `index.html` citations, and corrected `clear()` with `reVote()`
-  (`Room.scala:97-102`, cited three times as `:85-89`) and `RoomSpec`'s
-  hand-constructed reconnect and `Room.Running` sites (`RoomSpec.scala:194`,
-  `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
-  `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
-  unverified. `RoomSpec.scala`'s four are all in the two sentences above. Step 3
-  refreshed the `index.html` citations its own two hunks shifted. Step 5 swept
-  the `Room.scala` citations, renumbering the command-path list its own diff
-  shifted, annotating the `ValidateToken` sentence whose code it deleted, and
-  renumbering four more that had already gone stale from further back in the
-  file's history, unrelated to this step's own diff: the `SessionToken` opaque
-  type line, the `Leave`/`ConfirmLeave` timer range twice over (once for the
-  keying, once for the stale-ref branch), and the `Behaviors.withTimers` pair,
-  all resolved against the pre-"Step 1: Snapshot protocol" file the design was
-  originally written from.
+  swept the `index.html` citations, and corrected `clear()` with `reVote()` to
+  `Room.scala:97-102` as it stood then (cited three times as `:85-89`) and
+  `RoomSpec`'s hand-constructed reconnect and `Room.Running` sites
+  (`RoomSpec.scala:194`, `:237`, `:256`, cited as `:185`, `:231`, `:257`).
+  Citations into the rest of `Room.scala`, and into `RoomManager.scala`,
+  `SSE.scala` and `API.scala`, are unverified. `RoomSpec.scala`'s four are all in
+  the two sentences above. Step 3 refreshed the `index.html` citations its own
+  two hunks shifted. Step 5 swept the `Room.scala` citations, renumbering the
+  command-path list its own diff shifted, annotating the `ValidateToken`
+  sentence whose code it deleted, renumbering the design's own `clear()`/`reVote()`
+  pair from step 2's `:97-102` to `:94-99` in two places, and renumbering four
+  more that had already gone stale from further back in the file's history,
+  unrelated to this step's own diff: the `SessionToken` opaque type line, the
+  `Leave`/`ConfirmLeave` timer range twice over (once for the keying, once for
+  the stale-ref branch), and the `Behaviors.withTimers` pair, all resolved
+  against the pre-"Step 1: Snapshot protocol" file the design was originally
+  written from. That same step's `joinUser` hunk, and its four-line note
+  inserted into the design, went on to shift eight more pointers: five of this
+  file's own citations into `Room.scala`, for `reVote`, `vote` and the
+  revealed-round refusal, and three of this file's citations into the design, for
+  the additive-views passage, the re-vote tally argument, and the `clear`/`reVote`
+  removal rule. A review on 2026-09-09, before this branch opened as a pull
+  request, re-swept and corrected all eight, in this entry and the four below it.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
@@ -596,7 +604,7 @@ roadmap item instead of leaving it here as stale history.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
   are all defensible, and the third is worth weighing since the table already
   shows it. Whoever builds step 9's history views should decide it there:
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1014-1016`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1018-1020`
   already lists highest and lowest, majority, and most voted as additive views
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
@@ -605,8 +613,8 @@ roadmap item instead of leaving it here as stale history.
 
 ### A Show during a partial re-vote tallies two rounds as one distribution
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:100-102`
-  (`reVote` keeping every estimation) and `:86` (`vote` overwriting one), with the
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:97-99`
+  (`reVote` keeping every estimation) and `:83` (`vote` overwriting one), with the
   tally at `src/main/resources/pages/index.html:355` read at `:276-282` under the
   "Most voted estimation" heading.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
@@ -615,7 +623,7 @@ roadmap item instead of leaving it here as stale history.
   finish a round on 8, 8 and 3, somebody presses Re-vote, Carol re-votes to 5, and
   a Show before Alice and Bob pick reports 8 as the most voted estimation: two
   participants' answer to the previous round and nobody's answer to this one.
-  Since step 3a a revealed round refuses every vote (`Room.scala:83`), so the
+  Since step 3a a revealed round refuses every vote (`Room.scala:80`), so the
   holders of a stale value cannot replace it in place. The recovery is another
   Re-vote, which reopens the round for everyone, or a Clear.
 
@@ -623,7 +631,7 @@ roadmap item instead of leaving it here as stale history.
   than fixed. `reVote` keeps the values so that an estimation without a
   confirmation can mean a re-vote in progress, and the summary counts exactly the
   non-blank estimation cells the table beside it displays, which
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1314-1327`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1318-1331`
   argues for and `e2e/room.spec.js:305` asserts. It is the same failure class as
   the tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
@@ -636,7 +644,7 @@ roadmap item instead of leaving it here as stale history.
   and the room's two answers are worth reading together. Neither scheduled step
   closes it. Step 6 is about a refusal reaching the client that cast it, not about
   which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
-  design's `:602-609` removes estimates only on `clear` or the round ending, with a
+  design's `:606-613` removes estimates only on `clear` or the round ending, with a
   `reVote` leaving the values in place and clearing `confirmed`, which is the state
   `Estimate` exists to express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
@@ -644,7 +652,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A vote refused by a revealed round is silent, and can read as accepted
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`
   (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
   (`/vote` answering `NoContent` whatever happens) and
   `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
@@ -683,7 +691,7 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
   (`RequestSession`'s fresh `userId` per call) and
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`.
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`.
 - **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
   as a new member with no estimation. Since step 3a a revealed round refuses every
   vote, including a first one, so that member cannot vote at all until somebody

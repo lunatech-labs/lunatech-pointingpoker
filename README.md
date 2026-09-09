@@ -89,9 +89,13 @@ it is held against their membership.
 This session cookie closes an identity-spoofing gap, not room access control: anyone
 who knows a `roomId` can still call `/join` and legitimately participate in that
 room. What it prevents is impersonating a specific existing member and acting
-without ever having joined. Actual room access control (e.g. limiting who can create
-or enter a room at all) is a separate, unscheduled concern, closest to the
-room-creation hardening listed under Phase 5 in `docs/roadmap.md`.
+without ever having joined. Holding the token is enough to rejoin as that identity,
+including after a grace-period removal, but not enough to act as it: every vote,
+show, clear, revote and edit-issue request still checks current membership, so a
+removed member's still-resolving token cannot act until they have rejoined. Actual
+room access control (e.g. limiting who can create or enter a room at all) is a
+separate, unscheduled concern, closest to the room-creation hardening listed under
+Phase 5 in `docs/roadmap.md`.
 
 ### Tech stack
 
