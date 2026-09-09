@@ -1573,6 +1573,10 @@ Added, each with the step it lands at so nothing here is unassigned:
   the two resets, so a failure names the reset rather than a round of a meeting.
   Neither round is a residue check, since everyone voting overwrites whatever a
   `clear` left behind, and that is why the single-voter reveal keeps that job.
+  All of it came out of reviewing the step rather than planning it, and it is
+  about 60 of the step's line count: the review's corrections netted seven lines
+  fewer, so the growth was coverage the walk revealed was missing, which is the
+  part worth expecting at the next characterization step.
 
   With it comes `expectSummaryMatchesTable`, asserting the two renderings agree,
   compared as multisets so the undecided tie order stays unpinned. The helper
