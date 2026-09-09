@@ -1342,6 +1342,17 @@ Three details are load-bearing rather than polish:
   into one bucket. That is harmless because the summary is only rendered when
   `votesRevealed`, but it is the kind of thing a reader spots and mistakes for a
   bug, so it is stated rather than left to be rediscovered.
+
+  The filter removes a non-value from a distribution of values, and says nothing
+  about whether abstention should be surfaced. That is a signal of its own: half a
+  room withholding may mean the issue is unclear, where another refinement round
+  beats another vote. Step 3a sharpens it, since revealing to find out now costs a
+  Re-vote, so the reading wants to be available before the reveal. It can be:
+  redaction covers `estimation` only, so `voted` and `hasEstimation` are on the
+  wire for everyone throughout, and the table already marks each voter
+  (`index.html:318`). What is missing is the aggregate, and it belongs beside the
+  distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
+  carries it, next to the roles item that settles the denominator.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
   keeps `estimation` while `clear()` clears both (`Room.scala:97-102`), so "I
   have an estimation showing but the server does not consider me voted" is
@@ -2025,6 +2036,12 @@ reasoning behind each move rather than as work outstanding.
   round refuses votes, a changed mind is a room-level act, and the room's two
   answers are worth reading together. Not built there and not here; it wants step
   8's frontend.
+- Phase 4 gains an entry for showing how many participants have voted, placed
+  beside the roles item that settles its denominator. Step 3 is what makes it
+  worth stating: taking the non-voter out of the tally removed a non-value from a
+  distribution of values and left unsaid where abstention does surface, which is a
+  count beside the distribution rather than a bucket inside it. Not built there and
+  not here; it wants step 8's frontend.
 - The backlog's per-user command sequencing item stays in the backlog, with the
   reasoning under "Deferred, with triggers".
 - The backlog's client-side connection-liveness watchdog stays in the backlog,

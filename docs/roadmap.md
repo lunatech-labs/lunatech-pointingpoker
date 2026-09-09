@@ -82,6 +82,15 @@ directly in the new frontend.
 
 - [ ] Roles: voting participant vs. observer, self-service switching, excluding
       observers from vote counts and status indicators.
+- [ ] Show how many participants have voted, so a facilitator reads abstention
+      instead of counting check-circles. Comes out of step 3, which took the
+      non-voter out of the tally as a non-value: a count beside the distribution is
+      where that signal belongs, rather than a bucket inside it. Step 3a makes it
+      want to be readable before the reveal, since revealing to find out costs a
+      Re-vote. No protocol change, since `voted` is unredacted, so it is the new
+      frontend's to render. Depends on the roles item above for its denominator.
+      Which proportion means "unclear" is left to the facilitator on purpose: show
+      the number and stop there.
 - [x] Server-authoritative auto-reveal. Today "everyone voted" is computed
       client-side only and never told to the server or other clients; it needs to
       become real backend logic. **Moves into step 1**, where `round.revealed` is
