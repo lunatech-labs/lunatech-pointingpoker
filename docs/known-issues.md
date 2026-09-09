@@ -354,11 +354,11 @@ roadmap item instead of leaving it here as stale history.
   appendix to a test-suite change. **npm plus Dependabot:** installing the four
   assets as npm dependencies and serving them from the app would replace the
   refresh ritual with something that already works here, since
-  `.github/dependabot.yml` runs weekly but currently covers
-  `package-ecosystem: "github-actions"` only. It overlaps step 8, which bundles
-  these assets anyway, so it is worth deciding with step 8 rather than ahead of
-  it. Adding the `npm` ecosystem to `dependabot.yml` is worth doing either way:
-  nothing updates `@playwright/test` today.
+  `.github/dependabot.yml` runs the `npm` and `github-actions` ecosystems
+  weekly. It overlaps step 8, which bundles these assets anyway, so it is worth
+  deciding with step 8 rather than ahead of it. The `npm` ecosystem was added
+  on 2026-09-08, for `@playwright/test`, which nothing had updated before;
+  vendoring the CDN assets is what this follow-up still carries.
 
 ### A cached page can outlive the server that served it
 

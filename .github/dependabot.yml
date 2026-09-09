@@ -6,3 +6,17 @@ updates:
       interval: "weekly"
       time: "07:00"
       timezone: "Europe/Amsterdam"
+    # Ends in a paren, so dependabot appends the colon itself.
+    commit-message:
+      prefix: "build(deps)"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      time: "07:00"
+      timezone: "Europe/Amsterdam"
+    # @playwright/test is a devDependency, so it takes the -dev prefix.
+    commit-message:
+      prefix: "build(deps)"
+      prefix-development: "build(deps-dev)"
