@@ -407,10 +407,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
     }
 
-    "resolve a confirmed member by token (reconnect)" in {
+    "resolve a token whose member is connected" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
-      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user), pendingSessions = sessionsFor(user))
+      )
 
       roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
 
@@ -426,11 +429,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Unresolved)
     }
 
-    "clear the pending session once Join promotes it to a member" in {
-      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val userProbe         = TestProbe()(testKit.system.classicSystem)
-      val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+    "keep the session once Join promotes it to a member" in {
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe    = TestProbe()(testKit.system.classicSystem)
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
       roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
@@ -439,8 +442,35 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus]
-      data.data.pendingSessions.get(minted.token) mustBe None
+      // Retained, so the member entry is no longer the token's only record.
+      data.data.pendingSessions.get(minted.token) mustBe Some(
+        Room.PendingSession(minted.userId, "Alice")
+      )
       data.data.users.map(_.id) must contain(minted.userId)
+    }
+
+    "resolve a token whose member was removed at grace expiry" in {
+      val (user, _)         = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
+      val resultProbe       = testKit.createTestProbe[Room.TokenResolution]()
+      val responseProbe     = testKit.createTestProbe[Room.Response]()
+      val (roomId, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(
+          users = List(user, user2),
+          pendingSessions = sessionsFor(user, user2)
+        ),
+        gracePeriod = 50.millis
+      )
+
+      roomRef ! Room.Leave(user.id, user.ref, responseProbe.ref)
+      // Running is the confirmation that ConfirmLeave fired and removed the member while the
+      // room stayed up, which is the state a reconnect past the window actually arrives in.
+      responseProbe.expectMessage(Room.Running(roomId))
+
+      roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
+
+      resultProbe.expectMessage(Room.Resolved(user.id, user.name))
     }
 
     "reveal the round when the last outstanding vote lands" in {
@@ -605,6 +635,9 @@ object RoomSpec:
     val probe = TestProbe()(testKit.system.classicSystem)
     val user  = Room.User(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint())
     (user, probe)
+
+  def sessionsFor(users: Room.User*): Map[Room.SessionToken, Room.PendingSession] =
+    users.map(u => u.token -> Room.PendingSession(u.id, u.name)).toMap
 
   def createRoom(
       roomId: UUID,

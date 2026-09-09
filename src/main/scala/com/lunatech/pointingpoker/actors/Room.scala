@@ -69,10 +69,7 @@ object Room:
       val kept = this.users
         .find(_.id == user.id)
         .fold(user)(old => user.copy(voted = old.voted, estimation = old.estimation))
-      this.copy(
-        users = kept :: this.users.filterNot(_.id == user.id),
-        pendingSessions = this.pendingSessions - user.token
-      )
+      this.copy(users = kept :: this.users.filterNot(_.id == user.id))
     end joinUser
 
     def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
@@ -208,12 +205,11 @@ object Room:
               receiveBehaviour(roomId, publish(data.editIssue(issue), context), gracePeriod, timers)
             case None => Behaviors.same
         case ValidateToken(token, replyTo) =>
+          // The map is the single authority now that it is retained: a member removed at
+          // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
           val resolution = data.pendingSessions.get(token) match
-            case Some(pending) => Resolved(pending.userId, pending.name)
-            case None          =>
-              data.users.find(_.token == token) match
-                case Some(user) => Resolved(user.id, user.name)
-                case None       => Unresolved
+            case Some(session) => Resolved(session.userId, session.name)
+            case None          => Unresolved
           replyTo ! resolution
           Behaviors.same
         case GetData(replyTo) =>
