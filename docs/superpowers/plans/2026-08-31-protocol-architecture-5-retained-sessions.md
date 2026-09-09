@@ -117,9 +117,10 @@ Listed so a reviewer can reject one without re-deriving it.
    under a temporary revert of both production hunks. It keeps a second seeded
    member only so the room does not stop when the departing one goes.
 
-   One knock-on: this plan's task 1 step 7 says `sessionsFor` has three seeding
-   sites. It has two, because the corrected case mints Alice's session rather than
-   seeding it.
+   One knock-on: this plan's task 1 step 7 gives `sessionsFor` a seeding-site
+   count. The corrected case mints Alice's session rather than seeding it, and a
+   later case added a site, so take the count out rather than restate it. See
+   deviation 6.
 
 2. **Task 2's case forces detection rather than waiting for it.** The planned
    20 second timeout was not enough: in a quiet room a cut participant took about
@@ -156,6 +157,38 @@ Listed so a reviewer can reject one without re-deriving it.
    "No totals are given here on purpose. Three review rounds produced a different
    count each time, and the count was never what a sweep needed." A future step's
    plan should name the rules and skip the total.
+
+7. **Task 1 gained a test this plan did not schedule.** `RoomSpec.scala:483-516`
+   refuses all five commands from a token whose member was removed at grace
+   expiry, with six lines added alongside it in `e2e/room.spec.js`. It was added
+   because the global constraint it guards, that resolving a token and being
+   allowed to act stay two checks, had no executable guard: every other case would
+   have stayed green with a command rewritten onto `sessions`. It compares whole
+   `RoomData` before and after each command, so it catches a regression on any of
+   the five rather than sampling one.
+
+8. **Task 3 step 6 rewrote a README paragraph it scoped as needing no edit.** The
+   step inserts a paragraph between `:75-80` and `:82`, and names only the restart
+   paragraph as needing none. The identity-spoofing paragraph at `:82` was
+   rewritten too, because retention makes its claim half true: the cookie no
+   longer only prevents acting without ever having joined, now that a removed
+   member's token still resolves. It says instead that holding the token is enough
+   to rejoin as that identity but not to act as it.
+
+9. **Task 3 step 3 renumbered `:1795`, which its own rule 3 lists as historical.**
+   Rule 2 beats rule 3 where the sentence is a present-tense claim about live code
+   rather than a statement of what the step changed. `:1795` says `reVote()` keeps
+   `estimation`, which is true of the file today, so its pointer was corrected to
+   `Room.scala:97-99` while the neighbouring step 1 pointers stayed put. Step 4's
+   sweeper should read rule 3 as scoped to claims about what a step changed, not
+   to every pointer sitting inside a step's paragraph.
+
+10. **Task 3's sweep ran over `docs/known-issues.md` as well as the design.** Step
+    3 is scoped to the design's citations and step 5 asks only that the sweep be
+    recorded. Eight pointers in `docs/known-issues.md` were stale by the same
+    diff, five into `Room.scala` and three into the design, and the sweep note
+    this task adds would have been untrue with them left in place. Same reasoning
+    as deviation 4.
 
 ---
 
@@ -637,8 +670,9 @@ git commit -m "docs: close the forced-reload issue and record how long a session
 - [ ] `npm run e2e` passes in both chromium and firefox, with no expected
       failures. The `test.fail()` ledger has been empty since step 3.
 - [ ] `grep -rn "pendingSessions\|PendingSession" src/` returns nothing.
-- [ ] `git log --oneline` shows this plan plus the four commits above, and the
-      branch is based on `main`.
+- [ ] `git log --oneline` shows this plan plus the commits the tasks above
+      specify, and the branch is based on `main`. No count here on purpose; see
+      deviation 6.
 - [ ] The PR body says that step 4 waits on this one, and why: `Member` carries
       no token, so resolution has to live in `sessions` before the state split
       lands or every reconnect becomes a 401.

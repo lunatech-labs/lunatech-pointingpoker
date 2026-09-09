@@ -423,9 +423,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
-  // Detection rides on the room's own traffic, so two writes to Bob's dead stream are what
-  // start his grace period; without them a quiet room waits out two heartbeats first. Bob's
-  // page is stale while cut, so both writes are asserted on Alice's own row instead.
+  // Detection rides on the room's own traffic, so two writes to Bob's dead stream start his
+  // grace period; both are asserted on Alice's row, since Bob's page is stale while cut.
   const aliceOnAlice = participantRow(alice.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnAlice)).toHaveCount(1)

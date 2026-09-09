@@ -407,7 +407,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
     }
 
-    "resolve a token whose member is connected" in {
+    "resolve a token when the room already has members" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(
@@ -483,10 +483,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val userProbe         = TestProbe()(testKit.system.classicSystem)
       val (user2, _)        = createUser(UUID.randomUUID(), "user2", true, "3")
-      val (user3, _)        = createUser(UUID.randomUUID(), "user3", false, "")
+      val (user3, _)        = createUser(UUID.randomUUID(), "user3", true, "5")
       val (roomId, roomRef) = createRoom(
         UUID.randomUUID(),
-        RoomData.empty.copy(users = List(user2, user3), sessions = sessionsFor(user2)),
+        RoomData.empty.copy(users = List(user2, user3), sessions = sessionsFor(user2, user3)),
         gracePeriod = 50.millis
       )
 
@@ -506,11 +506,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         roomRef ! Room.GetData(dataProbe.ref)
         dataProbe.expectMessage(Room.DataStatus(data = before))
 
-      // user2 has voted and user3 has not, so the round stays unrevealed with a live
-      // estimation on the table: ClearVotes, ReVote, ShowVotes and EditIssue would each
-      // visibly change the room if Alice's removed-member token were wrongly honoured.
-      // Vote is vacuous today and kept deliberately: RoomData.vote keys on user id, so it is a
-      // no-op either way until step 4, where estimates outlive membership and the check bites.
+      // Both members voted with the round unrevealed, the state a room is in after an unvoted
+      // member's grace expiry, so any of the five honoured wrongly would visibly change it.
       assertUnaffected(Room.Vote(minted.token, "8"))
       assertUnaffected(Room.ClearVotes(minted.token))
       assertUnaffected(Room.ReVote(minted.token))

@@ -529,8 +529,8 @@ no token. Retention is a precondition for this shape rather than a companion to
 it, which is why step 4 waits on step 5.
 
 Landed at step 5: the scan is gone and `ValidateToken` is the single lookup this
-paragraph specifies. The citation is to the pre-step-5 file, which is what the
-argument is about.
+paragraph specifies. The citation is to the pre-step-1 file the design was
+written against, which is what the argument is about.
 
 The name is deliberately in both `Session` and `Member`: a session exists before
 there is a member, which is why 08-20 put it on `PendingSession`.
@@ -1999,9 +1999,10 @@ room's lifetime is bounded.
 Landed. `sessions` is retained past promotion and is the single authority
 `ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
 outcome with a cut that outlasts the grace period and recovers on the retry, and
-`docs/known-issues.md` lost the forced-reload entry. The pending-session leak
-entry stayed open and was re-pitched around retention, which widened it from
-abandoned tabs to every session a room mints.
+`docs/known-issues.md` lost the forced-reload entry and gained one for the
+heartbeat-bound detection delay that entry was the only record of. The
+pending-session leak entry stayed open and was re-pitched around retention,
+which widened it from abandoned tabs to every session a room mints.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit

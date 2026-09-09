@@ -460,27 +460,23 @@ roadmap item instead of leaving it here as stale history.
   Citations into the rest of `Room.scala`, and into `RoomManager.scala`,
   `SSE.scala` and `API.scala`, are unverified. `RoomSpec.scala`'s four are all in
   the two sentences above. Step 3 refreshed the `index.html` citations its own
-  two hunks shifted. Step 5 swept the `Room.scala` citations, renumbering the
-  command-path list its own diff shifted, annotating the `ValidateToken`
-  sentence whose code it deleted, renumbering the design's own `clear()`/`reVote()`
-  pair from step 2's `:97-102` to `:94-99` in two places, and renumbering four
-  more that had already gone stale from further back in the file's history,
-  unrelated to this step's own diff: the `SessionToken` opaque type line, the
+  two hunks shifted. Step 5 swept the `Room.scala` citations in both the design
+  and this file. In the design it renumbered the command-path list its own diff
+  shifted, annotated the `ValidateToken` sentence whose code it deleted, moved
+  the `clear()`/`reVote()` pair off step 2's `:97-102`, and corrected several
+  that had gone stale from further back in the file's history, unrelated to this
+  step's own diff: the `SessionToken` opaque type line, the
   `Leave`/`ConfirmLeave` timer range twice over (once for the keying, once for
-  the stale-ref branch), and the `Behaviors.withTimers` pair, all resolved
-  against the pre-"Step 1: Snapshot protocol" file the design was originally
-  written from. That same step's `joinUser` hunk, and its four-line note
-  inserted into the design, went on to shift eight more pointers: five of this
-  file's own citations into `Room.scala`, for `reVote`, `vote` and the
-  revealed-round refusal, and three of this file's citations into the design, for
-  the additive-views passage, the re-vote tally argument, and the `clear`/`reVote`
-  removal rule. A review on 2026-09-09, before this branch opened as a pull
-  request, re-swept and corrected all eight. They sit in four entries further
-  down, from "A tied vote is broken by JavaScript key order" to "A reload during
-  a revealed round locks the participant out of it", and none in this one. A
-  consistency pass after that review found a ninth, the same live `reVote` claim
-  in the design's own step 1 paragraph, and corrected it to `Room.scala:97-99`
-  with the other two.
+  the stale-ref branch), the `Behaviors.withTimers` pair, and the live `reVote`
+  claim inside step 1's own paragraph. Those resolved against the pre-"Step 1:
+  Snapshot protocol" file the design was originally written from. In this file it
+  corrected its own pointers into `Room.scala`, for `reVote`, `vote` and the
+  revealed-round refusal, and into the design, for the additive-views passage,
+  the re-vote tally argument, and the `clear`/`reVote` removal rule, all shifted
+  by the same `joinUser` hunk and by the note step 5 inserted into the design.
+  They sit in four entries further down, from "A tied vote is broken by
+  JavaScript key order" to "A reload during a revealed round locks the
+  participant out of it", and none in this one.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
@@ -524,7 +520,10 @@ roadmap item instead of leaving it here as stale history.
   as part of arguing why the design is what it is, so renumbering those makes
   the prose false rather than current. Several in `index.html` were left alone
   for that reason, as was the `Room.scala` pair in the design's own step 1
-  paragraph, which lists what step 1 removed.
+  paragraph, which lists what step 1 removed. The exception is a present-tense
+  claim about live code that happens to sit in a step's paragraph: step 5
+  renumbered the `reVote` claim in step 1's paragraph for that reason, while
+  leaving the pair beside it alone.
 - **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
@@ -637,7 +636,7 @@ roadmap item instead of leaving it here as stale history.
   confirmation can mean a re-vote in progress, and the summary counts exactly the
   non-blank estimation cells the table beside it displays, which
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1318-1331`
-  argues for and `e2e/room.spec.js:305` asserts. It is the same failure class as
+  argues for and `e2e/room.spec.js:319-320` asserts. It is the same failure class as
   the tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
   stale row with no check-circle (`index.html:318`), so anyone looking down from
