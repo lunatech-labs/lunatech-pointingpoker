@@ -59,8 +59,10 @@ jobs:
       - name: browser tests
         run: npm run e2e
 
+      # Not failure(): running on every build boots the action, so a bump that breaks its runtime
+      # goes red here rather than on the first real e2e failure.
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: ${{ !cancelled() }}
         with:
           name: playwright-artifacts
           path: test-results/
