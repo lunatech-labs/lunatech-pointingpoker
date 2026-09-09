@@ -106,8 +106,56 @@ browser case says so.
 
 ## Deviations from the plan, and why
 
-Filled in during execution. Listed so a reviewer can reject one without
-re-deriving it.
+Listed so a reviewer can reject one without re-deriving it.
+
+1. **Task 1's grace-expiry case characterized nothing as planned, and was
+   rewritten before review.** The planned case seeded `sessions` directly and
+   never called `Join`, so promotion never consumed the entry and the case passed
+   against the unfixed server: it would still pass with retention reverted. The
+   landed case drives `RequestSession`, then `Join`, then `Leave` past the grace
+   period, which is the sequence production actually walks, and its red was proven
+   under a temporary revert of both production hunks. It keeps a second seeded
+   member only so the room does not stop when the departing one goes.
+
+   One knock-on: this plan's task 1 step 7 says `sessionsFor` has three seeding
+   sites. It has two, because the corrected case mints Alice's session rather than
+   seeding it.
+
+2. **Task 2's case forces detection rather than waiting for it.** The planned
+   20 second timeout was not enough: in a quiet room a cut participant took about
+   35.5 seconds to disappear, deterministic to 2ms across two runs, because
+   detection of a dead stream rides on the room's own traffic and two 15 second
+   heartbeat writes have to fail before the 4 second grace period starts. Raising
+   the timeout to 40 seconds would have left 4.5 seconds of headroom on a loaded
+   CI machine. Instead the case votes and clears immediately after the cut, which
+   is what `departureWhileCut` already does for the same reason, taking the wait
+   to about 5 seconds under an unchanged 20 second timeout. The case runs in
+   roughly 7 seconds.
+
+3. **Task 3 added a known-issues entry this plan did not schedule.** The entry it
+   deletes was also the only record that detection is unbounded in a quiet room,
+   which this step does not fix and step 6's beacon will not fix either, since a
+   beacon only covers a page discarded deliberately. That fact is now its own
+   entry, with task 2's measurement behind it rather than the original hand-wavy
+   prose.
+
+4. **Task 3's sweep covered four citations older than this branch.** They were
+   stale before task 1 shifted anything, and this plan's step 3 did not list them.
+   They were fixed anyway: the sweep note this task adds claims the file was
+   swept, and leaving four known-stale citations in it would have made that note
+   untrue. All four resolved against the design's original baseline rather than
+   guessed at.
+
+5. **This plan's step 7 grep expectation for "session has ended" was wrong.** It
+   predicted no match in `docs/known-issues.md`; a pre-existing match sits in an
+   unrelated open entry and claims nothing stale. No tree change.
+
+6. **This plan's step 3 gave a citation count, and should not have.** It said the
+   grep returns twelve sites; it returns fifteen lines carrying sixteen pointers.
+   `docs/known-issues.md`'s own stale-citation entry warns against exactly this:
+   "No totals are given here on purpose. Three review rounds produced a different
+   count each time, and the count was never what a sweep needed." A future step's
+   plan should name the rules and skip the total.
 
 ---
 
