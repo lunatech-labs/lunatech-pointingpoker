@@ -450,27 +450,31 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "resolve a token whose member was removed at grace expiry" in {
-      val (user, _)         = createUser(UUID.randomUUID(), "user1", false, "")
-      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
       val resultProbe       = testKit.createTestProbe[Room.TokenResolution]()
       val responseProbe     = testKit.createTestProbe[Room.Response]()
+      val userProbe         = TestProbe()(testKit.system.classicSystem)
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
       val (roomId, roomRef) = createRoom(
         UUID.randomUUID(),
-        RoomData.empty.copy(
-          users = List(user, user2),
-          sessions = sessionsFor(user, user2)
-        ),
+        RoomData.empty.copy(users = List(user2), sessions = sessionsFor(user2)),
         gracePeriod = 50.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, responseProbe.ref)
+      // Through RequestSession and Join, since promotion is what used to consume the entry:
+      // seeding the map directly leaves the case green with the old code.
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+      roomRef ! Room.Join(Room.User(minted.userId, "Alice", false, "", userProbe.ref, minted.token))
+
+      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
       // Running is the confirmation that ConfirmLeave fired and removed the member while the
-      // room stayed up, which is the state a reconnect past the window actually arrives in.
+      // room stayed up, which is the state a reconnect past the window arrives in.
       responseProbe.expectMessage(Room.Running(roomId))
 
-      roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
+      roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
 
-      resultProbe.expectMessage(Room.Resolved(user.id, user.name))
+      resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
     }
 
     "reveal the round when the last outstanding vote lands" in {
