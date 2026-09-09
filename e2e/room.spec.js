@@ -301,6 +301,7 @@ test('an empty estimation posted directly is not a summary row', async ({ join, 
   // Bob counts as voted and still must not be a row: the confirmation flag would admit him.
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('a Show in a room where nobody voted renders no summary', async ({ join }) => {
