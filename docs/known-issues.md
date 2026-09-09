@@ -689,6 +689,30 @@ roadmap item instead of leaving it here as stale history.
   when the round was revealed stays out of it until Re-vote. Remove this entry
   when step 6 lands.
 
+### A reveal with votes still pushes the participants list down
+
+- **Where:** `src/main/resources/pages/index.html:273` (the summary block, under
+  `v-if="votesRevealed && votesSummary.length"`) sitting above the participants
+  table at `:308`.
+- **Issue:** Revealing a round with votes in it inserts the most-voted card and
+  the distribution table between the buttons and the participants list, so the
+  list a facilitator is reading jumps down by the height of that block. The
+  neighbouring case is fixed rather than open: the frozen-round notice at `:244`
+  used to appear under `v-if`, which resized the estimation card sharing its row
+  (`.estimation-card` is `height: 100%` at `:51`) and shifted every row below it
+  even in a room where nobody voted and no summary appeared. That notice now
+  toggles `visibility` and holds its line at all times, pinned by "the reveal
+  notice claims its space before the reveal" in `e2e/room.spec.js`.
+- **Resolution:** Left to step 8's rewrite, and deliberately not fixed the same
+  way. Reserving the summary block's space would put an empty card and an empty
+  table on the page for the whole pre-reveal round, which is a worse page than
+  one that grows when there is something to show: unlike the notice, this block
+  is real content arriving, and the movement is honest feedback that the reveal
+  landed. What the rewrite should carry over is that the shift is the block's
+  position rather than its existence, so placing the participants list above the
+  results would settle it without hiding anything. Remove this entry when step 8
+  lands or decides otherwise.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside

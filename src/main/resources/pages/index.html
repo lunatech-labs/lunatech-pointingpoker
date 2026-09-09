@@ -239,7 +239,9 @@
                       <button type="button" class="btn estimation-button m-1" v-if="e !== user.estimation" v-bind:disabled="votesRevealed" v-on:click="vote(e)">{{ e }}</button>
                     </div>
                   </div>
-                  <div class="row" v-if="votesRevealed">
+                  <!-- Hidden rather than absent: its row sizes the estimation card, so a v-if
+                       here resizes the card and shifts every row below on each reveal. -->
+                  <div class="row" v-bind:style="{ visibility: votesRevealed ? 'visible' : 'hidden' }">
                     <div class="col text-muted m-1">
                       <i data-feather="lock"></i>
                       <small>The round is revealed. Press Re-vote to open it again.</small>
