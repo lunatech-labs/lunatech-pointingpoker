@@ -713,6 +713,60 @@ roadmap item instead of leaving it here as stale history.
   results would settle it without hiding anything. Remove this entry when step 8
   lands or decides otherwise.
 
+### A green CI never runs the artifact upload, so a major bump of it lands unverified
+
+- **Where:** `.github/workflows/ci.yml`, the `actions/upload-artifact` step at the
+  end of the `test` job, guarded by `if: failure()`.
+- **Issue:** The step exists to hand back Playwright traces when the browser suite
+  fails, so by construction it never runs on a green job. A Dependabot PR that
+  bumps it therefore goes green while proving nothing about the new version: the
+  runner resolves and downloads the action during `Set up job` and then skips it.
+  PR #396 bumped it from 4 to 7, three majors at once, and its run 34356638195
+  resolved `actions/upload-artifact@v7` to SHA `043fb46d` and passed without
+  invoking it. The risk is bounded, since `if: failure()` means a regression can
+  never turn a passing run red, but it lands where it is least welcome: the first
+  real execution is a failing e2e run, which is exactly when the traces matter.
+  Every breaking change in that range was runtime-level rather than input-level
+  (v5 added Node 24, v6 made `node24` the default and set a runner floor of
+  2.327.1, v7 moved the action to ESM), which is the class of failure that shows
+  up the instant the action starts.
+- **Resolution:** No standing fix, and the v7 bump itself is verified, so nothing
+  is pending. What this entry carries is the recipe, because the next major bump
+  arrives with the same blind spot. Branch off the Dependabot branch so the real
+  action version is under test, add a spec that fails on purpose *after* reaching
+  a real room so the retained trace has the shape of a genuine failure, open it as
+  a **draft** PR against `main` (the head carries the bump, so the base does not
+  affect which version runs), then read the artifact and delete the branch. The
+  spec is the whole of it:
+
+  ```js
+  // e2e/artifact-probe.spec.js
+  import { test, expect, nameInput, participantRow } from './fixtures.js'
+
+  test('deliberate failure that leaves a trace behind', async ({ page, origin }) => {
+    await page.goto(`${origin}/`)
+    await nameInput(page).fill('Alice')
+    await page.getByRole('button', { name: 'Create' }).click()
+
+    await expect(participantRow(page, 'Alice')).toHaveCount(1)
+    await expect(participantRow(page, 'Alice')).toHaveCount(2)
+  })
+  ```
+
+  The signal is not the job status, which is red by design. It is whether
+  `playwright-artifacts` appears on the run with a chromium and a firefox
+  directory inside, and whether the traces survive a download. Run 34361420129 on
+  2026-09-09 is the worked example for v7: the step succeeded on the failed job
+  and returned 1,029,297 bytes holding `trace.zip` and `error-context.md` per
+  project, both archives intact, with v7's new `archive` input defaulting to
+  `true` and so matching v4's behaviour. A cheaper partial alternative was
+  considered and not taken: changing the guard to `if: '!cancelled()'` would start
+  the action on every run, catching any runtime-level break on a green build at
+  the cost of a few seconds, since `if-no-files-found: ignore` makes an empty
+  `test-results/` a no-op that uploads nothing. It would not exercise the zip and
+  upload path, so it narrows this entry rather than closing it. Remove this entry
+  if that guard changes or the step is retired.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
