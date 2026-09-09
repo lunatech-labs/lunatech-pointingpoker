@@ -176,6 +176,27 @@ export const connectionAlert = page => page.getByRole('alert')
 // The transient banner specifically, so a terminally dead session is not read as a blip.
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
+// Two renderings of one set, so a revealed round shows the same estimations in both. Compared as
+// multisets: the order of a tie is undecided, and pinning it here would choose a rule nobody has.
+export const expectSummaryMatchesTable = async page => {
+  // Two empty renderings agree trivially, so this gate is what makes the comparison mean
+  // anything, and being retrying it also settles the DOM before the reads below, which are not.
+  await expect(summaryTable(page).locator('tbody tr')).not.toHaveCount(0)
+  const tally = {}
+  for (const row of await participantRows(page).all()) {
+    const estimation = (await row.locator('td').nth(2).innerText()).trim()
+    if (estimation !== '') tally[estimation] = (tally[estimation] || 0) + 1
+  }
+  const summary = []
+  for (const row of await summaryTable(page).locator('tbody tr').all()) {
+    const cells = await row.locator('td').allInnerTexts()
+    // A third column would otherwise be dropped rather than compared.
+    expect(cells).toHaveLength(2)
+    const [value, count] = cells
+    summary.push([value.trim(), Number(count.trim())])
+  }
+  expect(summary.sort()).toEqual(Object.entries(tally).sort())
+}
 // A card by its face value, for asserting its state rather than pressing it.
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
 export const vote = (page, value) => card(page, value).click()

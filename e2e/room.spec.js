@@ -6,6 +6,7 @@ import {
   participantRow,
   participantRows,
   card,
+  expectSummaryMatchesTable,
   frozenNotice,
   revealedCell,
   summaryTable,
@@ -49,7 +50,9 @@ test('a straggler keeps the votes hidden until Show is pressed', async ({ join }
   await expect(participantRow(bob.page, 'Alice')).toContainText('5')
 })
 
-test('a cast vote shows as withheld in the other browser until the reveal', async ({ join }) => {
+test('a cast vote is withheld, shown on the reveal, and withheld again on a re-vote', async ({
+  join
+}) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
 
@@ -63,6 +66,13 @@ test('a cast vote shows as withheld in the other browser until the reveal', asyn
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(aliceOnBob).toContainText('5')
   await expect(hiddenMark(aliceOnBob)).toHaveCount(0)
+
+  // The mark clearing proves the re-vote reached Bob: the value goes back behind the marker while
+  // the row still has one, which showUserEstimation reading voted would lose.
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  await expect(votedMark(aliceOnBob)).toHaveCount(0)
+  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
+  await expect(aliceOnBob).not.toContainText('5')
 })
 
 test('the participant list follows a join and a leave', async ({ join }) => {
@@ -173,6 +183,44 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
 })
 
+// A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
+// estimations, clear wipes them. Shared so the pair cannot drift apart.
+async function resetReArmsTheAutoReveal(join, reset) {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  await vote(bob.page, '3')
+  // The latch firing on a fresh round, which is the state the reset below undoes.
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await reset(alice)
+  await expect(summaryTable(bob.page)).toBeHidden()
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
+
+  await vote(alice.page, '8')
+  // Half the room: still hidden, so the reveal below is the latch and not a stale summary.
+  await expect(summaryTable(bob.page)).toBeHidden()
+  await vote(bob.page, '8')
+
+  // No Show anywhere in this case: the last vote is what reveals the round.
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
+  await expectSummaryMatchesTable(alice.page)
+}
+
+test('a re-vote re-arms the auto-reveal, and the last vote fires it', async ({ join }) => {
+  await resetReArmsTheAutoReveal(join, alice =>
+    alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  )
+})
+
+test('a clear re-arms the auto-reveal, and the last vote fires it', async ({ join }) => {
+  await resetReArmsTheAutoReveal(join, alice =>
+    alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  )
+})
+
 // Carol never votes and then leaves, which a re-derived everyone-has-voted predicate would
 // answer by revealing the room. Shared so the two departure modes cannot drift apart.
 async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
@@ -251,6 +299,7 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   // Before step 3 Bob's empty estimation was a row of its own, and could out-count a real one.
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('a Show during a re-vote still tallies the estimations on the table', async ({ join }) => {
@@ -270,6 +319,7 @@ test('a Show during a re-vote still tallies the estimations on the table', async
   // The summary sits beside that table and has to count what it displays.
   await expect(participantRow(alice.page, 'Bob')).toContainText('5')
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('an empty estimation posted directly is not a summary row', async ({ join, room }) => {
@@ -287,6 +337,7 @@ test('an empty estimation posted directly is not a summary row', async ({ join, 
   // Bob counts as voted and still must not be a row: the confirmation flag would admit him.
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expectSummaryMatchesTable(alice.page)
 })
 
 test('a Show in a room where nobody voted renders no summary', async ({ join }) => {

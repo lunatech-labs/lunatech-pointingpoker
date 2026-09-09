@@ -57,10 +57,12 @@ are not part of this path.
 Steps 0 (two plans), 1 and 2 have plans. Each was large: the browser harness, the
 snapshot protocol, and the redaction with the test rewrites it forced.
 
-Steps 3 and 3a have none. Step 3 was a filter and a template guard, five lines of
-production code. Step 3a was around twenty-five, but it changed behaviour every
+Steps 3, 3a and 3b have none. Step 3 was a filter and a template guard, five lines
+of production code. Step 3a was around twenty-five, but it changed behaviour every
 participant sees, so it earned a long brainstorm and the spec amendments that came
-out of it. Both were executed directly under TDD in the session that designed
-them.
+out of it. Step 3b is tests only. All three were executed directly in the session
+that designed them, under TDD where there was production code to drive, and under
+the substitute step 3b's own entry in the design records: a characterization case
+arrives green, so it was verified by reintroducing the defect it exists to catch.
 
 Step 4 will have one. It rewrites the actor's state model and `RoomSpec` with it.
