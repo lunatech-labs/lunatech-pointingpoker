@@ -1389,7 +1389,14 @@ and reads as live. And no tooltip, considered and dropped: a native `title` need
 the whole wrapper apparatus, because a disabled button fires no mouse events and
 the pointer over one does not hover its parent either, and what it would say is
 the sentence already sitting under the deck. Step 8 revisits the affordance with
-real components.
+real components, and owes it a live region: the notice has none today, and adding
+`role="status"` to the block as it stands would not fix that, since a region
+inserted along with its content is not reliably announced. A persistent region
+whose text changes is the shape that works. `role="alert"` is the exception that
+would announce from the `v-if`, and it is refused: it is assertive and meant for
+time-sensitive messages, where a revealed round is a status change. That it is
+the one that survives injection is why toast libraries reach for it, and not a
+reason to.
 
 **A snapshot whose `you` is absent from `users` means the server no longer holds
 this identity as a member**, and the client treats it as a signal to rejoin
@@ -1527,19 +1534,22 @@ Added, each with the step it lands at so nothing here is unassigned:
   Step 3a adds one browser case and three in `RoomSpec`. The browser case
   asserts a card is disabled on the voter's page and on the straggler's, since
   those are the two refusals and only one of them is a change, then presses
-  Re-vote and votes to prove the deck comes back. It waits on the caster's mark
-  clearing on the *other* page first: a Re-vote that reached only the presser
-  would leave the rest passing against a deck nobody else has seen reopen. The
-  `RoomSpec` three are an overwrite refused, a first vote refused, and a refused
-  vote still publishing. The last is the one worth having, since it pins the
-  absence of a special case that a later reader is otherwise likely to add.
+  Re-vote and votes to prove the deck comes back. The line under the deck is
+  asserted with the cards and again after the Re-vote, so its appearance and its
+  removal are both pinned. It waits on the caster's mark clearing on the *other*
+  page first: a Re-vote that reached only the presser would leave the rest
+  passing against a deck nobody else has seen reopen. The `RoomSpec` three are an
+  overwrite refused, a first vote refused, and a refused vote still publishing.
+  The last is the one worth having, since it pins the absence of a special case
+  that a later reader is otherwise likely to add.
 
   What was not test-driven is the presentation. The 65% fade, the `not-allowed`
-  cursor, the lock line under the deck and the `:not(:disabled)` hover guard were
-  verified by eye rather than by a case. The hover guard carries the residual
-  risk: without it a frozen card still swaps to red under the pointer, and a
-  still frame cannot show that, so being wrong there is invisible in the diff and
-  in a screenshot alike.
+  cursor, the lock icon in the line under the deck and the `:not(:disabled)` hover
+  guard were verified by eye rather than by a case. The line's own text is pinned,
+  since the fixture keys on it rather than on the icon. The hover guard carries
+  the residual risk: without it a frozen card still swaps to red under the
+  pointer, and a still frame cannot show that, so being wrong there is invisible
+  in the diff and in a screenshot alike.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1632,8 +1642,8 @@ of what the probe is being kept for.
 Eleven steps, numbered from zero, one of them lettered because it was added
 after the rest. The numbers are labels rather than a queue; each states what it
 actually waits on. Line counts are rough. Which steps get an implementation plan
-under `docs/superpowers/plans/` is a separate question, answered by the README
-there rather than by size alone.
+is a separate question, answered by `docs/superpowers/plans/README.md` rather
+than by size alone.
 
 | Step | Waits on |
 | --- | --- |

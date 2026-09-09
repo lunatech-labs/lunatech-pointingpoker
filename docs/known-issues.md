@@ -567,7 +567,7 @@ roadmap item instead of leaving it here as stale history.
   and the room's two answers are worth reading together. Neither scheduled step
   closes it. Step 6 is about a refusal reaching the client that cast it, not about
   which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
-  design's `:600-609` removes estimates only on `clear` or the round ending, with a
+  design's `:602-609` removes estimates only on `clear` or the round ending, with a
   `reVote` leaving the values in place and clearing `confirmed`, which is the state
   `Estimate` exists to express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
