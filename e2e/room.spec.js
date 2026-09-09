@@ -67,10 +67,8 @@ test('a cast vote is withheld, shown on the reveal, and withheld again on a re-v
   await expect(aliceOnBob).toContainText('5')
   await expect(hiddenMark(aliceOnBob)).toHaveCount(0)
 
-  // The mark clearing is the proof the re-vote reached Bob. A re-vote keeps the estimation and
-  // drops the confirmation, so the value goes back behind the marker while the row still has
-  // one: showUserEstimation reading voted would lose it here, and step 4 re-expresses that
-  // field as an entry in round.estimates.
+  // The mark clearing proves the re-vote reached Bob: the value goes back behind the marker while
+  // the row still has one, which showUserEstimation reading voted would lose.
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   await expect(votedMark(aliceOnBob)).toHaveCount(0)
   await expect(hiddenMark(aliceOnBob)).toHaveCount(1)

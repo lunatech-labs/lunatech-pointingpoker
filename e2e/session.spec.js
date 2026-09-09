@@ -9,14 +9,8 @@ import {
   vote
 } from './fixtures.js'
 
-// One meeting rather than one feature. Every case in room.spec.js starts from a fresh room and
-// exercises a single behaviour, which is how a re-vote in progress went untallied for a whole
-// step: no case crossed a re-vote with a reveal, and in every round the two renderings of the
-// estimations happened to agree. What this walks is the states a round leaves behind.
-//
-// Each reveal asserts the row count before the invariant, and never the invariant alone: with
-// the summary not yet rendered both sides are empty and agree, so the invariant on its own
-// would pass on a snapshot that never arrived.
+// One meeting rather than one feature: the fresh-room cases beside this never crossed a re-vote
+// with a reveal. Why it exists, and why each reveal counts rows first: the spec's step 3b entry.
 test('a session of rounds keeps the summary honest across them', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')

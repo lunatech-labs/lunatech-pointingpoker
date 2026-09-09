@@ -176,9 +176,8 @@ export const connectionAlert = page => page.getByRole('alert')
 // The transient banner specifically, so a terminally dead session is not read as a blip.
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
-// The summary and the participant table are two renderings of one set, so a revealed round has
-// to show the same estimations in both. Compared as multisets, since the order of a tie is
-// undecided and known-issues says so; asserting it here would pin a rule nobody has chosen.
+// Two renderings of one set, so a revealed round shows the same estimations in both. Compared as
+// multisets: the order of a tie is undecided, and pinning it here would choose a rule nobody has.
 export const expectSummaryMatchesTable = async page => {
   // Two empty renderings agree trivially, so this gate is what makes the comparison mean
   // anything, and being retrying it also settles the DOM before the reads below, which are not.
