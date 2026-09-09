@@ -528,6 +528,10 @@ sessions past promotion removes that reason, so the scan goes and `Member` needs
 no token. Retention is a precondition for this shape rather than a companion to
 it, which is why step 4 waits on step 5.
 
+Landed at step 5: the scan is gone and `ValidateToken` is the single lookup this
+paragraph specifies. The citation is to the pre-step-5 file, which is what the
+argument is about.
+
 The name is deliberately in both `Session` and `Member`: a session exists before
 there is a member, which is why 08-20 put it on `PendingSession`.
 
@@ -544,7 +548,7 @@ between the two requests, an abandoned page load, a probe.
 resolves its token through `sessions` and then requires the resulting `userId` to
 be in `members`, so a resolved identity that is no longer a member is a no-op,
 which is what today's `data.users.find(_.token == token)` already produces
-(`Room.scala:141`, `152`, `163`, `174`, `227`). Keeping the checks separate matters
+(`Room.scala:143`, `149`, `154`, `159`, `203`). Keeping the checks separate matters
 because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
 at any point in the actor's life clear a round they are not in. Nothing about this
 weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
@@ -557,7 +561,7 @@ exists for.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
-while `clear()` clears both (`Room.scala:97-102`), so "has an estimation, is not
+while `clear()` clears both (`Room.scala:94-99`), so "has an estimation, is not
 counted as voted" is a state the current code holds and the wire format
 distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
 three things break at once: `ownVoteConfirmed` in section 5 is always true and
@@ -1354,7 +1358,7 @@ Three details are load-bearing rather than polish:
   distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
   carries it, next to the roles item that settles the denominator.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
-  keeps `estimation` while `clear()` clears both (`Room.scala:97-102`), so "I
+  keeps `estimation` while `clear()` clears both (`Room.scala:94-99`), so "I
   have an estimation showing but the server does not consider me voted" is
   exactly the revote state and nothing else. The optimistic assignment in
   `vote()` stays, and corrects itself on the next publish rather than promptly:
@@ -1991,6 +1995,13 @@ step 1's diff is readable at its size only because most of it is deletion.
 About 40 and 90, having lost the TTL and its expiry check. Closes the
 outage-recovery reload; the pending-session leak closes at step 4 instead, once a
 room's lifetime is bounded.
+
+Landed. `sessions` is retained past promotion and is the single authority
+`ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
+outcome with a cut that outlasts the grace period and recovers on the retry, and
+`docs/known-issues.md` lost the forced-reload entry. The pending-session leak
+entry stayed open and was re-pitched around retention, which widened it from
+abandoned tabs to every session a room mints.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit

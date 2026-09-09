@@ -79,6 +79,13 @@ closes). As a strictly-necessary functional cookie (it exists only to operate th
 session the user actively joined, not for tracking or analytics), it doesn't require
 a cookie-consent banner under the ePrivacy Directive.
 
+The session outlives any single connection. `/join` mints it and the room keeps
+it for as long as the room itself lives, so a drop that outlasts the grace period
+removes the participant from the list but leaves their token resolvable: the
+browser's own `EventSource` retry rejoins under the same identity, with no reload
+and no second entry in the list. Their vote does not survive that window, since
+it is held against their membership.
+
 This session cookie closes an identity-spoofing gap, not room access control: anyone
 who knows a `roomId` can still call `/join` and legitimately participate in that
 room. What it prevents is impersonating a specific existing member and acting

@@ -51,26 +51,26 @@ roadmap item instead of leaving it here as stale history.
   at an empty room keeps it alive; bounding that belongs to the rate-limiting
   entry below. Remove this entry when step 4 lands.
 
-### A `/join` with no follow-up `/events` leaks a pending session for the room's lifetime
+### Every session a room mints lives as long as the room does
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData.pendingSessions`, `registerSession`).
-- **Issue:** Same shape as the room-level GC issue above, one level deeper: a
-  `PendingSession` created by `RequestSession` (backing `/join`) is only cleared
-  when a matching `Join` promotes it to a real member. An abandoned tab, a
-  network failure between `/join` and `/events`, or a client that calls `/join`
-  more than once before connecting leaves the earlier entry in
-  `pendingSessions` for as long as the room actor lives, even if that room
-  already has active, joined members and would otherwise stay alive
-  indefinitely.
+  (`RoomData.sessions`, `registerSession`).
+- **Issue:** Same shape as the room-level GC issue above, one level deeper. A
+  `Session` created by `RequestSession` (backing `/join`) is never removed. Step
+  5 retains it past promotion, so that a member removed at grace expiry can still
+  reconnect, and it deliberately adds no TTL. A room therefore accumulates one
+  entry per `/join` it ever answered: tabs that connected, tabs that failed
+  between `/join` and `/events`, and people who joined and left hours ago.
 - **Resolution:** Scheduled as step 4 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle, so a room's sessions go
   with it two to four hours after its last connection instead of living for the
-  process. Step 5 retains sessions past promotion rather than consuming them,
-  which removes the pending/promoted distinction this entry is phrased around,
-  and it deliberately adds no TTL: the leak is a hundred bytes per abandoned tab
-  in a room whose lifetime is now bounded. Remove this entry when step 4 lands.
+  process. A TTL was considered there and dropped: its useful range is squeezed
+  below by needing to outlast a realistic in-meeting outage and above by the idle
+  stop, and what it would reclaim is a hundred bytes per abandoned session. What
+  is left after step 4 is a room held open for hours with heavy tab churn, which
+  is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
+  when step 4 lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
@@ -234,31 +234,36 @@ roadmap item instead of leaving it here as stale history.
   rate-limiting entry above, the underlying gap is broader than any one symptom
   and wants its own piece of work rather than a patch per endpoint.
 
-### A disconnection outlasting the grace period forces a page reload
+### The grace period does not start until a heartbeat write to the dead connection fails
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`joinUser` consuming the pending session, `ConfirmLeave`);
-  `src/main/resources/pages/index.html` (`onerror`).
-- **Issue:** When a connection drops for longer than the grace period,
-  `ConfirmLeave` removes the member. Because `joinUser` consumed the pending
-  session on promotion, the member entry was the token's only remaining record,
-  so `ValidateToken` now resolves nothing and `/events` answers `401`.
-  `EventSource` stops retrying on a non-2xx, the readyState goes to `CLOSED`,
-  and the user is told "Your session has ended. Please reload the page to
-  rejoin." The grace timer only starts once the room detects the disconnect,
-  and detection itself rides on the room's own traffic, not a fixed clock: in a
-  quiet room a blip can run well past six seconds and still recover invisibly,
-  while in a busy room detection is fast and the 6-second grace period is what
-  actually governs from there. So "a wifi handoff of more than six seconds" is
-  not the threshold; what has to outlast the window is detection plus the grace
-  period together, and how long that takes depends on the room. The `onerror`
-  comment attributes the 401 to the room having been reaped, which is a
-  different and rarer cause.
-- **Resolution:** Scheduled as step 5 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which retains sessions past promotion instead of consuming them, so the token
-  stays resolvable and the retry succeeds with the same identity.
-  Remove this entry when that lands.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`
+  (`heartbeatInterval` at `:28`, `keepAlive` at `:62`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace
+  period).
+- **Issue:** The grace timer only starts once the room detects the disconnect,
+  and detection itself rides on the room's own traffic rather than a clock. The
+  heartbeat lives entirely inside the SSE stream as the `keepAlive` stage, not
+  as a message to the room actor, so nothing notices a dead connection until a
+  write to it fails, and in a quiet room the only writes are that 15-second
+  heartbeat. Measured in a quiet two-person room: a cut participant took about
+  35.5 seconds to disappear from the other participant's list, two 15-second
+  heartbeat writes failing before the 4-second grace period (this branch's e2e
+  profile; production defaults to 6 seconds via `application.conf:23`) even
+  starts. Two runs agreed to within 2ms, so the number is deterministic rather
+  than noisy. Any room traffic detects the cut sooner, which is why
+  `e2e/room.spec.js`'s case forces a vote and a Clear rather than waiting it
+  out, and the older `departureWhileCut` helper does the same. A participant
+  who crashes, sleeps their laptop, or drops off the network in an otherwise
+  quiet room lingers in everyone's list for up to about half a minute.
+- **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
+  leave endpoint does not close this: its beacon fires only on `pagehide` for a
+  page being discarded deliberately, and a crash, a sleeping laptop, or a
+  silent network drop reaches no such event, so detection still waits on a
+  heartbeat write failing. Shortening the heartbeat would speed detection at the
+  cost of traffic on every open connection, and no step in the target design
+  schedules that trade.
 
 ### A second tab on the same room displaces the first tab's identity
 
@@ -454,7 +459,9 @@ roadmap item instead of leaving it here as stale history.
   `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
   `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
   unverified. `RoomSpec.scala`'s four are all in the two sentences above. Step 3
-  refreshed the `index.html` citations its own two hunks shifted.
+  refreshed the `index.html` citations its own two hunks shifted. Step 5 swept
+  the `Room.scala` citations, renumbering the command-path list its own diff
+  shifted and annotating the `ValidateToken` sentence whose code it deleted.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
