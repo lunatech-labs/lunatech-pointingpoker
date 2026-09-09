@@ -1552,12 +1552,13 @@ Added, each with the step it lands at so nothing here is unassigned:
   in the diff and in a screenshot alike.
 
   Step 3b adds a case of a different kind, in `e2e/session.spec.js`: one meeting
-  rather than one feature, four participants across five rounds, asserting at every
-  reveal. It exists because of the suite's shape rather than any one omission. Each
-  case beside it starts from a fresh room and exercises a single behaviour, so none
-  crossed a re-vote with a reveal, and in every round the table and the summary
-  happened to agree. It also carries the one thing a fresh-room case cannot: what a
-  round leaves behind, which the final reveal after a `clear` is there to check.
+  rather than one feature, four participants across seven rounds, asserting at
+  every reveal. It exists because of the suite's shape rather than any one
+  omission. Each case beside it starts from a fresh room and exercises a single
+  behaviour, so none crossed a re-vote with a reveal, and in every round the
+  table and the summary happened to agree. It also carries the one thing a
+  fresh-room case cannot: what a round leaves behind, which the single-voter
+  reveal after a `clear` is there to check.
 
   It also extends the withheld-value case through a re-vote, which closes the last
   of the three places that choose between `voted` and `hasEstimation` without a
@@ -1565,10 +1566,21 @@ Added, each with the step it lands at so nothing here is unassigned:
   correct before this, but step 4 re-expresses that field as an entry in
   `round.estimates`, so the state it is correct in is worth pinning first.
 
+  Two of its rounds let the room reveal itself, once after a re-vote and once
+  after a `clear`, which nothing in the suite did: every other reveal is a Show
+  or a fresh round's own latch, and no case voted after a `clear` at all. A
+  dedicated pair in `room.spec.js` pins that precisely, one helper driven over
+  the two resets, so a failure names the reset rather than a round of a meeting.
+  Neither round is a residue check, since everyone voting overwrites whatever a
+  `clear` left behind, and that is why the single-voter reveal keeps that job.
+
   With it comes `expectSummaryMatchesTable`, asserting the two renderings agree,
-  compared as multisets so the undecided tie order stays unpinned. Every reveal
-  asserts a row count before the invariant and never the invariant alone: before
-  the snapshot lands both sides are empty and agree.
+  compared as multisets so the undecided tie order stays unpinned. The helper
+  refuses an empty summary itself, since before the snapshot lands both sides
+  are empty and agree, so the invariant alone would pass on a snapshot that
+  never arrived. Every reveal still asserts a row count in front of it, which
+  pins the number expected there rather than merely a non-empty one: the two
+  catch different failures, and neither makes the other redundant.
 
   **A characterization case arrives green, so it was verified by breaking the code
   rather than by watching it fail.** Twice: reintroducing the `voted` filter fails
@@ -1576,6 +1588,16 @@ Added, each with the step it lands at so nothing here is unassigned:
   every row count correct, fails the invariant and nothing else. The second is the
   argument for the invariant existing beside the counts at all, and the pair is
   what a red phase would otherwise have given.
+
+  Both breaks demonstrate the helper and the filter rather than the walk, since
+  each also fails a fresh-room case beside it. The walk's own contribution is
+  the sequence, and no single mutation isolates it: anything breaking a later
+  round breaks server state that an earlier single-behaviour case already
+  asserts on. The obvious candidate, making `clear` keep estimations the way
+  `reVote` does, fails the single-voter reveal but also the re-vote styling case
+  and `RoomSpec`'s own clear case. So the length is argued rather than
+  mutation-demonstrated, which is the part worth carrying to the later steps
+  that copy this pattern.
 
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
@@ -1687,11 +1709,12 @@ than by size alone.
 | 9 Recorded value and round history | 8 |
 
 One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 3b, 5, 4, 6, 7,
-8, 9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is fixed
-beyond the table is that 2, 3 and 3a precede 4, for the reason under step 3.
-Step 3a is lettered rather than numbered because it was not one of the ten this
-design started with: it came out of using step 3, and the letter keeps it beside
-the reveal work it amends instead of taking a number that means something else.
+8, 9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is
+fixed beyond the table is that 2, 3, 3a and 3b precede 4, for the reasons under
+steps 3 and 3b. Step 3a is lettered rather than numbered because it was not one
+of the ten this design started with: it came out of using step 3, and the letter
+keeps it beside the reveal work it amends instead of taking a number that means
+something else.
 
 **Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
 a usability improvement, and 8 and 9 are product work whose case is the
@@ -1873,10 +1896,11 @@ mind, and section 3 records both the rule and the straggler exception rejected
 with it.
 
 **Step 3b. A session case, and the summary invariant.** One browser case walking
-a whole meeting, plus a helper asserting that a revealed summary is the tally of
-the estimations the table is showing, used at every reveal that has one. Waits on
+a whole meeting, a helper asserting that a revealed summary is the tally of the
+estimations the table is showing, used at every reveal a tally case asserts on,
+and a dedicated pair covering the auto-reveal the walk newly reaches. Waits on
 3a, not for tooling but because the sequence it walks is only settled once a
-revealed round refuses votes. About 90 lines of tests and no production code.
+revealed round refuses votes. About 175 lines of tests and no production code.
 
 Not in the original ten either, and it comes from the same defect step 3's own fix
 does. The tally read `voted` where it wanted `hasEstimation`, and the suite could
