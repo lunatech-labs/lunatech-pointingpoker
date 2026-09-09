@@ -590,7 +590,7 @@ roadmap item instead of leaving it here as stale history.
   confirmation can mean a re-vote in progress, and the summary counts exactly the
   non-blank estimation cells the table beside it displays, which
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1314-1327`
-  argues for and `e2e/room.spec.js:256` asserts. It is the same failure class as
+  argues for and `e2e/room.spec.js:269` asserts. It is the same failure class as
   the tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
   stale row with no check-circle (`index.html:318`), so anyone looking down from
