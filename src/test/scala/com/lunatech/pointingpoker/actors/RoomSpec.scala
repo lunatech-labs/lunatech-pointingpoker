@@ -509,6 +509,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // user2 has voted and user3 has not, so the round stays unrevealed with a live
       // estimation on the table: ClearVotes, ReVote, ShowVotes and EditIssue would each
       // visibly change the room if Alice's removed-member token were wrongly honoured.
+      // Vote is vacuous today and kept deliberately: RoomData.vote keys on user id, so it is a
+      // no-op either way until step 4, where estimates outlive membership and the check bites.
       assertUnaffected(Room.Vote(minted.token, "8"))
       assertUnaffected(Room.ClearVotes(minted.token))
       assertUnaffected(Room.ReVote(minted.token))

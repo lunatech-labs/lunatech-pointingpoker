@@ -475,7 +475,9 @@ roadmap item instead of leaving it here as stale history.
   revealed-round refusal, and three of this file's citations into the design, for
   the additive-views passage, the re-vote tally argument, and the `clear`/`reVote`
   removal rule. A review on 2026-09-09, before this branch opened as a pull
-  request, re-swept and corrected all eight, in this entry and the four below it.
+  request, re-swept and corrected all eight. They sit in four entries further
+  down, from "A tied vote is broken by JavaScript key order" to "A reload during
+  a revealed round locks the participant out of it", and none in this one.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
