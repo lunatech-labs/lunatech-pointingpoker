@@ -48,7 +48,7 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await expect(summaryTable(carol.page).locator('tbody tr')).toHaveCount(2)
   await expectSummaryMatchesTable(carol.page)
 
-  // A straggler joins the round. The reveal closed it, so the room reopens first.
+  // The straggler votes at last. The reveal closed the round, so the room reopens first.
   await reVote(alice.page)
   await expect(summaryTable(carol.page)).toBeHidden()
   await vote(carol.page, '8')
@@ -66,7 +66,8 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await show(bob.page)
   await expect(summaryTable(bob.page).locator('tbody tr')).toHaveCount(2)
   await expectSummaryMatchesTable(bob.page)
-  await expect(bob.page.locator('.summary-card')).toContainText('5')
+  // Scoped to the card: .estimation-text is also every revealed cell in the table.
+  await expect(bob.page.locator('.summary-card .estimation-text')).toHaveText('5')
 
   // Clear ends the round instead of reopening it. Asserting the cleared table proves nothing,
   // since an unrevealed round renders no values either way: the next round is the real check.
