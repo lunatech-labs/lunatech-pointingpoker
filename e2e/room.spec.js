@@ -185,6 +185,44 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
 })
 
+// A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
+// estimations, clear wipes them. Shared so the pair cannot drift apart.
+async function resetReArmsTheAutoReveal(join, reset) {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(alice.page, '5')
+  await vote(bob.page, '3')
+  // The latch firing on a fresh round, which is the state the reset below undoes.
+  await expect(summaryTable(alice.page)).toBeVisible()
+
+  await reset(alice)
+  await expect(summaryTable(bob.page)).toBeHidden()
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
+
+  await vote(alice.page, '8')
+  // Half the room: still hidden, so the reveal below is the latch and not a stale summary.
+  await expect(summaryTable(bob.page)).toBeHidden()
+  await vote(bob.page, '8')
+
+  // No Show anywhere in this case: the last vote is what reveals the round.
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
+  await expectSummaryMatchesTable(alice.page)
+}
+
+test('a re-vote re-arms the auto-reveal, and the last vote fires it', async ({ join }) => {
+  await resetReArmsTheAutoReveal(join, alice =>
+    alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  )
+})
+
+test('a clear re-arms the auto-reveal, and the last vote fires it', async ({ join }) => {
+  await resetReArmsTheAutoReveal(join, alice =>
+    alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  )
+})
+
 // Carol never votes and then leaves, which a re-derived everyone-has-voted predicate would
 // answer by revealing the room. Shared so the two departure modes cannot drift apart.
 async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {

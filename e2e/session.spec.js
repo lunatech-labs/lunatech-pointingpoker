@@ -80,4 +80,27 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   // One row and one row only: three rounds of estimations died with the Clear.
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
   await expectSummaryMatchesTable(alice.page)
+
+  // Nobody presses anything from here. Five rounds of Show have not once let the room reveal
+  // itself, which is the ordinary way a round ends.
+  await reVote(alice.page)
+  await expect(summaryTable(alice.page)).toBeHidden()
+  for (const page of [alice.page, bob.page, carol.page]) await vote(page, '8')
+  // Three of four: still hidden, so the next line is the latch firing rather than a stale table.
+  await expect(summaryTable(alice.page)).toBeHidden()
+  await vote(dave.page, '8')
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
+  await expectSummaryMatchesTable(alice.page)
+
+  // The same latch after a clear rather than a re-vote, the two resets it has to re-arm from.
+  // Not a residue check: everyone voting overwrites whatever the clear left behind.
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(summaryTable(alice.page)).toBeHidden()
+  for (const page of [alice.page, bob.page, carol.page]) await vote(page, '5')
+  await expect(summaryTable(alice.page)).toBeHidden()
+  await vote(dave.page, '3')
+  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+  await expectSummaryMatchesTable(alice.page)
 })
