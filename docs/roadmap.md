@@ -108,9 +108,13 @@ directly in the new frontend.
       re-voted, so the room can see who moved and which way. Comes out of step 3a:
       with a revealed round refusing votes, changing your mind is a Re-vote, which
       makes the second answer a deliberate act worth reading against the first.
-      `reVote()` already keeps `estimation` server-side, so what is missing is
-      carrying the previous value on the wire, rendering it, and deciding what
-      `clear` does to it. Wants the new frontend rather than the Vue 2 table.
+      `reVote()` keeps `estimation`, but only until that participant's next `vote`
+      overwrites it, which is exactly when both values are wanted, so the missing
+      piece is somewhere to keep the previous one rather than the wire and the
+      rendering alone. Decide what `clear` does to it too. Until it lands, a Show
+      during a partly re-voted round reports a distribution built from two rounds;
+      see `docs/known-issues.md`. Wants the new frontend rather than the Vue 2
+      table.
 - [x] Guarantee SSE broadcast delivery before latched reveal is trustworthy.
       Fixed the causes rather than compensating for them: a joining user's catch-up
       replay went out as a single batched message instead of one send per event,

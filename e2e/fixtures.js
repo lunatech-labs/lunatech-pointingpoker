@@ -180,7 +180,7 @@ export const connectionLost = page =>
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
 export const vote = (page, value) => card(page, value).click()
 // The line under the deck that says why the cards are frozen, keyed on its text rather than its
-// lock, which is the same choice votedMark and hiddenMark explain.
+// lock: it has text to key on, which is what votedMark and hiddenMark lack rather than share.
 export const frozenNotice = page => page.getByText('The round is revealed')
 
 export { expect }

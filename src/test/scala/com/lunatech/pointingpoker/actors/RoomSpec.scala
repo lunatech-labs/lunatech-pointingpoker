@@ -563,7 +563,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.revealed mustBe true
     }
 
-    "publish on a refused vote, so a client that assumed it landed corrects itself" in {
+    "publish on a refused vote, the same as on one that lands" in {
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "3")
       val (_, roomRef)      = createRoom(
         UUID.randomUUID(),

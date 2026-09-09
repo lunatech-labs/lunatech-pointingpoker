@@ -41,11 +41,18 @@ write the test, watch it fail for the reason you expect, then implement.
 
 **Say plainly what was not test-driven.** Presentation is the usual case, a fade,
 a cursor, an icon. Verifying it by eye is often the right call, and a plan would
-have recorded that choice under its deviations. Without one, the commit message
-and the review conversation are where it has to be said, rather than left to be
-inferred from the absence of a test.
+have recorded that choice under its deviations, the shape at
+`2026-08-31-protocol-architecture-1-snapshot.md:142`. Without a plan it goes in the
+living spec beside the cases that were written, for the reason above: a reader
+asking whether something is covered opens the spec, not the log. A commit message
+can carry the detail; it is not the record.
 
 ## The record so far
+
+The steps below are the 2026-08-31 protocol architecture's. The directory also
+holds `2026-08-18-sse-transport-implementation.md` and
+`2026-08-20-session-identity-mechanism.md`, which belong to earlier designs and
+are not part of this path.
 
 Steps 0 (two plans), 1 and 2 have plans. Each was large: the browser harness, the
 snapshot protocol, and the redaction with the test rewrites it forced.

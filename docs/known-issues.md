@@ -370,13 +370,16 @@ roadmap item instead of leaving it here as stale history.
   can therefore pair the previous page with the new server. Sessions do die with
   the process, but the page is a separate artifact, which is the gap in the
   README's restart paragraph. The `Cache-Control: no-cache` at `API.scala:132`
-  covers the SSE response only. Today the symptom is cosmetic: against a step 2
-  server the step 1 page's `showUserEstimation` reads `u.estimation`, which is
-  `""` for another participant before the reveal, so the withheld-value marker
-  is missing from other rows until the page revalidates, while the recipient's
-  own row and the post-reveal table are unaffected. A larger wire change would
-  degrade less kindly, and nothing detects the mismatch, since the wire carries
-  no version field.
+  covers the SSE response only. The step 1 page against a step 2 server is
+  cosmetic: `showUserEstimation` reads `u.estimation`, which is `""` for another
+  participant before the reveal, so the withheld-value marker is missing from
+  other rows until the page revalidates, while the recipient's own row and the
+  post-reveal table are unaffected. Step 3a is already worse than that. A page
+  cached before it has no `disabled` binding on the cards and no early return in
+  `vote()`, so it presents a live deck over a closed round and discards every
+  click in silence. Nothing detects either mismatch, and a version field on the
+  wire would not have caught this one: step 3a changed which votes the server
+  accepts without changing the snapshot's shape at all.
 - **Resolution:** Open, and worth folding into step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
   `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
@@ -385,8 +388,9 @@ roadmap item instead of leaving it here as stale history.
   and its directive are already imported at `API.scala:18-19` for the SSE
   response, so it is one line, and step 6 already touches these routes to add
   the leave endpoint and make `/join` idempotent. Doing it on its own branch
-  instead would add an `API.scala` conflict to the stack's ordered rebase for a
-  symptom that is currently one missing icon. Step 8's frontend rewrite would
+  instead would add an `API.scala` conflict to the stack's ordered rebase, and
+  reaching the symptom at all needs a deploy to land between a page load and the
+  next vote, so step 6 is soon enough. Step 8's frontend rewrite would
   close it structurally with fingerprinted assets if step 6 does not.
 
 ### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
@@ -530,12 +534,52 @@ roadmap item instead of leaving it here as stale history.
   over is the count-only comparator and the stable sort, not `Object.entries`
   order. Remove this entry once a rule is chosen and implemented.
 
+### A Show during a partial re-vote tallies two rounds as one distribution
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:100-102`
+  (`reVote` keeping every estimation) and `:86` (`vote` overwriting one), with the
+  tally at `src/main/resources/pages/index.html:355` read at `:276-282` under the
+  "Most voted estimation" heading.
+- **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
+  round that some participants have re-voted and others have not holds answers to
+  two different rounds at once. A Show there counts both. Alice, Bob and Carol
+  finish a round on 8, 8 and 3, somebody presses Re-vote, Carol re-votes to 5, and
+  a Show before Alice and Bob pick reports 8 as the most voted estimation: two
+  participants' answer to the previous round and nobody's answer to this one.
+  Since step 3a a revealed round refuses every vote (`Room.scala:83`), so the
+  holders of a stale value cannot replace it in place. The recovery is another
+  Re-vote, which reopens the round for everyone, or a Clear.
+
+  This follows from two deliberate decisions, which is why it is recorded rather
+  than fixed. `reVote` keeps the values so that an estimation without a
+  confirmation can mean a re-vote in progress, and the summary counts exactly the
+  non-blank estimation cells the table beside it displays, which
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1314-1327`
+  argues for and `e2e/room.spec.js:256` asserts. It is the same failure class as
+  the tie-break above, a headline decided by something other than this round's
+  votes, and it is mitigated the same way but only halfway: the table renders a
+  stale row with no check-circle (`index.html:318`), so anyone looking down from
+  the headline can see who has not confirmed. The distribution itself carries no
+  such mark, and it is the distribution that names the winner.
+- **Resolution:** The durable fix is the roadmap's unchecked entry for showing the
+  previous estimate beside the current one, which comes out of step 3a for this
+  reason: once a revealed round refuses votes, a changed mind is a room-level act
+  and the room's two answers are worth reading together. Neither scheduled step
+  closes it. Step 6 is about a refusal reaching the client that cast it, not about
+  which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
+  design's `:600-609` removes estimates only on `clear` or the round ending, with a
+  `reVote` leaving the values in place and clearing `confirmed`, which is the state
+  `Estimate` exists to express. Remove this entry once the previous estimate is
+  rendered beside the current one, or once a rule is chosen that clears an
+  estimation on `reVote`.
+
 ### A vote refused by a revealed round is silent, and can read as accepted
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`
   (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
   (`/vote` answering `NoContent` whatever happens) and
-  `src/main/resources/pages/index.html:516-521` (`vote()`'s optimistic flag).
+  `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
+  optimistic flag).
 - **Issue:** Step 3a made a revealed round refuse every vote, and nothing tells
   the participant. The two things that should stop the click before it happens,
   the `disabled` binding on the cards and `vote()`'s early return, both read
@@ -543,7 +587,8 @@ roadmap item instead of leaving it here as stale history.
   therefore still has a live deck over a closed round, and `POST /vote` returns
   `204` either way.
 
-  What makes it worse than a no-op is the optimistic assignment. Take a
+  What makes it worse than a no-op is the optimistic assignment, and what step 3a
+  changed there is not the display but what stands behind it. Take a
   participant with a re-vote pending, so `voted` is false, `estimation` is still
   `5`, and card 5 shows in the pale unconfirmed style. Their stream is cut and the
   "Connection to the room was lost" banner is up. Somebody else presses Show.
@@ -551,8 +596,10 @@ roadmap item instead of leaving it here as stale history.
   selected-card branch keys on `e === user.estimation` it is **card 5** that turns
   the confirmed dark red, for a vote of 8 that never landed. No snapshot arrives
   to correct it, because the stream that would carry it is the one that is down.
-  Before step 3a that vote landed, so this is a new way to be wrong rather than a
-  new way to be stuck.
+  The false card is not new: before step 3a the same click painted the same card
+  5, since the stale `user.estimation` was all the branch ever had to key on. What
+  is new is that the vote of 8 no longer lands behind it, so what was a display
+  error on a dead stream is now a lost vote as well.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   whose ask pattern gives `/vote` a real result and makes the refusal reportable

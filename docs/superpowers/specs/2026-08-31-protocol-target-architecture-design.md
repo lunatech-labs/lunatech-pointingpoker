@@ -1523,6 +1523,13 @@ Added, each with the step it lands at so nothing here is unassigned:
   vote still publishing. The last is the one worth having, since it pins the
   absence of a special case that a later reader is otherwise likely to add.
 
+  What was not test-driven is the presentation. The 65% fade, the `not-allowed`
+  cursor, the lock line under the deck and the `:not(:disabled)` hover guard were
+  verified by eye rather than by a case. The hover guard carries the residual
+  risk: without it a frozen card still swaps to red under the pointer, and a
+  still frame cannot show that, so being wrong there is invisible in the diff and
+  in a screenshot alike.
+
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
   room cookie: two tabs on the same room resolving to one participant, with a vote
