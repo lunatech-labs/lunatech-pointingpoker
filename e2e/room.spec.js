@@ -415,6 +415,36 @@ test('a vote survives its own reconnect', async ({ join }) => {
   await expect(participantRow(alice.page, 'Bob')).toContainText('8')
 })
 
+test('a disconnection outlasting the grace period comes back without a reload', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  // Detection rides on the room's own traffic, so two writes to Bob's dead stream are what
+  // start his grace period; without them a quiet room waits out two heartbeats first.
+  await vote(alice.page, '5')
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  // Bob's own row going is the grace period expiring, which is what this case needs and what
+  // departureWhileCut's reconnect stays inside: restoring sooner would prove nothing.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
+
+  await bob.restore()
+  // Any alert, not just the transient one: a consumed session ends here on the terminal
+  // "session has ended" banner, which is also an alert and would pass a filtered assertion.
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  // One row and not two: the retained session brings Bob back under the id he already had.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
+  await expect(participantRows(bob.page)).toHaveCount(2, { timeout: 10_000 })
+
+  // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+})
+
 test('the issue box resyncs once the editor loses focus', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
