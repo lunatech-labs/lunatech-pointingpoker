@@ -477,6 +477,45 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
     }
 
+    "refuse every command from a token whose member was removed at grace expiry" in {
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
+      val responseProbe     = testKit.createTestProbe[Room.Response]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe         = TestProbe()(testKit.system.classicSystem)
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", true, "3")
+      val (user3, _)        = createUser(UUID.randomUUID(), "user3", false, "")
+      val (roomId, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user2, user3), sessions = sessionsFor(user2)),
+        gracePeriod = 50.millis
+      )
+
+      // Same setup as the resolve case above: Alice's token is retained in `sessions`
+      // after her member entry is removed at grace expiry.
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+      roomRef ! Room.Join(Room.User(minted.userId, "Alice", false, "", userProbe.ref, minted.token))
+
+      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
+      responseProbe.expectMessage(Room.Running(roomId))
+
+      def assertUnaffected(command: Room.Command): Unit =
+        roomRef ! Room.GetData(dataProbe.ref)
+        val before = dataProbe.expectMessageType[Room.DataStatus].data
+        roomRef ! command
+        roomRef ! Room.GetData(dataProbe.ref)
+        dataProbe.expectMessage(Room.DataStatus(data = before))
+
+      // user2 has voted and user3 has not, so the round stays unrevealed with a live
+      // estimation on the table: ClearVotes, ReVote, ShowVotes and EditIssue would each
+      // visibly change the room if Alice's removed-member token were wrongly honoured.
+      assertUnaffected(Room.Vote(minted.token, "8"))
+      assertUnaffected(Room.ClearVotes(minted.token))
+      assertUnaffected(Room.ReVote(minted.token))
+      assertUnaffected(Room.ShowVotes(minted.token))
+      assertUnaffected(Room.EditIssue(minted.token, "a different issue"))
+    }
+
     "reveal the round when the last outstanding vote lands" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
