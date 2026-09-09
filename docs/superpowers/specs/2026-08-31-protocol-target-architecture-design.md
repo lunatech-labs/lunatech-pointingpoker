@@ -1796,7 +1796,7 @@ refs, and one snapshot shared across a member's connections, arrive with step 4.
 Here a user has exactly one ref, since `joinUser` replaces the whole entry on a
 reconnect rather than accumulating. `voted` on the wire is `User.voted`,
 already the confirmed flag since `reVote()` keeps `estimation`
-(`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
+(`Room.scala:97-99`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
 **`applySnapshot`'s tally keeps counting every participant here**, matching

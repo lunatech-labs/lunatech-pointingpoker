@@ -477,7 +477,10 @@ roadmap item instead of leaving it here as stale history.
   removal rule. A review on 2026-09-09, before this branch opened as a pull
   request, re-swept and corrected all eight. They sit in four entries further
   down, from "A tied vote is broken by JavaScript key order" to "A reload during
-  a revealed round locks the participant out of it", and none in this one.
+  a revealed round locks the participant out of it", and none in this one. A
+  consistency pass after that review found a ninth, the same live `reVote` claim
+  in the design's own step 1 paragraph, and corrected it to `Room.scala:97-99`
+  with the other two.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
