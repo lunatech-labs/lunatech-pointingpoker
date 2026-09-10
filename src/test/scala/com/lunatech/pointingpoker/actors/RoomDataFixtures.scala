@@ -22,6 +22,8 @@ object RoomDataFixtures:
         data.currentIssue,
         data.revealed
       )
+  end extension
 
   private def sessionsFor(users: Room.User*): Map[Room.SessionToken, Room.Session] =
     users.map(u => u.token -> Room.Session(u.id, u.name)).toMap
+end RoomDataFixtures
