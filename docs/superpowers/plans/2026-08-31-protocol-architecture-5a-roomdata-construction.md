@@ -803,14 +803,20 @@ this step's sweep and what it covered, in the same form the step 5 sweep used.
 - [ ] **Step 5: Check the documents**
 
 ```bash
-grep -rnP '\x{2014}' docs/known-issues.md docs/superpowers/specs/ README.md \
-  docs/superpowers/plans/2026-08-31-*.md
+git diff --name-only main...HEAD -- '*.md' | xargs grep -lP '\x{2014}'
 ```
 
-Expected: no matches. No em dash in any document. The pattern is written as an
-escape rather than as the character so that running the check does not put one
-into this plan. The two pre-2026-08-31 plans are excluded deliberately: they
-belong to earlier designs that predate the rule.
+Expected: no output. No em dash in any document this step wrote. The pass
+criterion is the empty output and not the exit code, `xargs grep -l` exiting
+123 when grep matches nothing. The pattern is written as an escape rather than
+as the character so that running the check does not put one into this plan.
+
+Only the changed files are checked, because a rule about writing cannot be
+broken by a file nobody edited. A repo-wide sweep instead returns the two
+delivered specs that predate the rule, 08-18 and 08-20, on every run, and a
+check that always reports the same two false positives trains its reader to
+skip the third. On a stacked branch this spans the parent step's documents too,
+which is a harmless superset.
 
 - [ ] **Step 6: Commit**
 
@@ -911,3 +917,11 @@ Listed so a reviewer can reject one without re-deriving it.
    sharing that package. Access is compile-time only, so this is not a second
    production behaviour change. A third `assertDoesNotCompile` pins it, and
    reverting the modifier reddens that case.
+
+9. **Task 3's em-dash check was rewritten, having never been able to pass.**
+   As drafted it swept `docs/superpowers/specs/` whole and expected no matches,
+   but 08-18 and 08-20 predate the rule and are delivered, so it returned them
+   every run. It now checks the step's own changed files. The check was written
+   with this plan and no commit has ever changed the em-dash count in any file
+   it covers, so it was modelled on the citation sweep beside it rather than on
+   a defect: old citations rot unattended, prose in an untouched file does not.
