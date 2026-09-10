@@ -1933,6 +1933,16 @@ entirely to `sessions`, and sessions are only resolvable past promotion once ste
 5 retains them, so landing this first would leave a connected client's token
 resolving to nothing and turn every reconnect into an immediate 401.
 
+**Step 5a's `Join` guard leaves a refused connection with nothing, and this is
+the step that could make that matter.** The guard warns and returns, and
+`publish` sends to members, so a refused joiner is not among its recipients: it
+holds an open stream taking heartbeats and never receives a first snapshot.
+Unreachable today, since `ConnectToRoom` takes the id and name from the
+resolution. If this step's rework makes it reachable, note that the fix is a
+send to that one connection rather than a call to `publish`, and that step 6's
+rejoin on a snapshot which does not name the client cannot cover it, no
+snapshot being delivered to trigger it.
+
 **It waits on step 1 for cost rather than correctness, and that is the one
 dependency here worth arguing with.** Landing the split first means porting
 `broadcast` and `setupNewUser` onto `members`, `round.estimates` and
