@@ -17,7 +17,7 @@ production behaviour changes except that guard, which is unreachable today.
 `must.Matchers`) with `ActorTestKit` and `LoggingTestKit`.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-step 5a at `:2013`. Invariant 5 owns the rule this enforces (`:290-292`), and
+step 5a at `:2023`. Invariant 5 owns the rule this enforces (`:290-292`), and
 section 3 owns the `Member` shape that makes step 4 restate it (`:502`).
 
 **Branch:** `20260831.protocol_architecture_5a_roomdata_construction`, based on
@@ -731,7 +731,7 @@ git commit -m "feat(actors): ignore a Join whose token is in no session"
 
 **Files:**
 - Modify: `docs/known-issues.md:100-133`
-- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2013`
+- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2023`
 
 **Interfaces:**
 - Consumes: the landed state of tasks 1 and 2.
@@ -873,8 +873,22 @@ Listed so a reviewer can reject one without re-deriving it.
    resolution, but step 4 makes the coupling load-bearing. The asymmetry was
    an omission at design time rather than a decision.
 
-7. **A refused `Join` returns without publishing**, so the connecting
-   client's SSE stream stays open and receives no snapshot. Correct for a
-   case that cannot occur, and recorded here rather than in the guard's
-   comment, which is at this project's two-line ceiling. Worth revisiting at
-   step 4 if that step changes reachability.
+7. **A refused `Join` returns without publishing**, so the connecting client
+   holds an open stream taking heartbeats and never receives a first snapshot.
+   Correct for a case that cannot occur, and it now lives in two places rather
+   than here. The mechanical fact is in the guard's comment, reworded to fit
+   the two-line ceiling: `publish` sends to members, and a refused joiner is
+   not one, so nothing reaches it. The consequence for whoever changes
+   reachability is in the design's step 4 section, that being where such a
+   decision is taken rather than in a completed step's plan.
+
+   This entry first recorded the opposite, that the note belonged here because
+   the comment had no room. Two things overturned it. The comment did have
+   room once its existing two lines were tightened, so no exception to the
+   one-or-two-line rule was needed. And the reasoning behind the note was
+   wrong: it assumed the remedy, if ever required, was to publish on refusal
+   too. `publish` iterates `data.users`, so publishing would reach the
+   existing members and still not the refused joiner. The remedy is a send to
+   that one connection, which is a different change, and step 6's rejoin on a
+   snapshot that does not name the client cannot substitute for it, no
+   snapshot arriving to trigger the rejoin.
