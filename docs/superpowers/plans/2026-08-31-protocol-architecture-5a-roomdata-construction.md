@@ -17,7 +17,7 @@ production behaviour changes except that guard, which is unreachable today.
 `must.Matchers`) with `ActorTestKit` and `LoggingTestKit`.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-step 5a at `:2023`. Invariant 5 owns the rule this enforces (`:290-292`), and
+step 5a at `:2030`. Invariant 5 owns the rule this enforces (`:290-292`), and
 section 3 owns the `Member` shape that makes step 4 restate it (`:502`).
 
 **Branch:** `20260831.protocol_architecture_5a_roomdata_construction`, based on
@@ -731,7 +731,7 @@ git commit -m "feat(actors): ignore a Join whose token is in no session"
 
 **Files:**
 - Modify: `docs/known-issues.md:100-133`
-- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2023`
+- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2030`
 
 **Interfaces:**
 - Consumes: the landed state of tasks 1 and 2.
