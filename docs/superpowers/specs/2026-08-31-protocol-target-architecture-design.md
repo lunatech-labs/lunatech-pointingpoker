@@ -548,7 +548,7 @@ between the two requests, an abandoned page load, a probe.
 resolves its token through `sessions` and then requires the resulting `userId` to
 be in `members`, so a resolved identity that is no longer a member is a no-op,
 which is what today's `data.users.find(_.token == token)` already produces
-(`Room.scala:143`, `149`, `154`, `159`, `203`). Keeping the checks separate matters
+(`Room.scala:171`, `177`, `182`, `187`, `231`). Keeping the checks separate matters
 because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
 at any point in the actor's life clear a round they are not in. Nothing about this
 weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
@@ -615,7 +615,7 @@ and clears `confirmed`, which is the state `Estimate` exists to express.
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
 relevant, scanning for a user still holding that exact ref and doing nothing if a
-reconnect replaced it (`Room.scala:163-201`). With connections in their own map
+reconnect replaced it (`Room.scala:191-229`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
 alone starts only if the set is now empty **and that member still exists**. A
@@ -644,7 +644,7 @@ accumulating: at most one timer per departure, and the tab that caused it is gon
 naming since nothing else now holds the invariant. Pekko guarantees that a
 cancelled or replaced timer's message is never received, even when it was already
 enqueued, by checking a generation counter on dequeue. That belongs to
-`Behaviors.withTimers`, which `Room` already uses (`Room.scala:121`, `183`);
+`Behaviors.withTimers`, which `Room` already uses (`Room.scala:140`, `211`);
 `context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
 so reaching for it instead would reintroduce exactly the race the check absorbed.
 
@@ -755,7 +755,7 @@ tab hits `pagehide` on a page that is being discarded, which a reload is and a
 back/forward cache entry is not, section 4 gating the beacon on `persisted` for
 the reason recorded there. So under a standing predicate one participant
 pressing F5 discloses the room's votes, unrecoverably, and today's six-second
-grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:189-201`) are what keep
+grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:217-229`) are what keep
 that from happening at present. Latching removes the unilateral trigger: a
 membership change on its own can no longer reveal anything, so the reload, the
 app switch, the slept laptop and the deliberate close all stop being reveals in
@@ -2019,6 +2019,13 @@ whose retention is what makes that state legal. Step 4 does not require it, but
 wants it first: the fixture migration is then one helper rather than 48 call
 sites. About 20 and 70 of tests.
 
+Landed. The constructor is private, `RoomData.of` is the only way in from
+outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
+`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, and the
+four needing a session without a member say so. The `Join` guard warns and
+drops rather than raising, and `docs/known-issues.md` lost the construction-gap
+entry.
+
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
 `ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
@@ -2046,7 +2053,7 @@ logger, so the guard sits in the `Join` case, which already has `context`. It
 warns and leaves the data alone rather than raising, because an unhandled
 exception in a typed behaviour stops the actor, and a violation unreachable
 today would then end a live meeting rather than drop one join.
-`Room.scala:176-182` already answers the same shape of question the same way,
+`Room.scala:204-210` already answers the same shape of question the same way,
 for a `Leave` that arrives twice on one connection. The line carries the room
 and user ids and not the token, which section 4 treats as a rejoin credential
 for the room's life.
