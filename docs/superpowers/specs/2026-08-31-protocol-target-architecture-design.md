@@ -2001,10 +2001,13 @@ room's lifetime is bounded.
 Landed. `sessions` is retained past promotion and is the single authority
 `ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
 outcome with a cut that outlasts the grace period and recovers on the retry, and
-`docs/known-issues.md` lost the forced-reload entry and gained one for the
-heartbeat-bound detection delay behind it. The pending-session leak entry stayed
-open and was re-pitched around retention, which widened it from abandoned tabs
-to every session a room mints.
+`docs/known-issues.md` lost the forced-reload entry and gained two: the
+heartbeat-bound detection delay behind it, and the one case retention does not
+reach, where the disconnecting member is the room's last and stop-when-empty ends
+the room the token would have resolved against. Step 4 closes that with
+stop-after-idle. The pending-session leak entry stayed open and was re-pitched
+around retention, which widened it from abandoned tabs to every session a room
+mints.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit

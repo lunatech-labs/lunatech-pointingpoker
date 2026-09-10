@@ -84,7 +84,10 @@ it for as long as the room itself lives, so a drop that outlasts the grace perio
 removes the participant from the list but leaves their token resolvable: the
 browser's own `EventSource` retry rejoins under the same identity, with no reload
 and no second entry in the list. Their vote does not survive that window, since
-it is held against their membership.
+it is held against their membership. The exception is the room's last member,
+whose removal empties the room and stops it, taking its sessions with it: their
+retry gets a `401` and does need a reload. `docs/known-issues.md` records that
+until a room's lifetime stops being tied to its membership.
 
 This session cookie closes an identity-spoofing gap, not room access control: anyone
 who knows a `roomId` can still call `/join` and legitimately participate in that

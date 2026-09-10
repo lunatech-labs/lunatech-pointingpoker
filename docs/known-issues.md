@@ -72,6 +72,30 @@ roadmap item instead of leaving it here as stale history.
   is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
   when step 4 lands.
 
+### A disconnection that outlasts the grace period still forces a reload for the room's last member
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`ConfirmLeave`'s stop-when-empty branch);
+  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ValidateToken` for an absent room).
+- **Issue:** Step 5 keeps a token resolvable past its member's removal, so a
+  reconnect after grace expiry rejoins under the same identity. That relies on
+  the room still being there to resolve against. `ConfirmLeave` stops the room
+  when the removal leaves `users` empty, and `ValidateToken` answers
+  `Unresolved` for a room the manager no longer holds, so `/events` returns
+  `401`, `EventSource` stops retrying, and the tab reads "Your session has
+  ended. Please reload the page to rejoin." This is the last connected member,
+  not only a lone one: it also catches whoever is left once the others have
+  gone. The `onerror` comment in `src/main/resources/pages/index.html` names
+  this cause, and since step 5 it is the only cause left.
+- **Resolution:** Scheduled as step 4 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  which replaces stop-when-empty with stop-after-idle: the room outlives its
+  last member by two to four hours, far longer than any outage the retry has to
+  cross, so the token resolves and the retry succeeds. How long the window is
+  before this fires at all is the detection-delay entry below. Remove this entry
+  when step 4 lands.
+
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
