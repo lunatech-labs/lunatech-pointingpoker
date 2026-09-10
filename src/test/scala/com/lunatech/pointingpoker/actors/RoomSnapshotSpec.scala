@@ -10,6 +10,7 @@ import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
 import com.lunatech.pointingpoker.actors.Room.RoomData
+import com.lunatech.pointingpoker.actors.RoomDataFixtures.*
 
 class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -25,7 +26,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
     "name the recipient it was built for" in {
       val alice = user(UUID.randomUUID(), "Alice", false, "")
-      val data  = RoomData.empty.copy(users = List(alice))
+      val data  = withUsers(alice)
 
       RoomSnapshot.of(data, alice.id).you mustBe alice.id
     }
@@ -35,7 +36,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val first  = user(UUID.fromString("00000000-0000-0000-0000-000000000001"), "First", false, "")
       val second =
         user(UUID.fromString("00000001-0000-0000-0000-000000000000"), "Second", false, "")
-      val data = RoomData.empty.copy(users = List(second, first))
+      val data = withUsers(second, first)
 
       RoomSnapshot.of(data, first.id).users.map(_.name) mustBe List("First", "Second")
     }
@@ -43,7 +44,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "carry the stored reveal flag rather than deriving one" in {
       val alice = user(UUID.randomUUID(), "Alice", false, "")
       val bob   = user(UUID.randomUUID(), "Bob", true, "5")
-      val data  = RoomData.empty.copy(users = List(alice, bob), revealed = true)
+      val data  = withUsers(alice, bob).withRevealed()
 
       // Not every participant has voted, so a derived predicate would say false here.
       RoomSnapshot.of(data, alice.id).votesRevealed mustBe true
@@ -51,7 +52,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
     "carry the current issue" in {
       val alice = user(UUID.randomUUID(), "Alice", false, "")
-      val data  = RoomData.empty.copy(users = List(alice), currentIssue = "PP-1")
+      val data  = withUsers(alice).withIssue("PP-1")
 
       RoomSnapshot.of(data, alice.id).currentIssue mustBe "PP-1"
     }
@@ -59,7 +60,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "build for a recipient who is not a member, rather than failing" in {
       val alice    = user(UUID.randomUUID(), "Alice", false, "")
       val departed = UUID.randomUUID()
-      val data     = RoomData.empty.copy(users = List(alice))
+      val data     = withUsers(alice)
 
       val snapshot = RoomSnapshot.of(data, departed)
       snapshot.you mustBe departed
@@ -68,14 +69,14 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
     "put no session token on the wire" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
-      val data  = RoomData.empty.copy(users = List(alice))
+      val data  = withUsers(alice)
 
       (RoomSnapshot.of(data, alice.id).asJson.noSpaces must not).include(alice.token.raw)
     }
 
     "serialize exactly the agreed field set" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
-      val data  = RoomData.empty.copy(users = List(alice), currentIssue = "PP-1", revealed = true)
+      val data  = withUsers(alice).withIssue("PP-1").withRevealed()
 
       val json = RoomSnapshot.of(data, alice.id).asJson
       json.asObject.map(_.keys.toList) mustBe Some(
@@ -90,7 +91,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "withhold another participant's estimation until the room reveals" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob))
+      val data  = withUsers(alice, bob)
 
       val forAlice = RoomSnapshot.of(data, alice.id)
       forAlice.users.find(_.id == alice.id).map(_.estimation) mustBe Some("5")
@@ -104,7 +105,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "keep a withheld estimation out of the serialized frame entirely" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob))
+      val data  = withUsers(alice, bob)
 
       val json = RoomSnapshot.of(data, alice.id).asJson
       // The property is about the wire, not the projection: devtools is the threat.
@@ -119,7 +120,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "hand every estimation over once the room has revealed" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob), revealed = true)
+      val data  = withUsers(alice, bob).withRevealed()
 
       RoomSnapshot.of(data, alice.id).users.map(_.estimation).toSet mustBe Set("5", "13")
     }
@@ -127,7 +128,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "say that another participant has an estimation without saying what it is" in {
       val alice = user(UUID.randomUUID(), "Alice", false, "")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob))
+      val data  = withUsers(alice, bob)
 
       val bobsRow = RoomSnapshot.of(data, alice.id).users.find(_.id == bob.id)
       // Computed from the unredacted value, so the hidden-value icon renders as it does today.
@@ -141,7 +142,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val alice    = user(UUID.randomUUID(), "Alice", false, "")
       val revoting = user(UUID.randomUUID(), "Revoting", false, "13")
       val cleared  = user(UUID.randomUUID(), "Cleared", false, "")
-      val data     = RoomData.empty.copy(users = List(alice, revoting, cleared))
+      val data     = withUsers(alice, revoting, cleared)
 
       val snapshot = RoomSnapshot.of(data, alice.id)
       // voted false with hasEstimation true is the re-vote state, and it has to survive
@@ -153,7 +154,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "withhold every estimation from a snapshot built for someone who is not a member" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob))
+      val data  = withUsers(alice, bob)
 
       // Unreachable today: publish iterates users. Step 4's connections let a departing tab
       // still be handed one snapshot.
@@ -163,7 +164,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
     "disclose every estimation to a non-member once the room has revealed" in {
       val alice = user(UUID.randomUUID(), "Alice", true, "5")
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
-      val data  = RoomData.empty.copy(users = List(alice, bob), revealed = true)
+      val data  = withUsers(alice, bob).withRevealed()
 
       // Intentional: post-reveal values are public in the room, and this recipient held a
       // valid room token.
