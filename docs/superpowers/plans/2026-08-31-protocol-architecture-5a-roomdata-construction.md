@@ -758,12 +758,11 @@ After the step 5a opening paragraph, which ends "About 20 and 70 of tests." at
 ```
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut, along with `joinUser`, the one method that adds a member.
-All 48 fixture sites build through `RoomDataFixtures`, as do the
-cases added since, and the five needing a session without a member say so.
-The `Join` guard warns and
-drops rather than raising, and `docs/known-issues.md` lost the construction-gap
-entry.
+`copy` shut, along with `joinUser`, the one method that adds a member. All 48
+fixture sites build through `RoomDataFixtures`, as do the cases added since,
+and the five needing a session without a member say so. The `Join` guard warns
+and drops rather than raising, and `docs/known-issues.md` lost the
+construction-gap entry.
 ```
 
 Check the wording against what actually landed before committing it. If task 2

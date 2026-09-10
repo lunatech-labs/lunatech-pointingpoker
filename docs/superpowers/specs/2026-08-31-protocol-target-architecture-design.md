@@ -1941,8 +1941,8 @@ holds an open stream taking heartbeats and never receives a first snapshot.
 Rare today rather than unreachable: `ConnectToRoom` takes the id and name from
 the resolution, but a same-id room restart between the two lands a refusal
 anyway, and step 5a's section carries the sequence. If this step's rework makes
-it ordinary, note that the fix is a
-send to that one connection rather than a call to `publish`, and that step 6's
+it ordinary, note that the fix is a send to that one connection rather than a
+call to `publish`, and that step 6's
 rejoin on a snapshot which does not name the client cannot cover it, no
 snapshot being delivered to trigger it.
 
@@ -2041,12 +2041,11 @@ tests.
 
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut, along with `joinUser`, the one method that adds a member.
-All 48 fixture sites build through `RoomDataFixtures`, as do the
-cases added since, and the five needing a session without a member say so.
-The `Join` guard warns and
-drops rather than raising, and `docs/known-issues.md` lost the construction-gap
-entry.
+`copy` shut, along with `joinUser`, the one method that adds a member. All 48
+fixture sites build through `RoomDataFixtures`, as do the cases added since,
+and the five needing a session without a member say so. The `Join` guard warns
+and drops rather than raising, and `docs/known-issues.md` lost the
+construction-gap entry.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
@@ -2077,12 +2076,12 @@ has `context`, and checks the same containment-and-identity test `of` runs on
 every member. It warns and leaves the data alone rather than raising, because
 an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
-unreachable, and the earlier drafts of this paragraph said unreachable. The
-resolution at `API.scala:126-128` and the `Join` at `RoomManager.scala:79-84`
-are two steps of one request, and they can address two different room actors:
-the room can empty and stop in between (`Room.scala:221-223`), and
-`RequestSession` can then recreate it under the same id with no sessions
-(`RoomManager.scala:90`), which is the one path that does so. The guard then
+unreachable. The resolution at `API.scala:126-128` and the `Join` at
+`RoomManager.scala:79-84` are two steps of one request, and they can address
+two different room actors: the room can empty and stop in between
+(`Room.scala:221-223`), and `RequestSession` can then recreate it under the
+same id with no sessions (`RoomManager.scala:90`), which is the one path that
+does so. The guard then
 refuses a token the new room never minted, which is what it is for. Without
 the recreation the client gets the same silent stream anyway, `ConnectToRoom`
 finding no room and sending no `Join` at all (`RoomManager.scala:80`).
