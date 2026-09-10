@@ -18,9 +18,9 @@ invariant 6 and is what step 4 rewrites onto `members`.
 `must.Matchers`) with `ActorTestKit`, Playwright against the staged launcher.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-step 5 at `:1990`. Section 3 owns the `sessions` map and the single-lookup rule
-(`:522-533`), invariant 6 owns the two checks (`:293`), section 4's first bullet
-owns what retention is for (`:1100-1121`).
+step 5 at `:1996`. Section 3 owns the `sessions` map and the single-lookup rule
+(`:522-529`), invariant 6 owns the two checks (`:293`), section 4's first bullet
+owns what retention is for (`:1104-1125`).
 
 **Branch:** `20260831.protocol_architecture_5_retained_sessions`, based on
 `main`. The design branch merged long ago, so this one is not stacked and needs
