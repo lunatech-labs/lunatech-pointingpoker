@@ -11,13 +11,14 @@ rely on the coupling it is about to make load-bearing.
 becomes the only way in from outside the class. Tests reach it through a
 `RoomDataFixtures` object holding `withUsers` and three extensions. The `Join`
 handler gains the matching runtime guard, warning rather than raising. No
-production behaviour changes except that guard, which is unreachable today.
+production behaviour changes except that guard, which needs a same-id room
+restart mid-request to fire.
 
 **Tech Stack:** Scala 3.8.4, Pekko typed actors, ScalaTest (`AnyWordSpec` +
 `must.Matchers`) with `ActorTestKit` and `LoggingTestKit`.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-step 5a at `:2030`. Invariant 5 owns the rule this enforces (`:290-292`), and
+step 5a at `:2032`. Invariant 5 owns the rule this enforces (`:290-292`), and
 section 3 owns the `Member` shape that makes step 4 restate it (`:502`).
 
 **Branch:** `20260831.protocol_architecture_5a_roomdata_construction`, based on
@@ -712,8 +713,8 @@ Expected: PASS, all cases.
 
 Run: `npm test && npm run e2e`
 Expected: PASS, 14 node tests and 54 Playwright cases in both engines. Nothing
-here should move: the guard is unreachable through the real transport, which is
-the point. A failure means the guard is rejecting a legitimate join.
+here should move: the guard does not fire in this suite, which is the point. A
+failure means the guard is rejecting a legitimate join.
 
 - [ ] **Step 11: Commit**
 
@@ -731,7 +732,7 @@ git commit -m "feat(actors): ignore a Join whose token is in no session"
 
 **Files:**
 - Modify: `docs/known-issues.md:100-133`
-- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2030`
+- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2032`
 
 **Interfaces:**
 - Consumes: the landed state of tasks 1 and 2.
@@ -925,3 +926,13 @@ Listed so a reviewer can reject one without re-deriving it.
    with this plan and no commit has ever changed the em-dash count in any file
    it covers, so it was modelled on the citation sweep beside it rather than on
    a defect: old citations rot unattended, prose in an untouched file does not.
+
+10. **"Unreachable today" was downgraded, the guard having a reachable path.**
+    Resolution and `Join` are two steps of one request and can address two room
+    actors: the room can empty and stop in between, and `RequestSession` can
+    recreate it under the same id with no sessions. The design paragraph now
+    carries the sequence, and the plan's two other absolutes went with it. Only
+    the no-session branch is reachable that way, the new room's `sessions`
+    being empty, so deviation 6's claim for the identity branch still holds:
+    nothing rebinds a token to a second identity. The guard's behaviour was
+    already right for the case, so this changed prose and not code.
