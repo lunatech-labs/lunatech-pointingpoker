@@ -439,7 +439,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   // "session has ended" banner, which is also an alert and would pass a filtered assertion.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // One row and not two: the retained session brings Bob back under the id he already had.
+  // Bob is back and not duplicated. Identity reuse is not observable here, since his row
+  // was already gone: RoomSpec's grace-expiry resolve case is what pins the id.
   await expect(participantRow(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
   await expect(participantRows(bob.page)).toHaveCount(2, { timeout: 10_000 })
 
