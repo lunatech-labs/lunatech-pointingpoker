@@ -351,6 +351,26 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         }(using testKit.system)
     }
 
+    "ignore a Join whose token names a different identity" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (impostor, _) = createUser(UUID.randomUUID(), "impostor", false, "")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val roomData      = withUsers(user).withMemberlessSession(impostor)
+      val (_, roomRef)  = createRoom(UUID.randomUUID(), roomData)
+
+      // impostor's token resolves to a session, but the joiner claims a different id
+      // than that session holds, which of would reject; the room drops it too.
+      val claimant = impostor.copy(id = UUID.randomUUID())
+
+      LoggingTestKit
+        .warn("names a different identity")
+        .expect {
+          roomRef ! Room.Join(claimant)
+          roomRef ! Room.GetData(dataProbe.ref)
+          dataProbe.expectMessage(Room.DataStatus(data = roomData))
+        }(using testKit.system)
+    }
+
     "publish the whole room to a joiner and to everyone already in it" in {
       val issue               = "current issue"
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "5")
