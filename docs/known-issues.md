@@ -516,7 +516,11 @@ roadmap item instead of leaving it here as stale history.
   delayed-decision argument, once beside the redundant-publish decision), the
   `Behaviors.withTimers` pair, and its own paragraph's duplicate-`Leave`
   citation all moved. This file's `Room.scala` citations sit inside
-  `RoomData`'s own methods, above both insertions, and needed nothing.
+  `RoomData`'s own methods, above both insertions, and needed nothing. The
+  sweep also found three pointers already wrong before this step and left
+  them, being outside a sweep scoped to what this step's insertions moved:
+  `Room.scala:130` for `joinUser`'s call site, which is actually `:163`, and
+  `Room.scala:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
