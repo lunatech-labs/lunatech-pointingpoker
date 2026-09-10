@@ -757,8 +757,9 @@ After the step 5a opening paragraph, which ends "About 20 and 70 of tests." at
 ```
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, and the
-four needing a session without a member say so. The `Join` guard warns and
+`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, as do the
+cases added since, and the five needing a session without a member say so.
+The `Join` guard warns and
 drops rather than raising, and `docs/known-issues.md` lost the construction-gap
 entry.
 ```
@@ -872,6 +873,13 @@ Listed so a reviewer can reject one without re-deriving it.
    reject. Unreachable today, since `ConnectToRoom` takes both from the
    resolution, but step 4 makes the coupling load-bearing. The asymmetry was
    an omission at design time rather than a decision.
+
+   Coming after task 3, it also invalidated the citation sweep task 3 had
+   already run: it added a line above nine of the numbers that sweep had just
+   corrected, and turned the section's "four" memberless-session sites into
+   five. Only the `joinUser` call site was caught at the time. A later re-run
+   fixed the rest, and `docs/known-issues.md` now carries the rule that a sweep
+   goes last and runs again after any commit touching a cited file.
 
 7. **A refused `Join` returns without publishing**, so the connecting client
    holds an open stream taking heartbeats and never receives a first snapshot.

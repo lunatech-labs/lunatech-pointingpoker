@@ -522,6 +522,15 @@ roadmap item instead of leaving it here as stale history.
   `Room.scala:130` for `joinUser`'s call site, which is actually `:157`, and
   `Room.scala:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`.
 
+  That sweep then went stale inside its own branch. Widening the `Join` guard to
+  match `of`'s predicate added a line above every citation it had just moved, and
+  only the `joinUser` call site was re-fixed, because that one had jumped far
+  enough to be visible. The other nine sat one short until a re-run: the five
+  case citations, both timer ranges, the `withTimers` pair's second number, and
+  5a's own duplicate-`Leave` citation. The count of sites needing a session
+  without a member went from four to five in the same commit, and the step 5a
+  section still said four.
+
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
   reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
@@ -558,6 +567,13 @@ roadmap item instead of leaving it here as stale history.
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
   given here on purpose. Three review rounds produced a different count each
   time, and the count was never what a sweep needed.
+
+  Sweep last, and sweep again after any later commit touches a cited file. A
+  sweep is only true of the tree it ran against, so one that runs before a
+  step's final code commit certifies numbers that commit then shifts, which is
+  worse than not sweeping: the entry above asserts the sweep, so a reader trusts
+  it. Step 5a is the worked example. The same rule catches counts the prose
+  states, not just line numbers.
 
   Two traps are worth naming, both of which caught the step 2 sweep. Checking
   what sits at the cited line is not enough: the question is whether the
