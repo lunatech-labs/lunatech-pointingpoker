@@ -499,15 +499,16 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
       responseProbe.expectMessage(Room.Running(roomId))
 
+      // Both members voted with the round unrevealed, the state a room is in after an unvoted
+      // member's grace expiry, so any of the five honoured wrongly would visibly change it.
+      roomRef ! Room.GetData(dataProbe.ref)
+      val before = dataProbe.expectMessageType[Room.DataStatus].data
+
       def assertUnaffected(command: Room.Command): Unit =
-        roomRef ! Room.GetData(dataProbe.ref)
-        val before = dataProbe.expectMessageType[Room.DataStatus].data
         roomRef ! command
         roomRef ! Room.GetData(dataProbe.ref)
         dataProbe.expectMessage(Room.DataStatus(data = before))
 
-      // Both members voted with the round unrevealed, the state a room is in after an unvoted
-      // member's grace expiry, so any of the five honoured wrongly would visibly change it.
       assertUnaffected(Room.Vote(minted.token, "8"))
       assertUnaffected(Room.ClearVotes(minted.token))
       assertUnaffected(Room.ReVote(minted.token))
