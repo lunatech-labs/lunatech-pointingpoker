@@ -51,26 +51,86 @@ roadmap item instead of leaving it here as stale history.
   at an empty room keeps it alive; bounding that belongs to the rate-limiting
   entry below. Remove this entry when step 4 lands.
 
-### A `/join` with no follow-up `/events` leaks a pending session for the room's lifetime
+### Every session a room mints lives as long as the room does
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData.pendingSessions`, `registerSession`).
-- **Issue:** Same shape as the room-level GC issue above, one level deeper: a
-  `PendingSession` created by `RequestSession` (backing `/join`) is only cleared
-  when a matching `Join` promotes it to a real member. An abandoned tab, a
-  network failure between `/join` and `/events`, or a client that calls `/join`
-  more than once before connecting leaves the earlier entry in
-  `pendingSessions` for as long as the room actor lives, even if that room
-  already has active, joined members and would otherwise stay alive
-  indefinitely.
+  (`RoomData.sessions`, `registerSession`).
+- **Issue:** Same shape as the room-level GC issue above, one level deeper. A
+  `Session` created by `RequestSession` (backing `/join`) is never removed. Step
+  5 retains it past promotion, so that a member removed at grace expiry can still
+  reconnect, and it deliberately adds no TTL. A room therefore accumulates one
+  entry per `/join` it ever answered: tabs that connected, tabs that failed
+  between `/join` and `/events`, and people who joined and left hours ago.
 - **Resolution:** Scheduled as step 4 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle, so a room's sessions go
   with it two to four hours after its last connection instead of living for the
-  process. Step 5 retains sessions past promotion rather than consuming them,
-  which removes the pending/promoted distinction this entry is phrased around,
-  and it deliberately adds no TTL: the leak is a hundred bytes per abandoned tab
-  in a room whose lifetime is now bounded. Remove this entry when step 4 lands.
+  process. A TTL was considered there and dropped: its useful range is squeezed
+  below by needing to outlast a realistic in-meeting outage and above by the idle
+  stop, and what it would reclaim is a hundred bytes per abandoned session. What
+  is left after step 4 is a room held open for hours with heavy tab churn, which
+  is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
+  when step 4 lands.
+
+### A disconnection that outlasts the grace period still forces a reload for the room's last member
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`ConfirmLeave`'s stop-when-empty branch);
+  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ValidateToken` for an absent room).
+- **Issue:** Step 5 keeps a token resolvable past its member's removal, so a
+  reconnect after grace expiry rejoins under the same identity. That relies on
+  the room still being there to resolve against. `ConfirmLeave` stops the room
+  when the removal leaves `users` empty, and `ValidateToken` answers
+  `Unresolved` for a room the manager no longer holds, so `/events` returns
+  `401`, `EventSource` stops retrying, and the tab reads "Your session has
+  ended. Please reload the page to rejoin." This is the last connected member,
+  not only a lone one: it also catches whoever is left once the others have
+  gone. The `onerror` comment in `src/main/resources/pages/index.html` names
+  this cause. Step 5 removed the consumed-session cause behind it, leaving
+  this one and a process restart, which takes every room and session with it.
+- **Resolution:** Scheduled as step 4 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  which replaces stop-when-empty with stop-after-idle: the room outlives its
+  last member by two to four hours, far longer than any outage the retry has to
+  cross, so the token resolves and the retry succeeds. How long the window is
+  before this fires at all is the detection-delay entry below. Remove this entry
+  when step 4 lands.
+
+### `RoomData` can be constructed with a member who has no session
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData`'s constructor and `joinUser`); the fixtures in
+  `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala` and
+  `RoomSnapshotSpec.scala`.
+- **Issue:** Invariant 5 of the design already implies this. A `members` entry,
+  today's `User`, is created by `ConnectToRoom` and by nothing else, and
+  `ConnectToRoom` runs only on a resolved session, so every member necessarily
+  has a `sessions` entry under its token holding its id. The design asserts
+  that for one reason, an unvotable member killing auto-reveal; step 5 gave it
+  a second, since making `sessions` the single authority `ValidateToken` reads
+  means such a member is also unresolvable. Production upholds it by
+  construction. Nothing enforces it. The constructor is public, and all but
+  three of the 48 fixture sites seed `users` with no `sessions` at all, so the
+  suite normalises a state production cannot reach. That has already cost
+  signal: three cases go red under a `Vote` rerouted onto `sessions` only
+  because their fixtures lack sessions, which deviation 7 of the step 5 plan
+  records as a trap for whoever fixes them. On the production side `joinUser`
+  adds whatever `User` it is handed and `Join` checks nothing, which is
+  unreachable today and load-bearing at step 4, where `Member` drops its token
+  and `sessions` becomes the only place a token lives.
+- **Resolution:** Scheduled as step 5a, between steps 5 and 4. A private
+  `RoomData` constructor with a validating `RoomData.of(users, sessions)`
+  factory, requiring the users' tokens to be a subset of the session keys
+  with matching ids; a `withUsers` sugar for the common seed; and a
+  test-scope `departed` extension for the retained-session-without-member
+  state that step 5 made normal. Scala 3.8.4 propagates a private
+  constructor to `copy` and `apply`, and every production mutator copies
+  from inside the class, so the lock costs production nothing. Valid
+  fixtures everywhere take the rerouted-`Vote` signal from four red cases to
+  the removed-member case alone, on deviation 7's reasoning, which is
+  acceptable only because that case guards it deliberately. Remove this entry
+  when step 5a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
@@ -96,7 +156,10 @@ roadmap item instead of leaving it here as stale history.
   mid-meeting can show as present for far longer than 6 seconds afterward, not up
   to 6. Quote the range rather than a midpoint: a single figure gets remembered as
   a ceiling, and 16.7 seconds from that suite's table has been, though it is the
-  nudged case at the old test grace period and nearer 22 in production.
+  nudged case at the old test grace period and nearer 22 in production. A silent
+  cut shares this mechanism and is measured below, under "The grace period does
+  not start until a heartbeat write to the dead connection fails"; the figures
+  there agree with these once detection is separated from the grace period.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
@@ -234,31 +297,39 @@ roadmap item instead of leaving it here as stale history.
   rate-limiting entry above, the underlying gap is broader than any one symptom
   and wants its own piece of work rather than a patch per endpoint.
 
-### A disconnection outlasting the grace period forces a page reload
+### The grace period does not start until a heartbeat write to the dead connection fails
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`joinUser` consuming the pending session, `ConfirmLeave`);
-  `src/main/resources/pages/index.html` (`onerror`).
-- **Issue:** When a connection drops for longer than the grace period,
-  `ConfirmLeave` removes the member. Because `joinUser` consumed the pending
-  session on promotion, the member entry was the token's only remaining record,
-  so `ValidateToken` now resolves nothing and `/events` answers `401`.
-  `EventSource` stops retrying on a non-2xx, the readyState goes to `CLOSED`,
-  and the user is told "Your session has ended. Please reload the page to
-  rejoin." The grace timer only starts once the room detects the disconnect,
-  and detection itself rides on the room's own traffic, not a fixed clock: in a
-  quiet room a blip can run well past six seconds and still recover invisibly,
-  while in a busy room detection is fast and the 6-second grace period is what
-  actually governs from there. So "a wifi handoff of more than six seconds" is
-  not the threshold; what has to outlast the window is detection plus the grace
-  period together, and how long that takes depends on the room. The `onerror`
-  comment attributes the 401 to the room having been reaped, which is a
-  different and rarer cause.
-- **Resolution:** Scheduled as step 5 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which retains sessions past promotion instead of consuming them, so the token
-  stays resolvable and the retry succeeds with the same identity.
-  Remove this entry when that lands.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`
+  (`heartbeatInterval` at `:28`, `keepAlive` at `:62`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
+  (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace
+  period).
+- **Issue:** The grace timer only starts once the room detects the disconnect,
+  and detection itself rides on the room's own traffic rather than a clock. The
+  heartbeat lives entirely inside the SSE stream as the `keepAlive` stage, not
+  as a message to the room actor, so nothing notices a dead connection until a
+  write to it fails, and in a quiet room the only writes are that 15-second
+  heartbeat. Measured in a quiet two-person room: a cut participant took about
+  35.5 seconds to disappear from the other participant's list, two 15-second
+  heartbeat writes failing before the 4-second grace period (this branch's e2e
+  profile; production defaults to 6 seconds via `application.conf:23`) even
+  starts. Two runs agreed to within 2ms, so the number is deterministic rather
+  than noisy. Any room traffic detects the cut sooner, which is why
+  `e2e/room.spec.js`'s case forces a vote and a Clear rather than waiting it
+  out, and the older `departureWhileCut` helper does the same. A participant
+  who crashes, sleeps their laptop, or drops off the network in an otherwise
+  quiet room lingers in everyone's list for up to about half a minute. The
+  deliberate-close entry above records the same mechanism; the 35.5 seconds here
+  is time to disappear under a 4-second grace period, so its detection half sits
+  at the top of the 16 to 31 seconds quoted there rather than contradicting it.
+- **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
+  leave endpoint does not close this: its beacon fires only on `pagehide` for a
+  page being discarded deliberately, and a crash, a sleeping laptop, or a
+  silent network drop reaches no such event, so detection still waits on a
+  heartbeat write failing. Shortening the heartbeat would speed detection at the
+  cost of traffic on every open connection, and no step in the target design
+  schedules that trade.
 
 ### A second tab on the same room displaces the first tab's identity
 
@@ -448,13 +519,31 @@ roadmap item instead of leaving it here as stale history.
 - **Issue:** The design was written against the pre-step-1 codebase and cites it
   throughout. Step 1 rewrote much of `index.html` and `Room.scala`, so a
   citation can now land on unrelated code while still reading as current. Step 2
-  swept the `index.html` citations, and corrected `clear()` with `reVote()`
-  (`Room.scala:97-102`, cited three times as `:85-89`) and `RoomSpec`'s
-  hand-constructed reconnect and `Room.Running` sites (`RoomSpec.scala:194`,
-  `:237`, `:256`, cited as `:185`, `:231`, `:257`). Citations into the rest of
-  `Room.scala`, and into `RoomManager.scala`, `SSE.scala` and `API.scala`, are
-  unverified. `RoomSpec.scala`'s four are all in the two sentences above. Step 3
-  refreshed the `index.html` citations its own two hunks shifted.
+  swept the `index.html` citations, and corrected `clear()` with `reVote()` to
+  `Room.scala:97-102` as it stood then (cited three times as `:85-89`) and
+  `RoomSpec`'s hand-constructed reconnect and `Room.Running` sites
+  (`RoomSpec.scala:194`, `:237`, `:256`, cited as `:185`, `:231`, `:257`).
+  Citations into the rest of `Room.scala`, and into `RoomManager.scala`,
+  `SSE.scala` and `API.scala`, are unverified. `RoomSpec.scala`'s four are all in
+  the two sentences above. Step 3 refreshed the `index.html` citations its own
+  two hunks shifted. Step 5 swept the `Room.scala` citations in both the design
+  and this file. In the design it renumbered the command-path list its own diff
+  shifted, annotated the `ValidateToken` sentence whose code it deleted, moved
+  step 2's `:97-102` sites, the live `reVote` claim inside step 1's paragraph
+  among them, onto the numbers this step's own `joinUser` hunk gave them, and
+  corrected others that had gone stale from further back in the file's history,
+  unrelated to this step's own diff: the `SessionToken` opaque type line, the
+  `Leave`/`ConfirmLeave` timer range twice over (once for the keying, once for
+  the stale-ref branch), and the `Behaviors.withTimers` pair. Those last
+  resolved against the pre-"Step 1: Snapshot protocol" file the design was
+  originally written from. In this file it corrected its own pointers into
+  `Room.scala`, for `reVote`, `vote` and the revealed-round refusal, and into
+  the design, for the additive-views passage, the re-vote tally argument, and
+  the `clear`/`reVote` removal rule, all shifted by the same `joinUser` hunk and
+  by the note step 5 inserted into the design.
+  They sit in four entries further down, from "A tied vote is broken by
+  JavaScript key order" to "A reload during a revealed round locks the
+  participant out of it", and none in this one.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
@@ -475,7 +564,9 @@ roadmap item instead of leaving it here as stale history.
   history while its siblings stay in the planning present, and a half-finished
   one leaves a paragraph contradicting itself. The same claim in
   `docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` (`:8`, `:47-48`,
-  `:318`) is outside this entry's scope and still reads as live.
+  `:318`) is outside this entry's scope and still reads as live. Step 3's sweep
+  also missed the vote-survival pointer, stale since before step 5's branch and
+  corrected by it to `e2e/room.spec.js:399`.
 
   A fourth kind, also unswept, is a delivered plan describing code that no longer exists:
   `docs/superpowers/plans/2026-08-31-protocol-architecture-0-playwright.md:876`
@@ -498,7 +589,19 @@ roadmap item instead of leaving it here as stale history.
   as part of arguing why the design is what it is, so renumbering those makes
   the prose false rather than current. Several in `index.html` were left alone
   for that reason, as was the `Room.scala` pair in the design's own step 1
-  paragraph, which lists what step 1 removed.
+  paragraph, which lists what step 1 removed. The exception is a present-tense
+  claim about live code that happens to sit in a step's paragraph: step 5
+  renumbered the `reVote` claim in step 1's paragraph for that reason, while
+  leaving the pair beside it alone.
+
+  Numbers the prose reasons from are a separate case, and renumbering is not
+  available for them. The step-ordering argument for step 4 rests on `RoomSpec`
+  being 510 of the project's 1,434 test lines; step 5 measured 693 of 1,706.
+  Updating the figures would rewrite the cost estimate the argument is made of,
+  and leaving them bare states something false in the present tense, so step 5
+  marked them as the design-time measurement and noted that the file has grown
+  since. Prefer that to either where a figure carries an argument rather than
+  locating code.
 - **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
@@ -583,7 +686,7 @@ roadmap item instead of leaving it here as stale history.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
   are all defensible, and the third is worth weighing since the table already
   shows it. Whoever builds step 9's history views should decide it there:
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1014-1016`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1018-1020`
   already lists highest and lowest, majority, and most voted as additive views
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
@@ -592,8 +695,8 @@ roadmap item instead of leaving it here as stale history.
 
 ### A Show during a partial re-vote tallies two rounds as one distribution
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:100-102`
-  (`reVote` keeping every estimation) and `:86` (`vote` overwriting one), with the
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:97-99`
+  (`reVote` keeping every estimation) and `:83` (`vote` overwriting one), with the
   tally at `src/main/resources/pages/index.html:355` read at `:276-282` under the
   "Most voted estimation" heading.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
@@ -602,7 +705,7 @@ roadmap item instead of leaving it here as stale history.
   finish a round on 8, 8 and 3, somebody presses Re-vote, Carol re-votes to 5, and
   a Show before Alice and Bob pick reports 8 as the most voted estimation: two
   participants' answer to the previous round and nobody's answer to this one.
-  Since step 3a a revealed round refuses every vote (`Room.scala:83`), so the
+  Since step 3a a revealed round refuses every vote (`Room.scala:80`), so the
   holders of a stale value cannot replace it in place. The recovery is another
   Re-vote, which reopens the round for everyone, or a Clear.
 
@@ -610,8 +713,8 @@ roadmap item instead of leaving it here as stale history.
   than fixed. `reVote` keeps the values so that an estimation without a
   confirmation can mean a re-vote in progress, and the summary counts exactly the
   non-blank estimation cells the table beside it displays, which
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1314-1327`
-  argues for and `e2e/room.spec.js:305` asserts. It is the same failure class as
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1318-1331`
+  argues for and `e2e/room.spec.js:338-340` asserts. It is the same failure class as
   the tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
   stale row with no check-circle (`index.html:318`), so anyone looking down from
@@ -623,7 +726,7 @@ roadmap item instead of leaving it here as stale history.
   and the room's two answers are worth reading together. Neither scheduled step
   closes it. Step 6 is about a refusal reaching the client that cast it, not about
   which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
-  design's `:602-609` removes estimates only on `clear` or the round ending, with a
+  design's `:606-613` removes estimates only on `clear` or the round ending, with a
   `reVote` leaving the values in place and clearing `confirmed`, which is the state
   `Estimate` exists to express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
@@ -631,7 +734,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A vote refused by a revealed round is silent, and can read as accepted
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`
   (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
   (`/vote` answering `NoContent` whatever happens) and
   `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
@@ -670,7 +773,7 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
   (`RequestSession`'s fresh `userId` per call) and
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:83`.
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`.
 - **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
   as a new member with no estimation. Since step 3a a revealed round refuses every
   vote, including a first one, so that member cannot vote at all until somebody

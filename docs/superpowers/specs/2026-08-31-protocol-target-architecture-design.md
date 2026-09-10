@@ -203,7 +203,7 @@ field that means two things. The frontend is most of the lines and almost none
 of that risk, because a mistake there is visible on the screen. So the type
 system is bought for the small part, and Scala 3's is the better match for it:
 exhaustive matching on a command ADT is a compile error, and
-`opaque type SessionToken = UUID` (`Room.scala:14`) makes swapping a token for a
+`opaque type SessionToken = UUID` (`Room.scala:13`) makes swapping a token for a
 user id unrepresentable rather than merely unlikely. TypeScript's equivalents
 are a discriminated union with an explicit `never` assertion people forget and a
 branded type others cast through. Add no cutover, 1,434 lines of existing tests,
@@ -528,6 +528,10 @@ sessions past promotion removes that reason, so the scan goes and `Member` needs
 no token. Retention is a precondition for this shape rather than a companion to
 it, which is why step 4 waits on step 5.
 
+Landed at step 5: the scan is gone and `ValidateToken` is the single lookup this
+paragraph specifies. The citation is to the pre-step-1 file the design was
+written against, which is what the argument is about.
+
 The name is deliberately in both `Session` and `Member`: a session exists before
 there is a member, which is why 08-20 put it on `PendingSession`.
 
@@ -544,7 +548,7 @@ between the two requests, an abandoned page load, a probe.
 resolves its token through `sessions` and then requires the resulting `userId` to
 be in `members`, so a resolved identity that is no longer a member is a no-op,
 which is what today's `data.users.find(_.token == token)` already produces
-(`Room.scala:141`, `152`, `163`, `174`, `227`). Keeping the checks separate matters
+(`Room.scala:143`, `149`, `154`, `159`, `203`). Keeping the checks separate matters
 because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
 at any point in the actor's life clear a round they are not in. Nothing about this
 weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
@@ -557,7 +561,7 @@ exists for.
 
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
-while `clear()` clears both (`Room.scala:97-102`), so "has an estimation, is not
+while `clear()` clears both (`Room.scala:94-99`), so "has an estimation, is not
 counted as voted" is a state the current code holds and the wire format
 distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
 three things break at once: `ownVoteConfirmed` in section 5 is always true and
@@ -611,7 +615,7 @@ and clears `confirmed`, which is the state `Estimate` exists to express.
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
 relevant, scanning for a user still holding that exact ref and doing nothing if a
-reconnect replaced it (`Room.scala:182-225`). With connections in their own map
+reconnect replaced it (`Room.scala:163-201`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
 alone starts only if the set is now empty **and that member still exists**. A
@@ -640,7 +644,7 @@ accumulating: at most one timer per departure, and the tab that caused it is gon
 naming since nothing else now holds the invariant. Pekko guarantees that a
 cancelled or replaced timer's message is never received, even when it was already
 enqueued, by checking a generation counter on dequeue. That belongs to
-`Behaviors.withTimers`, which `Room` already uses (`Room.scala:111`, `202`);
+`Behaviors.withTimers`, which `Room` already uses (`Room.scala:121`, `183`);
 `context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
 so reaching for it instead would reintroduce exactly the race the check absorbed.
 
@@ -751,7 +755,7 @@ tab hits `pagehide` on a page that is being discarded, which a reload is and a
 back/forward cache entry is not, section 4 gating the beacon on `persisted` for
 the reason recorded there. So under a standing predicate one participant
 pressing F5 discloses the room's votes, unrecoverably, and today's six-second
-grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:208-225`) are what keep
+grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:189-201`) are what keep
 that from happening at present. Latching removes the unilateral trigger: a
 membership change on its own can no longer reveal anything, so the reload, the
 app switch, the slept laptop and the deliberate close all stop being reveals in
@@ -1354,7 +1358,7 @@ Three details are load-bearing rather than polish:
   distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
   carries it, next to the roles item that settles the denominator.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
-  keeps `estimation` while `clear()` clears both (`Room.scala:97-102`), so "I
+  keeps `estimation` while `clear()` clears both (`Room.scala:94-99`), so "I
   have an estimation showing but the server does not consider me voted" is
   exactly the revote state and nothing else. The optimistic assignment in
   `vote()` stays, and corrects itself on the next publish rather than promptly:
@@ -1495,7 +1499,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:381`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:399`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
@@ -1792,7 +1796,7 @@ refs, and one snapshot shared across a member's connections, arrive with step 4.
 Here a user has exactly one ref, since `joinUser` replaces the whole entry on a
 reconnect rather than accumulating. `voted` on the wire is `User.voted`,
 already the confirmed flag since `reVote()` keeps `estimation`
-(`Room.scala:97-102`), and step 2's `hasEstimation` is `estimation.nonEmpty`
+(`Room.scala:97-99`), and step 2's `hasEstimation` is `estimation.nonEmpty`
 rather than an entry existing in a map.
 
 **`applySnapshot`'s tally keeps counting every participant here**, matching
@@ -1935,9 +1939,11 @@ dependency here worth arguing with.** Landing the split first means porting
 `connections`, keeping `issueLastEditBy` alive to do it, and deleting all of it
 one step later; the larger half of that bill is tests, since `RoomSpec` is 510 of
 the project's 1,434 test lines and is written in event assertions throughout, so
-they would be rewritten for the new state model and again for snapshots. Against
-that, the current order pays for stating every rule in steps 1 to 3 in two
-vocabularies, today's and section 3's, and for the throwaway Problem A fix below.
+they would be rewritten for the new state model and again for snapshots. Those
+line counts are the design-time measurement and the argument rests on them as
+such; `RoomSpec` has grown past 510 in the steps since. Against that, the
+current order pays for stating every rule in steps 1 to 3 in two vocabularies,
+today's and section 3's, and for the throwaway Problem A fix below.
 The only structural constraint is narrow and does not favour either order:
 `Round.revealed` has no consumer until
 something carries it, so the latch belongs to whichever step brings the wire
@@ -1991,6 +1997,18 @@ step 1's diff is readable at its size only because most of it is deletion.
 About 40 and 90, having lost the TTL and its expiry check. Closes the
 outage-recovery reload; the pending-session leak closes at step 4 instead, once a
 room's lifetime is bounded.
+
+Landed. `sessions` is retained past promotion and is the single authority
+`ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
+outcome with a cut that outlasts the grace period and recovers on the retry, and
+`docs/known-issues.md` lost the forced-reload entry and gained three: the
+heartbeat-bound detection delay behind it; the one case retention does not
+reach, where the disconnecting member is the room's last and stop-when-empty ends
+the room the token would have resolved against, which step 4 closes with
+stop-after-idle; and the construction gap that lets a `RoomData` hold a member
+with no session, which step 5a closes. The pending-session leak entry stayed
+open and was re-pitched around retention, which widened it from abandoned tabs
+to every session a room mints.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit

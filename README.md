@@ -79,12 +79,31 @@ closes). As a strictly-necessary functional cookie (it exists only to operate th
 session the user actively joined, not for tracking or analytics), it doesn't require
 a cookie-consent banner under the ePrivacy Directive.
 
+The session outlives any single connection. `/join` mints it and the room keeps
+it for as long as the room itself lives, so a drop that outlasts the grace period
+removes the participant from the list but leaves their token resolvable: the
+browser's own `EventSource` retry rejoins under the same identity, with no reload
+and no second entry in the list. Their vote does not survive that window, since
+it is held against their membership. The exception is the room's last member,
+whose removal empties the room and stops it, taking its sessions with it: their
+retry gets a `401` and does need a reload. `docs/known-issues.md` records that
+until a room's lifetime stops being tied to its membership.
+
 This session cookie closes an identity-spoofing gap, not room access control: anyone
 who knows a `roomId` can still call `/join` and legitimately participate in that
 room. What it prevents is impersonating a specific existing member and acting
-without ever having joined. Actual room access control (e.g. limiting who can create
-or enter a room at all) is a separate, unscheduled concern, closest to the
-room-creation hardening listed under Phase 5 in `docs/roadmap.md`.
+without ever having joined. Holding the token is enough to rejoin as that identity,
+including after a grace-period removal, but not enough to act as it: every vote,
+show, clear, revote and edit-issue request still checks current membership, so a
+removed member's still-resolving token cannot act until they have rejoined. Actual
+room access control (e.g. limiting who can create or enter a room at all) is a
+separate, unscheduled concern, closest to the room-creation hardening listed under
+Phase 5 in `docs/roadmap.md`. Nothing revokes a token short of the room itself
+ending. Leaving does not, and before sessions were retained it did so only as a
+side effect of the member record going, not by design. A token copied out of a
+browser is therefore a valid rejoin credential for that room's life, though still
+not a licence to act without rejoining; the cookie holding it is cleared when the
+browser closes.
 
 ### Tech stack
 
