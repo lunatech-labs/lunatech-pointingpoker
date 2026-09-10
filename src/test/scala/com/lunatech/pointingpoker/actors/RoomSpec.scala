@@ -723,6 +723,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.users mustBe List(user)
       data.sessions.keySet mustBe Set(user.token, departed.token)
     }
+
+    "refuse construction that bypasses of" in {
+      // The whole point of the private constructor: copy and apply are shut too, so a
+      // fixture cannot reach an invalid RoomData by going around the factory.
+      assertDoesNotCompile("""Room.RoomData(Nil, "", false, Map.empty)""")
+      assertDoesNotCompile("""RoomData.empty.copy(currentIssue = "x")""")
+      // Guards the two above against passing vacuously on a typo rather than on access.
+      assertCompiles("""RoomData.of(Nil, Map.empty)""")
+    }
   }
 end RoomSpec
 
