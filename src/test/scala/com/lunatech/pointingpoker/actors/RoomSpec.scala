@@ -595,7 +595,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Join(newUser)
       roomRef ! Room.GetData(dataProbe.ref)
 
-      dataProbe.expectMessageType[Room.DataStatus].data.revealed mustBe true
+      // Membership, not just revealed, so a dropped Join can't pass this vacuously.
+      dataProbe.expectMessage(
+        Room.DataStatus(data = withUsers(newUser, user).withRevealed())
+      )
     }
 
     "hide the round again on a clear and on a revote" in {
