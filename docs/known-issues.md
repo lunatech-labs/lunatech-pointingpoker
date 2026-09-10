@@ -97,41 +97,6 @@ roadmap item instead of leaving it here as stale history.
   before this fires at all is the detection-delay entry below. Remove this entry
   when step 4 lands.
 
-### `RoomData` can be constructed with a member who has no session
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData`'s constructor and `joinUser`); the fixtures in
-  `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala` and
-  `RoomSnapshotSpec.scala`.
-- **Issue:** Invariant 5 of the design already implies this. A `members` entry,
-  today's `User`, is created by `ConnectToRoom` and by nothing else, and
-  `ConnectToRoom` runs only on a resolved session, so every member necessarily
-  has a `sessions` entry under its token holding its id. The design asserts
-  that for one reason, an unvotable member killing auto-reveal; step 5 gave it
-  a second, since making `sessions` the single authority `ValidateToken` reads
-  means such a member is also unresolvable. Production upholds it by
-  construction. Nothing enforces it. The constructor is public, and all but
-  three of the 48 fixture sites seed `users` with no `sessions` at all, so the
-  suite normalises a state production cannot reach. That has already cost
-  signal: three cases go red under a `Vote` rerouted onto `sessions` only
-  because their fixtures lack sessions, which deviation 7 of the step 5 plan
-  records as a trap for whoever fixes them. On the production side `joinUser`
-  adds whatever `User` it is handed and `Join` checks nothing, which is
-  unreachable today and load-bearing at step 4, where `Member` drops its token
-  and `sessions` becomes the only place a token lives.
-- **Resolution:** Scheduled as step 5a, between steps 5 and 4. A private
-  `RoomData` constructor with a validating `RoomData.of(users, sessions)`
-  factory, requiring the users' tokens to be a subset of the session keys
-  with matching ids; a `withUsers` sugar for the common seed; and a
-  test-scope `departed` extension for the retained-session-without-member
-  state that step 5 made normal. Scala 3.8.4 propagates a private
-  constructor to `copy` and `apply`, and every production mutator copies
-  from inside the class, so the lock costs production nothing. Valid
-  fixtures everywhere take the rerouted-`Vote` signal from four red cases to
-  the removed-member case alone, on deviation 7's reasoning, which is
-  acceptable only because that case guards it deliberately. Remove this entry
-  when step 5a lands.
-
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -544,6 +509,18 @@ roadmap item instead of leaving it here as stale history.
   They sit in four entries further down, from "A tied vote is broken by
   JavaScript key order" to "A reload during a revealed round locks the
   participant out of it", and none in this one.
+
+  Step 5a swept the same file's `Room.scala` citations again, for its own
+  `RoomData.of` insertion and `Join` guard: the two-check argument's five case
+  citations, the grace-timer-replaced-ref range twice over (once in the
+  delayed-decision argument, once beside the redundant-publish decision), the
+  `Behaviors.withTimers` pair, and its own paragraph's duplicate-`Leave`
+  citation all moved. This file's `Room.scala` citations sit inside
+  `RoomData`'s own methods, above both insertions, and needed nothing. The
+  sweep also found three pointers already wrong before this branch and left
+  them, being wrong in ways independent of what this step shifted:
+  `Room.scala:130` for `joinUser`'s call site, which is actually `:157`, and
+  `Room.scala:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`

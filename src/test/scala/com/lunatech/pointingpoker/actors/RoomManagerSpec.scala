@@ -6,6 +6,7 @@ import scala.concurrent.ExecutionContext
 
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import org.apache.pekko.testkit.*
+import com.lunatech.pointingpoker.actors.RoomDataFixtures.*
 import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
@@ -277,12 +278,15 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "keep a member's vote when ConnectToRoom re-registers them after a reconnect" in {
-      val roomId        = UUID.randomUUID()
-      val userId        = UUID.randomUUID()
-      val token         = Room.SessionToken.mint()
-      val firstProbe    = TestProbe()(testKit.system.classicSystem)
-      val secondProbe   = TestProbe()(testKit.system.classicSystem)
-      val roomRef       = testKit.spawn(Room(roomId))
+      val roomId      = UUID.randomUUID()
+      val userId      = UUID.randomUUID()
+      val token       = Room.SessionToken.mint()
+      val firstProbe  = TestProbe()(testKit.system.classicSystem)
+      val secondProbe = TestProbe()(testKit.system.classicSystem)
+      val alice       = Room.User(userId, "Alice", false, "", firstProbe.ref, token)
+      // Alice's session exists before her member does, which is the state ConnectToRoom
+      // always arrives in; without it the room's Join guard drops the connection.
+      val roomRef       = testKit.spawn(Room(roomId, withUsers().withMemberlessSession(alice)))
       val responseProbe = testKit.createTestProbe[Room.Response]()
       val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
       val managerRef    = testKit.spawn(

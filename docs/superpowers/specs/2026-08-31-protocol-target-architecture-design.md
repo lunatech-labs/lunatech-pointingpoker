@@ -548,7 +548,7 @@ between the two requests, an abandoned page load, a probe.
 resolves its token through `sessions` and then requires the resulting `userId` to
 be in `members`, so a resolved identity that is no longer a member is a no-op,
 which is what today's `data.users.find(_.token == token)` already produces
-(`Room.scala:143`, `149`, `154`, `159`, `203`). Keeping the checks separate matters
+(`Room.scala:171`, `177`, `182`, `187`, `231`). Keeping the checks separate matters
 because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
 at any point in the actor's life clear a round they are not in. Nothing about this
 weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
@@ -615,7 +615,7 @@ and clears `confirmed`, which is the state `Estimate` exists to express.
 **The grace period stops making a delayed decision.** Today the timer is keyed on
 `(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
 relevant, scanning for a user still holding that exact ref and doing nothing if a
-reconnect replaced it (`Room.scala:163-201`). With connections in their own map
+reconnect replaced it (`Room.scala:191-229`). With connections in their own map
 the same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
 alone starts only if the set is now empty **and that member still exists**. A
@@ -644,7 +644,7 @@ accumulating: at most one timer per departure, and the tab that caused it is gon
 naming since nothing else now holds the invariant. Pekko guarantees that a
 cancelled or replaced timer's message is never received, even when it was already
 enqueued, by checking a generation counter on dequeue. That belongs to
-`Behaviors.withTimers`, which `Room` already uses (`Room.scala:121`, `183`);
+`Behaviors.withTimers`, which `Room` already uses (`Room.scala:140`, `211`);
 `context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
 so reaching for it instead would reintroduce exactly the race the check absorbed.
 
@@ -755,7 +755,7 @@ tab hits `pagehide` on a page that is being discarded, which a reload is and a
 back/forward cache entry is not, section 4 gating the beacon on `persisted` for
 the reason recorded there. So under a standing predicate one participant
 pressing F5 discloses the room's votes, unrecoverably, and today's six-second
-grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:189-201`) are what keep
+grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:217-229`) are what keep
 that from happening at present. Latching removes the unilateral trigger: a
 membership change on its own can no longer reveal anything, so the reload, the
 app switch, the slept laptop and the deliberate close all stop being reveals in
@@ -1926,12 +1926,23 @@ recovery for anything at all is Re-vote.
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, replacing the room actor's
 stop-when-empty with an idle timeout, completing attached streams on stop, and
-Problem C. Waits on steps 1 and 5. About 150 changed and 110 of tests.
+Problem C. Waits on steps 1 and 5. About 150 changed and 450 of tests, the
+test figure revised up after step 5a.
 
 **It waits on step 5 because `Member` carries no token.** Resolution moves
 entirely to `sessions`, and sessions are only resolvable past promotion once step
 5 retains them, so landing this first would leave a connected client's token
 resolving to nothing and turn every reconnect into an immediate 401.
+
+**Step 5a's `Join` guard leaves a refused connection with nothing, and this is
+the step that could make that matter.** The guard warns and returns, and
+`publish` sends to members, so a refused joiner is not among its recipients: it
+holds an open stream taking heartbeats and never receives a first snapshot.
+Unreachable today, since `ConnectToRoom` takes the id and name from the
+resolution. If this step's rework makes it reachable, note that the fix is a
+send to that one connection rather than a call to `publish`, and that step 6's
+rejoin on a snapshot which does not name the client cannot cover it, no
+snapshot being delivered to trigger it.
 
 **It waits on step 1 for cost rather than correctness, and that is the one
 dependency here worth arguing with.** Landing the split first means porting
@@ -1941,7 +1952,13 @@ one step later; the larger half of that bill is tests, since `RoomSpec` is 510 o
 the project's 1,434 test lines and is written in event assertions throughout, so
 they would be rewritten for the new state model and again for snapshots. Those
 line counts are the design-time measurement and the argument rests on them as
-such; `RoomSpec` has grown past 510 in the steps since. Against that, the
+such; `RoomSpec` has grown past 510 in the steps since. It stood at 798 on
+2026-09-10, with the actor specs holding 1,310 of 1,844 test lines, and that is
+what the 450 above is scaled from. Step 5a is why that figure is no longer 110:
+its own test estimate was 70 and it came in near 250, having priced the new
+cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
+same suite than 5a touched, so an estimate made the old way would be low by
+more, not less. Against that, the
 current order pays for stating every rule in steps 1 to 3 in two vocabularies,
 today's and section 3's, and for the throwaway Problem A fix below.
 The only structural constraint is narrow and does not favour either order:
@@ -2009,6 +2026,73 @@ stop-after-idle; and the construction gap that lets a `RoomData` hold a member
 with no session, which step 5a closes. The pending-session leak entry stayed
 open and was re-pitched around retention, which widened it from abandoned tabs
 to every session a room mints.
+
+**Step 5a. A `RoomData` cannot hold a member without a session.** A private
+constructor with a validating `RoomData.of(users, sessions)` in the companion,
+a `withUsers` sugar for the common seed, a test-scope `withMemberlessSession`
+extension for a session whose member has gone or has not yet arrived, and the
+`Join` handler refusing a user whose token is in no session or whose session
+names a different identity. Waits on step 5, whose retention is what makes
+that state legal. Step 4 does not require it, but wants it first: the fixture
+migration is then one helper rather than 48 call sites. About 20 and 70 of
+tests.
+
+Landed. The constructor is private, `RoomData.of` is the only way in from
+outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
+`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, and the
+four needing a session without a member say so. The `Join` guard warns and
+drops rather than raising, and `docs/known-issues.md` lost the construction-gap
+entry.
+
+Not in the original ten. Invariant 5 already implies it: a `members` entry,
+today's `User`, is created by `ConnectToRoom` and by nothing else, and
+`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
+but three of the 48 fixture sites seed members with no sessions at all, so the
+suite normalises a state production cannot reach. Step 5's review measured the
+cost: three cases go red under a `Vote` rerouted onto `sessions`, but only
+because their fixtures lack sessions, so an author fixing them the obvious way
+would seed sessions and remove the signal. Valid fixtures throughout leave the
+property guarded deliberately by one case rather than incidentally by four.
+
+**`of` validates what invariant 5 implies, and throws.** Every member's token is
+a key of `sessions`, and the session it names holds that member's id and that
+member's name. The name clause is not redundant: the name sits in both records
+deliberately, because a session exists before there is a member, and
+`ConnectToRoom` builds the member by copying the name off the resolved
+session, so a disagreement between the two is a fixture error rather than a
+state a room can reach; renaming on `/join` is step 6's target, not today's
+behaviour. `of` uses `require`, an invalid `RoomData` being a programming
+error rather than a runtime condition: production builds exactly one,
+`RoomData.empty` at `Room.scala:111`, holding no members, so the check is
+unreachable there, and an `Either` would push an unwrap through 48 test sites
+to encode a case that cannot happen.
+
+**The handler warns where `of` throws, on the same predicate.** `joinUser` is
+pure and holds no logger, so the guard sits in the `Join` case, which already
+has `context`, and checks the same containment-and-identity test `of` runs on
+every member. It warns and leaves the data alone rather than raising, because
+an unhandled exception in a typed behaviour stops the actor, and a violation
+unreachable today would then end a live meeting rather than drop one join.
+`Room.scala:204-210` already answers the same shape of question the same way,
+for a `Leave` that arrives twice on one connection. The line carries the room
+and user ids and not the token, which section 4 treats as a rejoin credential
+for the room's life.
+
+**Step 4 restates the containment clause rather than inheriting it.** `members`
+is keyed by UUID there and `Member` carries no token, so "every member's token
+is a key of `sessions`" becomes "every member id is some session's `userId`",
+which absorbs the id clause into the containment one. The name clause survives
+unchanged.
+
+**Step 5 is also what makes the fixture API a real choice.** Retention made
+`users` a strict subset of `sessions` normal rather than anomalous, and four
+sites need that state: one assertion comparing a whole `RoomData` after a
+departure, and three fixtures whose joiner holds a session and no member yet.
+Three of the four being the second case is why the extension is named for the
+state rather than for departing. A builder deriving sessions from its members
+encodes equality and cannot express that state, so the validating factory takes
+both collections and the fluent step is an extension in test scope, which also
+keeps a test-shaped method off the production type.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit
