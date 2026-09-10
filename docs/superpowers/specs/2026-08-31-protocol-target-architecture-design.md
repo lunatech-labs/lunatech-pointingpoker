@@ -2029,6 +2029,24 @@ because their fixtures lack sessions, so an author fixing them the obvious way
 would seed sessions and remove the signal. Valid fixtures throughout leave the
 property guarded deliberately by one case rather than incidentally by four.
 
+**`of` validates what invariant 5 implies, and throws.** Every member's token is
+a key of `sessions`, and the session it names holds that member's id and that
+member's name. The name clause is not redundant: the name sits in both records
+deliberately, because a session exists before there is a member, and `/join`
+renames the member if and only if one exists, so the two are written together
+and a disagreement is a fixture error rather than a state a room can reach. `of`
+uses `require`, an invalid `RoomData` being a programming error rather than a
+runtime condition: production builds exactly one, `RoomData.empty` at
+`Room.scala:111`, holding no members, so the check is unreachable there, and an
+`Either` would push an unwrap through 48 test sites to encode a case that cannot
+happen.
+
+**Step 4 restates the containment clause rather than inheriting it.** `members`
+is keyed by UUID there and `Member` carries no token, so "every member's token
+is a key of `sessions`" becomes "every member id is some session's `userId`",
+which absorbs the id clause into the containment one. The name clause survives
+unchanged.
+
 **Step 5 is also what makes the fixture API a real choice.** Retention made
 `users` a strict subset of `sessions` normal rather than anomalous, and five
 assertions compare a whole `RoomData` after a departure. A builder deriving
