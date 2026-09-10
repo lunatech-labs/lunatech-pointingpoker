@@ -2013,11 +2013,11 @@ to every session a room mints.
 **Step 5a. A `RoomData` cannot hold a member without a session.** A private
 constructor with a validating `RoomData.of(users, sessions)` in the companion,
 a `withUsers` sugar for the common seed, a test-scope `departed` extension for
-the retained-session-without-member state, and `joinUser` refusing a user whose
-token is in no session. Waits on step 5, whose retention is what makes that
-state legal. Step 4 does not require it, but wants it first: the fixture
-migration is then one helper rather than 48 call sites. About 20 and 70 of
-tests.
+the retained-session-without-member state, and the `Join` handler refusing a
+user whose token is in no session. Waits on step 5, whose retention is what
+makes that state legal. Step 4 does not require it, but wants it first: the
+fixture migration is then one helper rather than 48 call sites. About 20 and 70
+of tests.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
@@ -2040,6 +2040,16 @@ runtime condition: production builds exactly one, `RoomData.empty` at
 `Room.scala:111`, holding no members, so the check is unreachable there, and an
 `Either` would push an unwrap through 48 test sites to encode a case that cannot
 happen.
+
+**The handler warns where `of` throws.** `joinUser` is pure and holds no
+logger, so the guard sits in the `Join` case, which already has `context`. It
+warns and leaves the data alone rather than raising, because an unhandled
+exception in a typed behaviour stops the actor, and a violation unreachable
+today would then end a live meeting rather than drop one join.
+`Room.scala:176-182` already answers the same shape of question the same way,
+for a `Leave` that arrives twice on one connection. The line carries the room
+and user ids and not the token, which section 4 treats as a rejoin credential
+for the room's life.
 
 **Step 4 restates the containment clause rather than inheriting it.** `members`
 is keyed by UUID there and `Member` carries no token, so "every member's token
