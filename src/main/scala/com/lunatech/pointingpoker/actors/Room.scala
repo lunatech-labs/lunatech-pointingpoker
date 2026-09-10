@@ -151,7 +151,16 @@ object Room:
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
-          receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
+          // Invariant 5: ConnectToRoom runs only on a resolved session, so this cannot fire
+          // in production; warn rather than raise, which would stop the room and drop everyone.
+          if !data.sessions.contains(user.token) then
+            context.log.warn(
+              "Ignoring Join for user {} in room {}: its token resolves to no session.",
+              user.id,
+              roomId
+            )
+            Behaviors.same
+          else receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
           val token   = SessionToken.mint()
