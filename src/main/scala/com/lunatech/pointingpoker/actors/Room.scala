@@ -153,14 +153,15 @@ object Room:
         case Join(user) =>
           // Invariant 5: ConnectToRoom runs only on a resolved session, so this cannot fire
           // in production; warn rather than raise, which would stop the room and drop everyone.
-          if !data.sessions.contains(user.token) then
-            context.log.warn(
-              "Ignoring Join for user {} in room {}: its token resolves to no session.",
-              user.id,
-              roomId
-            )
+          if data.sessions.get(user.token).contains(Session(user.id, user.name)) then
+            receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
+          else
+            val reason =
+              if data.sessions.contains(user.token) then
+                "its token's session names a different identity"
+              else "its token resolves to no session"
+            context.log.warn("Ignoring Join for user {} in room {}: {}.", user.id, roomId, reason)
             Behaviors.same
-          else receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
           val token   = SessionToken.mint()
