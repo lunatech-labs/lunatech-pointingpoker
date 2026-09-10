@@ -103,20 +103,22 @@ roadmap item instead of leaving it here as stale history.
   (`RoomData`'s constructor and `joinUser`); the fixtures in
   `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala` and
   `RoomSnapshotSpec.scala`.
-- **Issue:** Step 5 made `sessions` the single authority `ValidateToken`
-  reads, which introduced an unstated coupling: every `User` needs a
-  `sessions` entry under its token, holding its id. Production upholds it by
-  construction, since the only way to become a `User` is `ConnectToRoom`,
-  whose id and name come from an already-resolved session. Nothing enforces
-  it. The constructor is public, and all but three of the 48 fixture sites
-  seed `users` with no `sessions` at all, so the suite normalises a state
-  production cannot reach. That has already cost signal: three cases go red
-  under a `Vote` rerouted onto `sessions` only because their fixtures lack
-  sessions, which deviation 7 of the step 5 plan records as a trap for
-  whoever fixes them. On the production side `joinUser` adds whatever `User`
-  it is handed and `Join` checks nothing, which is unreachable today and
-  load-bearing at step 4, where `Member` drops its token and `sessions`
-  becomes the only place a token lives.
+- **Issue:** Invariant 5 of the design already implies this. A `members` entry,
+  today's `User`, is created by `ConnectToRoom` and by nothing else, and
+  `ConnectToRoom` runs only on a resolved session, so every member necessarily
+  has a `sessions` entry under its token holding its id. The design asserts
+  that for one reason, an unvotable member killing auto-reveal; step 5 gave it
+  a second, since making `sessions` the single authority `ValidateToken` reads
+  means such a member is also unresolvable. Production upholds it by
+  construction. Nothing enforces it. The constructor is public, and all but
+  three of the 48 fixture sites seed `users` with no `sessions` at all, so the
+  suite normalises a state production cannot reach. That has already cost
+  signal: three cases go red under a `Vote` rerouted onto `sessions` only
+  because their fixtures lack sessions, which deviation 7 of the step 5 plan
+  records as a trap for whoever fixes them. On the production side `joinUser`
+  adds whatever `User` it is handed and `Join` checks nothing, which is
+  unreachable today and load-bearing at step 4, where `Member` drops its token
+  and `sessions` becomes the only place a token lives.
 - **Resolution:** Scheduled as step 5a, between steps 5 and 4. A private
   `RoomData` constructor with a validating `RoomData.of(users, sessions)`
   factory, requiring the users' tokens to be a subset of the session keys
