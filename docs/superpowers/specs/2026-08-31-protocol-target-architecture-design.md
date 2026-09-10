@@ -2012,12 +2012,12 @@ to every session a room mints.
 
 **Step 5a. A `RoomData` cannot hold a member without a session.** A private
 constructor with a validating `RoomData.of(users, sessions)` in the companion,
-a `withUsers` sugar for the common seed, a test-scope `departed` extension for
-the retained-session-without-member state, and the `Join` handler refusing a
-user whose token is in no session. Waits on step 5, whose retention is what
-makes that state legal. Step 4 does not require it, but wants it first: the
-fixture migration is then one helper rather than 48 call sites. About 20 and 70
-of tests.
+a `withUsers` sugar for the common seed, a test-scope `withMemberlessSession`
+extension for a session whose member has gone or has not yet arrived, and the
+`Join` handler refusing a user whose token is in no session. Waits on step 5,
+whose retention is what makes that state legal. Step 4 does not require it, but
+wants it first: the fixture migration is then one helper rather than 48 call
+sites. About 20 and 70 of tests.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
@@ -2058,12 +2058,14 @@ which absorbs the id clause into the containment one. The name clause survives
 unchanged.
 
 **Step 5 is also what makes the fixture API a real choice.** Retention made
-`users` a strict subset of `sessions` normal rather than anomalous, and five
-assertions compare a whole `RoomData` after a departure. A builder deriving
-sessions from its members encodes equality and cannot express that state, so
-the validating factory takes both collections and the fluent step is an
-extension in test scope, which also keeps a test-shaped method off the
-production type.
+`users` a strict subset of `sessions` normal rather than anomalous, and four
+sites need that state: one assertion comparing a whole `RoomData` after a
+departure, and three fixtures whose joiner holds a session and no member yet.
+Three of the four being the second case is why the extension is named for the
+state rather than for departing. A builder deriving sessions from its members
+encodes equality and cannot express that state, so the validating factory takes
+both collections and the fluent step is an extension in test scope, which also
+keeps a test-shaped method off the production type.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit
