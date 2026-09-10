@@ -557,6 +557,15 @@ roadmap item instead of leaving it here as stale history.
   claim about live code that happens to sit in a step's paragraph: step 5
   renumbered the `reVote` claim in step 1's paragraph for that reason, while
   leaving the pair beside it alone.
+
+  Numbers the prose reasons from are a separate case, and renumbering is not
+  available for them. The step-ordering argument for step 4 rests on `RoomSpec`
+  being 510 of the project's 1,434 test lines; step 5 measured 693 of 1,706.
+  Updating the figures would rewrite the cost estimate the argument is made of,
+  and leaving them bare states something false in the present tense, so step 5
+  marked them as the design-time measurement and noted that the file has grown
+  since. Prefer that to either where a figure carries an argument rather than
+  locating code.
 - **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
