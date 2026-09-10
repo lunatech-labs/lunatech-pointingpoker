@@ -858,9 +858,10 @@ Listed so a reviewer can reject one without re-deriving it.
    reasoning.
 
 5. **Three pre-existing stale citations were found and deliberately left.**
-   `Room.scala:130` for `joinUser`'s call site, which is `:163`, and
-   `:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`. Outside
-   a sweep scoped to what this step's insertions moved. They are named in
+   `Room.scala:130` for `joinUser`'s call site, which is `:157` after this
+   branch's final restructure, and `:66-74` and `:67-74` for `joinUser` itself,
+   which ends at `:73`. All were already wrong before this branch in ways
+   independent of what this step shifted. They are named in
    `docs/known-issues.md`'s standing stale-citation entry so a future
    sweeper inherits a task rather than re-deriving it.
 
