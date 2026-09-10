@@ -2014,10 +2014,11 @@ to every session a room mints.
 constructor with a validating `RoomData.of(users, sessions)` in the companion,
 a `withUsers` sugar for the common seed, a test-scope `withMemberlessSession`
 extension for a session whose member has gone or has not yet arrived, and the
-`Join` handler refusing a user whose token is in no session. Waits on step 5,
-whose retention is what makes that state legal. Step 4 does not require it, but
-wants it first: the fixture migration is then one helper rather than 48 call
-sites. About 20 and 70 of tests.
+`Join` handler refusing a user whose token is in no session or whose session
+names a different identity. Waits on step 5, whose retention is what makes
+that state legal. Step 4 does not require it, but wants it first: the fixture
+migration is then one helper rather than 48 call sites. About 20 and 70 of
+tests.
 
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
@@ -2048,11 +2049,12 @@ runtime condition: production builds exactly one, `RoomData.empty` at
 `Either` would push an unwrap through 48 test sites to encode a case that cannot
 happen.
 
-**The handler warns where `of` throws.** `joinUser` is pure and holds no
-logger, so the guard sits in the `Join` case, which already has `context`. It
-warns and leaves the data alone rather than raising, because an unhandled
-exception in a typed behaviour stops the actor, and a violation unreachable
-today would then end a live meeting rather than drop one join.
+**The handler warns where `of` throws, on the same predicate.** `joinUser` is
+pure and holds no logger, so the guard sits in the `Join` case, which already
+has `context`, and checks the same containment-and-identity test `of` runs on
+every member. It warns and leaves the data alone rather than raising, because
+an unhandled exception in a typed behaviour stops the actor, and a violation
+unreachable today would then end a live meeting rather than drop one join.
 `Room.scala:204-210` already answers the same shape of question the same way,
 for a `Leave` that arrives twice on one connection. The line carries the room
 and user ids and not the token, which section 4 treats as a rejoin credential
