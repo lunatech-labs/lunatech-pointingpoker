@@ -9,7 +9,6 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
-import com.lunatech.pointingpoker.actors.Room.RoomData
 import com.lunatech.pointingpoker.actors.RoomDataFixtures.*
 
 class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
