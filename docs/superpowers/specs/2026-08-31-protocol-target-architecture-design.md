@@ -1926,7 +1926,8 @@ recovery for anything at all is Re-vote.
 **Step 4. Transport and state split, plus stop-after-idle.** `RoomState`,
 `Round`, `members` and `connections`, replacing the room actor's
 stop-when-empty with an idle timeout, completing attached streams on stop, and
-Problem C. Waits on steps 1 and 5. About 150 changed and 110 of tests.
+Problem C. Waits on steps 1 and 5. About 150 changed and 450 of tests, the
+test figure revised up after step 5a.
 
 **It waits on step 5 because `Member` carries no token.** Resolution moves
 entirely to `sessions`, and sessions are only resolvable past promotion once step
@@ -1951,7 +1952,13 @@ one step later; the larger half of that bill is tests, since `RoomSpec` is 510 o
 the project's 1,434 test lines and is written in event assertions throughout, so
 they would be rewritten for the new state model and again for snapshots. Those
 line counts are the design-time measurement and the argument rests on them as
-such; `RoomSpec` has grown past 510 in the steps since. Against that, the
+such; `RoomSpec` has grown past 510 in the steps since. It stood at 798 on
+2026-09-10, with the actor specs holding 1,310 of 1,844 test lines, and that is
+what the 450 above is scaled from. Step 5a is why that figure is no longer 110:
+its own test estimate was 70 and it came in near 250, having priced the new
+cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
+same suite than 5a touched, so an estimate made the old way would be low by
+more, not less. Against that, the
 current order pays for stating every rule in steps 1 to 3 in two vocabularies,
 today's and section 3's, and for the throwaway Problem A fix below.
 The only structural constraint is narrow and does not favour either order:
