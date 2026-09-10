@@ -98,7 +98,12 @@ show, clear, revote and edit-issue request still checks current membership, so a
 removed member's still-resolving token cannot act until they have rejoined. Actual
 room access control (e.g. limiting who can create or enter a room at all) is a
 separate, unscheduled concern, closest to the room-creation hardening listed under
-Phase 5 in `docs/roadmap.md`.
+Phase 5 in `docs/roadmap.md`. Nothing revokes a token short of the room itself
+ending. Leaving does not, and before sessions were retained it did so only as a
+side effect of the member record going, not by design. A token copied out of a
+browser is therefore a valid rejoin credential for that room's life, though still
+not a licence to act without rejoining; the cookie holding it is cleared when the
+browser closes.
 
 ### Tech stack
 
