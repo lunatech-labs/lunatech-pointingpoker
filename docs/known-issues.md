@@ -87,7 +87,8 @@ roadmap item instead of leaving it here as stale history.
   ended. Please reload the page to rejoin." This is the last connected member,
   not only a lone one: it also catches whoever is left once the others have
   gone. The `onerror` comment in `src/main/resources/pages/index.html` names
-  this cause, and since step 5 it is the only cause left.
+  this cause. Step 5 removed the consumed-session cause behind it, leaving
+  this one and a process restart, which takes every room and session with it.
 - **Resolution:** Scheduled as step 4 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: the room outlives its
@@ -125,8 +126,9 @@ roadmap item instead of leaving it here as stale history.
   constructor to `copy` and `apply`, and every production mutator copies
   from inside the class, so the lock costs production nothing. Valid
   fixtures everywhere take the rerouted-`Vote` signal from four red cases to
-  one, which is acceptable only because the removed-member case guards it
-  deliberately. Remove this entry when step 5a lands.
+  the removed-member case alone, on deviation 7's reasoning, which is
+  acceptable only because that case guards it deliberately. Remove this entry
+  when step 5a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
