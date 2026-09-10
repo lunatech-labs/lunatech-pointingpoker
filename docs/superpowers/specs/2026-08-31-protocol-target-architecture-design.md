@@ -2010,6 +2010,33 @@ with no session, which step 5a closes. The pending-session leak entry stayed
 open and was re-pitched around retention, which widened it from abandoned tabs
 to every session a room mints.
 
+**Step 5a. A `RoomData` cannot hold a member without a session.** A private
+constructor with a validating `RoomData.of(users, sessions)` in the companion,
+a `withUsers` sugar for the common seed, a test-scope `departed` extension for
+the retained-session-without-member state, and `joinUser` refusing a user whose
+token is in no session. Waits on step 5, whose retention is what makes that
+state legal. Step 4 does not require it, but wants it first: the fixture
+migration is then one helper rather than 48 call sites. About 20 and 70 of
+tests.
+
+Not in the original ten. Invariant 5 already implies it: a `members` entry,
+today's `User`, is created by `ConnectToRoom` and by nothing else, and
+`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
+but three of the 48 fixture sites seed members with no sessions at all, so the
+suite normalises a state production cannot reach. Step 5's review measured the
+cost: three cases go red under a `Vote` rerouted onto `sessions`, but only
+because their fixtures lack sessions, so an author fixing them the obvious way
+would seed sessions and remove the signal. Valid fixtures throughout leave the
+property guarded deliberately by one case rather than incidentally by four.
+
+**Step 5 is also what makes the fixture API a real choice.** Retention made
+`users` a strict subset of `sessions` normal rather than anomalous, and five
+assertions compare a whole `RoomData` after a departure. A builder deriving
+sessions from its members encodes equality and cannot express that state, so
+the validating factory takes both collections and the fluent step is an
+extension in test scope, which also keeps a test-shaped method off the
+production type.
+
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit
 leave endpoint with its beacon gated on a discarded page, and the client rejoin
