@@ -57,7 +57,7 @@ object Room:
 
   final case class Session(userId: UUID, name: String)
 
-  final case class RoomData(
+  final case class RoomData private (
       users: List[User],
       currentIssue: String,
       revealed: Boolean = false,
