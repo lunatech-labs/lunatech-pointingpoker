@@ -757,7 +757,8 @@ After the step 5a opening paragraph, which ends "About 20 and 70 of tests." at
 ```
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, as do the
+`copy` shut, along with `joinUser`, the one method that adds a member.
+All 48 fixture sites build through `RoomDataFixtures`, as do the
 cases added since, and the five needing a session without a member say so.
 The `Join` guard warns and
 drops rather than raising, and `docs/known-issues.md` lost the construction-gap
@@ -900,3 +901,13 @@ Listed so a reviewer can reject one without re-deriving it.
    that one connection, which is a different change, and step 6's rejoin on a
    snapshot that does not name the client cannot substitute for it, no
    snapshot arriving to trigger the rejoin.
+
+8. **`joinUser` went `private[Room]`, which the plan did not ask for.** The
+   private constructor takes `apply` and `copy` with it, but `joinUser` is a
+   public method that appends whatever `User` it is handed, so
+   `RoomData.empty.joinUser(u)` still built the forbidden state from outside
+   the class. It is the only method that adds a member; the other seven
+   preserve or shrink `users`. `private[actors]` would not do, the tests
+   sharing that package. Access is compile-time only, so this is not a second
+   production behaviour change. A third `assertDoesNotCompile` pins it, and
+   reverting the modifier reddens that case.

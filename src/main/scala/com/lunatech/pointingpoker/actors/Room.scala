@@ -63,7 +63,7 @@ object Room:
       revealed: Boolean = false,
       sessions: Map[SessionToken, Session] = Map.empty
   ):
-    def joinUser(user: User): RoomData =
+    private[Room] def joinUser(user: User): RoomData =
       // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
       // ref actually differs on a reconnect, there being no rename feature.
       val kept = this.users

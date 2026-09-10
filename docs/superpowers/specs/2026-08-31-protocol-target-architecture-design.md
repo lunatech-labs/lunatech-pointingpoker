@@ -1952,8 +1952,8 @@ one step later; the larger half of that bill is tests, since `RoomSpec` is 510 o
 the project's 1,434 test lines and is written in event assertions throughout, so
 they would be rewritten for the new state model and again for snapshots. Those
 line counts are the design-time measurement and the argument rests on them as
-such; `RoomSpec` has grown past 510 in the steps since. It stood at 798 on
-2026-09-10, with the actor specs holding 1,310 of 1,844 test lines, and that is
+such; `RoomSpec` has grown past 510 in the steps since. It stood at 802 on
+2026-09-10, with the actor specs holding 1,314 of 1,848 test lines, and that is
 what the 450 above is scaled from. Step 5a is why that figure is no longer 110:
 its own test estimate was 70 and it came in near 250, having priced the new
 cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
@@ -2039,7 +2039,8 @@ tests.
 
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut. All 48 fixture sites build through `RoomDataFixtures`, as do the
+`copy` shut, along with `joinUser`, the one method that adds a member.
+All 48 fixture sites build through `RoomDataFixtures`, as do the
 cases added since, and the five needing a session without a member say so.
 The `Join` guard warns and
 drops rather than raising, and `docs/known-issues.md` lost the construction-gap
