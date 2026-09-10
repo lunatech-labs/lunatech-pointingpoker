@@ -2040,14 +2040,15 @@ property guarded deliberately by one case rather than incidentally by four.
 **`of` validates what invariant 5 implies, and throws.** Every member's token is
 a key of `sessions`, and the session it names holds that member's id and that
 member's name. The name clause is not redundant: the name sits in both records
-deliberately, because a session exists before there is a member, and `/join`
-renames the member if and only if one exists, so the two are written together
-and a disagreement is a fixture error rather than a state a room can reach. `of`
-uses `require`, an invalid `RoomData` being a programming error rather than a
-runtime condition: production builds exactly one, `RoomData.empty` at
-`Room.scala:111`, holding no members, so the check is unreachable there, and an
-`Either` would push an unwrap through 48 test sites to encode a case that cannot
-happen.
+deliberately, because a session exists before there is a member, and
+`ConnectToRoom` builds the member by copying the name off the resolved
+session, so a disagreement between the two is a fixture error rather than a
+state a room can reach; renaming on `/join` is step 6's target, not today's
+behaviour. `of` uses `require`, an invalid `RoomData` being a programming
+error rather than a runtime condition: production builds exactly one,
+`RoomData.empty` at `Room.scala:111`, holding no members, so the check is
+unreachable there, and an `Either` would push an unwrap through 48 test sites
+to encode a case that cannot happen.
 
 **The handler warns where `of` throws, on the same predicate.** `joinUser` is
 pure and holds no logger, so the guard sits in the `Join` case, which already
