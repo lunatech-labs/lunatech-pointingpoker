@@ -4,7 +4,7 @@ import java.util.UUID
 
 import scala.concurrent.duration.*
 
-import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
+import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, LoggingTestKit}
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
@@ -303,14 +303,14 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         Room.User(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
       val roomResponseProbe = testKit.createTestProbe[Room.Response]()
 
-      val roomId          = UUID.randomUUID()
-      val behaviorTestKit = BehaviorTestKit(Room(roomId), roomId.toString)
+      val roomId = UUID.randomUUID()
+      // Seeded rather than joined: Join is not what this case is about, and a refused
+      // Join would leave the room empty and pass the assertion for the wrong reason.
+      val behaviorTestKit =
+        BehaviorTestKit(Room(roomId, withUsers(user, user2)), roomId.toString)
 
-      behaviorTestKit.run(Room.Join(user))
-      behaviorTestKit.run(Room.Join(user2))
       // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
-      // directly rather than Leave (which only schedules it) - this test is about the
-      // "room stops when empty" invariant, not the grace-period delay itself.
+      // directly rather than Leave (which only schedules it).
       behaviorTestKit.run(Room.ConfirmLeave(user.id, user.ref, roomResponseProbe.ref))
       behaviorTestKit.run(Room.ConfirmLeave(user2.id, user2.ref, roomResponseProbe.ref))
       behaviorTestKit.isAlive mustBe false
@@ -332,6 +332,23 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessage(
         Room.DataStatus(data = withUsers(user.copy(ref = newRefProbe.ref)))
       )
+    }
+
+    "ignore a Join whose token is in no session" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (stranger, _) = createUser(UUID.randomUUID(), "stranger", false, "")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)  = createRoom(UUID.randomUUID(), withUsers(user))
+
+      // Nothing mints stranger's token, so ConnectToRoom could never have produced this
+      // Join; the room drops it rather than manufacturing an unresolvable member.
+      LoggingTestKit
+        .warn("resolves to no session")
+        .expect {
+          roomRef ! Room.Join(stranger)
+          roomRef ! Room.GetData(dataProbe.ref)
+          dataProbe.expectMessage(Room.DataStatus(data = withUsers(user)))
+        }(using testKit.system)
     }
 
     "publish the whole room to a joiner and to everyone already in it" in {
@@ -561,10 +578,6 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "keep the round revealed when a straggler joins" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef) = createRoom(
-        UUID.randomUUID(),
-        withUsers(user).withRevealed()
-      )
       val newUserProbe = TestProbe()(testKit.system.classicSystem)
       val newUser      = Room.User(
         UUID.randomUUID(),
@@ -573,6 +586,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         "",
         newUserProbe.ref,
         Room.SessionToken.mint()
+      )
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        withUsers(user).withRevealed().withMemberlessSession(newUser)
       )
 
       roomRef ! Room.Join(newUser)
