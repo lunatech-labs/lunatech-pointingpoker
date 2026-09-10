@@ -146,7 +146,10 @@ Listed so a reviewer can reject one without re-deriving it.
    They were fixed anyway: the sweep note this task adds claims the file was
    swept, and leaving four known-stale citations in it would have made that note
    untrue. All four resolved against the design's original baseline rather than
-   guessed at.
+   guessed at. A fifth of a different provenance went the same way: the design's
+   vote-survival pointer into `e2e/room.spec.js`, stale not from the original
+   baseline but because step 3's sweep missed it, corrected here and the miss
+   recorded in `docs/known-issues.md`.
 
 5. **This plan's step 7 grep expectation for "session has ended" was wrong,
    twice over.** It predicted no match in `docs/known-issues.md`; a pre-existing
