@@ -665,6 +665,67 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       users.map(u => (u.voted, u.estimation)) mustBe List((true, "5"))
       users.map(_.ref) mustBe List(newRefProbe.ref)
     }
+
+    "build a RoomData when every member has a matching session" in {
+      val (user, _)  = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, _) = createUser(UUID.randomUUID(), "user2", true, "5")
+      val sessions   = Map(
+        user.token  -> Room.Session(user.id, user.name),
+        user2.token -> Room.Session(user2.id, user2.name)
+      )
+
+      val data = RoomData.of(List(user, user2), sessions)
+
+      data.users mustBe List(user, user2)
+      data.sessions mustBe sessions
+      data.currentIssue mustBe ""
+      data.revealed mustBe false
+    }
+
+    "refuse a RoomData whose member has no session at all" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+
+      val thrown = intercept[IllegalArgumentException] {
+        RoomData.of(List(user), Map.empty)
+      }
+
+      thrown.getMessage must include("has no session")
+    }
+
+    "refuse a RoomData whose member's session names a different identity" in {
+      val (user, _)  = createUser(UUID.randomUUID(), "user1", false, "")
+      val (other, _) = createUser(UUID.randomUUID(), "user2", false, "")
+
+      val thrown = intercept[IllegalArgumentException] {
+        RoomData.of(List(user), Map(user.token -> Room.Session(other.id, other.name)))
+      }
+
+      thrown.getMessage must include("a different identity")
+    }
+
+    "refuse a RoomData whose member's session disagrees on the name alone" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+
+      val thrown = intercept[IllegalArgumentException] {
+        RoomData.of(List(user), Map(user.token -> Room.Session(user.id, "someone else")))
+      }
+
+      thrown.getMessage must include("a different identity")
+    }
+
+    "allow a session that has no member, which is what retention produces" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (departed, _) = createUser(UUID.randomUUID(), "user2", false, "")
+      val sessions      = Map(
+        user.token     -> Room.Session(user.id, user.name),
+        departed.token -> Room.Session(departed.id, departed.name)
+      )
+
+      val data = RoomData.of(List(user), sessions)
+
+      data.users mustBe List(user)
+      data.sessions.keySet mustBe Set(user.token, departed.token)
+    }
   }
 end RoomSpec
 

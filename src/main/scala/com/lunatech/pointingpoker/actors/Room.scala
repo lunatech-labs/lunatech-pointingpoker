@@ -110,6 +110,25 @@ object Room:
   object RoomData:
     val empty: RoomData = RoomData(List.empty[User], "")
 
+    def of(
+        users: List[User],
+        sessions: Map[SessionToken, Session],
+        currentIssue: String = "",
+        revealed: Boolean = false
+    ): RoomData =
+      // Invariant 5: ConnectToRoom creates every member off a resolved session, so a
+      // member whose session is missing or disagrees is a fixture error, never a state.
+      users.foreach { u =>
+        require(sessions.contains(u.token), s"member ${u.name} (${u.id}) has no session")
+        require(
+          sessions(u.token) == Session(u.id, u.name),
+          s"the session for member ${u.name} (${u.id}) holds a different identity"
+        )
+      }
+      RoomData(users, currentIssue, revealed, sessions)
+    end of
+  end RoomData
+
   val defaultGracePeriod: FiniteDuration = 6.seconds
 
   def apply(
