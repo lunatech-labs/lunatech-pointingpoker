@@ -821,5 +821,59 @@ git commit -m "docs: record step 5a as landed, and close the construction gap"
 
 ## Deviations from the plan, and why
 
-Listed so a reviewer can reject one without re-deriving it. Empty at the time
-of writing; fill it during implementation.
+Listed so a reviewer can reject one without re-deriving it.
+
+1. **Task 1 found a fixture site the plan wrongly called mechanical, and
+   fixed it early.** `RoomSpec`'s "publish the whole room to a joiner" case
+   compares a whole `RoomData` at its expectation. Migrating it mechanically
+   to `withUsers(newUser, user, user2)` derives a session for the joiner
+   that the actual room lacks, because `Join` creates no session, so it
+   fails at task 1 rather than task 2. Task 1 applied the fix task 2 step 8
+   prescribed. The planning miss: the site's fixture was checked against the
+   guard, its expectation was not.
+
+2. **The plan predicted three failing cases when the guard landed; one
+   failed.** Task 1's early fix removed one. The other, "keep the round
+   revealed when a straggler joins", passed vacuously instead: it seeds
+   `revealed = true` and asserts `revealed` is still true, so a silently
+   dropped `Join` satisfies it. Only `RoomManagerSpec`'s reconnect case
+   actually failed.
+
+3. **The straggler case needed more than the prescribed fix.** Seeding its
+   session fixed why the join was dropped without making the assertion
+   notice whether it landed. It now compares the whole `RoomData`, and the
+   fix was proven by removing the seeding and watching it report "expected 2
+   members, found 1". Three cases in this suite were found green against a
+   dropped `Join` during this step; the plan's hazard analysis caught only
+   the one that built its fixture via `Join`, and missed both whose
+   assertions were too weak to see a missing member.
+
+4. **The citation sweep was narrowed from the plan's `docs/` and
+   `README.md` to three files.** `docs/known-issues.md`, the 2026-08-31
+   design, and `README.md`, which turned out to hold no `Room.scala`
+   pointers at all. The plan's grep would have swept 42 pointers in
+   `2026-08-26-sse-delta-resync-design.md` and
+   `2026-08-28-sse-snapshot-protocol-design.md`, both cancelled designs and
+   frozen. Plan files for completed steps were excluded on the same
+   reasoning.
+
+5. **Three pre-existing stale citations were found and deliberately left.**
+   `Room.scala:130` for `joinUser`'s call site, which is `:163`, and
+   `:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`. Outside
+   a sweep scoped to what this step's insertions moved. They are named in
+   `docs/known-issues.md`'s standing stale-citation entry so a future
+   sweeper inherits a task rather than re-deriving it.
+
+6. **The `Join` guard was widened after the final review, and the spec with
+   it.** It was specified as containment-only while `of` also requires the
+   session to hold the member's id and name, so a `Join` against a session
+   naming a different identity produced a live `RoomData` that `of` would
+   reject. Unreachable today, since `ConnectToRoom` takes both from the
+   resolution, but step 4 makes the coupling load-bearing. The asymmetry was
+   an omission at design time rather than a decision.
+
+7. **A refused `Join` returns without publishing**, so the connecting
+   client's SSE stream stays open and receives no snapshot. Correct for a
+   case that cannot occur, and recorded here rather than in the guard's
+   comment, which is at this project's two-line ceiling. Worth revisiting at
+   step 4 if that step changes reachability.
