@@ -117,10 +117,10 @@ Listed so a reviewer can reject one without re-deriving it.
    under a temporary revert of both production hunks. It keeps a second seeded
    member only so the room does not stop when the departing one goes.
 
-   One knock-on: this plan's task 1 step 7 gives `sessionsFor` a seeding-site
-   count. The corrected case mints Alice's session rather than seeding it, and a
-   later case added a site, so take the count out rather than restate it. See
-   deviation 6.
+   One knock-on: this plan's task 1 step 7 says `sessionsFor` has three seeding
+   sites, which miscounted the two this plan writes out. Deviation 7's case added
+   a third, so the number now reads correctly by accident rather than by being
+   right. See deviation 6 on counts in plans.
 
 2. **Task 2's case forces detection rather than waiting for it.** The planned
    20 second timeout was not enough: in a quiet room a cut participant took about
@@ -134,11 +134,12 @@ Listed so a reviewer can reject one without re-deriving it.
    roughly 7 seconds.
 
 3. **Task 3 added a known-issues entry this plan did not schedule.** The entry it
-   deletes was also the only record that detection is unbounded in a quiet room,
-   which this step does not fix and step 6's beacon will not fix either, since a
-   beacon only covers a page discarded deliberately. That fact is now its own
-   entry, with task 2's measurement behind it rather than the original hand-wavy
-   prose.
+   deletes recorded that detection is unbounded in a quiet room, which this step
+   does not fix and step 6's beacon will not fix either, since a beacon only
+   covers a page discarded deliberately. That fact is now its own entry, with
+   task 2's measurement behind it rather than the original hand-wavy prose. The
+   deliberate-close entry records the same mechanism and was not deleted, so both
+   now point at each other.
 
 4. **Task 3's sweep covered four citations older than this branch.** They were
    stale before task 1 shifted anything, and this plan's step 3 did not list them.
@@ -147,9 +148,13 @@ Listed so a reviewer can reject one without re-deriving it.
    untrue. All four resolved against the design's original baseline rather than
    guessed at.
 
-5. **This plan's step 7 grep expectation for "session has ended" was wrong.** It
-   predicted no match in `docs/known-issues.md`; a pre-existing match sits in an
-   unrelated open entry and claims nothing stale. No tree change.
+5. **This plan's step 7 grep expectation for "session has ended" was wrong,
+   twice over.** It predicted no match in `docs/known-issues.md`; a pre-existing
+   match sits in an unrelated open entry and claims nothing stale. It also put
+   the README match at `:205`, which was already off by one when written and is
+   further off now that step 6's insert and deviation 8's rewrite have pushed the
+   restart paragraph down. Verify the string, not the line. No tree change either
+   time.
 
 6. **This plan's step 3 gave a citation count, and should not have.** It said the
    grep returns twelve sites; it returns fifteen lines carrying sixteen pointers.
@@ -158,21 +163,24 @@ Listed so a reviewer can reject one without re-deriving it.
    count each time, and the count was never what a sweep needed." A future step's
    plan should name the rules and skip the total.
 
-7. **Task 1 gained a test this plan did not schedule.** `RoomSpec.scala:483-516`
+7. **Task 1 gained a test this plan did not schedule.** `RoomSpec.scala:480-516`
    refuses all five commands from a token whose member was removed at grace
-   expiry, with six lines added alongside it in `e2e/room.spec.js`. It was added
-   because the global constraint it guards, that resolving a token and being
-   allowed to act stay two checks, had no executable guard: every other case would
-   have stayed green with a command rewritten onto `sessions`. It compares whole
-   `RoomData` before and after each command, so it catches a regression on any of
-   the five rather than sampling one.
+   expiry, with a comment, a locator and two assertions added alongside it in
+   `e2e/room.spec.js`. It was added because the global constraint it guards, that
+   resolving a token and being allowed to act stay two checks, had no executable
+   guard: no other case pins it. Three do go red under a `Vote` rewritten onto
+   `sessions`, but only because their fixtures seed `users` with no `sessions`,
+   so an author fixing them the obvious way would seed sessions and leave the
+   property unguarded again. It compares whole `RoomData` before and after each
+   command, so it catches a regression on any of the five rather than sampling
+   one.
 
 8. **Task 3 step 6 rewrote a README paragraph it scoped as needing no edit.** The
    step inserts a paragraph between `:75-80` and `:82`, and names only the restart
-   paragraph as needing none. The identity-spoofing paragraph at `:82` was
+   paragraph as needing none. The identity-spoofing paragraph below it was
    rewritten too, because retention makes its claim half true: the cookie no
    longer only prevents acting without ever having joined, now that a removed
-   member's token still resolves. It says instead that holding the token is enough
+   member's token still resolves. It adds that holding the token is enough
    to rejoin as that identity but not to act as it.
 
 9. **Task 3 step 3 renumbered `:1795`, which its own rule 3 lists as historical.**
@@ -189,6 +197,21 @@ Listed so a reviewer can reject one without re-deriving it.
     diff, five into `Room.scala` and three into the design, and the sweep note
     this task adds would have been untrue with them left in place. Same reasoning
     as deviation 4.
+
+11. **The `ValidateToken` landed note says something this plan's block does not.**
+    Task 3 step 3 dictates the note verbatim, ending "The citation is to the
+    pre-step-5 file". That is wrong: the citation is `Room.scala:236-243`, where
+    `ValidateToken` sat in the pre-step-1 file the design was written against,
+    not in the pre-step-5 file, where it sat at `:210-217`. The spec carries the
+    corrected wording and this plan's block is left as issued, so the two
+    disagree deliberately. `docs/known-issues.md` had the distinction right all
+    along.
+
+12. **The resolve case was retitled away from this plan's verbatim block.** Task 1
+    step 1 dictates `"resolve a token whose member is connected"`. With
+    `ValidateToken` reading only `sessions`, the seeded `users` list no longer
+    affects the outcome, so that title named a member-specific path this step
+    deletes. It is now `"resolve a token when the room already has members"`.
 
 ---
 

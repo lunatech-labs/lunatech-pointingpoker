@@ -96,7 +96,10 @@ roadmap item instead of leaving it here as stale history.
   mid-meeting can show as present for far longer than 6 seconds afterward, not up
   to 6. Quote the range rather than a midpoint: a single figure gets remembered as
   a ceiling, and 16.7 seconds from that suite's table has been, though it is the
-  nudged case at the old test grace period and nearer 22 in production.
+  nudged case at the old test grace period and nearer 22 in production. A silent
+  cut shares this mechanism and is measured below, under "The grace period does
+  not start until a heartbeat write to the dead connection fails"; the figures
+  there agree with these once detection is separated from the grace period.
 
   The form users actually report is a reload rather than a tab close.
   `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
@@ -256,7 +259,10 @@ roadmap item instead of leaving it here as stale history.
   `e2e/room.spec.js`'s case forces a vote and a Clear rather than waiting it
   out, and the older `departureWhileCut` helper does the same. A participant
   who crashes, sleeps their laptop, or drops off the network in an otherwise
-  quiet room lingers in everyone's list for up to about half a minute.
+  quiet room lingers in everyone's list for up to about half a minute. The
+  deliberate-close entry above records the same mechanism; the 35.5 seconds here
+  is time to disappear under a 4-second grace period, so its detection half sits
+  at the top of the 16 to 31 seconds quoted there rather than contradicting it.
 - **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
   leave endpoint does not close this: its beacon fires only on `pagehide` for a
   page being discarded deliberately, and a crash, a sleeping laptop, or a
@@ -463,17 +469,18 @@ roadmap item instead of leaving it here as stale history.
   two hunks shifted. Step 5 swept the `Room.scala` citations in both the design
   and this file. In the design it renumbered the command-path list its own diff
   shifted, annotated the `ValidateToken` sentence whose code it deleted, moved
-  the `clear()`/`reVote()` pair off step 2's `:97-102`, and corrected several
-  that had gone stale from further back in the file's history, unrelated to this
-  step's own diff: the `SessionToken` opaque type line, the
+  step 2's `:97-102` sites, the live `reVote` claim inside step 1's paragraph
+  among them, onto the numbers this step's own `joinUser` hunk gave them, and
+  corrected others that had gone stale from further back in the file's history,
+  unrelated to this step's own diff: the `SessionToken` opaque type line, the
   `Leave`/`ConfirmLeave` timer range twice over (once for the keying, once for
-  the stale-ref branch), the `Behaviors.withTimers` pair, and the live `reVote`
-  claim inside step 1's own paragraph. Those resolved against the pre-"Step 1:
-  Snapshot protocol" file the design was originally written from. In this file it
-  corrected its own pointers into `Room.scala`, for `reVote`, `vote` and the
-  revealed-round refusal, and into the design, for the additive-views passage,
-  the re-vote tally argument, and the `clear`/`reVote` removal rule, all shifted
-  by the same `joinUser` hunk and by the note step 5 inserted into the design.
+  the stale-ref branch), and the `Behaviors.withTimers` pair. Those last
+  resolved against the pre-"Step 1: Snapshot protocol" file the design was
+  originally written from. In this file it corrected its own pointers into
+  `Room.scala`, for `reVote`, `vote` and the revealed-round refusal, and into
+  the design, for the additive-views passage, the re-vote tally argument, and
+  the `clear`/`reVote` removal rule, all shifted by the same `joinUser` hunk and
+  by the note step 5 inserted into the design.
   They sit in four entries further down, from "A tied vote is broken by
   JavaScript key order" to "A reload during a revealed round locks the
   participant out of it", and none in this one.
@@ -497,7 +504,9 @@ roadmap item instead of leaving it here as stale history.
   history while its siblings stay in the planning present, and a half-finished
   one leaves a paragraph contradicting itself. The same claim in
   `docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` (`:8`, `:47-48`,
-  `:318`) is outside this entry's scope and still reads as live.
+  `:318`) is outside this entry's scope and still reads as live. Step 3's sweep
+  also missed the vote-survival pointer, stale since before step 5's branch and
+  corrected by it to `e2e/room.spec.js:399`.
 
   A fourth kind, also unswept, is a delivered plan describing code that no longer exists:
   `docs/superpowers/plans/2026-08-31-protocol-architecture-0-playwright.md:876`
@@ -636,7 +645,7 @@ roadmap item instead of leaving it here as stale history.
   confirmation can mean a re-vote in progress, and the summary counts exactly the
   non-blank estimation cells the table beside it displays, which
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1318-1331`
-  argues for and `e2e/room.spec.js:319-320` asserts. It is the same failure class as
+  argues for and `e2e/room.spec.js:338-340` asserts. It is the same failure class as
   the tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
   stale row with no check-circle (`index.html:318`), so anyone looking down from

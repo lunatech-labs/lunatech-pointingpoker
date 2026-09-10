@@ -1499,7 +1499,7 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:381`), so
+  annotations off and landed the vote-survival case (`e2e/room.spec.js:399`), so
   the "today" above is step 0's, not the reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
@@ -1939,9 +1939,11 @@ dependency here worth arguing with.** Landing the split first means porting
 `connections`, keeping `issueLastEditBy` alive to do it, and deleting all of it
 one step later; the larger half of that bill is tests, since `RoomSpec` is 510 of
 the project's 1,434 test lines and is written in event assertions throughout, so
-they would be rewritten for the new state model and again for snapshots. Against
-that, the current order pays for stating every rule in steps 1 to 3 in two
-vocabularies, today's and section 3's, and for the throwaway Problem A fix below.
+they would be rewritten for the new state model and again for snapshots. Those
+line counts are the design-time measurement and the argument rests on them as
+such; `RoomSpec` has grown past 510 in the steps since. Against that, the
+current order pays for stating every rule in steps 1 to 3 in two vocabularies,
+today's and section 3's, and for the throwaway Problem A fix below.
 The only structural constraint is narrow and does not favour either order:
 `Round.revealed` has no consumer until
 something carries it, so the latch belongs to whichever step brings the wire
@@ -2000,9 +2002,9 @@ Landed. `sessions` is retained past promotion and is the single authority
 `ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
 outcome with a cut that outlasts the grace period and recovers on the retry, and
 `docs/known-issues.md` lost the forced-reload entry and gained one for the
-heartbeat-bound detection delay that entry was the only record of. The
-pending-session leak entry stayed open and was re-pitched around retention,
-which widened it from abandoned tabs to every session a room mints.
+heartbeat-bound detection delay behind it. The pending-session leak entry stayed
+open and was re-pitched around retention, which widened it from abandoned tabs
+to every session a room mints.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
 pattern replacing the unconditional `204`, idempotent `/join`, the explicit
