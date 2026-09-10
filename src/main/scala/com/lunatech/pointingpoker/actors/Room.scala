@@ -151,8 +151,8 @@ object Room:
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
-          // Invariant 5: ConnectToRoom runs only on a resolved session, so this cannot fire
-          // in production; warn rather than raise, which would stop the room and drop everyone.
+          // Unreachable: ConnectToRoom runs only on a resolved session. Warn, not raise, which
+          // stops the room; publish is member-scoped, so a refused joiner gets no snapshot.
           if data.sessions.get(user.token).contains(Session(user.id, user.name)) then
             receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
           else
