@@ -252,9 +252,9 @@ roadmap item instead of leaving it here as stale history.
   larger than the icon it first appears to be. `RoomSnapshot`'s `hasEstimation`
   is `estimation.nonEmpty` today, so an empty estimation reads as voted with no
   estimation; step 4 re-expresses the field as the entry existing in
-  `round.estimates`, and the client reads that field twice, at
-  `index.html:531` for the withheld-value icon and at `:357` to gate the vote
-  tally. Presence alone would therefore admit a `""` bucket to the
+  `round.estimates`, and the client reads that field twice, in
+  `showUserEstimation` for the withheld-value icon and in `applySnapshot` to
+  gate the vote tally. Presence alone would therefore admit a `""` bucket to the
   distribution, which is the defect step 3 exists to remove. So step 4 refuses a
   blank estimation in `vote` rather than re-rendering the row, which is a refusal
   of the absence of a value and not the validation this entry's resolution
@@ -262,7 +262,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:373`). Step 6 describes the endpoints with tapir, which buys
+  (`estimationValues`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -568,18 +568,28 @@ roadmap item instead of leaving it here as stale history.
   controls as green, which is correct as a record of what step 0 was told to
   build. The plan is delivered, so this is recorded rather than edited.
 
-  The design's step 4 section carries the same fourth kind, at `:1955`: the
-  caveat that `Room.scala:125-130` is the code's only pointer to 08-24's
+  The design's step 1 section carries the same fourth kind, in "One caveat to
+  carry rather than delete with the code it annotates": that
+  `Room.scala:125-130` is the code's only pointer to 08-24's
   connection-establishment finding, and that deleting `setupNewUser` takes the
   pointer with it. Step 1 deleted it already, and a successor comment sits at
   `Room.scala:251-252`, so the caveat is spent and its citation is now one of
-  the deliberate pre-step-1 pointers the second trap below protects. Step 4
-  owns that section.
+  the deliberate pre-step-1 pointers the second trap below protects. Step 1's
+  section is landed, so the disposal is the annotation prescribed above rather
+  than an edit.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
-  given here on purpose. Three review rounds produced a different count each
+  given here on purpose.
+
+  Renumbering a step has a fourth shape, and it is not a citation: a step named
+  in a table cell rather than in a sentence. Splitting step 4 swept the prose and
+  left three rows behind, two in the design's "Known issues disposition" and one
+  in "Deferred, with triggers", because scanning prose does not read like
+  scanning a table. Those two tables are the only place that answers which step
+  closes a given entry, so a renumbering that misses them leaves the design
+  contradicting this file. Three review rounds produced a different count each
   time, and the count was never what a sweep needed.
 
   Sweep last, and sweep again after any later commit touches a cited file. A
@@ -713,7 +723,7 @@ roadmap item instead of leaving it here as stale history.
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
-  the rest in insertion order. Against the cards at `:373` that puts `0` to `89`
+  the rest in insertion order. Against `estimationValues` that puts `0` to `89`
   first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
   `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
   `0.5` and `?` is decided by `s.users` iteration order, the one case not
@@ -768,9 +778,10 @@ roadmap item instead of leaving it here as stale history.
   and the room's two answers are worth reading together. Neither scheduled step
   closes it. Step 6 is about a refusal reaching the client that cast it, not about
   which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
-  design's `:606-613` removes estimates only on `clear` or the round ending, with a
-  `reVote` leaving the values in place and clearing `confirmed`, which is the state
-  `Estimate` exists to express. Remove this entry once the previous estimate is
+  design's "Each of the three is removed at a different moment" removes estimates
+  only on `clear` or the round ending, with a `reVote` leaving the values in
+  place and clearing `confirmed`, which is the state `Estimate` exists to
+  express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
   estimation on `reVote`.
 

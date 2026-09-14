@@ -227,8 +227,8 @@ directly in the new frontend.
       additive and depends on no other step; acting on what they say needs weeks
       of accumulation, and the two are separate work. In particular step 4a does
       not wait for it: that step already reasons its way to a two-hour idle
-      timeout, and the protocol spec makes it the one value that design leaves
-      configurable, so a later correction is a deploy rather than a release.
+      timeout, and the protocol spec makes it the one value that design adds to
+      the configuration, so a later correction is a deploy rather than a release.
       Step 6 no longer sits behind it either, waiting on step 4 rather than on
       4a, which removes the sharpest version of this argument and leaves the
       plain one: there is nothing to gain by holding a value that a deploy can

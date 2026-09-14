@@ -161,9 +161,9 @@ because nothing in the current structure obstructs the target. One real
 structural flaw exists, `User.ref` being a live connection handle inside
 `RoomData`, and step 4 below treats correcting it as a bounded refactor rather
 than a reason to start over; its own paragraph carries the current figures, which
-have moved twice since this argument was written. The
-usual argument against rewrites (a long period with two codebases) is weak at
-this size and was not the deciding factor.
+have moved twice since this argument was written. The usual argument against
+rewrites (a long period with two codebases) is weak at this size and was not the
+deciding factor.
 
 ### Stack
 
@@ -428,20 +428,23 @@ committed, pre-reveal, on somebody else's row; `Confirmed(value)` revealed or on
 one's own row; `UnconfirmedHidden` after a `reVote`, pre-reveal, on somebody
 else's row; and `Unconfirmed(value)` after a `reVote` on one's own. Note that
 the tag has to carry `confirmed`, not only the value and its redaction, or the
-re-vote state collapses into the committed one and the check-circle at
-`index.html:320` loses its meaning.
+re-vote state collapses into the committed one and the participant table's
+check-circle on `u.voted` loses its meaning.
 
 It waits for step 8 rather than step 4 for three costs that all disappear there.
 Circe wraps a sealed trait in a constructor-name object under `deriveEncoder`, so
 it needs a custom encoder and takes every snapshot assertion with it; the wire
-shape is pinned deliberately, twice, at `RoomSnapshotSpec.scala:86` and `:115`,
-the second recording that "the wire keeps `estimation` a String that is always
-present"; and the Vue 2 page reads these fields at four sites (`:320`, `:324`,
-`:357`, `:531`). Taking it at step 4 would also make one PR change both the wire
-format and the shape of state, which is the pairing step 4 declines for itself
-when it refuses to fold into step 1. At step 8 the client is rewritten anyway and
-reads a union without any of it. The internal counterpart is a separate question
-and section 3 answers it separately, in the other direction.
+shape is pinned deliberately, twice, by `RoomSnapshotSpec`'s "serialize exactly
+the agreed field set" and "keep a withheld estimation out of the serialized
+frame entirely", the second recording that "the wire keeps `estimation` a String
+that is always present"; and the Vue 2 page reads these fields at six sites, the
+participant table's check-circle and estimation cell, `applySnapshot`'s tally
+and its two `me` reads, and `showUserEstimation`. Taking it at step 4 would also
+make one PR change both the wire format and the shape of state, which is the
+pairing step 4 declines for itself when it refuses to fold into step 1. At step
+8 the client is rewritten anyway and reads a union without any of it. The
+internal counterpart is a separate question and section 3 answers it separately,
+in the other direction.
 
 **The wire name is `votesRevealed`, not `revealed`.** Under the latch in section 3
 the two carry the same meaning, so the only reason for two names is that
@@ -529,8 +532,8 @@ sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long 
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
 
-emptySince    Option[Instant]  // empty since when; Some at creation, see "Two lifetimes"
-sawMessage    Boolean          // any message since the previous idle tick
+emptySince    Option[Instant]  // step 4a: empty since when, Some at creation
+sawMessage    Boolean          // step 4a: any message since the previous idle tick
 ```
 
 The last two are actor bookkeeping rather than a fifth group of state. They sit
@@ -599,13 +602,13 @@ changes which rows show the shield icon. So `voted` on the wire is
 `confirmed = false` across the map, and `clear` empties it.
 
 **Making `hasEstimation` mean presence has a second consequence, and it is the
-larger one.** The client reads that field twice, not once: at `index.html:531`
-for the withheld-value icon, and at `index.html:357` to gate the vote tally. So
-an estimate whose value is the empty string would enter the distribution as a
-`""` bucket, which is the defect step 3 exists to remove arriving through another
-door. The split is what creates the case rather than exposing it: `""` is today's
-*sentinel* for "no estimate", written by `clear()` (`Room.scala:95`), and the
-split abolishes the sentinel by making absence structural, so after it a
+larger one.** The client reads that field twice, not once: in
+`showUserEstimation` for the withheld-value icon, and in `applySnapshot` to gate
+the vote tally. So an estimate whose value is the empty string would enter the
+distribution as a `""` bucket, which is the defect step 3 exists to remove
+arriving through another door. The split is what creates the case rather than
+exposing it: `""` is today's *sentinel* for "no estimate", written by `clear()`,
+and the split abolishes the sentinel by making absence structural, so after it a
 `Vote(token, "")` writes a value where it used to collapse onto nothing.
 
 **So `vote` refuses a blank estimation**, in the branch that already refuses a
@@ -663,18 +666,18 @@ methods 5a shut from outside.
 
 **Nesting the member inside its session was considered and declined.** It would
 make that one relation unrepresentable rather than validated, and it is sound,
-since `RequestSession` mints a fresh `userId` with every token
-(`Room.scala:165-170`), making the two 1:1. It loses on coverage rather than on
-cost. Of the three relations, exactly one can nest: a connection whose member is
-gone is a required state, per the leave endpoint above, and an estimate
-outliving its member is Problem A's guarantee, so nesting either is forbidden by
-this design rather than merely awkward. Nesting therefore converts one relation
-of three into structure and leaves a factory for the other two, trading one
-uniform rule for two mechanisms a reader has to tell apart. The cost argument
-carries no weight and should not be revived: `sessions` reaches tens of entries
-in a meeting and a few hundred under heavy tab churn, so a scan would be
-microseconds across an entire session, and a derived `Map[UUID, SessionToken]`
-index removes even that at the price of putting a second id-keyed map back.
+since `RequestSession` mints a fresh `userId` with every token, making the two
+1:1. It loses on coverage rather than on cost. Of the three relations, exactly
+one can nest: a connection whose member is gone is a required state, per the
+leave endpoint above, and an estimate outliving its member is Problem A's
+guarantee, so nesting either is forbidden by this design rather than merely
+awkward. Nesting therefore converts one relation of three into structure and
+leaves a factory for the other two, trading one uniform rule for two mechanisms
+a reader has to tell apart. The cost argument carries no weight and should not
+be revived: `sessions` reaches tens of entries in a meeting and a few hundred
+under heavy tab churn, so a scan would be microseconds across an entire session,
+and a derived `Map[UUID, SessionToken]` index removes even that at the price of
+putting a second id-keyed map back.
 
 The general rule that decided it, since this is the third time the question has
 come up in this design: a **choice between shapes** is sum-shaped and earns an
@@ -969,8 +972,8 @@ tick is therefore not seen as idle until the tick after next, so the actual stop
 lands between one and two intervals after the last departure: **two to four
 hours**, on the figures above. Nothing distinguishes those outcomes, and one
 periodic timer is easier to test than a single-shot one that has to be cancelled
-and rescheduled. The actor idle timeout is the only value this design makes
-configurable, following the existing `SseConfig` pattern.
+and rescheduled. The actor idle timeout is the only value this design adds to
+the configuration; step 4a says where it lives and what the keys become.
 
 **The no-message term is what stops a join being lost.** `ConnectToRoom` is
 fire-and-forget (`RoomManager.scala:80-86`) and is sent from
@@ -980,14 +983,14 @@ dead-letter it, leaving the client holding an open, heartbeating stream that
 never receives a snapshot: no error, no `onerror`, no reconnect, a blank room
 until reload. The ordering that prevents it is causal rather than lucky, since
 `ConnectToRoom` is only ever sent after the same actor has answered
-`ValidateToken` (`API.scala:121-135`), and a mailbox is sequential, so any tick
-able to sit between them was itself preceded by that `ValidateToken` in the same
-interval. The term costs one field, `sawMessage` above, set by any command and
-cleared by each tick, and it lets a stray message defer an abandoned room's stop
-by one interval, which costs a few kilobytes of memory for a couple of hours. A
-message every interval defers it indefinitely, and nothing here bounds the rate,
-so step 4a closes the abandoned-room issue against accidental abandonment rather
-than against a loop. Bounding the loop is the rate-limiting entry in
+`ValidateToken`, and a mailbox is sequential, so any tick able to sit between
+them was itself preceded by that `ValidateToken` in the same interval. The term
+costs one field, `sawMessage` above, set by any command and cleared by each
+tick, and it lets a stray message defer an abandoned room's stop by one
+interval, which costs a few kilobytes of memory for a couple of hours. A message
+every interval defers it indefinitely, and nothing here bounds the rate, so step
+4a closes the abandoned-room issue against accidental abandonment rather than
+against a loop. Bounding the loop is the rate-limiting entry in
 `docs/known-issues.md`, which stays open.
 
 **Its two siblings get nothing, deliberately.** `RoomManager` keeps a stopping
@@ -1011,8 +1014,8 @@ two do not.
 **Message silence alone is the wrong criterion, though, and it is what an
 implementer reaches for.** Pekko's `setReceiveTimeout` fires on message silence,
 and open SSE connections send the room actor nothing at all: heartbeats come from
-the `keepAlive` stage inside the stream (`SSE.scala:69`), not from any message. A
-room with five people connected, arguing about an estimate for two hours before
+the `keepAlive` stage inside the stream, not from any message. A room with five
+people connected, arguing about an estimate for two hours before
 anyone clicks a card, would stop itself mid-meeting and leave every participant
 holding an open connection to a dead actor. So silence is a veto on stopping, not
 a reason to stop. Recorded as a rejected alternative because the reason it is
@@ -1025,10 +1028,10 @@ terminates into `ConnectionFailure`, which is already routed to `Leave`.
 **An actor that may stop on its own owes an answer to whoever is still attached,
 and today there is none.** `Source.actorRef`'s materialized ref has no lifecycle
 link to the room in either direction, and `completionMatcher` is deliberately
-`PartialFunction.empty` (`SSE.scala:71-75`), so a room that stops leaves every
-attached stream heartbeating from the `keepAlive` stage with no snapshot ever
-arriving again. That is the same symptom `sawMessage` above exists to prevent, from
-a second cause, and it is cheaper to close: `Room` handles `PostStop` by sending a
+`PartialFunction.empty`, so a room that stops leaves every attached stream
+heartbeating from the `keepAlive` stage with no snapshot ever arriving again.
+That is the same symptom `sawMessage` above exists to prevent, from a second
+cause, and it is cheaper to close: `Room` handles `PostStop` by sending a
 completion message to every ref in `connections`, and `completionMatcher`
 recognizes it. The comment quoted above therefore becomes the thing being changed
 rather than a rule to preserve.
@@ -1757,7 +1760,7 @@ arrives.
 | WebSocket | Needing low-latency bidirectional interaction at many events per second. |
 | Voting scale | Someone asking for a non-fibonacci scale. Moved to the end of the backlog: it was a nice-to-have nobody requested. |
 | Custom chosen room names | An authentication and ownership model existing, without which "is this name taken forever" has no answer. |
-| An explicit destroy-room action | Wanted as a convenience. Nothing needs reclaiming now that rooms are memory-only. Step 4's stop-time stream completion gives it the one mechanism it would otherwise have to invent, a way to evict whoever is still attached. |
+| An explicit destroy-room action | Wanted as a convenience. Nothing needs reclaiming now that rooms are memory-only. Step 4a's stop-time stream completion gives it the one mechanism it would otherwise have to invent, a way to evict whoever is still attached. |
 | Durable storage of any kind (a Postgres `rooms` table, or a whole-blob JSON snapshot in Cellar) | Someone wanting round history across sessions, or a truthful 404 becoming worth a database. See "No durable storage". A prior draft specified the Postgres version in full, including row TTLs, an expiry predicate and a sweeper; that analysis is in this file's history if it is ever needed. Between the two, Cellar is the simpler starting point on complexity grounds, since it needs no migration tool, no SQL and no database in CI. |
 | Observer roles | Phase 4, unchanged. A field plus one change to what "everyone has voted" means. |
 | Latched reveal, the part that is left | Phase 4. The auto-reveal half lands at step 1, because a re-derived predicate lets a departure disclose the round: see section 3. What stays deferred is whether a revealed round should survive a `reVote`, and it should ship with the backlog's undo and re-hide. Today's accidental un-reveal, where a joiner flips the room back, closes at step 1 rather than here. |
@@ -1790,9 +1793,9 @@ of what the probe is being kept for.
 
 ## The ordered path
 
-Thirteen steps, numbered from zero, three of them lettered. Two were added after
-the rest; 4a is a different case, carved out of step 4's own scope rather than
-discovered later, and the paragraph under step 4a says why. The numbers are
+Fourteen steps, numbered from zero, four of them lettered. Three were added
+after the rest; 4a is a different case, carved out of step 4's own scope rather
+than discovered later, and the paragraph under step 4a says why. The numbers are
 labels rather than a queue; each states what it actually waits on. Line counts
 are rough. Which steps get an implementation plan is a separate question,
 answered by `docs/superpowers/plans/README.md` rather than by size alone.
@@ -1808,18 +1811,19 @@ answered by `docs/superpowers/plans/README.md` rather than by size alone.
 | 4 State split | 1 and 5 |
 | 4a Stop-after-idle | 4 |
 | 5 Retained sessions | 1 |
+| 5a A `RoomData` cannot hold a member without a session | 5 |
 | 6 The write path becomes real | 4 |
 | 7 Slug room ids | 4 and 6 |
 | 8 Frontend rewrite | 1 and 6 |
 | 9 Recorded value and round history | 8 |
 
-One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 3b, 5, 4, 4a, 6,
-7, 8, 9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8; what is
-fixed beyond the table is that 2, 3, 3a and 3b precede 4, for the reasons under
-steps 3 and 3b. Step 3a is lettered rather than numbered because it was not one
-of the ten this design started with: it came out of using step 3, and the letter
-keeps it beside the reveal work it amends instead of taking a number that means
-something else.
+One landing sequence that satisfies all of it: **0, 1, 2, 3, 3a, 3b, 5, 5a, 4,
+4a, 6, 7, 8, 9**. Steps 2, 3, 3a and 5 are mutually independent, as are 7 and 8;
+what is fixed beyond the table is that 2, 3, 3a and 3b precede 4, for the
+reasons under steps 3 and 3b. Step 3a is lettered rather than numbered because
+it was not one of the ten this design started with: it came out of using step 3,
+and the letter keeps it beside the reveal work it amends instead of taking a
+number that means something else.
 
 **Step 6 waits on 4 and not on 4a**, which is what keeps the carve-out from
 costing anything. Its leave endpoint reads the size of a member's connection set,
@@ -1960,6 +1964,10 @@ with it. The chain is unchanged here and the send gets smaller, one snapshot in
 place of a batched replay, so restate the caveat on `publish` rather than
 re-running the trials.
 
+Landed at step 1: `setupNewUser` is gone and the caveat is restated on `publish`
+at `Room.scala:251-252`. The citation above is therefore historical and stays,
+which is what `docs/known-issues.md` records it as.
+
 **The anti-buffering headers need an assertion and not only an implementation.**
 `APISpec`'s "open an SSE events stream for a resolved session" is where it
 belongs, beside a route test that already exists. Step 0's stub cannot stand in
@@ -2047,11 +2055,11 @@ done nothing, and there is no banner and no retry behind it.
 
 The refusal needs the actor that answered `ValidateToken` to be a different actor
 from the one receiving `Join`. The mailbox is sequential and `ConnectToRoom` is
-only ever sent after the same actor resolved the token (`API.scala:121-135`), so
-it takes a same-id stop and recreation inside the milliseconds between the
-resolution and `SSE.source`'s `mapMaterializedValue` send. Today the stop half of
-that coincidence is armed by every departure, since any `ConfirmLeave` emptying
-the room fires it; after step 4a it is armed only by a two-hourly tick. The
+only ever sent after the same actor resolved the token, so it takes a same-id
+stop and recreation inside the milliseconds between the resolution and
+`SSE.source`'s `mapMaterializedValue` send. Today the stop half of that
+coincidence is armed by every departure, since any `ConfirmLeave` emptying the
+room fires it; after step 4a it is armed only by a two-hourly tick. The
 recreation half is unchanged, so the whole becomes strictly less reachable.
 
 **A refused `Join` therefore adds nothing to `connections`, and that is a rule
@@ -2059,11 +2067,11 @@ rather than an omission.** The split makes the wrong fix look free: `publish`
 iterates `connections` rather than members, and `RoomSnapshot.of` already has to
 tolerate a recipient who is not a member for the leave-endpoint case, so adding
 the ref anyway reads as a one-line cure for the silence. It is the opposite.
-`applySnapshot` hardcodes `inRoom` true (`index.html:360`), so the tab would
-render the room with itself absent from the participant list while every command
-it sends is dropped by the membership check, which reads as a successful join
-rather than a refused one. That is the same shape of lie told from the other
-side, and it is worse than silence because it is confident.
+`applySnapshot` hardcodes `inRoom` true, so the tab would render the room with
+itself absent from the participant list while every command it sends is dropped
+when its token resolves to no session, which reads as a successful join rather
+than a refused one. That is the same shape of lie told from the other side, and
+it is worse than silence because it is confident.
 
 The fix is a send to that one connection rather than a call to `publish`, and it
 belongs with step 6. The send and step 6's rejoin on a snapshot which does not
@@ -2080,13 +2088,12 @@ the project's 1,434 test lines and is written in event assertions throughout, so
 they would be rewritten for the new state model and again for snapshots. Those
 line counts are the design-time measurement and the argument rests on them as
 such; `RoomSpec` has grown past 510 in the steps since. It stood at 802 on
-2026-09-10 and 813 on 2026-09-14, with the actor specs holding 1,325 of 1,642
+2026-09-10 and 813 on 2026-09-14, with the actor specs holding 1,325 of 1,859
 test lines, and that is what the 400 above and step 4a's 80 are scaled from.
-Step 5a is why the combined figure is no longer 110:
-its own test estimate was 70 and it came in at 234, having priced the new
-cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
-same suite than 5a touched, so an estimate made the old way would be low by
-more, not less. Against that, the
+Step 5a is why the combined figure is no longer 110: its own test estimate was
+70 and it came in at 234, having priced the new cases and not the migration of
+48 fixture sites. Step 4 rewrites more of the same suite than 5a touched, so an
+estimate made the old way would be low by more, not less. Against that, the
 current order pays for stating every rule in steps 1 to 3 in two vocabularies,
 today's and section 3's, and for the throwaway Problem A fix below.
 The only structural constraint is narrow and does not favour either order:
@@ -2095,23 +2102,23 @@ something carries it, so the latch belongs to whichever step brings the wire
 format.
 
 **The split is a refactor with two deliberate exceptions, and a reviewer should
-be handed both rather than left to find them.** `connections` is a set per member
-from the start, but until step 6 makes `/join` idempotent it holds a second ref
-only transiently, across the racing reconnect section 3 describes, so nothing
-observable turns on it here. What does change is `hasEstimation`, which stops
-meaning `estimation.nonEmpty` and becomes the entry existing in
-`round.estimates`, and the blank vote that the change would otherwise admit to
-the tally. Section 3 carries both, under "`Estimate` carries `confirmed`".
-Neither is reachable from the page, whose card values are hardcoded
-(`index.html:373`); both need a hand-written request.
+be handed both rather than left to find them.** Not one of them, though it reads
+like one: `connections` is a set per member from the start, but until step 6
+makes `/join` idempotent it holds a second ref only transiently, across the
+racing reconnect section 3 describes, so nothing observable turns on it here.
+What does change is `hasEstimation`, which stops meaning `estimation.nonEmpty`
+and becomes the entry existing in `round.estimates`, and the blank vote that the
+change would otherwise admit to the tally. Section 3 carries both, under
+"`Estimate` carries `confirmed`". Neither is reachable from the page, whose card
+values are hardcoded in `estimationValues`; both need a hand-written request.
 
 Flag for its reviewer rather than let them find it: this **deletes** step 1's
 fix for Problem A, because the split makes vote loss on reconnect
 unrepresentable. Writing a fix and then removing it is deliberate, and it is
 also why Problem C is closed here for the first time rather than fixed twice:
-step 1 says why. Folding the split into step 1
-would produce one PR changing both the wire format and the shape of state, and
-step 1's diff is readable at its size only because most of it is deletion.
+step 1 says why. Folding the split into step 1 would produce one PR changing
+both the wire format and the shape of state, and step 1's diff is readable at
+its size only because most of it is deletion.
 
 **Step 4a. Stop-after-idle.** The idle timeout replacing stop-when-empty,
 completing attached streams on stop, the reply channel that the first of those
@@ -2122,7 +2129,9 @@ makes unreachable, and the configuration rename they arrive with. Waits on step
 letter a different case from 3a's and 5a's, and the reason is review rather than
 size. Step 4 is the large majority of the combined work, because the fixture
 shape changes under every case whether or not the case is about lifecycle, so
-splitting balances nothing. What it separates is two questions a reviewer would
+splitting balances nothing. The two halves also total about 20 production and 30
+test lines more than the combined step did, which is what separating the review
+questions costs. What it separates is two questions a reviewer would
 otherwise answer at once: whether behaviour changed, which step 4 answers with
 the two exceptions above and nothing else, and whether two to four hours is right
 and the tick does what it claims. This document applies the same argument one
@@ -2148,11 +2157,11 @@ rather than in `SSE` because `sse` imports `actors` and not the reverse, and
 putting it in `SSE` would invert that. It is not a `Room.Command`: it travels
 outward to connection refs, which are untyped, so `publish`'s existing send needs
 no new typing. `immediately` rather than `draining` because the buffer holds at
-most one element (`SSE.scala:21`) and its content is a snapshot of a room that no
+most one element (`bufferSize`) and its content is a snapshot of a room that no
 longer exists, so delivering it would render a live room for the instant before
-the tab is told its session ended. `failureMatcher` stays empty. The comment at
-`SSE.scala:64-65` asserting that no message ever completes the stream from
-outside is the thing being changed, not a rule to preserve.
+the tab is told its session ended. `failureMatcher` stays empty. The comment on
+`SSE`'s `completionMatcher` asserting that no message ever completes the stream
+from outside is the thing being changed, not a rule to preserve.
 
 The idle timeout also deletes the stop path it replaces, which is worth claiming
 because this step's diff is otherwise additive. `ConfirmLeave` no longer stops
@@ -2161,21 +2170,23 @@ the `Response` ADT, and `RoomManager`'s `removeRoom` call site all become
 unreachable.
 
 **Take the whole reply channel with them, not just the `Stopped` half.** A
-`Running` whose only handler is `case Room.Running(_) => Behaviors.same`
-(`RoomManager.scala:107`) is the no-consumer case this design applies to
-`version` and `scale`, so `Response` and `Running` go, `replyTo` leaves `Leave`
-and `ConfirmLeave`, and with them go `RoomResponseWrapper` (`:27`), its handler
-(`:105-110`), the `roomResponseActor` adapter (`:59-60`) and the
+`Running` whose only handler is `case Room.Running(_) => Behaviors.same` is the
+no-consumer case this design applies to `version` and `scale`, so `Response` and
+`Running` go, `replyTo` leaves `Leave` and `ConfirmLeave`, and with them go
+`RoomResponseWrapper`, its handler, the `roomResponseActor` adapter and the
 `roomResponseWrapper` parameter threaded through `receiveBehaviour`, its four
-recursive calls (`:78`, `:94`, `:109`, `:154`) and the one in `apply` (`:60`).
-That takes `RoomManager.receiveBehaviour` from three parameters to two. Most of the test churn is mechanical probe wiring, and step 4 has already
-rewritten those cases for the split, so 4a's half of it is deletion. **Step 6's
-leave endpoint does not revive this**: its reply is an ask answered to the HTTP
-route, carrying the applied / not-a-member results the ask pattern is for, so a
-`Response` ADT reappearing there is a new type under an old name rather than this
-one returning.
+recursive calls in the `CreateRoom`, `RequestSession`, `Stopped` and
+`Terminated` branches and the one in `RoomManager.apply`, with the two
+`Room.Leave` sends going when `replyTo` does. That takes
+`RoomManager.receiveBehaviour` from three parameters to two. Most of the test
+churn is mechanical probe wiring, and step 4 has already rewritten those cases
+for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
+not revive this**: its reply is an ask answered to the HTTP route, carrying the
+applied / not-a-member results the ask pattern is for, so a `Response` ADT
+reappearing there is a new type under an old name rather than this one
+returning.
 
-`Terminated` (`RoomManager.scala:163-165`) becomes the single
+`receiveBehaviour`'s `receiveSignal` on `Terminated` becomes the single
 deregistration path, which it has to be anyway, since it is the only one that can
 observe a self-initiated stop.
 
@@ -2195,23 +2206,32 @@ and `pointing-poker.sse.retry`, with the class becoming `LifecycleConfig`, since
 good keys behind an `SseConfig` reproduce the mismatch the rename removes. The
 name is `stop-after-idle` and **not `idle-timeout`**, for two reasons that both
 outlast the collision. `pointing-poker.probe.idle-timeout` already means the
-pekko-http server binding timeout it shadows (`API.scala:213-217`), and it is
-correctly named for that. And in HTTP vocabulary an idle timeout kills a
-connection through which nothing flows, where this value means close to the
-reverse: message silence is explicitly not what triggers it, which the section
-above spends a paragraph on because it is what an implementer reaches for.
+pekko-http server binding timeout it shadows, set by `API`'s `withIdleTimeout`
+call, and it is correctly named for that. And in HTTP vocabulary an idle timeout
+kills a connection through which nothing flows, where this value means close to
+the reverse: message silence is explicitly not what triggers it, which the
+section above spends a paragraph on because it is what an implementer reaches for.
+
+The environment variables move with their keys: `SSE_GRACE_PERIOD` becomes
+`ROOM_GRACE_PERIOD`, the idle timeout gets `ROOM_STOP_AFTER_IDLE`, and
+`SSE_RETRY` is unchanged because its key is. Leaving the old name against a
+`room` key reproduces the mismatch the rename exists to remove.
 
 Production overrides neither `SSE_GRACE_PERIOD` nor `SSE_RETRY` as of
-2026-09-14, so the rename reaches nothing but the e2e profile, which sets both.
-Should either be set later, updating it is a post-deploy edit rather than a
-blocker, provided whoever merges is told. The delivered step 0 plans and the
-cancelled 08-26 and 08-28 specs keep the old names as history; 08-30's §3 table
-documents the current profile and moves with it.
+2026-09-14, so the rename reaches nothing but the e2e profile, which sets the
+grace period and gains the idle timeout. Should either be set later, updating
+it is a post-deploy edit rather than a blocker, provided whoever merges is told.
+The delivered step 0 plans and the cancelled 08-26 and 08-28 specs keep the old
+names as history; 08-30's §3 table carries the variables, and 08-30 §2 and
+`docs/roadmap.md`'s instrumentation entry name the class, all in the present
+tense and all moving with it.
 
 **Step 5. Retained sessions.** Waits on step 1 only, and step 4 waits on it.
 About 40 and 90, having lost the TTL and its expiry check. Closes the
-outage-recovery reload; the pending-session leak closes at step 4a instead, once a
-room's lifetime is bounded.
+outage-recovery reload for everyone but the room's last member, whose removal
+still stops the room and leaves the retained token nothing to resolve against;
+that remainder and the pending-session leak both close at step 4a, once a room's
+lifetime is bounded.
 
 Landed. `sessions` is retained past promotion and is the single authority
 `ValidateToken` reads; the `users` scan went with it. `e2e/room.spec.js` pins the
@@ -2458,8 +2478,8 @@ than execution.
 | Entry | Closed by |
 | --- | --- |
 | Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it costs is telling someone they mistyped a slug. |
-| No GC for abandoned or never-joined rooms | Step 4, against accidental abandonment. A client looping requests at a stopped-but-idle room defers its stop indefinitely; bounding that belongs to the rate-limiting entry, which stays open. |
-| A `/join` with no follow-up `/events` leaks a pending session | Step 4, which bounds a room's lifetime. Step 5's retained sessions remove the pending/promoted distinction the entry is phrased around, and deliberately add no TTL. |
+| No GC for abandoned or never-joined rooms | Step 4a, against accidental abandonment. A client looping requests at a stopped-but-idle room defers its stop indefinitely; bounding that belongs to the rate-limiting entry, which stays open. |
+| A `/join` with no follow-up `/events` leaks a pending session | Step 4a, which bounds a room's lifetime. Step 5's retained sessions remove the pending/promoted distinction the entry is phrased around, and deliberately add no TTL. |
 | SSE reverse-proxy buffering is undocumented | Step 1 |
 | A deliberate tab close is as slow to announce as a transient reconnect | Step 6 |
 | HTTP command ordering is not guaranteed | Stays open. Snapshots downgrade it from silent divergence to a visible wrong-but-true state, and it has never been observed; see "Deferred, with triggers". |
@@ -2468,7 +2488,7 @@ than execution.
 | **new** A transparently reconnecting client duplicates every known participant | Step 1. Applying complete state cannot duplicate. |
 | **new** A participant who departs during a reconnect gap is never pruned | Step 1. Under a snapshot an absent participant is absent. |
 | **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
-| **new** A disconnection outlasting the grace period forces a page reload | Step 5. The member is removed, the consumed session leaves nothing to resolve the token, and the retry gets a 401; sleeping a laptop for more than six seconds in an occupied room is enough. Live today and unrelated to this design. |
+| **new** A disconnection outlasting the grace period forces a page reload | Step 5, then step 4a. Step 5 retains the token past its member's removal, which closes it for everyone but the room's last member: their removal empties `users`, `ConfirmLeave` stops the room, and the retained token has nothing left to resolve against. Step 4a keeps the room alive far longer than any outage the retry has to cross, closing the remainder. |
 | **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, by making `/join` resolve the existing cookie rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
 | The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. |
 
