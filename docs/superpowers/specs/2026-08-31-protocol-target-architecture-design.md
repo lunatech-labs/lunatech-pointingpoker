@@ -1968,7 +1968,7 @@ line counts are the design-time measurement and the argument rests on them as
 such; `RoomSpec` has grown past 510 in the steps since. It stood at 802 on
 2026-09-10, with the actor specs holding 1,314 of 1,848 test lines, and that is
 what the 450 above is scaled from. Step 5a is why that figure is no longer 110:
-its own test estimate was 70 and it came in at 233, having priced the new
+its own test estimate was 70 and it came in at 234, having priced the new
 cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
 same suite than 5a touched, so an estimate made the old way would be low by
 more, not less. Against that, the
