@@ -781,11 +781,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       assertDoesNotCompile("""RoomData.empty.copy(currentIssue = "x")""")
       assertDoesNotCompile("""RoomData.empty.joinUser(user)""")
       assertDoesNotCompile("""RoomData.empty.registerSession(user.token, user.id, "Mallory")""")
-      // Guards the four above against passing vacuously on a typo or an unresolved name.
-      // Checking one by reverting its modifier needs `sbt clean`: an incremental build skips
-      // this file and the macro's stale verdict stands.
+      // Reverting a modifier to check one needs `sbt clean`; incrementally the verdict is stale.
       assertCompiles("""RoomData.of(Nil, Map.empty)""")
-      assertCompiles("""user.name""")
+      // Resolves every name the four reference, so none can pass on a typo. Not their arity:
+      // the real calls are the thing that must not compile from here.
+      assertCompiles("""(user.name, user.token, user.id)""")
     }
   }
 end RoomSpec

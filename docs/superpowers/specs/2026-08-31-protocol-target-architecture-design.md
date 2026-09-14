@@ -1943,7 +1943,10 @@ the resolution, but a same-id room restart between the two lands a refusal
 anyway, and step 5a's section carries the sequence. The client cannot detect it
 either, which is what makes the state worse than rare. Nothing errors, so
 `onerror` never fires, and `doJoin`'s `onmessage` returns early on every
-heartbeat's empty payload, so the tab sits blank with no banner and no retry.
+heartbeat's empty payload. With no snapshot, `inRoom` never leaves `false`, so
+the join card stays rendered with its fields filled, as though the button had
+done nothing, and there is no banner and no retry behind it. That is the same
+shape of lie as the `inRoom` true case below, told from the other side.
 
 If this step's rework makes it ordinary, the fix is a send to that one
 connection rather than a call to `publish`, and it belongs with step 6 rather
@@ -1965,7 +1968,7 @@ line counts are the design-time measurement and the argument rests on them as
 such; `RoomSpec` has grown past 510 in the steps since. It stood at 802 on
 2026-09-10, with the actor specs holding 1,314 of 1,848 test lines, and that is
 what the 450 above is scaled from. Step 5a is why that figure is no longer 110:
-its own test estimate was 70 and it came in near 250, having priced the new
+its own test estimate was 70 and it came in at 233, having priced the new
 cases and not the migration of 48 fixture sites. Step 4 rewrites more of the
 same suite than 5a touched, so an estimate made the old way would be low by
 more, not less. Against that, the

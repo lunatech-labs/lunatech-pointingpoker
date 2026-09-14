@@ -590,7 +590,10 @@ roadmap item instead of leaving it here as stale history.
   changes landing after the list was drafted and none recorded in it until the
   code review asked. The check is mechanical and cheap. Diff the step's changed
   files against the file list its tasks declared, and account for whatever the
-  two do not share.
+  two do not share. Then diff the content of each declared file against what
+  the task asked of it, which is the half that does the work: only one of step
+  5a's four was an undeclared file, and the other three landed inside declared
+  ones, where a file-list diff cannot see them.
 
   Prefer a name to a number, and there is less to sweep. A wrong number fails
   silently, landing on plausible neighbouring code while still reading as

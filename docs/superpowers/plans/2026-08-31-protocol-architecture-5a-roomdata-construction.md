@@ -40,7 +40,8 @@ step 4 waits on both.
   reaches the class and its companion, so they keep compiling. Rerouting them
   through `of` is not part of this step.
 - **No new invariant in the design.** 5a enforces what invariant 5 already
-  implies, and `docs/known-issues.md:106` says so.
+  implies, and `docs/known-issues.md`'s construction-gap entry said so until
+  task 3 removed it.
 - **`RoomSnapshotSpec`'s private `user` builder is not unified with
   `RoomSpec.createUser`.** Pre-existing duplication, deliberately left alone.
 - **No e2e change and no `docs/roadmap.md` change.** Nothing user-visible
@@ -959,11 +960,15 @@ Listed so a reviewer can reject one without re-deriving it.
     nothing rebinds a token to a second identity. The guard's behaviour was
     already right for the case, so this changed prose and not code.
 
-11. **Four documentation changes landed outside task 3's file list.** That list
-    is `docs/known-issues.md` and the design. One decision taken four times,
-    each late and none routed back to this list, which the code review is what
-    caught. The content belongs where it went, durable docs rather than a PR
-    body that is read once; only the record of it was missing.
+11. **Four documentation changes landed outside what task 3 asked for.** The
+    task declared `docs/known-issues.md` and the design, and only the first
+    bullet below is an undeclared file; the rest landed inside declared ones,
+    which is why the file-list check alone would have missed them. One decision
+    taken four times, each late and none routed back to this list, and the code
+    review is what caught it. The content belongs where it went, durable docs
+    rather than a PR body that is read once; only the record of it was missing.
+    A fifth, the design's step 4 section rewritten for the refused `Join`,
+    belongs to the same pattern and is recorded in deviation 7 instead.
 
     - `docs/superpowers/plans/README.md` gained entries for steps 5 and 5a.
       Step 5's is written here rather than on its own branch, which merges
@@ -980,7 +985,7 @@ Listed so a reviewer can reject one without re-deriving it.
       policy for every step after this one rather than a note about this one.
       It came out of this branch shipping nine stale citations at once.
 
-12. **The code review's own changes, beyond deviations 7, 8 and 11.** Three
+12. **The code review's own changes, beyond deviations 7, 8 and 11.** Four
     outcomes with nowhere else to sit.
 
     - Both guard cases gained `expectNoMessage` on the refused joiner's probe.
@@ -990,14 +995,17 @@ Listed so a reviewer can reject one without re-deriving it.
       rather than silently.
     - `withRevealed` lost its `revealed: Boolean = true` parameter, all twelve
       call sites passing nothing. The Interfaces block above still declares the
-      parameter, deliberately, on deviation 8's precedent: it records what was
-      planned, and this list records what changed.
+      parameter, as does task 1's code block, deliberately and on deviation 8's
+      precedent: they record what was planned, and this list records what
+      changed.
     - The design's `Room.scala:236-243` pointer is pinned to `91f783d`. Unlike
       deviation 5's three, this one was not pre-existing. It was out of range
       at 230 lines and harmless; this step grew the file to 259 and landed it
       on the current single-lookup `ValidateToken`, which says the opposite of
       the sentence carrying it.
 
-    The plan's three pointers into the design went to the section name in the
-    same pass, the step 5a section having moved for the third time on this
-    branch. The citation convention names that citation as its own example.
+    - Three of this plan's five pointers into the design went to the section
+      name, the step 5a section having moved for the third time on this branch,
+      which the citation convention names as its own worked example. The other
+      two, `:290-292` for invariant 5 and `:502` for the `Member` shape, stayed
+      numbered: both resolve, and "do not retrofit what exists" permits it.
