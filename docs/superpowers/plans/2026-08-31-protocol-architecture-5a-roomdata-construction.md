@@ -763,6 +763,13 @@ write invariant 5's members-to-sessions relation. All 48 fixture sites build
 through `RoomDataFixtures`, as do the cases added since, and the five needing a
 session without a member say so. The `Join` guard warns and drops rather than
 raising, and `docs/known-issues.md` lost the construction-gap entry.
+
+What `of` enforces is invariant 5 and no more: every member's token resolves to
+a session, and that session holds that member's own id and name. It does not
+reject a repeated member id or token, so "an invalid `RoomData` is
+unconstructible" is a claim about those two clauses rather than about the type
+in general. `joinUser` dedupes by id, so no room reaches a repeated one, and
+widening the factory would be a claim this step did not set out to make.
 ```
 
 Check the wording against what actually landed before committing it. If task 2

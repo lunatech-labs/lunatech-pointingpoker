@@ -11,8 +11,8 @@ object RoomDataFixtures:
     def withIssue(issue: String): RoomData =
       RoomData.of(data.users, data.sessions, issue, data.revealed)
 
-    def withRevealed(revealed: Boolean = true): RoomData =
-      RoomData.of(data.users, data.sessions, data.currentIssue, revealed)
+    def withRevealed(): RoomData =
+      RoomData.of(data.users, data.sessions, data.currentIssue, true)
 
     // A session whose member has gone or has not yet arrived; both reach the same state.
     def withMemberlessSession(users: Room.User*): RoomData =

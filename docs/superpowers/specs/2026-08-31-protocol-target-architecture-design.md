@@ -2055,6 +2055,13 @@ through `RoomDataFixtures`, as do the cases added since, and the five needing a
 session without a member say so. The `Join` guard warns and drops rather than
 raising, and `docs/known-issues.md` lost the construction-gap entry.
 
+What `of` enforces is invariant 5 and no more: every member's token resolves to
+a session, and that session holds that member's own id and name. It does not
+reject a repeated member id or token, so "an invalid `RoomData` is
+unconstructible" is a claim about those two clauses rather than about the type
+in general. `joinUser` dedupes by id, so no room reaches a repeated one, and
+widening the factory would be a claim this step did not set out to make.
+
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
 `ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
