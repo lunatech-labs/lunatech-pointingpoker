@@ -562,6 +562,13 @@ roadmap item instead of leaving it here as stale history.
   controls as green, which is correct as a record of what step 0 was told to
   build. The plan is delivered, so this is recorded rather than edited.
 
+  The design's step 4 section carries the same fourth kind, at `:1854`: the
+  caveat that `Room.scala:125-130` is the code's only pointer to 08-24's
+  connection-establishment finding, and that deleting `setupNewUser` takes the
+  pointer with it. Step 1 deleted it already, and a successor comment sits at
+  `Room.scala:251-252`, so the caveat is spent and its citation is now one of
+  the deliberate pre-step-1 pointers rule 3 protects. Step 4 owns that section.
+
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
