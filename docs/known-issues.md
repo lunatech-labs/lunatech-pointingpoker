@@ -523,13 +523,13 @@ roadmap item instead of leaving it here as stale history.
   `Room.scala:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`.
 
   That sweep then went stale inside its own branch. Widening the `Join` guard to
-  match `of`'s predicate added a line above every citation it had just moved, and
-  only the `joinUser` call site was re-fixed, because that one had jumped far
-  enough to be visible. The other nine sat one short until a re-run: the five
-  case citations, both timer ranges, the `withTimers` pair's second number, and
-  5a's own duplicate-`Leave` citation. The count of sites needing a session
-  without a member went from four to five in the same commit, and the step 5a
-  section still said four.
+  match `of`'s predicate added a line above every citation it had just moved,
+  and only the `joinUser` call site was re-fixed, because that one had jumped
+  far enough to be visible. The other nine sat one short until a re-run: the
+  five case citations, both timer ranges, the `withTimers` pair's second
+  number, and 5a's own duplicate-`Leave` citation. The count of sites needing
+  a session without a member went from four to five in the same commit, and
+  the step 5a section still said four.
 
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
@@ -567,7 +567,8 @@ roadmap item instead of leaving it here as stale history.
   connection-establishment finding, and that deleting `setupNewUser` takes the
   pointer with it. Step 1 deleted it already, and a successor comment sits at
   `Room.scala:251-252`, so the caveat is spent and its citation is now one of
-  the deliberate pre-step-1 pointers rule 3 protects. Step 4 owns that section.
+  the deliberate pre-step-1 pointers the second trap below protects. Step 4
+  owns that section.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
@@ -581,6 +582,29 @@ roadmap item instead of leaving it here as stale history.
   worse than not sweeping: the entry above asserts the sweep, so a reader trusts
   it. Step 5a is the worked example. The same rule catches counts the prose
   states, not just line numbers.
+
+  Prefer a name to a number, and there is less to sweep. A wrong number fails
+  silently, landing on plausible neighbouring code while still reading as
+  current, which is how this branch shipped nine at once; a wrong name fails
+  loudly under `grep`, and only when the thing is renamed or deleted, which is
+  when the sentence around it wanted rereading anyway. Most of the design's
+  `Room.scala` citations already quote the symbol or the line beside the
+  number, so the number is the redundant half and the only half that rots.
+  Four forms, in the order of what they save: cite the symbol rather than the
+  line; drop the number where the prose already quotes the code; pin a
+  deliberately historical citation to the commit it resolves against, as
+  `Room.scala:125-130 as of 1bbe1cf^`, which `git show` resolves forever and
+  which the second trap below then need not protect; and cite a document's
+  section heading rather than its line, which is what made `:2030` here become
+  `:2032`. Ranges are the worst of the numbered forms and the majority of the
+  Scala ones, two moving endpoints apiece, and they nearly always mean "this
+  handler", which the name says shorter. No counts here, for the reason given
+  above: they were measured once and would need maintaining forever.
+
+  Do not retrofit what exists. A bulk conversion is the churn this paragraph
+  exists to reduce, and it would shift every count and cross-reference on the
+  way through. Convert what a step touches anyway, and the population drains
+  as the steps land.
 
   Two traps are worth naming, both of which caught the step 2 sweep. Checking
   what sits at the cited line is not enough: the question is whether the
