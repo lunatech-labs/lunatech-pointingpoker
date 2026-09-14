@@ -67,6 +67,16 @@ arrives green, so it was verified by reintroducing the defect it exists to catch
 
 Step 4 will have one. It rewrites the actor's state model and `RoomSpec` with it.
 
+Step 4a will not, and the split between them is the clearest illustration of the
+two axes above. Step 4a was carved out of step 4's scope during the brainstorm
+that designed both, so its decision weight was settled in the same conversation
+and is written into the design's own step 4a section. What is left is about sixty
+production lines and eighty of tests across the idle timeout, the stream
+completion on stop, the reply-channel deletion and a config rename, with no
+handover, which is the small-surface-area case. It is executed directly under
+test-driven development, and anything not test-driven goes in the living spec
+rather than only in the log.
+
 Step 5 has one, added late to this record. Its production change is one file and
 about forty lines, which on surface area alone is borderline, but the plan earned
 its place after the fact: it accumulated twelve deviations, and several of them

@@ -42,14 +42,14 @@ roadmap item instead of leaving it here as stale history.
   leaves. `POST /create-room` no longer requires a completed join to keep a room
   alive, so an abandoned tab, a network failure before `/join`, or stray traffic
   can accumulate rooms that live for the life of the process.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: a room stops two to four
   hours after its last connection goes, whether or not anyone ever joined. That
   closes the accidental form. It does not close the abusive one, since any message
   arriving in an interval defers the stop by another, so a client looping requests
   at an empty room keeps it alive; bounding that belongs to the rate-limiting
-  entry below. Remove this entry when step 4 lands.
+  entry below. Remove this entry when step 4a lands.
 
 ### Every session a room mints lives as long as the room does
 
@@ -61,16 +61,16 @@ roadmap item instead of leaving it here as stale history.
   reconnect, and it deliberately adds no TTL. A room therefore accumulates one
   entry per `/join` it ever answered: tabs that connected, tabs that failed
   between `/join` and `/events`, and people who joined and left hours ago.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle, so a room's sessions go
   with it two to four hours after its last connection instead of living for the
   process. A TTL was considered there and dropped: its useful range is squeezed
   below by needing to outlast a realistic in-meeting outage and above by the idle
   stop, and what it would reclaim is a hundred bytes per abandoned session. What
-  is left after step 4 is a room held open for hours with heavy tab churn, which
+  is left after step 4a is a room held open for hours with heavy tab churn, which
   is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
-  when step 4 lands.
+  when step 4a lands.
 
 ### A disconnection that outlasts the grace period still forces a reload for the room's last member
 
@@ -89,13 +89,13 @@ roadmap item instead of leaving it here as stale history.
   gone. The `onerror` comment in `src/main/resources/pages/index.html` names
   this cause. Step 5 removed the consumed-session cause behind it, leaving
   this one and a process restart, which takes every room and session with it.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: the room outlives its
   last member by two to four hours, far longer than any outage the retry has to
   cross, so the token resolves and the retry succeeds. How long the window is
   before this fires at all is the detection-delay entry below. Remove this entry
-  when step 4 lands.
+  when step 4a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
@@ -248,11 +248,17 @@ roadmap item instead of leaving it here as stale history.
   or injection one. Body size falls back to the pekko-http default,
   `application.conf` configuring no parsing limits.
 
-  One case is already scheduled to change behaviour. `RoomSnapshot`'s
-  `hasEstimation` is `estimation.nonEmpty`, so an empty estimation reads as
-  voted with no estimation, and step 4 re-expresses the field as the entry
-  existing in `round.estimates`, which gives that same row the withheld-value
-  icon. The target design records that beside `hasEstimation`.
+  The empty-estimation case is scheduled to close, and its consequence is
+  larger than the icon it first appears to be. `RoomSnapshot`'s `hasEstimation`
+  is `estimation.nonEmpty` today, so an empty estimation reads as voted with no
+  estimation; step 4 re-expresses the field as the entry existing in
+  `round.estimates`, and the client reads that field twice, at
+  `index.html:531` for the withheld-value icon and at `:357` to gate the vote
+  tally. Presence alone would therefore admit a `""` bucket to the
+  distribution, which is the defect step 3 exists to remove. So step 4 refuses a
+  blank estimation in `vote` rather than re-rendering the row, which is a refusal
+  of the absence of a value and not the validation this entry's resolution
+  defers. The target design records both beside `hasEstimation`.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
@@ -562,7 +568,7 @@ roadmap item instead of leaving it here as stale history.
   controls as green, which is correct as a record of what step 0 was told to
   build. The plan is delivered, so this is recorded rather than edited.
 
-  The design's step 4 section carries the same fourth kind, at `:1854`: the
+  The design's step 4 section carries the same fourth kind, at `:1955`: the
   caveat that `Room.scala:125-130` is the code's only pointer to 08-24's
   connection-establishment finding, and that deleting `setupNewUser` takes the
   pointer with it. Step 1 deleted it already, and a successor comment sits at
