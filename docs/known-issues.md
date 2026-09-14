@@ -583,6 +583,15 @@ roadmap item instead of leaving it here as stale history.
   it. Step 5a is the worked example. The same rule catches counts the prose
   states, not just line numbers.
 
+  Re-read the deviations list before the final commit, for the same reason. A
+  step's late commits are the ones least likely to reach it: each is a small
+  decision taken on its own, and the list is a file nobody reopens once its
+  entries are written. Step 5a is again the worked example, four documentation
+  changes landing after the list was drafted and none recorded in it until the
+  code review asked. The check is mechanical and cheap. Diff the step's changed
+  files against the file list its tasks declared, and account for whatever the
+  two do not share.
+
   Prefer a name to a number, and there is less to sweep. A wrong number fails
   silently, landing on plausible neighbouring code while still reading as
   current, which is how this branch shipped nine at once; a wrong name fails

@@ -948,3 +948,24 @@ Listed so a reviewer can reject one without re-deriving it.
     being empty, so deviation 6's claim for the identity branch still holds:
     nothing rebinds a token to a second identity. The guard's behaviour was
     already right for the case, so this changed prose and not code.
+
+11. **Four documentation changes landed outside task 3's file list.** That list
+    is `docs/known-issues.md` and the design. One decision taken four times,
+    each late and none routed back to this list, which the code review is what
+    caught. The content belongs where it went, durable docs rather than a PR
+    body that is read once; only the record of it was missing.
+
+    - `docs/superpowers/plans/README.md` gained entries for steps 5 and 5a.
+      Step 5's is written here rather than on its own branch, which merges
+      first. Nothing is inconsistent, step 5's head being this branch's base,
+      but the habit is worth avoiding on a stack this deep, and moving it now
+      would cost a commit on the parent and a `rebase --onto` of this branch.
+    - The design's step 4 test estimate went from 110 to 450, with a paragraph
+      giving the reasoning and keeping the design-time figures beside the
+      current ones, so the neighbouring ordering argument keeps its provenance.
+      The largest of the four, and a planning number for a step not yet begun.
+    - `docs/known-issues.md` records that the design's `setupNewUser` caveat is
+      spent, step 1 having deleted the code it points at. Step 4 resolves it.
+    - `docs/known-issues.md` gained the citation convention, which is standing
+      policy for every step after this one rather than a note about this one.
+      It came out of this branch shipping nine stale citations at once.

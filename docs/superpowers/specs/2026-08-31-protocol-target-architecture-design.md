@@ -521,12 +521,12 @@ from the map when its set empties rather than left holding an empty one, so
 
 **`sessions` is the single authority for resolving a token to an identity**,
 which is what lets `ValidateToken` become one map lookup. Today it takes two
-(`Room.scala:236-243`): a lookup in `pendingSessions`, then a linear scan of
-`users` by token, the scan existing only because `joinUser` consumes the pending
-entry on promotion so the token's last record is on the `User`. Retaining
-sessions past promotion removes that reason, so the scan goes and `Member` needs
-no token. Retention is a precondition for this shape rather than a companion to
-it, which is why step 4 waits on step 5.
+(`Room.scala:236-243 as of 91f783d`): a lookup in `pendingSessions`, then a
+linear scan of `users` by token, the scan existing only because `joinUser`
+consumes the pending entry on promotion so the token's last record is on the
+`User`. Retaining sessions past promotion removes that reason, so the scan goes
+and `Member` needs no token. Retention is a precondition for this shape rather
+than a companion to it, which is why step 4 waits on step 5.
 
 Landed at step 5: the scan is gone and `ValidateToken` is the single lookup this
 paragraph specifies. The citation is to the pre-step-1 file the design was
