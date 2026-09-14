@@ -18,7 +18,8 @@ restart mid-request to fire.
 `must.Matchers`) with `ActorTestKit` and `LoggingTestKit`.
 
 **Spec:** `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-step 5a at `:2032`. Invariant 5 owns the rule this enforces (`:290-292`), and
+the section beginning "**Step 5a. A `RoomData` cannot hold a member without a
+session.**" Invariant 5 owns the rule this enforces (`:290-292`), and
 section 3 owns the `Member` shape that makes step 4 restate it (`:502`).
 
 **Branch:** `20260831.protocol_architecture_5a_roomdata_construction`, based on
@@ -732,7 +733,9 @@ git commit -m "feat(actors): ignore a Join whose token is in no session"
 
 **Files:**
 - Modify: `docs/known-issues.md:100-133`
-- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:2032`
+- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  the section beginning "**Step 5a. A `RoomData` cannot hold a member without a
+  session.**"
 
 **Interfaces:**
 - Consumes: the landed state of tasks 1 and 2.
@@ -752,8 +755,8 @@ delete it: the design section carries the settled version.
 
 - [ ] **Step 2: Add the landed note to the design**
 
-After the step 5a opening paragraph, which ends "About 20 and 70 of tests." at
-`:2020`, insert a paragraph in the same place and shape as step 5's:
+After the step 5a opening paragraph, which ends "About 20 and 70 of tests.",
+insert a paragraph in the same place and shape as step 5's:
 
 ```
 Landed. The constructor is private, `RoomData.of` is the only way in from
@@ -976,3 +979,25 @@ Listed so a reviewer can reject one without re-deriving it.
     - `docs/known-issues.md` gained the citation convention, which is standing
       policy for every step after this one rather than a note about this one.
       It came out of this branch shipping nine stale citations at once.
+
+12. **The code review's own changes, beyond deviations 7, 8 and 11.** Three
+    outcomes with nowhere else to sit.
+
+    - Both guard cases gained `expectNoMessage` on the refused joiner's probe.
+      The plan wrote the cases without it, so "a refused joiner gets no
+      snapshot" was asserted in three documents and pinned nowhere. Step 6
+      reddens them, which is the point: the send lands with a failing test
+      rather than silently.
+    - `withRevealed` lost its `revealed: Boolean = true` parameter, all twelve
+      call sites passing nothing. The Interfaces block above still declares the
+      parameter, deliberately, on deviation 8's precedent: it records what was
+      planned, and this list records what changed.
+    - The design's `Room.scala:236-243` pointer is pinned to `91f783d`. Unlike
+      deviation 5's three, this one was not pre-existing. It was out of range
+      at 230 lines and harmless; this step grew the file to 259 and landed it
+      on the current single-lookup `ValidateToken`, which says the opposite of
+      the sentence carrying it.
+
+    The plan's three pointers into the design went to the section name in the
+    same pass, the step 5a section having moved for the third time on this
+    branch. The citation convention names that citation as its own example.
