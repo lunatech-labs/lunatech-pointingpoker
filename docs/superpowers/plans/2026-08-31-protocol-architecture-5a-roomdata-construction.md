@@ -1009,3 +1009,31 @@ Listed so a reviewer can reject one without re-deriving it.
       which the citation convention names as its own worked example. The other
       two, `:290-292` for invariant 5 and `:502` for the `Member` shape, stayed
       numbered: both resolve, and "do not retrofit what exists" permits it.
+
+13. **A second review pass, run over the first one's own commits.** Its
+    remaining findings were corrections to this record and are simply applied.
+    Three were decisions, and belong here.
+
+    - The Global Constraints cited `docs/known-issues.md:106` for the
+      construction-gap entry, which task 3 deleted, so it had come to land in
+      the grace-period entry while still reading as current. A fourth stale
+      citation, and unlike deviation 5's three it was not left: the constraint
+      names the entry and its fate now, with no number to rot again.
+    - The deviations-list rule added above was widened. As first written it
+      said to diff the step's changed files against the file list its tasks
+      declared, which catches one of the four cases in deviation 11: only the
+      plans README was an undeclared file. The other three landed inside
+      declared files, where that diff is blind. It now asks for the content
+      check too, which is the half that does the work.
+    - `RoomSpec`'s vacuity guard resolved `user` and the factory, while the
+      `registerSession` case it was written for also references `user.token`
+      and `user.id`. Both are in the tuple now. Arity stays uncovered, no
+      `assertCompiles` here being able to reach it, and the comment says so
+      rather than claiming the four cases are fully guarded.
+
+    The pass also upheld both places the first review was overruled, on its own
+    reading rather than on this record's: `of`'s two `require` clauses, and
+    deferring the refused-`Join` send to step 6. For the second it found a
+    sharper argument than deviation 7 carries, that `API.scala` answers a vote
+    `204` without validating, so the send alone would have produced a room that
+    accepts every vote and discards it.
