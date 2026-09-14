@@ -906,7 +906,12 @@ Listed so a reviewer can reject one without re-deriving it.
    existing members and still not the refused joiner. The remedy is a send to
    that one connection, which is a different change, and step 6's rejoin on a
    snapshot that does not name the client cannot substitute for it, no
-   snapshot arriving to trigger the rejoin.
+   snapshot arriving to trigger the rejoin. Nor is the send a remedy by
+   itself, which the code review established: `applySnapshot` hardcodes
+   `inRoom` true, so a send without the rejoin renders a joined-looking room
+   the client is not in and whose votes it drops. The two are one change, and
+   they belong to step 6. The design's step 4 section carries that, and the
+   reason the client cannot detect the state today.
 
 8. **`joinUser` and `registerSession` went `private[Room]`, which the plan did
    not ask for.** The private constructor takes `apply` and `copy` with it, but

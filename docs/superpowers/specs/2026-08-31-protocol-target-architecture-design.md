@@ -1940,11 +1940,19 @@ the step that could make that matter.** The guard warns and returns, and
 holds an open stream taking heartbeats and never receives a first snapshot.
 Rare today rather than unreachable: `ConnectToRoom` takes the id and name from
 the resolution, but a same-id room restart between the two lands a refusal
-anyway, and step 5a's section carries the sequence. If this step's rework makes
-it ordinary, note that the fix is a send to that one connection rather than a
-call to `publish`, and that step 6's
-rejoin on a snapshot which does not name the client cannot cover it, no
-snapshot being delivered to trigger it.
+anyway, and step 5a's section carries the sequence. The client cannot detect it
+either, which is what makes the state worse than rare. Nothing errors, so
+`onerror` never fires, and `doJoin`'s `onmessage` returns early on every
+heartbeat's empty payload, so the tab sits blank with no banner and no retry.
+
+If this step's rework makes it ordinary, the fix is a send to that one
+connection rather than a call to `publish`, and it belongs with step 6 rather
+than here. The send and step 6's rejoin on a snapshot which does not name the
+client are each useless alone. Without the send no snapshot is delivered to
+trigger the rejoin. Without the rejoin the send lands in `applySnapshot`, which
+hardcodes `inRoom` true, so the tab renders the room with itself absent from
+the participant list while `Vote`'s token lookup drops everything it sends,
+which reads as a successful join rather than a refused one.
 
 **It waits on step 1 for cost rather than correctness, and that is the one
 dependency here worth arguing with.** Landing the split first means porting

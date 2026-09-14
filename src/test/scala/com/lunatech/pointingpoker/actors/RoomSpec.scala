@@ -335,10 +335,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "ignore a Join whose token is in no session" in {
-      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
-      val (stranger, _) = createUser(UUID.randomUUID(), "stranger", false, "")
-      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef)  = createRoom(UUID.randomUUID(), withUsers(user))
+      val (user, _)                 = createUser(UUID.randomUUID(), "user1", false, "")
+      val (stranger, strangerProbe) = createUser(UUID.randomUUID(), "stranger", false, "")
+      val dataProbe                 = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)              = createRoom(UUID.randomUUID(), withUsers(user))
 
       // Nothing mints stranger's token, so ConnectToRoom could never have produced this
       // Join; the room drops it rather than manufacturing an unresolvable member.
@@ -349,14 +349,18 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           roomRef ! Room.GetData(dataProbe.ref)
           dataProbe.expectMessage(Room.DataStatus(data = withUsers(user)))
         }(using testKit.system)
+
+      // Step 6 is expected to redden this: the send that recovers a refused joiner pairs
+      // with its rejoin, and the design's step 4 section carries why neither works alone.
+      strangerProbe.expectNoMessage()
     }
 
     "ignore a Join whose token names a different identity" in {
-      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
-      val (impostor, _) = createUser(UUID.randomUUID(), "impostor", false, "")
-      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
-      val roomData      = withUsers(user).withMemberlessSession(impostor)
-      val (_, roomRef)  = createRoom(UUID.randomUUID(), roomData)
+      val (user, _)                 = createUser(UUID.randomUUID(), "user1", false, "")
+      val (impostor, impostorProbe) = createUser(UUID.randomUUID(), "impostor", false, "")
+      val dataProbe                 = testKit.createTestProbe[Room.DataStatus]()
+      val roomData                  = withUsers(user).withMemberlessSession(impostor)
+      val (_, roomRef)              = createRoom(UUID.randomUUID(), roomData)
 
       // impostor's token resolves to a session, but the joiner claims a different id
       // than that session holds, which of would reject; the room drops it too.
@@ -369,6 +373,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           roomRef ! Room.GetData(dataProbe.ref)
           dataProbe.expectMessage(Room.DataStatus(data = roomData))
         }(using testKit.system)
+
+      // copy carries impostor's ref, so this is the claimant's own connection. Step 6
+      // reddens it for the same reason as the case above.
+      impostorProbe.expectNoMessage()
     }
 
     "publish the whole room to a joiner and to everyone already in it" in {
