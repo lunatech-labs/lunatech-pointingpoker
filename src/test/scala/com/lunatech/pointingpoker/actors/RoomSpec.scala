@@ -767,12 +767,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "refuse construction that bypasses of" in {
       val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
 
-      // The whole point of the private constructor: copy, apply and joinUser are shut too,
-      // so a fixture cannot reach an invalid RoomData by going around the factory.
+      // The whole point of the private constructor: copy and apply are shut, and so are the
+      // two methods that write either side of invariant 5's members-to-sessions relation.
       assertDoesNotCompile("""Room.RoomData(Nil, "", false, Map.empty)""")
       assertDoesNotCompile("""RoomData.empty.copy(currentIssue = "x")""")
       assertDoesNotCompile("""RoomData.empty.joinUser(user)""")
-      // Guards the three above against passing vacuously on a typo or an unresolved name.
+      assertDoesNotCompile("""RoomData.empty.registerSession(user.token, user.id, "Mallory")""")
+      // Guards the four above against passing vacuously on a typo or an unresolved name.
+      // Checking one by reverting its modifier needs `sbt clean`: an incremental build skips
+      // this file and the macro's stale verdict stands.
       assertCompiles("""RoomData.of(Nil, Map.empty)""")
       assertCompiles("""user.name""")
     }

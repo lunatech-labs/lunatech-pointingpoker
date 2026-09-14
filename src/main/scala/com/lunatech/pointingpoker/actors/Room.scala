@@ -72,7 +72,7 @@ object Room:
       this.copy(users = kept :: this.users.filterNot(_.id == user.id))
     end joinUser
 
-    def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
+    private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =

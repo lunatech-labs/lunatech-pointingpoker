@@ -758,11 +758,11 @@ After the step 5a opening paragraph, which ends "About 20 and 70 of tests." at
 ```
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut, along with `joinUser`, the one method that adds a member. All 48
-fixture sites build through `RoomDataFixtures`, as do the cases added since,
-and the five needing a session without a member say so. The `Join` guard warns
-and drops rather than raising, and `docs/known-issues.md` lost the
-construction-gap entry.
+`copy` shut, along with `joinUser` and `registerSession`, the two methods that
+write invariant 5's members-to-sessions relation. All 48 fixture sites build
+through `RoomDataFixtures`, as do the cases added since, and the five needing a
+session without a member say so. The `Join` guard warns and drops rather than
+raising, and `docs/known-issues.md` lost the construction-gap entry.
 ```
 
 Check the wording against what actually landed before committing it. If task 2
@@ -908,15 +908,23 @@ Listed so a reviewer can reject one without re-deriving it.
    snapshot that does not name the client cannot substitute for it, no
    snapshot arriving to trigger the rejoin.
 
-8. **`joinUser` went `private[Room]`, which the plan did not ask for.** The
-   private constructor takes `apply` and `copy` with it, but `joinUser` is a
-   public method that appends whatever `User` it is handed, so
-   `RoomData.empty.joinUser(u)` still built the forbidden state from outside
-   the class. It is the only method that adds a member; the other seven
-   preserve or shrink `users`. `private[actors]` would not do, the tests
-   sharing that package. Access is compile-time only, so this is not a second
-   production behaviour change. A third `assertDoesNotCompile` pins it, and
-   reverting the modifier reddens that case.
+8. **`joinUser` and `registerSession` went `private[Room]`, which the plan did
+   not ask for.** The private constructor takes `apply` and `copy` with it, but
+   both of these were public methods writing one side of invariant 5's
+   members-to-sessions relation. `RoomData.empty.joinUser(u)` appended whatever
+   `User` it was handed, and
+   `withUsers(a).registerSession(a.token, UUID.randomUUID(), "Mallory")` left
+   `a` a member whose session names someone else. Both values are ones `of`
+   rejects. `joinUser` is the only method that adds a member and
+   `registerSession` the only one that rewrites a session entry; the other six
+   preserve or shrink `users` and touch no session. `private[actors]` would not
+   do, the tests sharing that package. Access is compile-time only, so this is
+   not a second production behaviour change. Two `assertDoesNotCompile` cases
+   pin them, and reverting either modifier reddens its case under `sbt clean`.
+   The clean is not optional: an incremental build recompiles only `Room.scala`,
+   leaving `RoomSpec`'s macro verdict stale, so the reverted modifier appears to
+   change nothing. `registerSession` was found by the code review, after the
+   rest of the step had landed.
 
 9. **Task 3's em-dash check was rewritten, having never been able to pass.**
    As drafted it swept `docs/superpowers/specs/` whole and expected no matches,

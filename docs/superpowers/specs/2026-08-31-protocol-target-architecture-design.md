@@ -2041,11 +2041,11 @@ tests.
 
 Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
-`copy` shut, along with `joinUser`, the one method that adds a member. All 48
-fixture sites build through `RoomDataFixtures`, as do the cases added since,
-and the five needing a session without a member say so. The `Join` guard warns
-and drops rather than raising, and `docs/known-issues.md` lost the
-construction-gap entry.
+`copy` shut, along with `joinUser` and `registerSession`, the two methods that
+write invariant 5's members-to-sessions relation. All 48 fixture sites build
+through `RoomDataFixtures`, as do the cases added since, and the five needing a
+session without a member say so. The `Join` guard warns and drops rather than
+raising, and `docs/known-issues.md` lost the construction-gap entry.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
