@@ -748,7 +748,7 @@ shape: there is no per-branch bookkeeping to forget, because the timer holds it.
         // between ValidateToken and the ConnectToRoom it precedes.
         if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
         // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
-        // from a superseded generation. Verified against pekko-actor-typed 1.6.0.
+        // from a superseded generation. Verified against pekko-actor-typed 1.7.0.
         message match
           case IdleTick =>
             if data.idleFor(stopAfterIdle, Instant.now()) then
@@ -790,7 +790,7 @@ which key on `userId`.
 tick that fires just before a message is processed, which would stop a room the
 message should have kept alive. Pekko's generation stamping already voids it, as
 the spec now records, so an `isTimerActive` check or a re-introduced flag would
-be dead code. This was verified by experiment against pekko-actor-typed 1.6.0,
+be dead code. This was verified by experiment against pekko-actor-typed 1.7.0,
 not inferred.
 
 - [ ] **Step 5: Thread the value through `RoomManager` and `Main`**
