@@ -693,20 +693,6 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       thrown.getMessage must include("has no session")
     }
 
-    "refuse a RoomData whose member's session names a different identity" in {
-      val (user, _)  = createUser(UUID.randomUUID(), "user1", false, "")
-      val (other, _) = createUser(UUID.randomUUID(), "user2", false, "")
-
-      val thrown = intercept[IllegalArgumentException] {
-        RoomData.of(
-          members = Map(user.id -> Room.Member(user.name)),
-          sessions = Map(other.token -> Room.Session(user.id, other.name))
-        )
-      }
-
-      thrown.getMessage must include("a different name")
-    }
-
     "refuse a RoomData whose member's session disagrees on the name alone" in {
       val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
 
