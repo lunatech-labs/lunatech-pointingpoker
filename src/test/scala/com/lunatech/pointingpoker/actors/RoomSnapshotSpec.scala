@@ -18,8 +18,8 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
   override def afterAll(): Unit =
     system.terminate()
 
-  private def user(id: UUID, name: String, voted: Boolean, estimation: String): Room.User =
-    Room.User(id, name, voted, estimation, TestProbe().ref, Room.SessionToken.mint())
+  private def user(id: UUID, name: String, voted: Boolean, estimation: String): Attendee =
+    Attendee(id, name, voted, estimation, TestProbe().ref, Room.SessionToken.mint())
 
   "RoomSnapshot.of" should {
 
@@ -168,6 +168,28 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       // Intentional: post-reveal values are public in the room, and this recipient held a
       // valid room token.
       RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation).toSet mustBe Set("5", "13")
+    }
+
+    "count an entry in the round as an estimation, however the value reads" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", false, "")
+      val data  = withUsers(alice, bob)
+
+      // hasEstimation is the entry existing, not a non-empty string on the participant.
+      val rows = RoomSnapshot.of(data, alice.id).users
+      rows.find(_.id == alice.id).map(_.hasEstimation) mustBe Some(true)
+      rows.find(_.id == bob.id).map(_.hasEstimation) mustBe Some(false)
+    }
+
+    "leave an estimate belonging to no participant out of the snapshot entirely" in {
+      val alice    = user(UUID.randomUUID(), "Alice", true, "5")
+      val departed = user(UUID.randomUUID(), "Departed", true, "13")
+      val data     = withUsers(alice).withMemberlessSession(departed).withEstimate(departed)
+
+      // Invariant 2: every estimate on the wire comes from the join, never from the map.
+      val snapshot = RoomSnapshot.of(data, alice.id)
+      snapshot.users.map(_.id) mustBe List(alice.id)
+      (snapshot.asJson.noSpaces must not).include("13")
     }
   }
 end RoomSnapshotSpec

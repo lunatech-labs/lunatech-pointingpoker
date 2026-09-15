@@ -34,22 +34,26 @@ object RoomSnapshot:
   // forUser is both the identity this was built for and the only one whose estimation it
   // discloses before the reveal, so redaction and identity cannot disagree.
   def of(data: RoomData, forUser: UUID): RoomSnapshot =
+    val round = data.state.round
     RoomSnapshot(
       you = forUser,
-      currentIssue = data.currentIssue,
-      votesRevealed = data.revealed,
+      currentIssue = data.state.currentIssue,
+      votesRevealed = round.revealed,
+      // The join: a participant appears because they are one, their estimate comes from
+      // the round, and an estimate belonging to nobody present reaches nobody.
       users = data.users
         .sortWith((a, b) => a.id.compareTo(b.id) < 0)
         .map { u =>
-          val disclose = data.revealed || u.id == forUser
+          val estimate = round.estimates.get(u.id)
+          val disclose = round.revealed || u.id == forUser
           Participant(
             id = u.id,
             name = u.name,
-            voted = u.voted,
-            // From the unredacted value: the client's hidden-value icon reads this, not the string.
-            hasEstimation = u.estimation.nonEmpty,
-            estimation = if disclose then u.estimation else ""
+            voted = estimate.exists(_.confirmed),
+            hasEstimation = estimate.isDefined,
+            estimation = estimate.filter(_ => disclose).map(_.value).getOrElse("")
           )
         }
     )
+  end of
 end RoomSnapshot

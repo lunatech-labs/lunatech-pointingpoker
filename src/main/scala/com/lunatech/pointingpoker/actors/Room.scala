@@ -46,57 +46,61 @@ object Room:
   final case class Running(roomId: UUID) extends Response
   final case class Stopped(roomId: UUID) extends Response
 
-  final case class User(
-      id: UUID,
-      name: String,
-      voted: Boolean,
-      estimation: String,
-      ref: UntypedRef,
-      token: SessionToken
-  )
+  final case class User(id: UUID, name: String, ref: UntypedRef, token: SessionToken)
+
+  final case class Estimate private (value: String, confirmed: Boolean):
+    // copy is private with the constructor, so the re-vote transition lives on the type.
+    def unconfirmed: Estimate = this.copy(confirmed = false)
+
+  object Estimate:
+    def of(value: String, confirmed: Boolean = true): Estimate =
+      // vote refuses a blank before this, so an invalid estimate is a programming error.
+      require(!value.isBlank, "an estimate needs a value")
+      Estimate(value, confirmed)
+
+  final case class Round(estimates: Map[UUID, Estimate], revealed: Boolean)
+
+  object Round:
+    val fresh: Round = Round(Map.empty[UUID, Estimate], revealed = false)
+
+  final case class RoomState(currentIssue: String, round: Round)
+
+  object RoomState:
+    val empty: RoomState = RoomState("", Round.fresh)
 
   final case class Session(userId: UUID, name: String)
 
   final case class RoomData private (
       users: List[User],
-      currentIssue: String,
-      revealed: Boolean = false,
+      state: RoomState,
       sessions: Map[SessionToken, Session] = Map.empty
   ):
     private[Room] def joinUser(user: User): RoomData =
-      // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
-      // ref actually differs on a reconnect, there being no rename feature.
-      val kept = this.users
-        .find(_.id == user.id)
-        .fold(user)(old => user.copy(voted = old.voted, estimation = old.estimation))
-      this.copy(users = kept :: this.users.filterNot(_.id == user.id))
-    end joinUser
+      // Nothing to carry over: the estimate is keyed by user id in the round, not on the entry.
+      this.copy(users = user :: this.users.filterNot(_.id == user.id))
 
     private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
-      // The reveal closes the round: no vote lands, first or changed, until clear or reVote.
-      if this.revealed then this
+      // The reveal closes the round, and a blank estimation is the absence of a value, which
+      // presence-based hasEstimation would otherwise admit to the client's tally.
+      if this.state.round.revealed || estimation.isBlank then this
       else
-        val voted = this.users.map { u =>
-          if userId == u.id then u.copy(voted = true, estimation = estimation)
-          else u
-        }
-        // Still a latch: revealed is false here, and only a vote or ShowVotes sets it, so a
-        // departure satisfying the same predicate cannot reveal the round.
-        this.copy(users = voted, revealed = voted.nonEmpty && voted.forall(_.voted))
+        val estimates = this.state.round.estimates + (userId -> Estimate.of(estimation))
+        // Still a latch: only a vote or ShowVotes sets it, so a departure reveals nothing.
+        withRound(Round(estimates, everyUserHasVoted(estimates)))
     end vote
 
     def show(): RoomData =
-      this.copy(revealed = true)
+      withRound(this.state.round.copy(revealed = true))
 
     def clear(): RoomData =
-      this.copy(users = this.users.map(_.copy(voted = false, estimation = "")), revealed = false)
+      withRound(Round.fresh)
 
     def reVote(): RoomData =
-      // Keeps estimation, which is what makes "estimation but not voted" mean re-vote.
-      this.copy(users = this.users.map(u => u.copy(voted = false)), revealed = false)
+      // Keeps the values, which is what makes an estimate without a confirmation a re-vote.
+      withRound(Round(this.state.round.estimates.view.mapValues(_.unconfirmed).toMap, false))
 
     def leave(userId: UUID, ref: UntypedRef): RoomData =
       // Scoped to the specific connection's ref, not just userId, so a stale connection's
@@ -104,17 +108,23 @@ object Room:
       this.copy(users = this.users.filterNot(u => u.id == userId && u.ref == ref))
 
     def editIssue(issue: String): RoomData =
-      this.copy(currentIssue = issue)
+      this.copy(state = this.state.copy(currentIssue = issue))
+
+    private def withRound(round: Round): RoomData =
+      this.copy(state = this.state.copy(round = round))
+
+    private def everyUserHasVoted(estimates: Map[UUID, Estimate]): Boolean =
+      // nonEmpty is insurance rather than a live case: only a Vote ever runs this.
+      this.users.nonEmpty && this.users.forall(u => estimates.get(u.id).exists(_.confirmed))
   end RoomData
 
   object RoomData:
-    val empty: RoomData = RoomData(List.empty[User], "")
+    val empty: RoomData = RoomData(List.empty[User], RoomState.empty)
 
     def of(
         users: List[User],
         sessions: Map[SessionToken, Session],
-        currentIssue: String = "",
-        revealed: Boolean = false
+        state: RoomState = RoomState.empty
     ): RoomData =
       // Invariant 5: ConnectToRoom creates every member off a resolved session, so a
       // member whose session is missing or disagrees is a fixture error, never a state.
@@ -125,7 +135,12 @@ object Room:
           s"the session for member ${u.name} (${u.id}) holds a different identity"
         )
       }
-      RoomData(users, currentIssue, revealed, sessions)
+      // The round outlives membership, so its keys are checked against sessions, not users.
+      val identities = sessions.values.map(_.userId).toSet
+      state.round.estimates.keys.foreach { id =>
+        require(identities.contains(id), s"the estimate for $id resolves to no session")
+      }
+      RoomData(users, state, sessions)
     end of
   end RoomData
 

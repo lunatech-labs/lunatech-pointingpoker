@@ -340,20 +340,23 @@ test('a Show during a re-vote still tallies the estimations on the table', async
   await expectSummaryMatchesTable(alice.page)
 })
 
-test('an empty estimation posted directly is not a summary row', async ({ join, room }) => {
+test('an empty estimation posted directly is refused, not stored as an empty vote', async ({
+  join,
+  room
+}) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
 
   await vote(alice.page, '5')
-  // Nothing validates the estimation, so this sets voted with nothing in it: the one state
-  // where the confirmation flag and the estimation disagree in the other direction.
+  // Nothing validates the estimation at the HTTP layer, but vote refuses a blank one outright,
+  // as silently as a revealed round refuses one: the request still returns 204 and changes nothing.
   const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
   expect(posted.status()).toBe(204)
 
-  // Every user has now voted, so the room reveals itself and needs no Show.
-  await expect(summaryTable(alice.page)).toBeVisible()
-  // Bob counts as voted and still must not be a row: the confirmation flag would admit him.
-  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  // Bob never voted, so the round stays hidden until Show is pressed.
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(0)
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(revealedCell(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
   await expectSummaryMatchesTable(alice.page)
 })
