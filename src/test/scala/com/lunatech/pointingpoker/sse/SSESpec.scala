@@ -78,5 +78,30 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       probe.expectNext().retry mustBe Some(2000)
     }
+
+    "complete the stream when the room says it stopped" in {
+      val (_, _, user, probe) = wire()
+      probe.request(1)
+
+      user ! Room.StreamCompleted
+
+      probe.expectComplete()
+    }
+
+    "drop a queued snapshot rather than render a room that no longer exists" in {
+      val (_, userId, user, probe) = wire()
+      probe.ensureSubscription()
+
+      // Two, not one: bufferSize + 1 are tolerated in flight, so the first is already past
+      // the source and only the second is queued where the completion strategy governs it.
+      user ! snapshot(userId, "first")
+      user ! snapshot(userId, "second")
+      user ! Room.StreamCompleted
+      probe.expectNoMessage(300.millis)
+
+      probe.request(2)
+      probe.expectNext().data must include("first")
+      probe.expectComplete()
+    }
   }
 end SSESpec

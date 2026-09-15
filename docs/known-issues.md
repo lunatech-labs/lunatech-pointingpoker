@@ -438,22 +438,26 @@ roadmap item instead of leaving it here as stale history.
   next vote, so step 6 is soon enough. Step 8's frontend rewrite would
   close it structurally with fingerprinted assets if step 6 does not.
 
-### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
+### Two SSE tests settle on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
   ("keep a stalled client's stream open and hand it the newest snapshot, not a
-  stale queued one").
-- **Issue:** The case sends five snapshots with no demand yet granted, then calls
-  `probe.expectNoMessage(300.millis)` before requesting demand, so that all five
-  sends have landed and been resolved by `dropHead` before the assertion runs.
-  That wait is a deliberate wall-clock settle, not a synchronization primitive
-  like the barriers used elsewhere in this suite.
-- **Resolution:** Accepted as-is. The wait can only fail safe: if fewer than five
-  sends have landed by the time demand arrives, the surviving element is a
-  lower-numbered issue than expected, and the assertion goes red rather than
-  passing on a race. No arrangement of timings produces a green result out of a
-  broken `dropHead`, so the 300ms settle costs a small amount of suite time
-  against a real synchronization primitive and buys nothing in return.
+  stale queued one", and "drop a queued snapshot rather than render a room that
+  no longer exists").
+- **Issue:** Each case sends with no demand yet granted, then calls
+  `probe.expectNoMessage(300.millis)` before requesting demand, so that the sends
+  have landed and been resolved before the assertion runs. That wait is a
+  deliberate wall-clock settle, not a synchronization primitive like the barriers
+  used elsewhere in this suite.
+- **Resolution:** Accepted as-is. The wait can only fail safe in both cases. In
+  the first, if fewer than five sends have landed by the time demand arrives, the
+  surviving element is a lower-numbered issue than expected and the assertion goes
+  red rather than passing on a race. In the second, if the completion has not
+  landed, the queued snapshot is emitted and `expectComplete` sees an element,
+  which is also red. No arrangement of timings produces a green result out of a
+  broken `dropHead` or a broken completion strategy, so the settles cost a small
+  amount of suite time against a real synchronization primitive and buy nothing in
+  return.
 
 ### The browser suite's apt step is unbounded and now dominates the CI job
 

@@ -963,6 +963,19 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.members.keySet mustBe Set(user.id)
       data.connections.keySet mustBe Set(user.id, departed.id)
     }
+
+    "tell every attached connection when it stops" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val (_, roomRef)        = createRoom(UUID.randomUUID(), withUsers(user, user2))
+
+      testKit.stop(roomRef)
+
+      // Without this a stopped room leaves every tab heartbeating from the keepAlive stage
+      // with no snapshot ever arriving again, which is silence rather than an error.
+      userProbe.expectMsg(Room.StreamCompleted)
+      user2Probe.expectMsg(Room.StreamCompleted)
+    }
   }
 end RoomSpec
 
