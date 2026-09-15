@@ -547,32 +547,39 @@ again. Do not reorder.
 
 - [ ] **Step 1: Write the failing e2e case**
 
-Add to `e2e/room.spec.js`, extending the existing `./fixtures.js` import with
-`vote` and `summaryTable` if they are not already named there:
+Add to `e2e/room.spec.js`. Every name it uses is already in that file's
+`./fixtures.js` import, so the import does not change:
 
 ```javascript
 test('a room outlives its last member', async ({ join }) => {
   const alice = await join('Alice')
-  await vote(alice.page, '5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(frozenNotice(alice.page)).toBeVisible()
 
   await alice.close()
   // Past the profile's 4s grace period, which is where the room used to stop itself.
   await new Promise(resolve => setTimeout(resolve, 6000))
 
   const bob = await join('Bob')
-  // A restarted room would hand Bob a fresh unrevealed round, so the summary is the proof.
-  await expect(summaryTable(bob.page)).toBeVisible()
+  // votesRevealed lives in RoomState.round and depends on no tally, so it survives Alice's
+  // removal. A restarted room would hand Bob a fresh unrevealed round and hide the notice.
+  await expect(frozenNotice(bob.page)).toBeVisible()
 })
 ```
+
+Not the summary table, which `index.html:273` guards with
+`votesRevealed && votesSummary.length` and `index.html:356-358` tallies from the
+snapshot's own participants. Once Alice's member entry is removed, Bob's snapshot
+holds only Bob, the tally is empty and the table is hidden whether or not the room
+survived. The notice at `index.html:244` is bound by `visibility` on
+`votesRevealed` alone, and Playwright's `toBeVisible()` honours that.
 
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `npm run e2e -- room.spec.js -g "outlives its last member"`
 Expected: FAIL. Alice's departure empties `members`, `ConfirmLeave` stops the
-room, and Bob's join creates a new one whose round is unrevealed, so the summary
-table is hidden.
+room, and Bob's join creates a new one whose round is unrevealed, so the notice
+is hidden.
 
 - [ ] **Step 3: Take the reply channel out of `Room`**
 
