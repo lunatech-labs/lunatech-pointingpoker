@@ -1391,3 +1391,24 @@ Listed so a reviewer can reject one without re-deriving it.
    even reads the trap back, telling the runner that an `Estimate.of` throwing
    during fixture construction is that illegal state, which the specified filter
    makes unreachable.
+
+5. **Three changes to the test list came from a review round after task 3, not
+   from the plan: two cases added, one removed.** `RoomSpec` now pins the
+   `Leave` whose member is already gone, which the plan's cases left free. Every
+   `Leave` they send belongs to a live member, so deleting the
+   `next.isMember(userId)` conjunct kept the suite green, and step 6's leave
+   endpoint would have arrived with that guard already broken. It also pins the
+   confirmation `everyMemberHasVoted` reads, which could become
+   `estimates.get(id).isDefined` with a green `sbt test` because a re-vote keeps
+   every value and clears only the flag. That one was never unpinned, only slow
+   to report: the browser case for a re-vote re-arming the auto-reveal fails
+   under it, four minutes and two engines away from the change. The removed case
+   is the `RoomData.of` refusal named for a session that names a different
+   identity, which the split had turned into a duplicate. `of` re-keys sessions
+   by `userId` and never reads the token, so once `Member` lost its token both
+   that case and the one beside it built a name mismatch and asserted the same
+   message, under a title describing a check that no longer exists. The planning
+   miss: the plan calls the migration of 5a's two-part check mechanical, and a
+   case can survive a mechanical port with its title intact and its meaning
+   gone. Each of the three was checked by making the change the case exists to
+   catch and watching that case, and only that case, fail.
