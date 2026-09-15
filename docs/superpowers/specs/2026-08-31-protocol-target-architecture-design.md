@@ -966,7 +966,9 @@ instantaneous check: `emptySince` is set when `connections` becomes empty and
 cleared when it becomes non-empty, and the tick stops the actor once that stamp
 is older than the timeout. Connections present means never idle, whether or not
 anyone is clicking, and a short emptiness is survivable, which is the
-coffee-break requirement above.
+coffee-break requirement above. That makes this step a consumer of the removal
+moments above: since step 4, only stream termination drains a member's set, so a
+ref stranded by a lost `Leave` leaves its room permanently non-idle.
 
 **`emptySince` starts as `Some(now)` at the actor's creation and not as `None`**,
 which reads as a detail and is not one. A room whose `/events` never follows its
