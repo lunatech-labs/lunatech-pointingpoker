@@ -949,8 +949,8 @@ with triggers".
 
 #### Two lifetimes, not one
 
-Today a room dies with its last member, which conflates two things worth keeping
-apart:
+A room used to die with its last member, which conflated two things worth
+keeping apart:
 
 1. **The connection**, ending when the SSE stream does, with the grace period
    covering transient drops.
@@ -2293,6 +2293,36 @@ names as history; 08-30's §3 table carries the variables, and 08-30 §2 and
 `docs/roadmap.md`'s instrumentation entry name the class, all in the present
 tense and all moving with it.
 
+Landed. `LifecycleConfig` replaces `SseConfig`, carrying `gracePeriod`,
+`retryMillis` and the new `stopAfterIdle` behind one `load` that enforces the
+ordered chain, `retryMillis` well under `gracePeriod` and `gracePeriod` under
+`stopAfterIdle`. `Room` arms a single-shot `IdleTick` timer in
+`Behaviors.withTimers`, re-armed on every message except the tick itself, and
+stops via `Behaviors.stopped` once `RoomData.idleFor` reports the room has held
+no connection for the full timeout; `emptySince` stamps at the room's own setup
+for a never-joined room and at the last disconnect otherwise, and clears on
+connect. `Room.StreamCompleted` completes every attached SSE stream when the
+room stops, recognized by `completionMatcher` as `CompletionStrategy.immediately`,
+as this section specifies. `ConfirmLeave` no longer stops the room when its
+membership empties, and with every `ConfirmLeave` answer now identical the whole
+reply channel came with it: `Response`, `Running`, `Stopped`,
+`RoomManager`'s `RoomResponseWrapper`, and `replyTo` off `Leave`/`ConfirmLeave`.
+
+It closes three `docs/known-issues.md` entries outright: no GC for abandoned or
+never-joined rooms, every session living as long as the room, and a
+disconnection outlasting the grace period forcing a reload. It deviates from
+the plan on end-to-end coverage: the browser case the plan specified for a room
+outliving its last member passed identically before and after the deletion,
+since a short wait with no other room traffic never gave the room a chance to
+notice the departure, so the case was dropped rather than stretched into a
+roughly 40-second-per-browser wait. The survival behaviour is instead pinned at
+the JVM level, by `RoomSpec`'s "stay alive when its last member is removed" and
+the four idle-timeout cases beside it, all deterministic and clock-free;
+`docs/known-issues.md` records the gap as "A room outliving its last member is
+not covered end to end." What it leaves open: a client looping requests at an
+empty room re-arms the timer indefinitely, so bounding that abuse still belongs
+to the rate-limiting entry.
+
 **Step 5. Retained sessions.** Waits on step 1 only, and step 4 waits on it.
 About 40 and 90, having lost the TTL and its expiry check. Closes the
 outage-recovery reload for everyone but the room's last member, whose removal
@@ -2370,11 +2400,12 @@ an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
 unreachable. The resolution at `API.scala:126-128` and the `Join` that
 `RoomManager.ConnectToRoom` forwards are two steps of one request, and they can
-address two different room actors: the room can empty and stop in between, at
-`ConfirmLeave`'s stop-when-empty, and `RequestSession` can then recreate it
-through `createRoom` under the same id with no sessions, which is the one path
-that does so. The guard then refuses a token the new room never minted, which is
-what it is for. Without the recreation the client gets the same silent stream
+address two different room actors: the room can stop in between, at the idle
+tick that replaced `ConfirmLeave`'s stop-when-empty at step 4a, and
+`RequestSession` can then recreate it through `createRoom` under the same id
+with no sessions, which is the one path that does so. The guard then refuses a
+token the new room never minted, which is what it is for. Without the
+recreation the client gets the same silent stream
 anyway, `ConnectToRoom` finding no room and sending no `Join` at all. The
 duplicate-`Leave` warning answered the same shape of question the same way, for a
 `Leave` that arrived twice on one connection, until step 4 deleted it with the

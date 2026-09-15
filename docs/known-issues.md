@@ -18,12 +18,12 @@ roadmap item instead of leaving it here as stale history.
   (`RequestSession`'s find-or-create).
 - **Issue:** `/join` (and, transitively, `/events`) auto-creates a room for any
   `roomId` it doesn't recognize, rather than rejecting it. A bookmarked room link
-  therefore never *errors* - but if the room's actor has already been reaped (its
-  last member left, or the process restarted), the link silently opens a brand-new,
-  empty room under the same UUID: no prior participants, no vote history, no
-  in-progress issue. There is currently no way for the server to tell "this UUID was
-  never used" apart from "this UUID was a real room, but everyone left" - both look
-  identical: an absent map entry.
+  therefore never *errors* - but if the room's actor has already been reaped (idle
+  long enough to stop, or the process restarted), the link silently opens a
+  brand-new, empty room under the same UUID: no prior participants, no vote
+  history, no in-progress issue. There is currently no way for the server to tell
+  "this UUID was never used" apart from "this UUID was a real room that went idle"
+  - both look identical: an absent map entry.
 - **Resolution:** Stays open, and reclassified rather than scheduled.
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
   establishes that teams pin one room URL for years and want a *blank* room at the
@@ -33,69 +33,6 @@ roadmap item instead of leaving it here as stale history.
   existed, which that design declines to keep, and its residual value is telling
   someone they mistyped a slug rather than leaving them alone in a phantom
   room.
-
-### No garbage collection for abandoned or never-joined rooms
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`RoomManagerData`).
-- **Issue:** A room is only removed from memory when its last joined participant
-  leaves. `POST /create-room` no longer requires a completed join to keep a room
-  alive, so an abandoned tab, a network failure before `/join`, or stray traffic
-  can accumulate rooms that live for the life of the process.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle: a room stops two hours
-  after its last connection goes, whether or not anyone ever joined. That closes
-  the accidental form. It does not close the abusive one, since any message
-  re-arms the timer for another two hours, so a client looping requests at an
-  empty room keeps it alive; bounding that belongs to the rate-limiting entry
-  below. Remove this entry when step 4a lands.
-
-### Every session a room mints lives as long as the room does
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData.sessions`, `registerSession`).
-- **Issue:** Same shape as the room-level GC issue above, one level deeper. A
-  `Session` created by `RequestSession` (backing `/join`) is never removed. Step
-  5 retains it past promotion, so that a member removed at grace expiry can still
-  reconnect, and it deliberately adds no TTL. A room therefore accumulates one
-  entry per `/join` it ever answered: tabs that connected, tabs that failed
-  between `/join` and `/events`, and people who joined and left hours ago.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle, so a room's sessions go
-  with it two hours after its last connection instead of living for the
-  process. A TTL was considered there and dropped: its useful range is squeezed
-  below by needing to outlast a realistic in-meeting outage and above by the idle
-  stop, and what it would reclaim is a hundred bytes per abandoned session. What
-  is left after step 4a is a room held open for hours with heavy tab churn, which
-  is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
-  when step 4a lands.
-
-### A disconnection that outlasts the grace period still forces a reload for the room's last member
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`ConfirmLeave`'s stop-when-empty branch);
-  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`ValidateToken` for an absent room).
-- **Issue:** Step 5 keeps a token resolvable past its member's removal, so a
-  reconnect after grace expiry rejoins under the same identity. That relies on
-  the room still being there to resolve against. `ConfirmLeave` stops the room
-  when the removal leaves `users` empty, and `ValidateToken` answers
-  `Unresolved` for a room the manager no longer holds, so `/events` returns
-  `401`, `EventSource` stops retrying, and the tab reads "Your session has
-  ended. Please reload the page to rejoin." This is the last connected member,
-  not only a lone one: it also catches whoever is left once the others have
-  gone. The `onerror` comment in `src/main/resources/pages/index.html` names
-  this cause. Step 5 removed the consumed-session cause behind it, leaving
-  this one and a process restart, which takes every room and session with it.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle: the room outlives its
-  last member by two hours, far longer than any outage the retry has to
-  cross, so the token resolves and the retry succeeds. How long the window is
-  before this fires at all is the detection-delay entry below. Remove this entry
-  when step 4a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 

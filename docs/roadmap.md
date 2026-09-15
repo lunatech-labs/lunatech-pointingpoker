@@ -178,14 +178,14 @@ directly in the new frontend.
       nobody commanded.
 - [ ] Room-creation hardening (rate limiting, caps on unauthenticated room
       creation).
-- [ ] Garbage collection for abandoned or never-joined rooms. Not in the original
-      list; found during review of the SSE transport PR. A room is only removed
-      from memory when its last joined participant leaves
-      (`actors/RoomManager.scala`), but `POST /create-room` no longer requires a
+- [x] Garbage collection for abandoned or never-joined rooms. Not in the original
+      list; found during review of the SSE transport PR. A room was only removed
+      from memory when its last joined participant left
+      (`actors/RoomManager.scala`), but `POST /create-room` no longer required a
       completed join to keep a room alive, so an abandoned tab, a network failure
-      before `/join`, or stray traffic can accumulate rooms that live for the life
-      of the process. **Absorbed by step 4a**, which stops a room two
-      hours after its last connection goes, joined or not. See
+      before `/join`, or stray traffic could accumulate rooms that lived for the
+      life of the process. **Landed as step 4a's stop-after-idle**, which stops a
+      room two hours after its last connection goes, joined or not. See
       `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,

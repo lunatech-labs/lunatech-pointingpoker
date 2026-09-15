@@ -760,7 +760,7 @@ shape: there is no per-branch bookkeeping to forget, because the timer holds it.
               Behaviors.same
           case Join(userId, name, token, ref) =>
             // ... every existing branch byte for byte, Behaviors.same included, with
-            // stopAfterIdle added to each of the 11 recursive receiveBehaviour calls
+            // stopAfterIdle added to each of the 9 recursive receiveBehaviour calls
       }
       .receiveSignal { case (_, PostStop) =>
         // A room that stops owes its attached streams an answer; the alternative is silence.
@@ -781,8 +781,8 @@ The one branch that does change is `Leave`, whose `disconnect` now stamps:
           receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
 ```
 
-Adding `stopAfterIdle` to the 11 recursive calls at `Room.scala:188,200,204,214,219,224,236,244,248`
-and the one in `apply` is the whole of the remaining diff. `IdleTickKey` is a
+Adding `stopAfterIdle` to the 9 recursive calls at `Room.scala:188,200,204,214,219,224,236,244,248`
+and the one in `apply` (10 in total) is the whole of the remaining diff. `IdleTickKey` is a
 case object rather than a `UUID`, so it cannot collide with the grace timers,
 which key on `userId`.
 
@@ -1115,7 +1115,7 @@ miss.
 
 ```bash
 git add docs/
-git commit -m "docs: record stop-after-idle as landed and close the two issues it bounds"
+git commit -m "docs: record stop-after-idle as landed and close the three issues it bounds"
 ```
 
 ---
@@ -1124,9 +1124,10 @@ git commit -m "docs: record stop-after-idle as landed and close the two issues i
 
 Before opening the PR:
 
-- `sbt scalafmtAll scalafmtCheckAll test` green, JVM case count up by roughly 9
-  over step 4's 124.
-- `npm run e2e` green across chromium and firefox, up by one case.
+- `sbt scalafmtAll scalafmtCheckAll test` green, JVM case count up by 8 over
+  step 4's 124, to 132.
+- `npm run e2e` green across chromium and firefox, case count unchanged. The
+  planned case was dropped rather than written; see Deviations, item 6.
 - `grep -rn "SseConfig\|Room.Response\|RoomResponseWrapper" src testkit e2e` prints
   nothing.
 - The app starts on defaults and refuses to start with
@@ -1134,5 +1135,66 @@ Before opening the PR:
 
 ## Deviations from the plan, and why
 
-None yet. Record each one here as it is taken, with the reason, so the PR
-description and the spec's landed record can be written from this list.
+1. **Task 1's doc sweep list was incomplete.** The plan's step 8 named two files to
+   update for the rename; it missed `SSE.scala:31`'s stale `SseConfig` doc comment,
+   the only such reference left in `src/`, and 08-30's "Two variables" count, which
+   the same step's own new `ROOM_STOP_AFTER_IDLE` table row had already falsified.
+   Both were in scope for a rename that claims to leave no stale reference, so both
+   were fixed inside task 1's commit rather than deferred.
+
+2. **The plan's own step 3 code block mandated a three-line comment.** `LifecycleConfig`'s
+   Scaladoc, written into the plan verbatim, ran three content lines, against the
+   standing one-or-two-line comment rule. Code review caught it; the plan was wrong,
+   not the reviewer, so both the shipped comment and the plan's own snippet were
+   trimmed to two lines.
+
+3. **A stale Pekko version propagated into a second document.** The plan's PostStop
+   notes cited `pekko-actor-typed 1.6.0`; `build.sbt` pins 1.7.0. Task 2 corrected
+   both occurrences in this plan. Because all five task briefs had already been
+   extracted before that fix landed, task 3's brief still carried the old figure;
+   its implementer corrected it on sight rather than reproducing it, and briefs 4
+   and 5 were re-extracted from the corrected plan.
+
+4. **The SSE test for dropping a queued snapshot on stop took four designs to pass
+   with teeth.** The plan's version sent two messages and then requested demand,
+   which raced Pekko's `Source.actorRef` mailbox against the test's own demand and
+   failed under `immediately` for reasons unrelated to the implementation. A
+   zero-demand redesign failed under both `immediately` and `draining`, because
+   `SSE.source`'s `.keepAlive` stage withholds a completed upstream from the
+   subscriber until it has been pulled at least once. An `expectNoMessage(300ms)`
+   settling barrier failed the same way for the same reason. The design that
+   passed, and failed correctly when `completionMatcher` was mutated to `draining`,
+   sends two snapshots rather than one: the first fills the single in-flight slot
+   `SSE.source` already tolerates, so the second is the one actually queued for
+   `immediately` to discard. Landed as the two-test entry in
+   `docs/known-issues.md`, "Two SSE tests settle on a wall clock, not a
+   synchronization primitive."
+
+5. **This document's own step 4 prose miscounted the recursive calls it asked for.**
+   It said "the 11 recursive calls"; the concrete line list in the same paragraph
+   names 9 sites inside `receiveBehaviour`, plus the one in `apply`, 10 in total.
+   Corrected in this document as part of this task.
+
+6. **The plan's e2e case for a room outliving its last member passed before the
+   change, not just after it.** A 6-second wait past the grace period, with no
+   other room traffic, never gave the room a chance to notice the departure in
+   either version: detection here rides on a failed write, not a clock, and a
+   quiet room with nobody left to generate traffic produces neither. The case was
+   dropped rather than stretched into a roughly 40-second-per-browser wait, and the
+   gap was recorded in `docs/known-issues.md` as "A room outliving its last member
+   is not covered end to end." The survival behaviour is instead pinned at the JVM
+   level, by `RoomSpec`'s "stay alive when its last member is removed" and the four
+   idle-timeout cases beside it.
+
+7. **The plan's step 6 barrier rewrite broke two tests it treated as a 1:1 swap.**
+   "resolve a token whose member was removed at grace expiry" and "refuse every
+   command from a token whose member was removed at grace expiry" both bring Alice
+   in mid-test through a real `Join`, and that `Join` itself publishes a snapshot to
+   `user2Probe` before `Leave` is ever sent. The plan's literal swap
+   (`expectSnapshot(user2Probe)` in place of the old `Room.Running` wait) dequeued
+   that stale `Join` snapshot instead of `ConfirmLeave`'s, which failed "refuse
+   every command..." deterministically and left "resolve a token..." green only by
+   luck, since its own assertion never read the removed membership. Fixed by
+   draining the `Join` snapshot with an assertion of its own before treating the
+   next publish as the real post-removal barrier, which repairs both the race and
+   the case that had been passing for the wrong reason.
