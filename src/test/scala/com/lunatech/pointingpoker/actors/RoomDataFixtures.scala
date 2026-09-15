@@ -18,33 +18,61 @@ object RoomDataFixtures:
       ref: UntypedRef,
       token: Room.SessionToken
   ):
-    def asUser: Room.User = Room.User(id, name, ref, token)
+    def joinMessage: Room.Join = Room.Join(id, name, token, ref)
 
   def withUsers(users: Attendee*): RoomData =
     RoomData.of(
-      users.map(_.asUser).toList,
-      sessionsFor(users*),
-      Room.RoomState("", Room.Round(estimatesFor(users*), revealed = false))
+      state = Room.RoomState("", Room.Round(estimatesFor(users*), revealed = false)),
+      members = users.map(u => u.id -> Room.Member(u.name)).toMap,
+      sessions = sessionsFor(users*),
+      connections = users.map(u => u.id -> Set(u.ref)).toMap
     )
 
   extension (data: RoomData)
     def withIssue(issue: String): RoomData =
-      RoomData.of(data.users, data.sessions, data.state.copy(currentIssue = issue))
+      RoomData.of(
+        data.state.copy(currentIssue = issue),
+        data.members,
+        data.sessions,
+        data.connections
+      )
 
     def withRevealed(): RoomData =
-      RoomData.of(data.users, data.sessions, withRound(data, _.copy(revealed = true)))
+      RoomData.of(
+        withRound(data, _.copy(revealed = true)),
+        data.members,
+        data.sessions,
+        data.connections
+      )
 
     // A session whose member has gone or has not yet arrived; both reach the same state.
     def withMemberlessSession(users: Attendee*): RoomData =
-      RoomData.of(data.users, data.sessions ++ sessionsFor(users*), data.state)
+      RoomData.of(data.state, data.members, data.sessions ++ sessionsFor(users*), data.connections)
 
-    // An estimate with no member, which a departure leaves behind and the join must drop.
     def withEstimate(user: Attendee): RoomData =
       RoomData.of(
-        data.users,
+        withRound(data, r => r.copy(estimates = r.estimates ++ estimatesFor(user))),
+        data.members,
         data.sessions,
-        withRound(data, r => r.copy(estimates = r.estimates ++ estimatesFor(user)))
+        data.connections
       )
+
+    // The replacement tab arriving before the frozen one drops, and the two-tab case.
+    def withSecondConnection(user: Attendee, ref: UntypedRef): RoomData =
+      RoomData.of(
+        data.state,
+        data.members,
+        data.sessions,
+        data.connections.updatedWith(user.id)(refs => Some(refs.getOrElse(Set.empty) + ref))
+      )
+
+    // Inside the grace period: the row survives, the sends do not.
+    def withNoConnection(user: Attendee): RoomData =
+      RoomData.of(data.state, data.members, data.sessions, data.connections - user.id)
+
+    // Membership ended while the tab is still attached, which is step 6's leave endpoint.
+    def withDeparted(user: Attendee): RoomData =
+      RoomData.of(data.state, data.members - user.id, data.sessions, data.connections)
 
     def estimateFor(user: Attendee): Option[(String, Boolean)] =
       data.state.round.estimates.get(user.id).map(e => (e.value, e.confirmed))

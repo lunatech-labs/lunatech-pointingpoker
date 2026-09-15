@@ -74,9 +74,7 @@ object RoomManager:
             replyTo ! RoomId(roomId.toString)
             receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
           case ConnectToRoom(roomId, userId, name, token, ref) =>
-            data.rooms.get(roomId).foreach { room =>
-              room ! Room.Join(Room.User(userId, name, ref, token))
-            }
+            data.rooms.get(roomId).foreach(room => room ! Room.Join(userId, name, token, ref))
             Behaviors.same
           case RequestSession(roomId, name, replyTo) =>
             data.rooms

@@ -41,14 +41,14 @@ object RoomSnapshot:
       votesRevealed = round.revealed,
       // The join: a participant appears because they are one, their estimate comes from
       // the round, and an estimate belonging to nobody present reaches nobody.
-      users = data.users
-        .sortWith((a, b) => a.id.compareTo(b.id) < 0)
-        .map { u =>
-          val estimate = round.estimates.get(u.id)
-          val disclose = round.revealed || u.id == forUser
+      users = data.members.toList
+        .sortWith((a, b) => a._1.compareTo(b._1) < 0)
+        .map { (id, member) =>
+          val estimate = round.estimates.get(id)
+          val disclose = round.revealed || id == forUser
           Participant(
-            id = u.id,
-            name = u.name,
+            id = id,
+            name = member.name,
             voted = estimate.exists(_.confirmed),
             hasEstimation = estimate.isDefined,
             estimation = estimate.filter(_ => disclose).map(_.value).getOrElse("")

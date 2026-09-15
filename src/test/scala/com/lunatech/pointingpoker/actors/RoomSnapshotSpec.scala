@@ -191,5 +191,16 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       snapshot.users.map(_.id) mustBe List(alice.id)
       (snapshot.asJson.noSpaces must not).include("13")
     }
+
+    "leave a participant whose membership ended out of the snapshot" in {
+      val alice    = user(UUID.randomUUID(), "Alice", true, "5")
+      val departed = user(UUID.randomUUID(), "Departed", true, "13")
+      val data     = withUsers(alice, departed).withDeparted(departed).withRevealed()
+
+      // The join is over members, so a revealed round discloses nothing of a departed one.
+      val snapshot = RoomSnapshot.of(data, alice.id)
+      snapshot.users.map(_.id) mustBe List(alice.id)
+      (snapshot.asJson.noSpaces must not).include("13")
+    }
   }
 end RoomSnapshotSpec

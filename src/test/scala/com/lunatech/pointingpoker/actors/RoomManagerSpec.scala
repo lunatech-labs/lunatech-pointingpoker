@@ -50,8 +50,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.ConnectToRoom(roomId, userId1, user1Name, token1, user1Probe.ref)
       managerRef ! RoomManager.ConnectToRoom(roomId, userId2, user2Name, token2, user2Probe.ref)
 
-      roomProbe.expectMessage(Room.Join(Room.User(userId1, user1Name, user1Probe.ref, token1)))
-      roomProbe.expectMessage(Room.Join(Room.User(userId2, user2Name, user2Probe.ref, token2)))
+      roomProbe.expectMessage(Room.Join(userId1, user1Name, token1, user1Probe.ref))
+      roomProbe.expectMessage(Room.Join(userId2, user2Name, token2, user2Probe.ref))
     }
 
     "no-op ConnectToRoom for an unknown room" in {
