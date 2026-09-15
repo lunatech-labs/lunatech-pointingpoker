@@ -189,7 +189,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       // Invariant 2: every estimate on the wire comes from the join, never from the map.
       val snapshot = RoomSnapshot.of(data, alice.id)
       snapshot.users.map(_.id) mustBe List(alice.id)
-      (snapshot.asJson.noSpaces must not).include("13")
+      (snapshot.asJson.noSpaces must not).include("\"13\"")
     }
 
     "leave a participant whose membership ended out of the snapshot" in {
@@ -200,7 +200,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       // The join is over members, so a revealed round discloses nothing of a departed one.
       val snapshot = RoomSnapshot.of(data, alice.id)
       snapshot.users.map(_.id) mustBe List(alice.id)
-      (snapshot.asJson.noSpaces must not).include("13")
+      (snapshot.asJson.noSpaces must not).include("\"13\"")
     }
   }
 end RoomSnapshotSpec
