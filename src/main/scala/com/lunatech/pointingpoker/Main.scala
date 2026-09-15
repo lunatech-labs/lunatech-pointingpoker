@@ -36,7 +36,12 @@ object Main extends App:
   given timeout: Timeout = 3.seconds
 
   val roomManagerFuture: Future[ActorRef[RoomManager.Command]] = system.ask { ref =>
-    SpawnProtocol.Spawn(RoomManager(lifecycleConfig.gracePeriod), "room-manager", Props.empty, ref)
+    SpawnProtocol.Spawn(
+      RoomManager(lifecycleConfig.gracePeriod, lifecycleConfig.stopAfterIdle),
+      "room-manager",
+      Props.empty,
+      ref
+    )
   }
   given ec: ExecutionContextExecutor = system.executionContext
 

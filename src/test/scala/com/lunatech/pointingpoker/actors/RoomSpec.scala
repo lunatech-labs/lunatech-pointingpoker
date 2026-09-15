@@ -976,6 +976,81 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       userProbe.expectMsg(Room.StreamCompleted)
       user2Probe.expectMsg(Room.StreamCompleted)
     }
+
+    "stop itself once it has held no connection for the idle timeout" in {
+      val watcher      = testKit.createTestProbe()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty,
+        stopAfterIdle = 200.millis
+      )
+
+      // Never connected at all, which is the never-joined room the stamp at creation covers:
+      // written as a transition-only field this room would run for the life of the process.
+      watcher.expectTerminated(roomRef, 3.seconds)
+    }
+
+    "stay alive while a connection is attached, however quiet the room is" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val watcher      = testKit.createTestProbe()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        withUsers(user),
+        stopAfterIdle = 200.millis
+      )
+
+      // Message silence is a veto on stopping, not a reason to stop: five people arguing for
+      // two hours before anyone clicks a card must not be disconnected mid-meeting.
+      watcher.expectNoMessage(700.millis)
+
+      val dataProbe = testKit.createTestProbe[Room.DataStatus]()
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user.id)
+    }
+
+    "defer its stop by a full delay when any message arrives" in {
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val watcher      = testKit.createTestProbe()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty,
+        stopAfterIdle = 300.millis
+      )
+
+      // A stray message re-arms the timer, which is what stops a tick landing between
+      // ConnectToRoom's send and its delivery. It also defers an abandoned room by a delay.
+      Thread.sleep(250)
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus]
+      watcher.expectNoMessage(200.millis)
+
+      watcher.expectTerminated(roomRef, 3.seconds)
+    }
+
+    "clear the idle stamp on a connection and restamp it when the last one goes" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+      val dataProbe = testKit.createTestProbe[Room.DataStatus]()
+      // The reply channel is still alive at this task; task 4 strips this probe.
+      val responseProbe = testKit.createTestProbe[Room.Response]()
+      val (_, roomRef)  = createRoom(
+        UUID.randomUUID(),
+        withUsers().withMemberlessSession(user),
+        gracePeriod = 50.millis
+      )
+
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe defined
+
+      roomRef ! user.joinMessage
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe None
+
+      roomRef ! Room.Leave(user.id, user.ref, responseProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      // Stamped at the disconnect, not at the member's removal: the two are a grace period apart
+      // and it is the connection layer this is derived from.
+      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe defined
+    }
   }
 end RoomSpec
 
@@ -992,10 +1067,12 @@ object RoomSpec:
   def createRoom(
       roomId: UUID,
       data: RoomData,
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
+      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
   )(using
       testKit: ActorTestKit
   ): (UUID, ActorRef[Room.Command]) =
-    val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod))
+    val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod, stopAfterIdle))
     (roomId, roomRef)
+  end createRoom
 end RoomSpec

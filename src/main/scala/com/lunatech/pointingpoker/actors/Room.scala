@@ -1,5 +1,6 @@
 package com.lunatech.pointingpoker.actors
 
+import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -75,20 +76,29 @@ object Room:
       state: RoomState,
       members: Map[UUID, Member],
       sessions: Map[SessionToken, Session],
-      connections: Map[UUID, Set[UntypedRef]]
+      connections: Map[UUID, Set[UntypedRef]],
+      emptySince: Option[Instant]
   ):
     private[Room] def connect(userId: UUID, name: String, ref: UntypedRef): RoomData =
       this.copy(
         members = this.members + (userId -> Member(name)),
         connections =
-          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref))
+          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref)),
+        emptySince = None
       )
 
-    private[Room] def disconnect(userId: UUID, ref: UntypedRef): RoomData =
+    private[Room] def disconnect(userId: UUID, ref: UntypedRef, now: Instant): RoomData =
       // The entry goes when its set empties, so "holds no connection" means what it says.
-      this.copy(connections =
-        this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
-      )
+      val next = this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
+      this.copy(connections = next, emptySince = Option.when(next.isEmpty)(now))
+
+    private[Room] def startedAt(now: Instant): RoomData =
+      // Some at creation, not None: a room whose /events never followed its /join has been
+      // empty without ever becoming empty, and that is the never-joined room this bounds.
+      this.copy(emptySince = Option.when(this.connections.isEmpty)(now))
+
+    def idleFor(timeout: FiniteDuration, now: Instant): Boolean =
+      this.emptySince.exists(since => !since.isAfter(now.minusMillis(timeout.toMillis)))
 
     private[Room] def removeMember(userId: UUID): RoomData =
       // Estimates are keyed by id and survive a departure; only clear or the round ends one.
@@ -137,7 +147,8 @@ object Room:
         state: RoomState = RoomState.empty,
         members: Map[UUID, Member] = Map.empty,
         sessions: Map[SessionToken, Session] = Map.empty,
-        connections: Map[UUID, Set[UntypedRef]] = Map.empty
+        connections: Map[UUID, Set[UntypedRef]] = Map.empty,
+        emptySince: Option[Instant] = None
     ): RoomData =
       // Every id resolves to a session, which is conspicuously not "every id is a member":
       // a connection or an estimate outliving its member is a state this design requires.
@@ -155,20 +166,33 @@ object Room:
       state.round.estimates.keys.foreach(id =>
         require(identities.contains(id), s"the estimate for $id resolves to no session")
       )
-      RoomData(state, members, sessions, connections)
+      RoomData(state, members, sessions, connections, emptySince)
     end of
   end RoomData
 
-  val defaultGracePeriod: FiniteDuration = 6.seconds
+  final private[actors] case object IdleTick extends Command
+
+  private case object IdleTickKey
+
+  val defaultGracePeriod: FiniteDuration   = 6.seconds
+  val defaultStopAfterIdle: FiniteDuration = 2.hours
 
   def apply(
       roomId: UUID,
       initialData: RoomData = RoomData.empty,
-      gracePeriod: FiniteDuration = defaultGracePeriod
+      gracePeriod: FiniteDuration = defaultGracePeriod,
+      stopAfterIdle: FiniteDuration = defaultStopAfterIdle
   ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
-        receiveBehaviour(roomId, initialData, gracePeriod, timers)
+        timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+        receiveBehaviour(
+          roomId,
+          initialData.startedAt(Instant.now()),
+          gracePeriod,
+          stopAfterIdle,
+          timers
+        )
       }
     }
 
@@ -176,11 +200,23 @@ object Room:
       roomId: UUID,
       data: RoomData,
       gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration,
       timers: TimerScheduler[Command]
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
+        // Any message pushes the tick a full delay out, which is what keeps one from landing
+        // between ValidateToken and the ConnectToRoom it precedes.
+        if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
         message match
+          case IdleTick =>
+            if data.idleFor(stopAfterIdle, Instant.now()) then
+              context.log.info("Stopping room {}: no connection for {}", roomId, stopAfterIdle)
+              Behaviors.stopped
+            else
+              // Occupied, so no message re-armed this one: ask again a delay from now.
+              timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+              Behaviors.same
           case Join(userId, name, token, ref) =>
             // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
             // the room; a refused joiner gets no snapshot and, deliberately, no connection.
@@ -189,7 +225,7 @@ object Room:
               // staleness check of its own.
               timers.cancel(userId)
               val newData = publish(data.connect(userId, name, ref), context)
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+              receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
             else
               val reason =
                 if data.sessions.contains(token) then
@@ -202,7 +238,7 @@ object Room:
             val token   = SessionToken.mint()
             val newData = data.registerSession(token, userId, name)
             replyTo ! SessionMinted(userId, token)
-            receiveBehaviour(roomId, newData, gracePeriod, timers)
+            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
           case Vote(token, estimation) =>
             data.actingMember(token) match
               case Some(userId) =>
@@ -210,35 +246,54 @@ object Room:
                   roomId,
                   publish(data.vote(userId, estimation), context),
                   gracePeriod,
+                  stopAfterIdle,
                   timers
                 )
               case None => Behaviors.same
           case ClearVotes(token) =>
             data.actingMember(token) match
               case Some(_) =>
-                receiveBehaviour(roomId, publish(data.clear(), context), gracePeriod, timers)
+                receiveBehaviour(
+                  roomId,
+                  publish(data.clear(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
               case None => Behaviors.same
           case ReVote(token) =>
             data.actingMember(token) match
               case Some(_) =>
-                receiveBehaviour(roomId, publish(data.reVote(), context), gracePeriod, timers)
+                receiveBehaviour(
+                  roomId,
+                  publish(data.reVote(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
               case None => Behaviors.same
           case ShowVotes(token) =>
             data.actingMember(token) match
               case Some(_) =>
-                receiveBehaviour(roomId, publish(data.show(), context), gracePeriod, timers)
+                receiveBehaviour(
+                  roomId,
+                  publish(data.show(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
               case None => Behaviors.same
           case Leave(userId, ref, replyTo) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
-            val next = data.disconnect(userId, ref)
+            val next = data.disconnect(userId, ref, Instant.now())
             if !next.holdsConnection(userId) && next.isMember(userId) then
               timers.startSingleTimer(
                 key = userId,
                 msg = ConfirmLeave(userId, replyTo),
                 delay = gracePeriod
               )
-            receiveBehaviour(roomId, next, gracePeriod, timers)
+            receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
           case ConfirmLeave(userId, replyTo) =>
             val newData = publish(data.removeMember(userId), context)
             if newData.members.isEmpty then
@@ -246,7 +301,7 @@ object Room:
               Behaviors.stopped
             else
               replyTo ! Running(roomId)
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+              receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
           case EditIssue(token, issue) =>
             data.actingMember(token) match
               case Some(_) =>
@@ -254,6 +309,7 @@ object Room:
                   roomId,
                   publish(data.editIssue(issue), context),
                   gracePeriod,
+                  stopAfterIdle,
                   timers
                 )
               case None => Behaviors.same
@@ -268,6 +324,7 @@ object Room:
           case GetData(replyTo) =>
             replyTo ! Room.DataStatus(data)
             Behaviors.same
+        end match
 
       }
       .receiveSignal { case (_, PostStop) =>
