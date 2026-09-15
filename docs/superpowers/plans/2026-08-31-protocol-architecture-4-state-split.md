@@ -1368,4 +1368,26 @@ Listed so a reviewer can reject one without re-deriving it.
    matching the JSON string literal `"13"` rather than the bare digits, which
    cannot collide with an id. The planning miss: the cases were copied from the
    step 2 case's intent without its escaping, and a probabilistic failure passes
-   every time anyone runs it while writing it.
+   every time anyone runs it while writing it. It had in fact appeared once
+   already, during task 1: one suite run reported 116 of 117 passing and named no
+   case, and it was written off as pre-existing suite flakiness because nothing
+   then connected it to a cause. That is the half worth carrying forward. A
+   probabilistic failure's first appearance is indistinguishable from noise, and
+   the only reason this one was caught at all is that it happened twice.
+
+4. **`RoomDataFixtures.estimatesFor` filtered an illegal attendee instead of
+   refusing it, and now refuses it.** The traps section above says that no
+   fixture site combines `voted = true` with a blank estimation, that such a
+   site would encode a state the new model calls illegal, and that the fixture
+   should throw rather than encode it. The helper as landed filtered every blank
+   estimation out before `Estimate.of` could refuse one, so such an attendee
+   became "not voted, no estimation" in silence. No fixture site does this today,
+   so nothing was wrong on the branch, but a case written to mean "voted with no
+   estimation" would have asserted against a non-voter and passed vacuously. The
+   helper now requires the combination to be absent and fails the fixture site
+   that writes it. The planning miss is unusually flat: the trap and the helper
+   were specified in the same document, and the helper specified does not
+   implement the trap named a few hundred lines above it. Step 10 of the plan
+   even reads the trap back, telling the runner that an `Estimate.of` throwing
+   during fixture construction is that illegal state, which the specified filter
+   makes unreachable.

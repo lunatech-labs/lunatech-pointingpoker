@@ -1714,6 +1714,10 @@ Added, each with the step it lands at so nothing here is unassigned:
   mutation-demonstrated, which is the part worth carrying to the later steps
   that copy this pattern.
 
+  Step 4 adds none and amends one, which this inventory would otherwise not
+  record: the blank-estimation case changed with the vote refusal, and step 4's
+  landed note carries what it became and why.
+
   Step 6 adds two that need one browser context rather than two, since they are
   about the shared
   room cookie: two tabs on the same room resolving to one participant, with a vote
@@ -2394,7 +2398,11 @@ pattern replacing the unconditional `204`, idempotent `/join`, the explicit
 leave endpoint with its beacon gated on a discarded page, and the client rejoin
 on a snapshot that does not name it as a member. Wants step 4 first, both so
 handlers are not rewritten twice and because the leave endpoint's rule reads the
-size of a member's connection set. About 190 and 175.
+size of a member's connection set. That set has to be read through an `Option`:
+step 4's `RoomData.disconnect` drops a member's `connections` entry once its refs
+are gone, and the late beacon, arriving after its own stream has already
+terminated, is exactly the ordering where the entry is already absent, so
+`connections(id).size` throws on the case the rule exists for. About 190 and 175.
 
 **Its result set gains a third case from step 3a**, refused because the round is
 revealed, beside applied and not-a-member. That refusal exists from 3a onward and
