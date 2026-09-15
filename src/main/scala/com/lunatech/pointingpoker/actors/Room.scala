@@ -208,6 +208,8 @@ object Room:
         // Any message pushes the tick a full delay out, which is what keeps one from landing
         // between ValidateToken and the ConnectToRoom it precedes.
         if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+        // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
+        // from a superseded generation. Verified against pekko-actor-typed 1.7.0.
         message match
           case IdleTick =>
             if data.idleFor(stopAfterIdle, Instant.now()) then
