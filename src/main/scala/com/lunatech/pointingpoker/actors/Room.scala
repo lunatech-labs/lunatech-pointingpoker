@@ -21,9 +21,8 @@ object Room:
   sealed trait Command
   final case class Join(userId: UUID, name: String, token: SessionToken, ref: UntypedRef)
       extends Command
-  final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final private[actors] case class ConfirmLeave(userId: UUID, replyTo: ActorRef[Response])
-      extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef)                           extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID)                     extends Command
   final case class Vote(token: SessionToken, estimation: String)                  extends Command
   final case class ClearVotes(token: SessionToken)                                extends Command
   final case class ReVote(token: SessionToken)                                    extends Command
@@ -40,10 +39,6 @@ object Room:
   sealed trait TokenResolution
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
   case object Unresolved                                extends TokenResolution
-
-  sealed trait Response
-  final case class Running(roomId: UUID) extends Response
-  final case class Stopped(roomId: UUID) extends Response
 
   // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
   case object StreamCompleted
@@ -285,25 +280,16 @@ object Room:
                   timers
                 )
               case None => Behaviors.same
-          case Leave(userId, ref, replyTo) =>
+          case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
             val next = data.disconnect(userId, ref, Instant.now())
             if !next.holdsConnection(userId) && next.isMember(userId) then
-              timers.startSingleTimer(
-                key = userId,
-                msg = ConfirmLeave(userId, replyTo),
-                delay = gracePeriod
-              )
+              timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
             receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
-          case ConfirmLeave(userId, replyTo) =>
+          case ConfirmLeave(userId) =>
             val newData = publish(data.removeMember(userId), context)
-            if newData.members.isEmpty then
-              replyTo ! Stopped(roomId)
-              Behaviors.stopped
-            else
-              replyTo ! Running(roomId)
-              receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
           case EditIssue(token, issue) =>
             data.actingMember(token) match
               case Some(_) =>

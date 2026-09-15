@@ -305,6 +305,26 @@ roadmap item instead of leaving it here as stale history.
   cost of traffic on every open connection, and no step in the target design
   schedules that trade.
 
+### A room outliving its last member is not covered end to end
+
+- **Where:** `e2e/room.spec.js`; the behaviour itself is in
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`ConfirmLeave`,
+  which no longer stops the actor) and the idle tick that replaced it.
+- **Issue:** The browser suite cannot cheaply prove that a room survives its last
+  member leaving. The room only learns of a departure when a heartbeat write to
+  the dead connection fails, measured at about 35.5 seconds in a quiet room under
+  the e2e profile by the entry above, and when the departing member is the last
+  one there is nobody left to generate the traffic that would detect it sooner.
+  An honest case therefore needs a wait of roughly 40 seconds per browser. A first
+  attempt with a 6 second wait passed identically before and after the change,
+  which is worse than no case at all.
+- **Resolution:** Accepted. The behaviour is pinned at the JVM level by
+  `RoomSpec`'s "stay alive when its last member is removed" and by the four idle
+  cases beside it, all deterministic and clock-free. The e2e cost buys a weaker
+  guard than those already provide, since its strength depends on detection
+  landing inside the wait on CI hardware. Revisit if the detection path ever
+  becomes clock-driven rather than write-driven.
+
 ### A second tab on the same room displaces the first tab's identity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`
