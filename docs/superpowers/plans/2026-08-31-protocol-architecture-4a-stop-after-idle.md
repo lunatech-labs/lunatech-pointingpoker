@@ -45,11 +45,12 @@ step 5a (#403) on step 5 (#402), so this branch is the fourth level and needs a
 - **The idle timeout is the only behaviour change a working room can observe.**
   Stream completion on stop changes only what a stopped or crashed room does, and
   the reply-channel deletion changes nothing observable at all.
-- **Task 3 leaves rooms unable to stop, and task 4 is what bounds them again.**
-  That intermediate commit is the one that is not shippable on its own. The
-  ordering is no longer forced, since task 4 no longer restructures the branches
-  task 3 deletes from, so running 4 before 3 would remove the unshippable commit.
-  Finding M3 of the plan review owns that choice.
+- **The idle timeout lands before the stop path it replaces is deleted**, so
+  every commit leaves a tree that can still stop a room. Task 3 adds the tick
+  while `ConfirmLeave` still stops an emptied room, and task 4 then removes that
+  second path. Reversing them would leave one commit with no stop path at all,
+  which matters on the fourth level of a four-deep stack where each merge below
+  forces a `rebase --onto`.
 - **The configured chain is `retry < grace << idle`**, and all three `require`s
   live in one `load`. Exact keys: `pointing-poker.room.grace-period`,
   `pointing-poker.room.stop-after-idle`, `pointing-poker.sse.retry`. Exact
@@ -322,7 +323,7 @@ and lines 39 and 47 become:
       val api = API(roomManager, apiConfig, lifecycleConfig, probeConfig)
 ```
 
-`RoomManager` gains `stopAfterIdle` in task 4, which is when this `Spawn` picks
+`RoomManager` gains `stopAfterIdle` in task 3, which is when this `Spawn` picks
 up the second argument.
 
 In `API.scala`, the import on line 25 and the parameter names on lines 35, 142,
@@ -401,7 +402,7 @@ on its own.
 
 - Produces: `Room.StreamCompleted`, a bare `case object` in `object Room` and
   deliberately **not** a `Room.Command`. It travels outward to connection refs,
-  which are untyped, so `publish`'s existing send needs no new typing. Task 4's
+  which are untyped, so `publish`'s existing send needs no new typing. Task 3's
   `PostStop` handler is the second sender.
 
 - [ ] **Step 1: Write the failing room test**
@@ -520,223 +521,7 @@ git commit -m "feat(actors): complete every attached stream when a room stops"
 
 ---
 
-### Task 3: Delete stop-when-empty and the whole reply channel
-
-`ConfirmLeave` stops stopping the actor, so it always answers `Running`, which is
-the no-consumer case this design applies to `version` and `scale`. `Response` and
-`Running` go with `Stopped`, and `replyTo` goes with them.
-
-**This task leaves rooms unable to stop at all.** Task 4 is what bounds them
-again. Do not reorder.
-
-**Files:**
-
-- Modify: `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:23-24,43-45,226-244`
-- Modify: `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala:26,45-51,53-58,60-64,97-102,133-143,145-148`
-- Modify: `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala`
-- Modify: `src/test/scala/com/lunatech/pointingpoker/actors/RoomManagerSpec.scala`
-- Modify: `e2e/room.spec.js`
-
-**Interfaces:**
-
-- Produces: `Room.Leave(userId: UUID, ref: UntypedRef)` and
-  `Room.ConfirmLeave(userId: UUID)`, both without `replyTo`.
-  `RoomManager.receiveBehaviour(data: RoomManagerData, gracePeriod: FiniteDuration)`,
-  two parameters instead of three. Task 4 adds a third for `stopAfterIdle`.
-- Consumes: nothing from tasks 1 and 2.
-
-- [ ] **Step 1: Write the failing e2e case**
-
-Add to `e2e/room.spec.js`. Every name it uses is already in that file's
-`./fixtures.js` import, so the import does not change:
-
-```javascript
-test('a room outlives its last member', async ({ join }) => {
-  const alice = await join('Alice')
-  await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(frozenNotice(alice.page)).toBeVisible()
-
-  await alice.close()
-  // Past the profile's 4s grace period, which is where the room used to stop itself.
-  await new Promise(resolve => setTimeout(resolve, 6000))
-
-  const bob = await join('Bob')
-  // votesRevealed lives in RoomState.round and depends on no tally, so it survives Alice's
-  // removal. A restarted room would hand Bob a fresh unrevealed round and hide the notice.
-  await expect(frozenNotice(bob.page)).toBeVisible()
-})
-```
-
-Not the summary table, which `index.html:273` guards with
-`votesRevealed && votesSummary.length` and `index.html:356-358` tallies from the
-snapshot's own participants. Once Alice's member entry is removed, Bob's snapshot
-holds only Bob, the tally is empty and the table is hidden whether or not the room
-survived. The notice at `index.html:244` is bound by `visibility` on
-`votesRevealed` alone, and Playwright's `toBeVisible()` honours that.
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `npm run e2e -- room.spec.js -g "outlives its last member"`
-Expected: FAIL. Alice's departure empties `members`, `ConfirmLeave` stops the
-room, and Bob's join creates a new one whose round is unrevealed, so the notice
-is hidden.
-
-- [ ] **Step 3: Take the reply channel out of `Room`**
-
-In `Room.scala`, lines 23-24 become:
-
-```scala
-  final case class Leave(userId: UUID, ref: UntypedRef)                 extends Command
-  final private[actors] case class ConfirmLeave(userId: UUID)           extends Command
-```
-
-Delete the `Response`, `Running` and `Stopped` declarations at lines 43-45,
-keeping `StreamCompleted` from task 2. The `Leave` branch's timer send loses its
-`replyTo`:
-
-```scala
-            timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
-```
-
-and the `ConfirmLeave` branch collapses to its surviving half:
-
-```scala
-        case ConfirmLeave(userId) =>
-          receiveBehaviour(roomId, publish(data.removeMember(userId), context), gracePeriod, timers)
-```
-
-- [ ] **Step 4: Take it out of `RoomManager`**
-
-In `RoomManager.scala`: delete the `RoomResponseWrapper` command (line 26), the
-`removeRoom` method (lines 48-49), the `roomResponseActor` adapter in `apply`
-(lines 55-56), the `roomResponseWrapper` parameter of `receiveBehaviour` (line
-62) and the `RoomResponseWrapper` branch (lines 97-102). Every recursive
-`receiveBehaviour(...)` call and the `receiveSignal` handler drop the wrapper
-argument, and the two `Room.Leave` sends in `ConnectionCompleted` and
-`ConnectionFailure` become:
-
-```scala
-            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref))
-```
-
-`apply` becomes:
-
-```scala
-  def apply(gracePeriod: FiniteDuration = Room.defaultGracePeriod): Behavior[Command] =
-    Behaviors.setup[Command](_ => receiveBehaviour(RoomManagerData.empty, gracePeriod))
-```
-
-`receiveSignal` on `Terminated` stays exactly as it is: it is now the single
-deregistration path, which it has to be anyway, since it is the only one that can
-observe a self-initiated stop.
-
-- [ ] **Step 5: Strip the probes from `RoomManagerSpec`**
-
-Delete the `roomResponseProbe` or `responseProbe` `val` at lines 38, 93, 109,
-193, 209, 225, 249, 265 and 286, drop the second argument from every
-`RoomManager.receiveBehaviour(...)` call, and change the two expectations at
-lines 203 and 219 to:
-
-```scala
-      roomProbe.expectMessage(Room.Leave(userId, ref))
-```
-
-- [ ] **Step 6: Strip the probes from `RoomSpec` and rewrite the three cases that read them**
-
-Delete the `roomResponseProbe` or `responseProbe` `val` at lines 164, 180, 240,
-269, 451, 478, 866, 891 and 928, and drop the argument from every `Room.Leave`
-send.
-
-The "restart the grace period" case at lines 206-234 loses `firstReplyProbe`,
-`secondReplyProbe` and its last two assertions. Its two `Leave` sends become
-plain, and the assertion that the timer was replaced rather than run twice
-becomes the snapshot count it already has plus a data read:
-
-```scala
-      // Fires exactly once: a duplicated timer would publish a second time and the second
-      // removal would find nobody, so one publish and one surviving member is the proof.
-      expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
-      user2Probe.expectNoMessage(200.millis)
-      roomRef ! Room.GetData(dataProbe.ref)
-      dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user2.id)
-```
-
-Add `val dataProbe = testKit.createTestProbe[Room.DataStatus]()` to that case.
-
-The "remove a user on leave" case at line 251 drops
-`roomResponseProbe.expectMessage(Room.Running(roomId))`; the `expectSnapshot` on
-line 250 already waits past the grace period. The same deletion applies to lines
-469 and 496, whose comment at 467-468 becomes:
-
-```scala
-      // The published snapshot is the confirmation that ConfirmLeave fired and removed the
-      // member while the room stayed up, which is the state a reconnect past the window meets.
-      expectSnapshot(userProbe)
-```
-
-Note that `userProbe` in those two cases is Alice's own classic `TestProbe`, and
-she is the member being removed, so read the barrier off `user2`'s probe instead:
-both cases seed `user2` through `withUsers`, so replace the line above with
-`expectSnapshot(user2Probe)` and capture `user2Probe` from `createUser` where the
-case currently discards it with `val (user2, _)`.
-
-The two "schedule no removal" cases at lines 862-907 lose
-`roomResponseProbe.expectNoMessage(200.millis)`. Each keeps its `GetData`
-assertion, and gains the wait the deleted line was providing:
-
-```scala
-      Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
-```
-
-- [ ] **Step 7: Rewrite the "stop itself if empty" case**
-
-The case at lines 263-282 asserts the behaviour this task deletes. Replace it
-with its inverse, which is the guarantee task 3 introduces:
-
-```scala
-    "stay alive when its last member is removed" in {
-      val probe = TestProbe()(testKit.system.classicSystem)
-      val user  =
-        Attendee(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
-      val user2 =
-        Attendee(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
-
-      val roomId = UUID.randomUUID()
-      // Seeded rather than joined: Join is not what this case is about, and a refused
-      // Join would leave the room empty and pass the assertion for the wrong reason.
-      val behaviorTestKit =
-        BehaviorTestKit(Room(roomId, withUsers(user, user2)), roomId.toString)
-
-      // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
-      // directly rather than Leave (which only schedules it).
-      behaviorTestKit.run(Room.ConfirmLeave(user.id))
-      behaviorTestKit.run(Room.ConfirmLeave(user2.id))
-
-      // An empty room is idle, not dead: task 4's tick is what ends it, hours later.
-      behaviorTestKit.isAlive mustBe true
-    }
-```
-
-- [ ] **Step 8: Run both suites to verify they pass**
-
-Run: `sbt scalafmtAll test`
-Expected: PASS, with no reference to `Room.Response` anywhere in the tree. Check
-with `grep -rn "Room.Response\|RoomResponseWrapper\|Room.Running\|Room.Stopped" src`,
-which must print nothing.
-
-Run: `npm run e2e -- room.spec.js -g "outlives its last member"`
-Expected: PASS.
-
-- [ ] **Step 9: Commit**
-
-```bash
-git add src/main src/test e2e/room.spec.js
-git commit -m "refactor(actors): delete stop-when-empty and the room reply channel"
-```
-
----
-
-### Task 4: The idle timeout
+### Task 3: The idle timeout
 
 **Files:**
 
@@ -744,13 +529,13 @@ git commit -m "refactor(actors): delete stop-when-empty and the room reply chann
 - Modify: `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala:53-58,60-64,150-155`
 - Modify: `src/main/scala/com/lunatech/pointingpoker/Main.scala:39`
 - Modify: `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala`
-- Modify: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:535-543`
 
 **Interfaces:**
 
-- Consumes: `LifecycleConfig.stopAfterIdle` from task 1, `Room.StreamCompleted`
-  and the `PostStop` handler from task 2, and the reply-free `receiveBehaviour`
-  from task 3.
+- Consumes: `LifecycleConfig.stopAfterIdle` from task 1, and `Room.StreamCompleted`
+  with the `PostStop` handler from task 2. Nothing from task 4, which is why this
+  task can precede it: the reply channel is still in place here and `Leave` still
+  carries a `replyTo`.
 - Produces: `RoomData.emptySince: Option[Instant]`,
   `RoomData.idleFor(timeout: FiniteDuration, now: Instant): Boolean`,
   `Room.defaultStopAfterIdle: FiniteDuration`, and
@@ -812,9 +597,11 @@ Add to `RoomSpec.scala`, at the end of the `"Room Actor" should` block:
     }
 
     "clear the idle stamp on a connection and restamp it when the last one goes" in {
-      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
-      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef) = createRoom(
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      // The reply channel is still alive at this task; task 4 strips this probe.
+      val responseProbe = testKit.createTestProbe[Room.Response]()
+      val (_, roomRef)  = createRoom(
         UUID.randomUUID(),
         withUsers().withMemberlessSession(user),
         gracePeriod = 50.millis
@@ -827,7 +614,7 @@ Add to `RoomSpec.scala`, at the end of the `"Room Actor" should` block:
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe None
 
-      roomRef ! Room.Leave(user.id, user.ref)
+      roomRef ! Room.Leave(user.id, user.ref, responseProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
       // Stamped at the disconnect, not at the member's removal: the two are a grace period apart
       // and it is the connection layer this is derived from.
@@ -984,12 +771,12 @@ shape: there is no per-branch bookkeeping to forget, because the timer holds it.
 The one branch that does change is `Leave`, whose `disconnect` now stamps:
 
 ```scala
-        case Leave(userId, ref) =>
+        case Leave(userId, ref, replyTo) =>
           // Answerable at the moment of the event now that connections are their own map: a
           // member still holding one, or already removed, schedules nothing.
           val next = data.disconnect(userId, ref, Instant.now())
           if !next.holdsConnection(userId) && next.isMember(userId) then
-            timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
+            timers.startSingleTimer(userId, ConfirmLeave(userId, replyTo), gracePeriod)
           receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
 ```
 
@@ -1041,6 +828,224 @@ Expected: no output.
 ```bash
 git add src/main src/test
 git commit -m "feat(actors): stop a room once it has held no connection for the idle timeout"
+```
+
+---
+
+### Task 4: Delete stop-when-empty and the whole reply channel
+
+`ConfirmLeave` stops stopping the actor, so it always answers `Running`, which is
+the no-consumer case this design applies to `version` and `scale`. `Response` and
+`Running` go with `Stopped`, and `replyTo` goes with them.
+
+Task 3's tick already bounds every room, so this task removes the second stop
+path rather than the only one, and the tree stays shippable at every commit.
+
+**Files:**
+
+- Modify: `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`, `ConfirmLeave`, the `Response` ADT)
+- Modify: `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala` (`RoomResponseWrapper`, `removeRoom`, `apply`, `receiveBehaviour`, both `Connection*` branches)
+- Modify: `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala`
+- Modify: `src/test/scala/com/lunatech/pointingpoker/actors/RoomManagerSpec.scala`
+- Modify: `e2e/room.spec.js`
+
+**Interfaces:**
+
+- Produces: `Room.Leave(userId: UUID, ref: UntypedRef)` and
+  `Room.ConfirmLeave(userId: UUID)`, both without `replyTo`.
+  `RoomManager.receiveBehaviour(data, gracePeriod, stopAfterIdle)`, three
+  parameters instead of four.
+- Consumes: task 3's `stopAfterIdle` parameter, which stays.
+
+- [ ] **Step 1: Write the failing e2e case**
+
+Add to `e2e/room.spec.js`. Every name it uses is already in that file's
+`./fixtures.js` import, so the import does not change:
+
+```javascript
+test('a room outlives its last member', async ({ join }) => {
+  const alice = await join('Alice')
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(frozenNotice(alice.page)).toBeVisible()
+
+  await alice.close()
+  // Past the profile's 4s grace period, which is where the room used to stop itself.
+  await new Promise(resolve => setTimeout(resolve, 6000))
+
+  const bob = await join('Bob')
+  // votesRevealed lives in RoomState.round and depends on no tally, so it survives Alice's
+  // removal. A restarted room would hand Bob a fresh unrevealed round and hide the notice.
+  await expect(frozenNotice(bob.page)).toBeVisible()
+})
+```
+
+Not the summary table, which `index.html:273` guards with
+`votesRevealed && votesSummary.length` and `index.html:356-358` tallies from the
+snapshot's own participants. Once Alice's member entry is removed, Bob's snapshot
+holds only Bob, the tally is empty and the table is hidden whether or not the room
+survived. The notice at `index.html:244` is bound by `visibility` on
+`votesRevealed` alone, and Playwright's `toBeVisible()` honours that.
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `npm run e2e -- room.spec.js -g "outlives its last member"`
+Expected: FAIL. Alice's departure empties `members`, `ConfirmLeave` stops the
+room, and Bob's join creates a new one whose round is unrevealed, so the notice
+is hidden.
+
+- [ ] **Step 3: Take the reply channel out of `Room`**
+
+In `Room.scala`, lines 23-24 become:
+
+```scala
+  final case class Leave(userId: UUID, ref: UntypedRef)                 extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID)           extends Command
+```
+
+Delete the `Response`, `Running` and `Stopped` declarations at lines 43-45,
+keeping `StreamCompleted` from task 2. The `Leave` branch's timer send loses its
+`replyTo`:
+
+```scala
+            timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
+```
+
+and the `ConfirmLeave` branch collapses to its surviving half:
+
+```scala
+        case ConfirmLeave(userId) =>
+          receiveBehaviour(roomId, publish(data.removeMember(userId), context), gracePeriod, timers)
+```
+
+- [ ] **Step 4: Take it out of `RoomManager`**
+
+In `RoomManager.scala`: delete the `RoomResponseWrapper` command (line 26), the
+`removeRoom` method (lines 48-49), the `roomResponseActor` adapter in `apply`
+(lines 55-56), the `roomResponseWrapper` parameter of `receiveBehaviour` (line
+62) and the `RoomResponseWrapper` branch (lines 97-102). Every recursive
+`receiveBehaviour(...)` call and the `receiveSignal` handler drop the wrapper
+argument, and the two `Room.Leave` sends in `ConnectionCompleted` and
+`ConnectionFailure` become:
+
+```scala
+            data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref))
+```
+
+`apply` becomes:
+
+```scala
+  def apply(gracePeriod: FiniteDuration = Room.defaultGracePeriod): Behavior[Command] =
+    Behaviors.setup[Command](_ => receiveBehaviour(RoomManagerData.empty, gracePeriod))
+```
+
+`receiveSignal` on `Terminated` stays exactly as it is: it is now the single
+deregistration path, which it has to be anyway, since it is the only one that can
+observe a self-initiated stop.
+
+- [ ] **Step 5: Strip the probes from `RoomManagerSpec`**
+
+Delete the `roomResponseProbe` or `responseProbe` `val` at lines 38, 93, 109,
+193, 209, 225, 249, 265 and 286, drop the second argument from every
+`RoomManager.receiveBehaviour(...)` call, and change the two expectations at
+lines 203 and 219 to:
+
+```scala
+      roomProbe.expectMessage(Room.Leave(userId, ref))
+```
+
+- [ ] **Step 6: Strip the probes from `RoomSpec` and rewrite the three cases that read them**
+
+Delete every `roomResponseProbe` or `responseProbe` `val` in the file and drop
+the argument from every `Room.Leave` send. As of step 4's tip those are at lines
+164, 180, 240, 269, 451, 478, 866, 891 and 928, plus the one task 3 added to the
+"clear the idle stamp" case, so grep rather than trusting the list:
+`grep -n "Room.Response" src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala`.
+
+The "restart the grace period" case at lines 206-234 loses `firstReplyProbe`,
+`secondReplyProbe` and its last two assertions. Its two `Leave` sends become
+plain, and the assertion that the timer was replaced rather than run twice
+becomes the snapshot count it already has plus a data read:
+
+```scala
+      // Fires exactly once: a duplicated timer would publish a second time and the second
+      // removal would find nobody, so one publish and one surviving member is the proof.
+      expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
+      user2Probe.expectNoMessage(200.millis)
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user2.id)
+```
+
+Add `val dataProbe = testKit.createTestProbe[Room.DataStatus]()` to that case.
+
+The "remove a user on leave" case at line 251 drops
+`roomResponseProbe.expectMessage(Room.Running(roomId))`; the `expectSnapshot` on
+line 250 already waits past the grace period. The same deletion applies to lines
+469 and 496, whose comment at 467-468 becomes:
+
+```scala
+      // The published snapshot is the confirmation that ConfirmLeave fired and removed the
+      // member while the room stayed up, which is the state a reconnect past the window meets.
+      expectSnapshot(userProbe)
+```
+
+Note that `userProbe` in those two cases is Alice's own classic `TestProbe`, and
+she is the member being removed, so read the barrier off `user2`'s probe instead:
+both cases seed `user2` through `withUsers`, so replace the line above with
+`expectSnapshot(user2Probe)` and capture `user2Probe` from `createUser` where the
+case currently discards it with `val (user2, _)`.
+
+The two "schedule no removal" cases at lines 862-907 lose
+`roomResponseProbe.expectNoMessage(200.millis)`. Each keeps its `GetData`
+assertion, and gains the wait the deleted line was providing:
+
+```scala
+      Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
+```
+
+- [ ] **Step 7: Rewrite the "stop itself if empty" case**
+
+The case at lines 263-282 asserts the behaviour this task deletes. Replace it
+with its inverse, which is the guarantee this task introduces:
+
+```scala
+    "stay alive when its last member is removed" in {
+      val probe = TestProbe()(testKit.system.classicSystem)
+      val user  =
+        Attendee(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
+      val user2 =
+        Attendee(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
+
+      val roomId = UUID.randomUUID()
+      // Seeded rather than joined: Join is not what this case is about, and a refused
+      // Join would leave the room empty and pass the assertion for the wrong reason.
+      val behaviorTestKit =
+        BehaviorTestKit(Room(roomId, withUsers(user, user2)), roomId.toString)
+
+      // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
+      // directly rather than Leave (which only schedules it).
+      behaviorTestKit.run(Room.ConfirmLeave(user.id))
+      behaviorTestKit.run(Room.ConfirmLeave(user2.id))
+
+      // An empty room is idle, not dead: task 3's tick is what ends it, hours later.
+      behaviorTestKit.isAlive mustBe true
+    }
+```
+
+- [ ] **Step 8: Run both suites to verify they pass**
+
+Run: `sbt scalafmtAll test`
+Expected: PASS, with no reference to `Room.Response` anywhere in the tree. Check
+with `grep -rn "Room.Response\|RoomResponseWrapper\|Room.Running\|Room.Stopped" src`,
+which must print nothing.
+
+Run: `npm run e2e -- room.spec.js -g "outlives its last member"`
+Expected: PASS.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add src/main src/test e2e/room.spec.js
+git commit -m "refactor(actors): delete stop-when-empty and the room reply channel"
 ```
 
 ---

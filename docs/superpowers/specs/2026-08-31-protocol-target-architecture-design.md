@@ -2240,9 +2240,9 @@ no-consumer case this design applies to `version` and `scale`, so `Response` and
 recursive calls in the `CreateRoom`, `RequestSession`, `Stopped` and
 `Terminated` branches and the one in `RoomManager.apply`, with the two
 `Room.Leave` sends going when `replyTo` does. That takes
-`RoomManager.receiveBehaviour` from three parameters to two, and the idle timeout
-then puts a third back, since `createRoom` needs it: the step ends where it
-started, at `data`, `gracePeriod` and `stopAfterIdle`. Most of the test
+`RoomManager.receiveBehaviour` from three parameters to two, and the idle
+timeout's own `stopAfterIdle` puts a third back, since `createRoom` needs it: the
+step ends where it started, at `data`, `gracePeriod` and `stopAfterIdle`. Most of the test
 churn is mechanical probe wiring, and step 4 has already rewritten those cases
 for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
 not revive this**: its reply is an ask answered to the HTTP route, carrying the
