@@ -524,7 +524,7 @@ carry forward. It splits three ways, and the block below shows the whole of
 
 ```
 RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
-            // slug holds the room's UUID until step 7 generates a name
+            // slug arrives at step 7, not with the split: step 4 says why
             // history, and RoundRecord with it, arrives at step 9
 Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
@@ -577,10 +577,10 @@ between the two requests, an abandoned page load, a probe.
 **Resolving a token and being allowed to act are two checks, not one.** A command
 resolves its token through `sessions` and then requires the resulting `userId` to
 be in `members`, so a resolved identity that is no longer a member is a no-op,
-which is what today's `data.users.find(_.token == token)` already produces
-(`Room.scala:172`, `178`, `183`, `188`, `232`). Keeping the checks separate matters
-because step 5 gives sessions no TTL: `sessions` alone would let anyone who joined
-at any point in the actor's life clear a round they are not in. Nothing about this
+which is what the `data.users.find(_.token == token)` in every command handler
+already produced before step 4. Keeping the checks separate matters because step
+5 gives sessions no TTL: `sessions` alone would let anyone who joined at any
+point in the actor's life clear a round they are not in. Nothing about this
 weakens Problem A's guarantee, since `round.estimates` is keyed by user id and
 survives a departure independently of membership.
 
@@ -589,17 +589,20 @@ Their job is to authorize a connection that is *about* to create the membership,
 and requiring membership first is what would break the outage recovery step 5
 exists for.
 
+Landed at step 4 as `RoomData.actingMember`, which every command handler calls
+and which `ValidateToken` bypasses, reading `sessions` directly.
+
 **`Estimate` carries `confirmed` because a bare `Map[UUID, String]` cannot
 express the re-vote state.** `reVote()` clears `voted` and keeps `estimation`
-while `clear()` clears both (`Room.scala:94-99`), so "has an estimation, is not
-counted as voted" is a state the current code holds and the wire format
-distinguishes as `voted` against `hasEstimation`. Collapsed into one predicate,
-three things break at once: `ownVoteConfirmed` in section 5 is always true and
-the unconfirmed-button styling never appears, the first re-vote after a `reVote`
-instantly re-reveals the room, and `showUserEstimation`
-changes which rows show the shield icon. So `voted` on the wire is
-`confirmed`, `hasEstimation` is the entry existing at all, `reVote` sets
-`confirmed = false` across the map, and `clear` empties it.
+while `clear()` clears both, as both stood on `User` before step 4, so "has an
+estimation, is not counted as voted" is a state the code already held and the
+wire format distinguishes as `voted` against `hasEstimation`. Collapsed into one
+predicate, three things break at once: `ownVoteConfirmed` in section 5 is always
+true and the unconfirmed-button styling never appears, the first re-vote after a
+`reVote` instantly re-reveals the room, and `showUserEstimation` changes which
+rows show the shield icon. So `voted` on the wire is `confirmed`,
+`hasEstimation` is the entry existing at all, `reVote` sets `confirmed = false`
+across the map, and `clear` empties it.
 
 **Making `hasEstimation` mean presence has a second consequence, and it is the
 larger one.** The client reads that field twice, not once: in
@@ -695,11 +698,11 @@ estimate keyed by a departed user is present in the map and has to be absent fro
 anything published.
 
 **That join makes Problem A unrepresentable rather than fixed.** Vote loss on
-reconnect exists today because `RoomManager.ConnectToRoom`
-(`RoomManager.scala:82-84`) always builds a fresh `User` with
-`InitialVoteState`, and `joinUser` replaces the entry wholesale. Under the split
-a reconnect adds a ref to `connections` and touches neither `members` nor
-`round.estimates`, so there is nothing to carry over and nothing to forget.
+reconnect existed before step 4 because `RoomManager.ConnectToRoom` always built
+a fresh `User` with `InitialVoteState`, and `joinUser` replaced the entry
+wholesale. Under the split a reconnect adds a ref to `connections` and touches
+neither `members` nor `round.estimates`, so there is nothing to carry over and
+nothing to forget.
 
 **Each of the three is removed at a different moment, and the differences are the
 design rather than an accident.** A ref leaves its member's set the instant its
@@ -710,11 +713,11 @@ which removes no ref of its own. Estimates are never removed by a departure at
 all, only by `clear` or the round ending; a `reVote` leaves the values in place
 and clears `confirmed`, which is the state `Estimate` exists to express.
 
-**The grace period stops making a delayed decision.** Today the timer is keyed on
-`(userId, ref)` and `ConfirmLeave` decides after the delay whether it is still
-relevant, scanning for a user still holding that exact ref and doing nothing if a
-reconnect replaced it (`Room.scala:192-230`). With connections in their own map
-the same question is answerable at the moment of the event: on `Leave(userId,
+**The grace period stops making a delayed decision.** Before step 4 the timer was
+keyed on `(userId, ref)` and `ConfirmLeave` decided after the delay whether it was
+still relevant, scanning for a user still holding that exact ref and doing
+nothing if a reconnect had replaced it. With connections in their own map the
+same question is answerable at the moment of the event: on `Leave(userId,
 ref)` the ref is removed from that member's set, and a timer keyed on `userId`
 alone starts only if the set is now empty **and that member still exists**. A
 member still holding another connection schedules nothing, and neither does one
@@ -742,7 +745,8 @@ accumulating: at most one timer per departure, and the tab that caused it is gon
 naming since nothing else now holds the invariant. Pekko guarantees that a
 cancelled or replaced timer's message is never received, even when it was already
 enqueued, by checking a generation counter on dequeue. That belongs to
-`Behaviors.withTimers`, which `Room` already uses (`Room.scala:140`, `212`);
+`Behaviors.withTimers`, which `Room.apply` already wraps the behaviour in and
+which the `Leave` handler's `startSingleTimer` runs through;
 `context.scheduleOnce` returns a `Cancellable` that only suppresses a future send,
 so reaching for it instead would reintroduce exactly the race the check absorbed.
 
@@ -852,9 +856,9 @@ removed at grace expiry and, once section 4's leave endpoint lands, the moment a
 tab hits `pagehide` on a page that is being discarded, which a reload is and a
 back/forward cache entry is not, section 4 gating the beacon on `persisted` for
 the reason recorded there. So under a standing predicate one participant
-pressing F5 discloses the room's votes, unrecoverably, and today's six-second
-grace plus `ConfirmLeave`'s stale-ref branch (`Room.scala:218-230`) are what keep
-that from happening at present. Latching removes the unilateral trigger: a
+pressing F5 discloses the room's votes, unrecoverably, and the six-second grace
+plus `ConfirmLeave`'s stale-ref branch were what kept that from happening until
+step 4 deleted the branch. Latching removes the unilateral trigger: a
 membership change on its own can no longer reveal anything, so the reload, the
 app switch, the slept laptop and the deliberate close all stop being reveals in
 their own right, and a later feature cannot bring that back.
@@ -976,21 +980,20 @@ and rescheduled. The actor idle timeout is the only value this design adds to
 the configuration; step 4a says where it lives and what the keys become.
 
 **The no-message term is what stops a join being lost.** `ConnectToRoom` is
-fire-and-forget (`RoomManager.scala:80-86`) and is sent from
-`mapMaterializedValue`, which is after the 200 and the `text/event-stream`
-headers have gone out. A tick landing between that send and its delivery would
-dead-letter it, leaving the client holding an open, heartbeating stream that
-never receives a snapshot: no error, no `onerror`, no reconnect, a blank room
-until reload. The ordering that prevents it is causal rather than lucky, since
-`ConnectToRoom` is only ever sent after the same actor has answered
-`ValidateToken`, and a mailbox is sequential, so any tick able to sit between
-them was itself preceded by that `ValidateToken` in the same interval. The term
-costs one field, `sawMessage` above, set by any command and cleared by each
-tick, and it lets a stray message defer an abandoned room's stop by one
-interval, which costs a few kilobytes of memory for a couple of hours. A message
-every interval defers it indefinitely, and nothing here bounds the rate, so step
-4a closes the abandoned-room issue against accidental abandonment rather than
-against a loop. Bounding the loop is the rate-limiting entry in
+fire-and-forget and is sent from `mapMaterializedValue`, which is after the 200
+and the `text/event-stream` headers have gone out. A tick landing between that
+send and its delivery would dead-letter it, leaving the client holding an open,
+heartbeating stream that never receives a snapshot: no error, no `onerror`, no
+reconnect, a blank room until reload. The ordering that prevents it is causal
+rather than lucky, since `ConnectToRoom` is only ever sent after the same actor
+has answered `ValidateToken`, and a mailbox is sequential, so any tick able to
+sit between them was itself preceded by that `ValidateToken` in the same
+interval. The term costs one field, `sawMessage` above, set by any command and
+cleared by each tick, and it lets a stray message defer an abandoned room's stop
+by one interval, which costs a few kilobytes of memory for a couple of hours. A
+message every interval defers it indefinitely, and nothing here bounds the rate,
+so step 4a closes the abandoned-room issue against accidental abandonment rather
+than against a loop. Bounding the loop is the rate-limiting entry in
 `docs/known-issues.md`, which stays open.
 
 **Its two siblings get nothing, deliberately.** `RoomManager` keeps a stopping
@@ -1420,7 +1423,9 @@ Three details are load-bearing rather than polish:
   one therefore rendered a table showing both values beside a summary counting
   neither, and the guard above then hid the block outright. There is a second
   state, an empty estimation from a hand-written `POST /vote`, where `voted`
-  admits precisely the blank row this bullet exists to delete. The rule that
+  admits precisely the blank row this bullet exists to delete; step 4 removed
+  that one at the source, `vote` refusing a blank, so the re-vote is now the only
+  state that parts the two fields. The rule that
   settles it is that the summary counts exactly the non-blank estimation cells
   the table beside it displays, so the filter is the non-empty test on the
   estimation, which is what `hasEstimation` is. The two do not read one field:
@@ -1455,10 +1460,10 @@ Three details are load-bearing rather than polish:
   (`index.html:318`). What is missing is the aggregate, and it belongs beside the
   distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
   carries it, next to the roles item that settles the denominator.
-- **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears `voted` and
-  keeps `estimation` while `clear()` clears both (`Room.scala:94-99`), so "I
-  have an estimation showing but the server does not consider me voted" is
-  exactly the revote state and nothing else. The optimistic assignment in
+- **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears the
+  confirmation and keeps the value while `clear()` drops both, so "I have an
+  estimation showing but the server does not consider me voted" is exactly the
+  revote state and nothing else. The optimistic assignment in
   `vote()` stays, and corrects itself on the next publish rather than promptly:
   a failed vote POST leaves the server holding the old estimation, so the
   selection stays visibly confirmed until somebody else acts, which in an idle
@@ -1555,14 +1560,17 @@ lost on the way.
 ### 6. Testing
 
 `RoomSpec`'s existing cases remain the behaviour specification. Its reconnect
-tests hand-construct the reconnecting user via `user.copy(ref = ...)`
-(`RoomSpec.scala:194`, `:280`), which preserves vote state by construction and
-therefore never exercised the real `ConnectToRoom` path; they should go through
-`ConnectToRoom` so they would catch a regression. That lands at step 1, beside
-Problem A's fix, since vote loss on reconnect is the regression they would have
-caught. Step 1 met this differently: it added `RoomManagerSpec.scala:279`,
-which drives the real path, and left these two cases hand-constructing, so they
-still read as described here.
+tests hand-construct the reconnecting user via `user.copy(ref = ...)`, which
+preserves vote state by construction and therefore never exercised the real
+`ConnectToRoom` path; they should go through `ConnectToRoom` so they would catch
+a regression. That lands at step 1, beside Problem A's fix, since vote loss on
+reconnect is the regression they would have caught. Step 1 met this differently:
+it added `RoomManagerSpec`'s "keep a member's vote when `ConnectToRoom`
+re-registers them after a reconnect", which drives the real path, and left these
+two cases hand-constructing, so they still read as described here. Step 4 then
+took one of the two with `ConfirmLeave`'s staleness check, leaving "swallow a
+`Leave` entirely if the same user reconnects within the grace period" as the
+only one.
 
 **`BackpressureReconnectSpec` is retired at step 1, not ported.** Its single case
 asserts that a stalled client's stream fails and silently reconnects, which is the
@@ -1597,8 +1605,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   assertion arrives at step 1 with Problem A's fix. The `RoomSpec` conversion
   recommended above did not follow it: step 1 added a `ConnectToRoom` case in
   `RoomManagerSpec` for the same reason instead. Step 1 also took the pair's
-  annotations off and landed the vote-survival case (`e2e/room.spec.js:399`), so
-  the "today" above is step 0's, not the reader's.
+  annotations off and landed the vote-survival case, "a vote survives its own
+  reconnect" in `e2e/room.spec.js`, so the "today" above is step 0's, not the
+  reader's.
 
   Step 1 adds two on the issue input, cheap and guarding a trap: the box resyncing
   to the room once the editor loses focus, and an edit committed with the check
@@ -1964,9 +1973,9 @@ with it. The chain is unchanged here and the send gets smaller, one snapshot in
 place of a batched replay, so restate the caveat on `publish` rather than
 re-running the trials.
 
-Landed at step 1: `setupNewUser` is gone and the caveat is restated on `publish`
-at `Room.scala:251-252`. The citation above is therefore historical and stays,
-which is what `docs/known-issues.md` records it as.
+Landed at step 1: `setupNewUser` is gone and the caveat is restated on `publish`,
+where step 4's rewrite of that method carried it. The citation above is therefore
+historical and stays, which is what `docs/known-issues.md` records it as.
 
 **The anti-buffering headers need an assertion and not only an implementation.**
 `APISpec`'s "open an SSE events stream for a resolved session" is where it
@@ -2119,6 +2128,48 @@ also why Problem C is closed here for the first time rather than fixed twice:
 step 1 says why. Folding the split into step 1 would produce one PR changing
 both the wire format and the shape of state, and step 1's diff is readable at
 its size only because most of it is deletion.
+
+Landed. `RoomState`, `Round` and `Estimate` came first, with estimates keyed by
+user id and `RoomSnapshot.of` rewritten as the join over `members` and that map;
+`members`, `sessions` and `connections` followed, so no connection handle sits in
+the room's own state any more. `publish` iterates `connections` and builds one
+snapshot per member, `RoomData.of` requires every member, connection and estimate
+id to resolve to a session, and the grace timer is keyed on `userId` with its
+decision taken at `Leave` time, which took `Room.User`, `RoomData.leave`, the
+duplicate-`Leave` warning and `ConfirmLeave`'s staleness check with it. Step 1's
+fix for Problem A went, as this section said it would.
+
+**`RoomState` carries no `slug`**, which departs from the state block in section
+3 and is deliberate. `roomId` is already a parameter of `Room.receiveBehaviour`,
+so a second copy has no reader and can do nothing but disagree with the one that
+does, and every whole-`RoomData` assertion would have to pin a value the fixtures
+would otherwise randomize. Step 7 adds the field when slug generation gives it a
+meaning, and the block above is annotated to say so.
+
+**`Estimate` took the product**, with 5a's treatment on top, which is what
+section 3 predicted for the question it left open: a private constructor and an
+`Estimate.of` refusing a blank value. What section 3 does not say is where the
+re-vote transition then lives. It is `unconfirmed` on the type rather than a
+`copy` in `RoomData`, the private constructor having taken `copy` with it.
+
+Both deliberate behaviour changes landed as specified. `hasEstimation` is the
+entry existing, which `RoomSnapshotSpec`'s "count an entry in the round as an
+estimation, however the value reads" pins. The blank refusal is pinned three
+times over in `RoomSpec`: "refuse a blank estimation rather than storing one"
+for the state, "publish on a refused blank vote, the same as on one that lands"
+for the absence of a special case, and "refuse an `Estimate` with a blank value"
+for the factory behind it.
+
+**One browser case had to change, though section 6 assigns this step no browser
+work.** "An empty estimation posted directly is not a summary row" pinned the
+behaviour the blank refusal removes: it posted a blank, then asserted that the
+poster counted as voted and still produced no summary row, which the client's
+filter was what secured. It is now "an empty estimation posted directly is
+refused, not stored as an empty vote", asserting that the poster never counts as
+voted at all. The property it exists for is unchanged, that a blank never becomes
+a summary row, and the case now reaches that property at the source rather than
+through the client. Rewriting it rather than deleting it is what keeps the
+property covered from the browser.
 
 **Step 4a. Stop-after-idle.** The idle timeout replacing stop-when-empty,
 completing attached streams on stop, the reply channel that the first of those
@@ -2289,9 +2340,9 @@ session, so a disagreement between the two is a fixture error rather than a
 state a room can reach; renaming on `/join` is step 6's target, not today's
 behaviour. `of` uses `require`, an invalid `RoomData` being a programming
 error rather than a runtime condition: production builds exactly one,
-`RoomData.empty` at `Room.scala:111`, holding no members, so the check is
-unreachable there, and an `Either` would push an unwrap through 48 test sites
-to encode a case that cannot happen.
+`RoomData.empty`, holding no members, so the check is unreachable there, and an
+`Either` would push an unwrap through 48 test sites to encode a case that cannot
+happen.
 
 **The handler warns where `of` throws, on the same predicate.** `joinUser` is
 pure and holds no logger, so the guard sits in the `Join` case, which already
@@ -2299,25 +2350,34 @@ has `context`, and checks the same containment-and-identity test `of` runs on
 every member. It warns and leaves the data alone rather than raising, because
 an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
-unreachable. The resolution at `API.scala:126-128` and the `Join` at
-`RoomManager.scala:79-84` are two steps of one request, and they can address
-two different room actors: the room can empty and stop in between
-(`Room.scala:221-223`), and `RequestSession` can then recreate it under the
-same id with no sessions (`RoomManager.scala:90`), which is the one path that
-does so. The guard then
-refuses a token the new room never minted, which is what it is for. Without
-the recreation the client gets the same silent stream anyway, `ConnectToRoom`
-finding no room and sending no `Join` at all (`RoomManager.scala:80`).
-`Room.scala:205-211` already answers the same shape of question the same way,
-for a `Leave` that arrives twice on one connection. The line carries the room
-and user ids and not the token, which section 4 treats as a rejoin credential
-for the room's life.
+unreachable. The resolution at `API.scala:126-128` and the `Join` that
+`RoomManager.ConnectToRoom` forwards are two steps of one request, and they can
+address two different room actors: the room can empty and stop in between, at
+`ConfirmLeave`'s stop-when-empty, and `RequestSession` can then recreate it
+through `createRoom` under the same id with no sessions, which is the one path
+that does so. The guard then refuses a token the new room never minted, which is
+what it is for. Without the recreation the client gets the same silent stream
+anyway, `ConnectToRoom` finding no room and sending no `Join` at all. The
+duplicate-`Leave` warning answered the same shape of question the same way, for a
+`Leave` that arrived twice on one connection, until step 4 deleted it with the
+rest of the delayed decision. The guard's own line carries the room and user ids
+and not the token, which section 4 treats as a rejoin credential for the room's
+life.
 
 **Step 4 restates the containment clause rather than inheriting it.** `members`
 is keyed by UUID there and `Member` carries no token, so "every member's token
 is a key of `sessions`" becomes "every member id is some session's `userId`",
 which absorbs the id clause into the containment one. The name clause survives
 unchanged.
+
+That absorption arrived, and it left one of this step's two name cases with
+nothing of its own to say. `of` resolves a session by id now and cannot see
+which token supplied one, so "refuse a `RoomData` whose member's session names a
+different identity" and "refuse a `RoomData` whose member's session disagrees on
+the name alone" reach the same `require` and fail with the same message. Both
+were carried through the migration rather than dropped in the middle of it,
+where a deletion would have read as coverage lost to the rewrite. Dropping
+either is a later cleanup.
 
 **Step 5 is also what makes the fixture API a real choice.** Retention made
 `users` a strict subset of `sessions` normal rather than anomalous, and four

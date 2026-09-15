@@ -65,7 +65,15 @@ that designed them, under TDD where there was production code to drive, and unde
 the substitute step 3b's own entry in the design records: a characterization case
 arrives green, so it was verified by reintroducing the defect it exists to catch.
 
-Step 4 will have one. It rewrites the actor's state model and `RoomSpec` with it.
+Step 4 had one. It rewrote the actor's state model and `RoomSpec` with it, and
+what the plan turned out to carry is a second thing worth keeping. It decomposed
+into two production tasks rather than one, because no tree compiles between the
+halves of a single rewrite: the round had to leave the participant before the
+participant could be split into a member, a session and a connection, and
+stopping anywhere in the middle leaves nothing that builds, let alone a suite
+that runs. A plan is what lets each half be a reviewable commit with a green
+suite behind it. The later large steps, 6 and 8, are the same shape, and they
+can reuse it.
 
 Step 4a will not, and the split between them is the clearest illustration of the
 two axes above. Step 4a was carved out of step 4's scope during the brainstorm

@@ -1330,6 +1330,42 @@ Then, by hand, against a locally staged app (`npm run stage` and
 
 ## Deviations from the plan, and why
 
-Filled in as the work lands, in the shape step 5a's plan uses: one numbered entry
-per deviation, saying what changed, why, and what the planning miss was, so a
-reviewer can reject one without re-deriving it.
+Listed so a reviewer can reject one without re-deriving it.
+
+1. **`e2e/room.spec.js` was modified, where the file structure above says `e2e/`
+   is not.** The browser case "an empty estimation posted directly is not a
+   summary row" pinned the behaviour this step removes: it posted a blank
+   estimation, then asserted that the poster counted as voted and still produced
+   no summary row, which was true only because the client's tally filtered on
+   `hasEstimation`. Once `vote` refuses a blank, the poster never counts as
+   voted, and the assertion is false. It was rewritten as "an empty estimation
+   posted directly is refused, not stored as an empty vote", which keeps the
+   property the case exists for, that a blank never becomes a summary row, and
+   now reaches it at the source rather than through the client's filter. The
+   planning miss: the two deliberate behaviour changes were checked against the
+   JVM suite, which the plan rewrites case by case, and not against the browser
+   suite, which it declared untouched on the strength of nothing a user sees
+   changing. Nothing a user sees did change; what changed is what a
+   hand-written `POST` does, and one browser case was written to make exactly
+   that request. Task 3 records the amendment in the design, whose testing
+   section assigns this step no browser work.
+
+2. **The plan's assertion for the two `Join` guard cases is unsatisfiable.** It
+   asks for `data.connections mustBe empty` beside the existing `DataStatus`
+   assertion, and both fixtures seed a member who holds a connection, so the map
+   is never empty at that point. What landed asserts that the refused joiner's
+   id is absent from `data.connections.keySet`, which is the rule the cases are
+   for: a refused `Join` adds no connection. The planning miss is the same shape
+   as the assertion it was trying to strengthen, a rule about one id written as
+   a claim about the whole collection.
+
+3. **Two of the plan's own new cases were flaky, and `fb20b8d` fixed them after
+   task 2.** They assert `(snapshot.asJson.noSpaces must not).include("13")` over
+   a whole serialized snapshot to prove a departed member's estimate is absent.
+   UUIDs are hex, so a bare digit pair collides with any one random id about 11%
+   of the time, and a snapshot carries several, which is enough to redden CI
+   intermittently. The fix is the pattern the step 2 case above already used,
+   matching the JSON string literal `"13"` rather than the bare digits, which
+   cannot collide with an id. The planning miss: the cases were copied from the
+   step 2 case's intent without its escaping, and a probabilistic failure passes
+   every time anyone runs it while writing it.
