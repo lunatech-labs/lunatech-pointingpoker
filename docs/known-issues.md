@@ -44,12 +44,12 @@ roadmap item instead of leaving it here as stale history.
   can accumulate rooms that live for the life of the process.
 - **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle: a room stops two to four
-  hours after its last connection goes, whether or not anyone ever joined. That
-  closes the accidental form. It does not close the abusive one, since any message
-  arriving in an interval defers the stop by another, so a client looping requests
-  at an empty room keeps it alive; bounding that belongs to the rate-limiting
-  entry below. Remove this entry when step 4a lands.
+  which replaces stop-when-empty with stop-after-idle: a room stops two hours
+  after its last connection goes, whether or not anyone ever joined. That closes
+  the accidental form. It does not close the abusive one, since any message
+  re-arms the timer for another two hours, so a client looping requests at an
+  empty room keeps it alive; bounding that belongs to the rate-limiting entry
+  below. Remove this entry when step 4a lands.
 
 ### Every session a room mints lives as long as the room does
 
@@ -64,7 +64,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle, so a room's sessions go
-  with it two to four hours after its last connection instead of living for the
+  with it two hours after its last connection instead of living for the
   process. A TTL was considered there and dropped: its useful range is squeezed
   below by needing to outlast a realistic in-meeting outage and above by the idle
   stop, and what it would reclaim is a hundred bytes per abandoned session. What
@@ -92,7 +92,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: the room outlives its
-  last member by two to four hours, far longer than any outage the retry has to
+  last member by two hours, far longer than any outage the retry has to
   cross, so the token resolves and the retry succeeds. How long the window is
   before this fires at all is the detection-delay entry below. Remove this entry
   when step 4a lands.

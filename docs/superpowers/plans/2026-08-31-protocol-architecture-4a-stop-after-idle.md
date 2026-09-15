@@ -286,8 +286,8 @@ In `src/main/resources/application.conf`, replace the whole `sse { ... }` block
     grace-period = 6s
     grace-period = ${?ROOM_GRACE_PERIOD}
 
-    # How long a Room with no connection at all survives before stopping itself. The tick
-    # runs at this interval, so the actual stop lands between one and two of them.
+    # How long a Room with no connection at all survives before stopping itself. Any
+    # message re-arms the timer, so the stop lands this long after the last of them.
     stop-after-idle = 2h
     stop-after-idle = ${?ROOM_STOP_AFTER_IDLE}
   }
@@ -904,15 +904,15 @@ is hidden.
 
 - [ ] **Step 3: Take the reply channel out of `Room`**
 
-In `Room.scala`, lines 23-24 become:
+In `Room.scala`, the two commands become:
 
 ```scala
   final case class Leave(userId: UUID, ref: UntypedRef)                 extends Command
   final private[actors] case class ConfirmLeave(userId: UUID)           extends Command
 ```
 
-Delete the `Response`, `Running` and `Stopped` declarations at lines 43-45,
-keeping `StreamCompleted` from task 2. The `Leave` branch's timer send loses its
+Delete the `Response`, `Running` and `Stopped` declarations, keeping
+`StreamCompleted` from task 2. The `Leave` branch's timer send loses its
 `replyTo`:
 
 ```scala
@@ -923,15 +923,16 @@ and the `ConfirmLeave` branch collapses to its surviving half:
 
 ```scala
         case ConfirmLeave(userId) =>
-          receiveBehaviour(roomId, publish(data.removeMember(userId), context), gracePeriod, timers)
+          val newData = publish(data.removeMember(userId), context)
+          receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
 ```
 
 - [ ] **Step 4: Take it out of `RoomManager`**
 
-In `RoomManager.scala`: delete the `RoomResponseWrapper` command (line 26), the
-`removeRoom` method (lines 48-49), the `roomResponseActor` adapter in `apply`
-(lines 55-56), the `roomResponseWrapper` parameter of `receiveBehaviour` (line
-62) and the `RoomResponseWrapper` branch (lines 97-102). Every recursive
+In `RoomManager.scala`: delete the `RoomResponseWrapper` command, the
+`removeRoom` method, the `roomResponseActor` adapter in `apply`, the
+`roomResponseWrapper` parameter of `receiveBehaviour` and the
+`RoomResponseWrapper` branch. Every recursive
 `receiveBehaviour(...)` call and the `receiveSignal` handler drop the wrapper
 argument, and the two `Room.Leave` sends in `ConnectionCompleted` and
 `ConnectionFailure` become:
@@ -943,8 +944,13 @@ argument, and the two `Room.Leave` sends in `ConnectionCompleted` and
 `apply` becomes:
 
 ```scala
-  def apply(gracePeriod: FiniteDuration = Room.defaultGracePeriod): Behavior[Command] =
-    Behaviors.setup[Command](_ => receiveBehaviour(RoomManagerData.empty, gracePeriod))
+  def apply(
+      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
+      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
+  ): Behavior[Command] =
+    Behaviors.setup[Command](_ =>
+      receiveBehaviour(RoomManagerData.empty, gracePeriod, stopAfterIdle)
+    )
 ```
 
 `receiveSignal` on `Terminated` stays exactly as it is: it is now the single
@@ -1074,7 +1080,7 @@ block stating what landed, what it deviated on, and what it closed. Write it fro
 the branch's own history rather than from this plan, and list every deviation in
 this document's "Deviations from the plan, and why" section below as you go.
 
-- [ ] **Step 2: Close the two known issues this step bounds**
+- [ ] **Step 2: Close the three known issues this step bounds**
 
 In `docs/known-issues.md`, delete three entries, not two. Each ends with the
 sentence "Remove this entry when step 4a lands", so the judgment was made when
@@ -1094,9 +1100,9 @@ room defers its stop indefinitely, and bounding that loop is still unowned. Chec
 
 In `docs/roadmap.md`, mark the "Garbage collection for abandoned or never-joined
 rooms" item (lines 181-185) done, naming stop-after-idle rather than restating it.
-Its "two to four hours" is stale: the figure is two hours since the tick became a
-re-armed single-shot timer. The three `docs/known-issues.md` entries carry the
-same stale figure and are deleted wholesale in step 2, so they need no edit.
+Its figure is already two hours: the four companion-doc sites were corrected
+during this plan's review, so there is no stale "two to four hours" left to
+find in a live document.
 
 - [ ] **Step 4: Verify no document still describes the old lifetime**
 

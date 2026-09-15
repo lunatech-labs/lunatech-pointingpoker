@@ -184,7 +184,7 @@ directly in the new frontend.
       (`actors/RoomManager.scala`), but `POST /create-room` no longer requires a
       completed join to keep a room alive, so an abandoned tab, a network failure
       before `/join`, or stray traffic can accumulate rooms that live for the life
-      of the process. **Absorbed by step 4a**, which stops a room two to four
+      of the process. **Absorbed by step 4a**, which stops a room two
       hours after its last connection goes, joined or not. See
       `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
