@@ -784,6 +784,20 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessageType[Room.DataStatus].data.estimateFor(user) mustBe Some(("3", false))
     }
 
+    "leave a re-voted round hidden until every member has confirmed again" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", true, "5")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user, user2).withRevealed())
+
+      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // A re-vote keeps both values, so only the confirmation can hold the reveal back.
+      dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
+    }
+
     "refuse a RoomData whose estimate resolves to no session" in {
       val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
       val stranger  = UUID.randomUUID()
