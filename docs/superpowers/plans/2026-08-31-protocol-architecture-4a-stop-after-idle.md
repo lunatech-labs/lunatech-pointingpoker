@@ -9,9 +9,10 @@ its own rather than living for the life of the process.
 
 **Architecture:** `RoomData` gains `emptySince`, stamped when `connections`
 empties and cleared when it fills, and `Some` at the actor's creation so a room
-whose `/events` never followed its `/join` is idle from the start. A periodic
-timer at the timeout's own interval stops the actor when that stamp is older than
-the timeout and no message has arrived since the previous tick. `PostStop` tells
+whose `/events` never followed its `/join` is idle from the start. A single-shot
+timer re-armed on every message stops the actor when that stamp is older than the
+timeout, so the timer itself carries "has anything happened lately" and no branch
+has to remember to record it. `PostStop` tells
 every attached stream the room is gone, which is what makes a self-initiated stop
 answerable. The stop path it replaces goes with it, and the whole `Room.Response`
 reply channel goes with that.
@@ -34,20 +35,21 @@ step 5a (#403) on step 5 (#402), so this branch is the fourth level and needs a
 
 ## Global Constraints
 
-- **`sawMessage` lives on the behaviour, not in `RoomData`.** The spec's state
-  block draws it beside `connections` (`:535-536`); task 4 amends that line and
-  says why. It is a property of the mailbox rather than of the room, and putting
-  it in `RoomData` would make every `Room.DataStatus` equality assertion in
-  `RoomSpec` depend on message history. `emptySince` does go in `RoomData`, since
-  `connect` and `disconnect` derive it.
+- **There is no `sawMessage`, in `RoomData` or anywhere else.** The deferral it
+  used to express is carried by re-arming the tick's single-shot timer on every
+  message, which is one line before the existing match rather than a value every
+  branch has to thread. The spec was amended to match during this plan's review,
+  so `:535-536` and the "Two lifetimes, not one" paragraphs already describe the
+  timer. `emptySince` does go in `RoomData`, since `connect` and `disconnect`
+  derive it.
 - **The idle timeout is the only behaviour change a working room can observe.**
   Stream completion on stop changes only what a stopped or crashed room does, and
   the reply-channel deletion changes nothing observable at all.
 - **Task 3 leaves rooms unable to stop, and task 4 is what bounds them again.**
-  That is deliberate and is the one intermediate commit that is not shippable on
-  its own. Do not reorder them: task 4's restructure of `receiveBehaviour` needs
-  every branch to return a `RoomData`, which only holds once `ConfirmLeave` has
-  stopped stopping the actor.
+  That intermediate commit is the one that is not shippable on its own. The
+  ordering is no longer forced, since task 4 no longer restructures the branches
+  task 3 deletes from, so running 4 before 3 would remove the unshippable commit.
+  Finding M3 of the plan review owns that choice.
 - **The configured chain is `retry < grace << idle`**, and all three `require`s
   live in one `load`. Exact keys: `pointing-poker.room.grace-period`,
   `pointing-poker.room.stop-after-idle`, `pointing-poker.sse.retry`. Exact
@@ -783,7 +785,7 @@ Add to `RoomSpec.scala`, at the end of the `"Room Actor" should` block:
       dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user.id)
     }
 
-    "defer its stop by one interval when a message arrived since the previous tick" in {
+    "defer its stop by a full delay when any message arrives" in {
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val watcher      = testKit.createTestProbe()
       val (_, roomRef) = createRoom(
@@ -792,8 +794,8 @@ Add to `RoomSpec.scala`, at the end of the `"Room Actor" should` block:
         stopAfterIdle = 300.millis
       )
 
-      // A stray message defers an abandoned room by one interval, which is what stops a tick
-      // landing between ConnectToRoom's send and its delivery.
+      // A stray message re-arms the timer, which is what stops a tick landing between
+      // ConnectToRoom's send and its delivery. It also defers an abandoned room by a delay.
       Thread.sleep(250)
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus]
@@ -897,7 +899,7 @@ two connection transitions maintain it:
 with `RoomData(state, members, sessions, connections, emptySince)` as its last
 line, the three existing `require` blocks untouched.
 
-- [ ] **Step 4: Add the tick and restructure the receive around it**
+- [ ] **Step 4: Add the tick, re-armed on every message**
 
 Still in `Room.scala`, add the timeout default and the tick beside the existing
 commands:
@@ -911,7 +913,7 @@ commands:
   val defaultStopAfterIdle: FiniteDuration = 2.hours
 ```
 
-`apply` stamps the data and arms one periodic timer:
+`apply` stamps the data and arms the first tick:
 
 ```scala
   def apply(
@@ -922,26 +924,22 @@ commands:
   ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
-        // The interval is the timeout itself, so the stop lands between one and two of them;
-        // one periodic timer beats a single-shot one that has to be cancelled and rescheduled.
-        timers.startTimerWithFixedDelay(IdleTickKey, IdleTick, stopAfterIdle)
+        timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
         receiveBehaviour(
           roomId,
           initialData.startedAt(Instant.now()),
           gracePeriod,
           stopAfterIdle,
-          sawMessage = false,
           timers
         )
       }
     }
 ```
 
-`receiveBehaviour` gains `stopAfterIdle` and `sawMessage`, and splits the tick
-off from everything else. Every other branch now returns a `RoomData` rather than
-a `Behavior`, which is what makes `sawMessage` unconditional: `ValidateToken` is
-the branch that most needs it and is the one that used to answer
-`Behaviors.same`.
+`receiveBehaviour` gains `stopAfterIdle` after `gracePeriod`, and gains exactly
+two things inside the closure: one line before the existing `match`, and one new
+branch. **No existing branch changes except `Leave`**, which is the point of this
+shape: there is no per-branch bookkeeping to forget, because the timer holds it.
 
 ```scala
   private[actors] def receiveBehaviour(
@@ -949,94 +947,49 @@ the branch that most needs it and is the one that used to answer
       data: RoomData,
       gracePeriod: FiniteDuration,
       stopAfterIdle: FiniteDuration,
-      sawMessage: Boolean,
       timers: TimerScheduler[Command]
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
+        // Any message pushes the tick a full delay out, which is what keeps one from landing
+        // between ValidateToken and the ConnectToRoom it precedes.
+        if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
         message match
           case IdleTick =>
-            if !sawMessage && data.idleFor(stopAfterIdle, Instant.now()) then
+            if data.idleFor(stopAfterIdle, Instant.now()) then
               context.log.info("Stopping room {}: no connection for {}", roomId, stopAfterIdle)
               Behaviors.stopped
             else
-              receiveBehaviour(roomId, data, gracePeriod, stopAfterIdle, false, timers)
-          case command =>
-            val next = handle(command, roomId, data, gracePeriod, timers, context)
-            receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, true, timers)
+              // Occupied, so no message re-armed this one: ask again a delay from now.
+              timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+              Behaviors.same
+          case Join(userId, name, token, ref) =>
+            // ... every existing branch byte for byte, Behaviors.same included, with
+            // stopAfterIdle added to each of the 11 recursive receiveBehaviour calls
       }
       .receiveSignal { case (_, PostStop) =>
         // A room that stops owes its attached streams an answer; the alternative is silence.
         data.connections.values.flatten.foreach(_ ! StreamCompleted)
         Behaviors.same
       }
-
-  private def handle(
-      message: Command,
-      roomId: UUID,
-      data: RoomData,
-      gracePeriod: FiniteDuration,
-      timers: TimerScheduler[Command],
-      context: ActorContext[Command]
-  ): RoomData =
-    message match
-      case IdleTick => data // answered by the caller, which never delegates it here
-      case Join(userId, name, token, ref) =>
-        // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
-        // the room; a refused joiner gets no snapshot and, deliberately, no connection.
-        if data.sessions.get(token).contains(Session(userId, name)) then
-          // The arriving connection cancels any pending removal, so ConfirmLeave needs no
-          // staleness check of its own.
-          timers.cancel(userId)
-          publish(data.connect(userId, name, ref), context)
-        else
-          val reason =
-            if data.sessions.contains(token) then "its token's session names a different identity"
-            else "its token resolves to no session"
-          context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
-          data
-      case RequestSession(name, replyTo) =>
-        val userId  = UUID.randomUUID()
-        val token   = SessionToken.mint()
-        val newData = data.registerSession(token, userId, name)
-        replyTo ! SessionMinted(userId, token)
-        newData
-      case Vote(token, estimation) =>
-        data.actingMember(token).fold(data)(userId => publish(data.vote(userId, estimation), context))
-      case ClearVotes(token) =>
-        data.actingMember(token).fold(data)(_ => publish(data.clear(), context))
-      case ReVote(token) =>
-        data.actingMember(token).fold(data)(_ => publish(data.reVote(), context))
-      case ShowVotes(token) =>
-        data.actingMember(token).fold(data)(_ => publish(data.show(), context))
-      case EditIssue(token, issue) =>
-        data.actingMember(token).fold(data)(_ => publish(data.editIssue(issue), context))
-      case Leave(userId, ref) =>
-        // Answerable at the moment of the event now that connections are their own map: a
-        // member still holding one, or already removed, schedules nothing.
-        val next = data.disconnect(userId, ref, Instant.now())
-        if !next.holdsConnection(userId) && next.isMember(userId) then
-          timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
-        next
-      case ConfirmLeave(userId) =>
-        publish(data.removeMember(userId), context)
-      case ValidateToken(token, replyTo) =>
-        // The map is the single authority now that it is retained: a member removed at
-        // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
-        replyTo ! data.sessions
-          .get(token)
-          .fold[TokenResolution](Unresolved)(session => Resolved(session.userId, session.name))
-        data
-      case GetData(replyTo) =>
-        replyTo ! Room.DataStatus(data)
-        data
-  end handle
 ```
 
-The five token-guarded branches collapse from `match` to `fold` only because they
-now yield data rather than a behaviour; nothing about what they do changes. The
-two that do change are `Leave`, whose `disconnect` gains the stamp, and
-`ConfirmLeave`, which task 3 already reduced to its surviving half.
+The one branch that does change is `Leave`, whose `disconnect` now stamps:
+
+```scala
+        case Leave(userId, ref) =>
+          // Answerable at the moment of the event now that connections are their own map: a
+          // member still holding one, or already removed, schedules nothing.
+          val next = data.disconnect(userId, ref, Instant.now())
+          if !next.holdsConnection(userId) && next.isMember(userId) then
+            timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
+          receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
+```
+
+Adding `stopAfterIdle` to the 11 recursive calls at `Room.scala:188,200,204,214,219,224,236,244,248`
+and the one in `apply` is the whole of the remaining diff. `IdleTickKey` is a
+case object rather than a `UUID`, so it cannot collide with the grace timers,
+which key on `userId`.
 
 - [ ] **Step 5: Thread the value through `RoomManager` and `Main`**
 
@@ -1065,31 +1018,21 @@ In `Main.scala`, line 39 becomes:
 Run: `sbt scalafmtAll test`
 Expected: PASS, all four new cases included.
 
-- [ ] **Step 7: Correct the spec's state block**
+- [ ] **Step 7: Check the spec still matches what landed**
 
-In `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-line 536 becomes:
+No spec edit is due here: `:535-536` and the two "Two lifetimes, not one"
+paragraphs were amended during this plan's review, before any code was written,
+and they already describe the re-armed single-shot timer and the two-hour figure.
+Confirm the code agrees with them rather than the reverse, and if it does not,
+the code is what moves.
 
-```
-sawMessage    Boolean          // step 4a: behaviour state, not RoomData; see below
-```
-
-and the paragraph at lines 539-543 gains one sentence after its first:
-
-```markdown
-`emptySince` sits beside `connections` rather than inside `RoomState`, because it
-is derived from the connection layer: an `Instant` is not a handle, but putting it
-in the room's own data would break the rule below in spirit while satisfying it in
-letter. `sawMessage` went one step further out and lives on the behaviour, since it
-is a property of the mailbox rather than of the room, and holding it in `RoomData`
-would make every state assertion depend on the message history that preceded it.
-"Two lifetimes, not one" specifies what they mean.
-```
+Run: `grep -rn "sawMessage\|two to four" docs/superpowers/specs/ src/`
+Expected: no output.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/main src/test docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md
+git add src/main src/test
 git commit -m "feat(actors): stop a room once it has held no connection for the idle timeout"
 ```
 
@@ -1112,20 +1055,27 @@ this document's "Deviations from the plan, and why" section below as you go.
 
 - [ ] **Step 2: Close the two known issues this step bounds**
 
-In `docs/known-issues.md`, delete the "No garbage collection for abandoned or
-never-joined rooms" entry (lines 37-51) and the pending-session leak entry
-(lines 60-72). Both were open against an unbounded room lifetime, which now has a
-bound. Leave the rate-limiting entry open and check that its text still reads
-correctly once the two above are gone: a client looping requests at an empty room
-defers its stop indefinitely, and bounding that loop is still unowned.
+In `docs/known-issues.md`, delete three entries, not two. Each ends with the
+sentence "Remove this entry when step 4a lands", so the judgment was made when
+they were written:
 
-Check the same file's step 5 entries: the one that says retention does not reach
-the room's last member, closed by stop-after-idle, goes too.
+- `:37-52` "No garbage collection for abandoned or never-joined rooms"
+- `:54-73` "Every session a room mints lives as long as the room does"
+- `:75-98` "A disconnection that outlasts the grace period still forces a reload
+  for the room's last member"
+
+Leave the rate-limiting entry at `:204` open and check its text still reads
+correctly once the three above are gone: a client looping requests at an empty
+room defers its stop indefinitely, and bounding that loop is still unowned. Check
+`:15-36` too, the silent-auto-create entry, whose text turns on when a room stops.
 
 - [ ] **Step 3: Tick the roadmap's GC item**
 
 In `docs/roadmap.md`, mark the "Garbage collection for abandoned or never-joined
 rooms" item (lines 181-185) done, naming stop-after-idle rather than restating it.
+Its "two to four hours" is stale: the figure is two hours since the tick became a
+re-armed single-shot timer. The three `docs/known-issues.md` entries carry the
+same stale figure and are deleted wholesale in step 2, so they need no edit.
 
 - [ ] **Step 4: Verify no document still describes the old lifetime**
 
