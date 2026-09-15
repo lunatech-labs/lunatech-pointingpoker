@@ -708,13 +708,14 @@ nothing to forget.
 design rather than an accident.** A ref leaves its member's set the instant its
 stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
 dead ref is a no-op anyway, and `emptySince` has to reflect reality. Termination
-is now the only thing that drains the set, which the wholesale replacement above
-also did as a side effect: `connect` adds to a `Set` and leaves what is already
-there, so a lost `Leave` would strand a ref that nothing else evicts. A `members`
-entry goes at grace expiry, or immediately on the explicit leave in section 4,
-which removes no ref of its own. Estimates are never removed by a departure at
-all, only by `clear` or the round ending; a `reVote` leaves the values in place
-and clears `confirmed`, which is the state `Estimate` exists to express.
+is now the only thing that drains the set, where the wholesale replacement above
+used to evict a stale ref as a side effect too: `connect` adds to a `Set` and
+leaves what is already there, so a lost `Leave` would strand a ref that nothing
+else evicts. A `members` entry goes at grace expiry, or immediately on the
+explicit leave in section 4, which removes no ref of its own. Estimates are
+never removed by a departure at all, only by `clear` or the round ending; a
+`reVote` leaves the values in place and clears `confirmed`, which is the state
+`Estimate` exists to express.
 
 **The grace period stops making a delayed decision.** Before step 4 the timer was
 keyed on `(userId, ref)` and `ConfirmLeave` decided after the delay whether it was
