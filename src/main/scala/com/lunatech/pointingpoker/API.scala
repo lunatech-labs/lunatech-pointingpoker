@@ -22,7 +22,7 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
-import com.lunatech.pointingpoker.config.{ApiConfig, ProbeConfig, SseConfig}
+import com.lunatech.pointingpoker.config.{ApiConfig, LifecycleConfig, ProbeConfig}
 import com.lunatech.pointingpoker.probe.ProbeRoutes
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -32,7 +32,7 @@ import scala.util.{Failure, Success}
 class API(
     roomManager: ActorRef[RoomManager.Command],
     apiConfig: ApiConfig,
-    sseConfig: SseConfig,
+    lifecycleConfig: LifecycleConfig,
     probeConfig: ProbeConfig
 )(using actorSystem: ActorSystem[SpawnProtocol.Command])
     extends EventStreamMarshalling:
@@ -139,7 +139,7 @@ class API(
                           userId,
                           name,
                           token,
-                          sseConfig.retryMillis
+                          lifecycleConfig.retryMillis
                         )
                       )
                     }
@@ -225,7 +225,7 @@ object API:
   def apply(
       roomManager: ActorRef[RoomManager.Command],
       apiConfig: ApiConfig,
-      sseConfig: SseConfig,
+      lifecycleConfig: LifecycleConfig,
       probeConfig: ProbeConfig
   )(using actorSystem: ActorSystem[SpawnProtocol.Command]): API =
-    new API(roomManager, apiConfig, sseConfig, probeConfig)
+    new API(roomManager, apiConfig, lifecycleConfig, probeConfig)

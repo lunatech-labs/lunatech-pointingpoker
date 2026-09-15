@@ -28,7 +28,7 @@ object SSE:
   val heartbeatInterval = 15.seconds
 
   /** Fallback for `retryMillis` below when unspecified; production wires the real value from
-    * `SseConfig` instead - see `Main.scala`.
+    * `LifecycleConfig` instead - see `Main.scala`.
     */
   val defaultRetryMillis = 2000
 

@@ -230,9 +230,8 @@ import com.typesafe.config.Config
 
 import scala.concurrent.duration.FiniteDuration
 
-/** Tuning for the room and connection lifetimes in
-  * docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md. All three are
-  * heuristics, not measured figures, hence configurable.
+/** Tuning for the room and connection lifetimes; all three are heuristics, not measured figures.
+  * See docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md.
   */
 final case class LifecycleConfig(
     gracePeriod: FiniteDuration,

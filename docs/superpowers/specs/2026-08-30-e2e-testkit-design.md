@@ -165,7 +165,7 @@ it is the same artifact Docker ships. The cost is one `sbt Universal/stage`
 before the suite, which `npm test` and `npm run e2e` each perform themselves
 through an npm pre-hook, measured at about four seconds when nothing changed.
 
-**The app's own invariants validate the test profile.** `SseConfig.load`
+**The app's own invariants validate the test profile.** `LifecycleConfig.load`
 throws on a violated `require`, so a profile that breaks a relationship
 between two timings fails at startup with that `require`'s message rather than
 producing a mysteriously flaky case later. This is why the harness surfaces
@@ -179,24 +179,30 @@ Every value arrives by environment variable. No new configuration surface.
 
 | Variable | Test | Production |
 | --- | --- | --- |
-| `SSE_GRACE_PERIOD` | 4s | 6s |
+| `ROOM_GRACE_PERIOD` | 4s | 6s |
+| `ROOM_STOP_AFTER_IDLE` | 5m | 2h |
 | `SSE_RETRY` | 200ms | 2000ms |
 
-**Two variables, not the ten an earlier draft of this section tabled.** The
-other eight were bounded mode's five, a heartbeat interval, a detection timeout
-and an assumed proxy timeout, with a session TTL assumed in the prose beside
-them. All nine belonged to 08-28's proposed configuration surface, none of them
-was ever built, and the target architecture cancels every one. The heartbeat is
+**Three variables, where an earlier draft of this section tabled ten.** Two are
+this design's own, the grace period and the retry; the third is step 4a's idle
+timeout, the only value the target architecture adds to the configuration. The
+eight the draft tabled and this design does not were bounded mode's five, a
+heartbeat interval, a detection timeout and an assumed proxy timeout, with a
+session TTL assumed in the prose beside them. All nine belonged to 08-28's
+proposed configuration surface, none of them was ever built, and the target
+architecture cancels every one. The heartbeat is
 worth singling out, since it stays real while its variable does not: it is a
 hardcoded `val heartbeatInterval = 15.seconds` (`SSE.scala:34`), so no case may
-depend on turning it down. The profile grows again at step 4a, which makes the
-actor idle timeout configurable and will want it turned right down to test
-stop-after-idle.
+depend on turning it down. The idle timeout is the row step 4a added, and it is
+turned up rather than down: the value is global to the worker's app process, so
+a short one would stop rooms out from under unrelated cases. Whether a room
+stops is pinned by the JVM suite instead.
 
-One invariant is left, and it is the one the app actually enforces: `4000 >=
-2x200`, against `SseConfig.load`'s `require` that the grace period be at least
-twice the retry. That `require` throwing is what validates the profile, which
-is section 2's point rather than a second mechanism.
+Two invariants are left, and both are ones the app actually enforces: `4000 >=
+2x200`, against `LifecycleConfig.load`'s `require` that the grace period be at
+least twice the retry, and `5m > 4s`, against its `require` that the idle timeout
+exceed the grace period. Those `require`s throwing is what validates the profile,
+which is section 2's point rather than a second mechanism.
 
 **The stub's deadline is a constant in the testkit.** An earlier draft read it
 from `SSE_ASSUMED_PROXY_TIMEOUT` so that the simulated proxy and a deployment's

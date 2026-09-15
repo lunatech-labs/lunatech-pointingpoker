@@ -15,10 +15,13 @@ export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
 const OUTPUT_CAP_BYTES = 1 << 20
 
-// SseConfig.load's `require`s validate this at startup, so the profile does not get its own
-// copy of the rules. The heartbeat is hardcoded at 15s and cannot be turned down.
+// LifecycleConfig.load's `require`s validate this at startup, so the profile does not get its
+// own copy of the rules. The heartbeat is hardcoded at 15s and cannot be turned down.
 export const testProfile = {
-  SSE_GRACE_PERIOD: '4s',
+  ROOM_GRACE_PERIOD: '4s',
+  // Well past any case's runtime: the point is that a room survives a departure, not that
+  // it eventually stops, which the JVM suite owns.
+  ROOM_STOP_AFTER_IDLE: '5m',
   SSE_RETRY: '200ms'
 }
 

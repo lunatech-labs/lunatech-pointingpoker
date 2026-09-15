@@ -221,7 +221,7 @@ directly in the new frontend.
       and how long they sit idle before dying; participants per room and rounds
       per session; and how often a round is revealed by Show rather than by the
       vote latch. Each of those is a number some existing decision was guessed
-      at, and `config/SseConfig.scala` says so about its own, calling them
+      at, and `config/LifecycleConfig.scala` says so about its own, calling them
       "heuristics, not measured figures".
       **This blocks nothing and must not be made to.** Emitting the lines is
       additive and depends on no other step; acting on what they say needs weeks
