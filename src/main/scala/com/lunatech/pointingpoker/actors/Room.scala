@@ -112,7 +112,9 @@ object Room:
     def show(): RoomData   = withRound(this.state.round.copy(revealed = true))
     def clear(): RoomData  = withRound(Round.fresh)
     def reVote(): RoomData =
-      withRound(Round(this.state.round.estimates.view.mapValues(_.unconfirmed).toMap, false))
+      withRound(
+        Round(this.state.round.estimates.view.mapValues(_.unconfirmed).toMap, revealed = false)
+      )
 
     def editIssue(issue: String): RoomData =
       this.copy(state = this.state.copy(currentIssue = issue))
