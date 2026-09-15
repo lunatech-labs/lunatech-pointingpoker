@@ -1402,15 +1402,15 @@ Listed so a reviewer can reject one without re-deriving it.
    `estimates.get(id).isDefined` with a green `sbt test` because a re-vote keeps
    every value and clears only the flag. That one was never unpinned, only slow
    to report: the browser case for a re-vote re-arming the auto-reveal fails
-   under it, four minutes and two engines away from the change. The removed case
-   is the `RoomData.of` refusal named for a session that names a different
-   identity, which the split had turned into a duplicate. `of` re-keys sessions
-   by `userId` and never reads the token, so once `Member` lost its token both
-   that case and the one beside it built a name mismatch and asserted the same
-   message, under a title describing a check that no longer exists. Task 3 had
-   already recorded that duplication in the design's step 5a section and
-   deferred the deletion, on the grounds that dropping a case mid-rewrite reads
-   as coverage lost to the rewrite; the review round brought the cleanup forward
+   under it, a whole browser run and two engines away from the change. The
+   removed case is the `RoomData.of` refusal named for a session that names a
+   different identity, which the split had turned into a duplicate. `of` re-keys
+   sessions by `userId` and never reads the token, so once `Member` lost its
+   token both that case and the one beside it built a name mismatch and asserted
+   the same message, under a title describing a check that no longer exists.
+   Task 3 had already recorded that duplication in the design's step 5a section
+   and deferred the deletion, on the grounds that dropping a case mid-rewrite
+   reads as coverage lost to the rewrite; the review round brought it forward
    once the migration was complete. The planning miss is therefore narrower than
    it looks: the plan calls the migration of 5a's two-part check mechanical, and
    a mechanical port can leave a case with its title intact and its meaning

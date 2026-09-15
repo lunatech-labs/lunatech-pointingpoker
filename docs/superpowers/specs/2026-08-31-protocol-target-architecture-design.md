@@ -2318,10 +2318,11 @@ Landed. The constructor is private, `RoomData.of` is the only way in from
 outside the class, and a compile-time case in `RoomSpec` pins both `apply` and
 `copy` shut, along with `joinUser` and `registerSession`, the two methods that
 write invariant 5's members-to-sessions relation. All 48 fixture sites built
-through `RoomDataFixtures` on 2026-09-10, the day this step landed, five of them
-needing a session without a member; later steps add sites of their own and
-neither figure is maintained. The `Join` guard warns and drops rather than
-raising, and `docs/known-issues.md` lost the construction-gap entry.
+through `RoomDataFixtures` on 2026-09-10, the day this step landed, and five
+sites by the end of that day needed a session without a member; later steps add
+sites of their own and neither figure is maintained. The `Join` guard warns and
+drops rather than raising, and `docs/known-issues.md` lost the construction-gap
+entry.
 
 What `of` enforces is invariant 5 and no more: every member's token resolves to
 a session, and that session holds that member's own id and name. It does not
