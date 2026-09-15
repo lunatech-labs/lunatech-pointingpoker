@@ -2383,8 +2383,10 @@ which token supplied one, so "refuse a `RoomData` whose member's session names a
 different identity" and "refuse a `RoomData` whose member's session disagrees on
 the name alone" reach the same `require` and fail with the same message. Both
 were carried through the migration rather than dropped in the middle of it,
-where a deletion would have read as coverage lost to the rewrite. Dropping
-either is a later cleanup.
+where a deletion would have read as coverage lost to the rewrite. Step 4's
+review round then brought that cleanup forward, dropping the identity-named one
+once the migration was complete and the surviving case had been confirmed to
+catch the same mutation. Deviation 5 of step 4's plan records it.
 
 **Step 5 is also what makes the fixture API a real choice.** Retention made
 `users` a strict subset of `sessions` normal rather than anomalous, and four

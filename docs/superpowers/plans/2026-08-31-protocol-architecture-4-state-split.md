@@ -1407,8 +1407,15 @@ Listed so a reviewer can reject one without re-deriving it.
    identity, which the split had turned into a duplicate. `of` re-keys sessions
    by `userId` and never reads the token, so once `Member` lost its token both
    that case and the one beside it built a name mismatch and asserted the same
-   message, under a title describing a check that no longer exists. The planning
-   miss: the plan calls the migration of 5a's two-part check mechanical, and a
-   case can survive a mechanical port with its title intact and its meaning
-   gone. Each of the three was checked by making the change the case exists to
-   catch and watching that case, and only that case, fail.
+   message, under a title describing a check that no longer exists. Task 3 had
+   already recorded that duplication in the design's step 5a section and
+   deferred the deletion, on the grounds that dropping a case mid-rewrite reads
+   as coverage lost to the rewrite; the review round brought the cleanup forward
+   once the migration was complete. The planning miss is therefore narrower than
+   it looks: the plan calls the migration of 5a's two-part check mechanical, and
+   a mechanical port can leave a case with its title intact and its meaning
+   gone, which is worth catching during the port rather than after it. The two
+   additions were each checked by making the change the case exists to catch and
+   watching that case, and only that case, fail. The removal was checked the
+   other way round, by confirming that the surviving neighbour fails when the
+   name clause of `RoomData.of` is deleted.
