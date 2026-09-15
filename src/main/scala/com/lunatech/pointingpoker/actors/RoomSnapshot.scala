@@ -16,8 +16,8 @@ final case class RoomSnapshot(
 
 object RoomSnapshot:
 
-  // A projection rather than Room.User: a derived encoder over the domain type would put
-  // every participant's session token on the wire to every other participant.
+  // A projection rather than Room.Member: a derived encoder over the room's own state would
+  // put every participant's session token on the wire to every other participant.
   final case class Participant(
       id: UUID,
       name: String,

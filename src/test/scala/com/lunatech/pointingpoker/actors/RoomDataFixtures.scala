@@ -85,9 +85,14 @@ object RoomDataFixtures:
     users.map(u => u.token -> Room.Session(u.id, u.name)).toMap
 
   private def estimatesFor(users: Attendee*): Map[UUID, Room.Estimate] =
-    // A blank estimation is no entry at all; Estimate.of would refuse to build one.
+    // A blank estimation is no entry at all, but voting for one is an illegal state
+    // the fixture refuses rather than quietly rewrites into a non-voter.
+    users.foreach(u =>
+      require(!(u.voted && u.estimation.isBlank), s"${u.name} voted with no estimation")
+    )
     users
       .filterNot(_.estimation.isBlank)
       .map(u => u.id -> Room.Estimate.of(u.estimation, u.voted))
       .toMap
+  end estimatesFor
 end RoomDataFixtures

@@ -204,8 +204,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "restart the grace period when a second Leave arrives on a connection already dropped" in {
-      // Pins that startSingleTimer replaces rather than duplicates, which is what makes
-      // ConfirmLeave's old staleness check deletable.
+      // Pins that startSingleTimer replaces rather than duplicates, which is what absorbs a
+      // duplicate Leave; the Join branch's timers.cancel is what made the staleness check go.
       val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val firstReplyProbe     = testKit.createTestProbe[Room.Response]()
@@ -234,7 +234,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "remove a user on leave and publish the smaller room" in {
-      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "8")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
@@ -254,9 +254,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // The departed user's ref is not published to, so nothing reaches their probe.
       userProbe.expectNoMessage()
-      dataProbe.expectMessage(
-        Room.DataStatus(data = withUsers(user2).withMemberlessSession(user))
-      )
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      // Problem A's guarantee: the departure takes the member and leaves the estimate.
+      data.estimateFor(user) mustBe Some(("8", true))
+      data mustBe withUsers(user2).withMemberlessSession(user).withEstimate(user)
     }
 
     "stop itself if empty" in {
@@ -384,6 +385,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.data.sessions.get(minted.token) mustBe Some(
         Room.Session(minted.userId, "Alice")
       )
+      // Invariant 5: only ConnectToRoom creates a member, or everyMemberHasVoted is
+      // unsatisfiable for a member who never connects and never votes.
+      data.data.members mustBe empty
     }
 
     "resolve a session minted for a tab that has not connected" in {
@@ -741,6 +745,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       assertDoesNotCompile("""RoomData.empty.copy(state = Room.RoomState.empty)""")
       assertDoesNotCompile("""RoomData.empty.connect(user.id, user.name, user.ref)""")
       assertDoesNotCompile("""RoomData.empty.removeMember(user.id)""")
+      assertDoesNotCompile("""RoomData.empty.disconnect(user.id, user.ref)""")
       assertDoesNotCompile("""RoomData.empty.registerSession(user.token, user.id, "Mallory")""")
       // Reverting a modifier to check one needs `sbt clean`; incrementally the verdict is stale.
       assertCompiles("""RoomData.of()""")
@@ -862,10 +867,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)      = createRoom(
         UUID.randomUUID(),
-        withUsers(user, user2).withSecondConnection(user, replacement.ref),
+        withUsers(user, user2),
         gracePeriod = 50.millis
       )
 
+      // The race itself, driven rather than seeded: the replacement stream is established
+      // before the old one's termination arrives, so the set briefly holds two refs.
+      roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
       roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
 
       // Problem C made unrepresentable: the question is answered at Leave time, so the
