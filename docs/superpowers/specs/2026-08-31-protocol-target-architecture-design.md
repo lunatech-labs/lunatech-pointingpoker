@@ -539,8 +539,7 @@ The last is actor bookkeeping rather than a fifth group of state. It sits beside
 `connections` rather than inside `RoomState`, because it is derived from the
 connection layer: an `Instant` is not a handle, but putting it in the room's own
 data would break the rule below in spirit while satisfying it in letter. "Two
-lifetimes, not one" specifies what it means, and is also where the second field
-this block used to carry went: the idle tick's timer holds that state instead.
+lifetimes, not one" specifies what it means.
 
 **`connections` maps a member to a set because one person can hold several
 connections at once**: a second tab, or a replacement opened because the first
@@ -982,7 +981,11 @@ idle timeout itself.** The stop therefore lands one delay after the later of the
 last message and the moment `connections` emptied: **two hours**, on the figures
 above. Re-arming needs no cancellation, since `startSingleTimer` replaces a timer
 sharing its key, which is the same mechanism the grace period already relies on
-to absorb a duplicate `Leave`. The actor idle timeout is the only value this
+to absorb a duplicate `Leave`. It needs no staleness check either, and that is
+the part worth writing down: Pekko stamps each timer message with a generation
+and discards one from a superseded generation before the behaviour sees it, so a
+tick that fired in the instant before a message arrived cannot stop a room that
+message should have kept alive. Without that guarantee this would need a flag. The actor idle timeout is the only value this
 design adds to the configuration; step 4a says where it lives and what the keys
 become.
 

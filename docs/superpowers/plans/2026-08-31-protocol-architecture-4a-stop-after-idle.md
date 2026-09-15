@@ -748,6 +748,8 @@ shape: there is no per-branch bookkeeping to forget, because the timer holds it.
         // Any message pushes the tick a full delay out, which is what keeps one from landing
         // between ValidateToken and the ConnectToRoom it precedes.
         if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+        // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
+        // from a superseded generation. Verified against pekko-actor-typed 1.6.0.
         message match
           case IdleTick =>
             if data.idleFor(stopAfterIdle, Instant.now()) then
@@ -784,6 +786,13 @@ Adding `stopAfterIdle` to the 11 recursive calls at `Room.scala:188,200,204,214,
 and the one in `apply` is the whole of the remaining diff. `IdleTickKey` is a
 case object rather than a `UUID`, so it cannot collide with the grace timers,
 which key on `userId`.
+
+**Do not add a staleness guard to the `IdleTick` branch.** The obvious worry is a
+tick that fires just before a message is processed, which would stop a room the
+message should have kept alive. Pekko's generation stamping already voids it, as
+the spec now records, so an `isTimerActive` check or a re-introduced flag would
+be dead code. This was verified by experiment against pekko-actor-typed 1.6.0,
+not inferred.
 
 - [ ] **Step 5: Thread the value through `RoomManager` and `Main`**
 
