@@ -885,6 +885,22 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.connections(user.id) mustBe Set(replacement.ref)
     }
 
+    "schedule no removal when the connection that drops belongs to no member" in {
+      val (user, _)         = createUser(UUID.randomUUID(), "user1", false, "")
+      val (departed, _)     = createUser(UUID.randomUUID(), "user2", false, "")
+      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
+      val (_, roomRef)      = createRoom(
+        UUID.randomUUID(),
+        withUsers(user, departed).withDeparted(departed),
+        gracePeriod = 50.millis
+      )
+
+      roomRef ! Room.Leave(departed.id, departed.ref, roomResponseProbe.ref)
+
+      // Section 4's leave endpoint: membership ended first, so the tab's own drop removes nobody.
+      roomResponseProbe.expectNoMessage(200.millis)
+    }
+
     "keep a member with no connection in everyone's list" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
