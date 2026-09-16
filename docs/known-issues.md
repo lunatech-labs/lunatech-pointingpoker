@@ -422,6 +422,39 @@ roadmap item instead of leaving it here as stale history.
   next vote, so step 6 is soon enough. Step 8's frontend rewrite would
   close it structurally with fingerprinted assets if step 6 does not.
 
+### Tests that pass with the mechanism they name deleted, as a recurring pattern
+
+- **Where:** the suite generally. The instances found so far are in `RoomSpec`
+  (the retired "defer its stop by a full delay when any message arrives", and the
+  `expectNoMessage` line in the case that replaced "stay alive while a connection
+  is attached"), `RoomManagerSpec` ("drop a stopped room from its map so a later
+  request creates a fresh one"), and the straggler-reload case recorded in the
+  ghost-participant entry above.
+- **Issue:** Individual instances are recorded across this file; the pattern is
+  not, and it keeps recurring. On the 2026-09-16 branch three separate cases were
+  found to pass with the mechanism they name removed outright. The deferral case
+  went green with the message re-arm replaced by `if false`, which was the only
+  regression test behind the mechanism the branch had chosen instead of a
+  `sawMessage` field. The `RoomManager` case asserted only that a session could be
+  minted, which a surviving room satisfies exactly as well as a restarted one, so
+  it was green for the opposite of the reason its name gives. Two of the three
+  rested on the same false belief, that a typed `TestProbe` observes termination:
+  it registers a death-watch only inside `expectTerminated`, so an
+  `expectNoMessage` placed before it asserts nothing at all. A proposed fix for
+  one of them repeated that error and was caught only by running it. The common
+  shapes are assertions of absence, assertions satisfied by either outcome, and
+  waits shorter than the detection path they depend on, which is the same failure
+  the ghost-participant and artifact-upload entries describe in their own terms.
+- **Resolution:** No audit has been done and no tooling is in place. What works is
+  cheap and should be the habit: mutate the mechanism the test names, expect red,
+  revert. That found every instance above and cost one targeted run each. The
+  entry below reasons in exactly this frame, and is the model, since it argues
+  case by case that its waits can only fail safe. Mutation tooling would automate
+  the sweep permanently; Stryker4s has never been assessed against this project's
+  Scala 3 and sbt setup, so whether it is viable here is unknown. Browser cases
+  stay manual regardless, since mutating the server and re-running the suite costs
+  minutes per mutant.
+
 ### Two SSE tests settle on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
