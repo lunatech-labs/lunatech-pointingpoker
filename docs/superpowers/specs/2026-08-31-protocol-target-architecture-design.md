@@ -962,12 +962,12 @@ keeping apart:
 **Idle means `connections` has been empty continuously for the idle period, and
 no message has arrived since the previous tick.** It is a duration rather than an
 instantaneous check: `emptySince` is set when `connections` becomes empty and
-cleared when it becomes non-empty, and the tick stops the actor once that stamp
-is older than the timeout. Connections present means never idle, whether or not
-anyone is clicking, and a short emptiness is survivable, which is the
-coffee-break requirement above. That makes this step a consumer of the removal
-moments above: since step 4, only stream termination drains a member's set, so a
-ref stranded by a lost `Leave` leaves its room permanently non-idle.
+cleared when it becomes non-empty, and the tick stops the actor once
+`connections` is empty when it fires. Connections present means never idle,
+whether or not anyone is clicking, and a short emptiness is survivable, which is
+the coffee-break requirement above. That makes this step a consumer of the
+removal moments above: since step 4, only stream termination drains a member's
+set, so a ref stranded by a lost `Leave` leaves its room permanently non-idle.
 
 **`emptySince` starts as `Some(now)` at the actor's creation and not as `None`**,
 which reads as a detail and is not one. A room whose `/events` never follows its
@@ -992,6 +992,23 @@ loudly. Without the generation guarantee the queued-tick half would need a flag.
 The actor idle timeout is the only value this
 design adds to the configuration; step 4a says where it lives and what the keys
 become.
+
+**The tick needs no elapsed comparison of its own.** The `IdleTick` branch in
+`receiveBehaviour` asks only whether `connections` is empty. The re-armed
+`IdleTick` timer already carries the elapsed part: it cannot fire sooner than a
+full idle timeout after the last message, and `emptySince`, written only by a
+message handler, can never be later than that message. A timestamp comparison
+could therefore only ever disagree with the timer when the system clock stepped
+backwards, which is the wall-clock defect `docs/known-issues.md` used to record
+as accepted. Removing the comparison removes the defect instead of managing it.
+
+**Invariant: `connections` changes only on the message path.** Every mutation
+arrives as a `Command` and therefore re-arms the tick, which is what makes the
+timer a complete account of idle time. A connection dropped from a signal
+handler instead, such as a `Terminated` watch replacing write-failure
+detection, would not re-arm, so the stop would land a delay after the last
+message rather than after the room emptied. That is a change worth making
+deliberately rather than by accident.
 
 **Re-arming on every message is what stops a join being lost.** `ConnectToRoom` is
 fire-and-forget and is sent from `mapMaterializedValue`, which is after the 200
@@ -2303,8 +2320,8 @@ Landed. `LifecycleConfig` replaces `SseConfig`, carrying `gracePeriod`,
 ordered chain, `retryMillis` well under `gracePeriod` and `gracePeriod` under
 `stopAfterIdle`. `Room` arms a single-shot `IdleTick` timer in
 `Behaviors.withTimers`, re-armed on every message except the tick itself, and
-stops via `Behaviors.stopped` once `RoomData.idleFor` reports the room has held
-no connection for the full timeout; `emptySince` stamps at the room's own setup
+stops via `Behaviors.stopped` when the tick finds the room holds no connection,
+with no elapsed comparison; `emptySince` stamps at the room's own setup
 for a never-joined room and at the last disconnect otherwise, and clears on
 connect. `Room.StreamCompleted` completes every attached SSE stream when the
 room stops, recognized by `completionMatcher` as `CompletionStrategy.immediately`,

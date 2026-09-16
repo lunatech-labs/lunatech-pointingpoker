@@ -1022,6 +1022,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Never connected at all, which is the never-joined room the stamp at creation covers:
       // written as a transition-only field this room would run for the life of the process.
+      // The one case proving pekko delivers the tick after the delay, which BehaviorTestKit cannot.
       watcher.expectTerminated(roomRef, 3.seconds)
     }
 
@@ -1039,21 +1040,27 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       onlyTimer(btk.retrieveAllEffects()).overriding mustBe true
     }
 
-    "stop after the idle timeout once its last member has left" in {
-      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
-      val watcher      = testKit.createTestProbe()
-      val (_, roomRef) = createRoom(
-        UUID.randomUUID(),
-        withUsers(user),
-        gracePeriod = 50.millis,
-        stopAfterIdle = 300.millis
-      )
+    "stop on a tick when it holds no connection" in {
+      val roomId = UUID.randomUUID()
+      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
 
-      roomRef ! Room.Leave(user.id, user.ref)
+      // Never connected at all, which is the never-joined room this bounds: /join
+      // without the /events that should have followed it.
+      btk.run(Room.IdleTick)
 
-      // The production sequence end to end: the connection drops, the grace period removes the
-      // member, and the idle timeout ends a room that started this case fully occupied.
-      watcher.expectTerminated(roomRef, 5.seconds)
+      btk.isAlive mustBe false
+    }
+
+    "stop on a tick once its last member has left" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+      val roomId    = UUID.randomUUID()
+      val btk       = BehaviorTestKit(Room(roomId, withUsers(user)), roomId.toString)
+
+      // Leave drops the connection; the member row outlives it until ConfirmLeave.
+      btk.run(Room.Leave(user.id, user.ref))
+      btk.run(Room.IdleTick)
+
+      btk.isAlive mustBe false
     }
 
     "clear the idle stamp on a connection and restamp it when the last one goes" in {

@@ -268,18 +268,6 @@ roadmap item instead of leaving it here as stale history.
   landing inside the wait on CI hardware. Revisit if the detection path ever
   becomes clock-driven rather than write-driven.
 
-### The idle stop compares wall-clock time, not a monotonic clock
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData.idleFor`, comparing `Instant`s).
-- **Issue:** `idleFor` measures elapsed idle time with `java.time.Instant`, which
-  follows the system clock rather than a monotonic source. A backward NTP step
-  during the idle window can make a tick find the room not yet idle and re-arm,
-  deferring the stop by up to one full timeout.
-- **Resolution:** Accepted deliberately, not a defect. Harmless at the two-hour
-  default, and `Instant` is far more testable here than `nanoTime`, which is why
-  the tests drive real wall-clock sleeps rather than a fake monotonic clock.
-
 ### A second tab on the same room displaces the first tab's identity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`

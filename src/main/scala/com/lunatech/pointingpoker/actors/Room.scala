@@ -203,19 +203,17 @@ object Room:
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
-        // Any message pushes the tick a full delay out, which is what keeps one from landing
-        // between ValidateToken and the ConnectToRoom it precedes.
+        // Any message re-arms the tick a full delay out, so none lands between ValidateToken
+        // and ConnectToRoom. Invariant: connections change only here, so the timer is exact.
         if message != IdleTick then armIdleTick(timers, stopAfterIdle)
         // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
         // from a superseded generation. Verified against pekko-actor-typed 1.7.0.
         message match
           case IdleTick =>
-            if data.idleFor(stopAfterIdle, Instant.now()) then
+            if data.connections.isEmpty then
               context.log.info("Stopping room {}: no connection for {}", roomId, stopAfterIdle)
               Behaviors.stopped
             else
-              // Not what bounds a normal idle room, since connections only change on the message
-              // path. It is what keeps a backward clock step from stranding one; see known-issues.
               armIdleTick(timers, stopAfterIdle)
               Behaviors.same
           case Join(userId, name, token, ref) =>
