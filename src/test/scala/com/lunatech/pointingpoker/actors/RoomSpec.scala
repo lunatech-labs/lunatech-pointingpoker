@@ -1039,7 +1039,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val roomId    = UUID.randomUUID()
       val btk       =
         BehaviorTestKit(
-          Room(roomId, withUsers(user), testGracePeriod, testStopAfterIdle),
+          Room(roomId, withUsers(user), testGracePeriod, 90.minutes),
           roomId.toString
         )
       btk.retrieveAllEffects()
@@ -1050,6 +1050,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       btk.isAlive mustBe true
       val timer = onlyTimer(btk.retrieveAllEffects())
+      // This branch re-arms from its own call site, not the one every other message takes.
+      timer.delay mustBe 90.minutes
       timer.mode mustBe Effect.TimerScheduled.SingleMode
       timer.overriding mustBe true
     }
