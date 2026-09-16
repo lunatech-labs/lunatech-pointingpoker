@@ -33,8 +33,8 @@ object LifecycleConfig:
       s"pointing-poker.room.grace-period ($gracePeriod) must be at least twice " +
         s"pointing-poker.sse.retry ($retryMillis ms)"
     )
-    // Configured below the grace period, a room stops while its last member is still inside
-    // their window, so their reconnect finds no room and gets blank state.
+    // Below the grace period a room stops mid-window and the reconnect gets blank state. An
+    // inequality, not a multiple like the guard above: that failure is a cliff, not a slope.
     require(
       stopAfterIdle > gracePeriod,
       s"pointing-poker.room.stop-after-idle ($stopAfterIdle) must exceed " +
