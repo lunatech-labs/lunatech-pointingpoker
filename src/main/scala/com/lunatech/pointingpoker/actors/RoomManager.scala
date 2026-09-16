@@ -48,8 +48,8 @@ object RoomManager:
     val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[UUID, ActorRef[Room.Command]])
 
   def apply(
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
-      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
+      gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration
   ): Behavior[Command] =
     Behaviors.setup[Command](_ =>
       receiveBehaviour(RoomManagerData.empty, gracePeriod, stopAfterIdle)
@@ -57,8 +57,8 @@ object RoomManager:
 
   private[actors] def receiveBehaviour(
       data: RoomManagerData,
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
-      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
+      gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
@@ -138,8 +138,8 @@ object RoomManager:
   private[actors] def createRoom(
       roomId: UUID,
       context: ActorContext[Command],
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
-      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
+      gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration
   ): ActorRef[Room.Command] =
     context.spawn(
       actors.Room(roomId, gracePeriod = gracePeriod, stopAfterIdle = stopAfterIdle),

@@ -299,15 +299,16 @@ roadmap item instead of leaving it here as stale history.
   cannot see a swap after it, and no JVM test covers `Main`'s wiring, so a
   transposition there would ship a two-hour grace period and a six-second idle
   timeout with only the browser suite to notice.
-- **Resolution:** Mitigated, not prevented. `Main`'s spawn now names both
-  arguments, which makes a swap visible to a reader but enforces nothing; the
-  forwarding calls inside `RoomManager` stay positional, where each argument
-  carries the name of the parameter it feeds and tests cover the result. The
+- **Resolution:** Mitigated, not prevented. `Main`'s spawn names both arguments,
+  which makes a swap visible to a reader but enforces nothing; the forwarding
+  calls inside `RoomManager` stay positional, where each argument carries the name
+  of the parameter it feeds and tests cover the result. The fallback half of this
+  is closed: `Room` and `RoomManager` no longer carry default durations, so a call
+  site that omits them does not compile and no omission can silently resolve to a
+  value that happens to match production. What remains is the transposition, whose
   structural fix is to give each duration its own type (`opaque type GracePeriod
-  <: FiniteDuration`, and likewise for the idle timeout) so a transposition is a
-  compile error. Deferred rather than rejected: it touches `LifecycleConfig`,
-  `RoomManager`, `Room` and their specs, which are the files the three
-  `rebase --onto` below this branch replay. Reconsider once the stack has landed.
+  <: FiniteDuration`, and likewise for the idle timeout). Reconsider once the
+  stack has landed.
 
 ### A second tab on the same room displaces the first tab's identity
 

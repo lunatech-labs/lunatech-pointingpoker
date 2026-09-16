@@ -29,8 +29,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
   override def afterAll(): Unit =
     testKit.shutdownTestKit()
 
-  // BehaviorTestKit records timer scheduling without running timers, which is what
-  // lets these cases run at the real two-hour default.
+  // BehaviorTestKit records timer scheduling without running timers, so these cases can
+  // assert a delay of hours without waiting one.
   def onlyTimer(effects: Seq[Effect]): Effect.TimerScheduled[?] = effects match
     case Seq(t: Effect.TimerScheduled[?]) => t
     case other => fail(s"expected exactly one scheduled timer, got $other")
@@ -279,7 +279,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // Seeded rather than joined: Join is not what this case is about, and a refused
       // Join would leave the room empty and pass the assertion for the wrong reason.
       val behaviorTestKit =
-        BehaviorTestKit(Room(roomId, withUsers(user, user2)), roomId.toString)
+        BehaviorTestKit(
+          Room(roomId, withUsers(user, user2), testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
 
       // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
       // directly rather than Leave (which only schedules it).
@@ -989,18 +992,21 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "arm a single-shot idle timer at setup, for the configured delay" in {
       val roomId = UUID.randomUUID()
-      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
+      // A value that is nobody's default, so the delay can only have come from the argument.
+      val btk =
+        BehaviorTestKit(Room(roomId, RoomData.empty, testGracePeriod, 90.minutes), roomId.toString)
 
       val timer = onlyTimer(btk.retrieveAllEffects())
       timer.msg mustBe Room.IdleTick
-      timer.delay mustBe Room.defaultStopAfterIdle
+      timer.delay mustBe 90.minutes
       timer.mode mustBe Effect.TimerScheduled.SingleMode
       timer.overriding mustBe false
     }
 
     "re-arm the timer, superseding the pending tick, on any non-tick message" in {
       val roomId = UUID.randomUUID()
-      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
+      val btk    =
+        BehaviorTestKit(Room(roomId, RoomData.empty, testGracePeriod, 90.minutes), roomId.toString)
       btk.retrieveAllEffects()
 
       // The re-arm is what the branch chose instead of a sawMessage field, and
@@ -1009,7 +1015,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       val timer = onlyTimer(btk.retrieveAllEffects())
       timer.msg mustBe Room.IdleTick
-      timer.delay mustBe Room.defaultStopAfterIdle
+      timer.delay mustBe 90.minutes
       timer.overriding mustBe true
     }
 
@@ -1031,7 +1037,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "survive a tick while a connection is attached, and re-arm" in {
       val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
       val roomId    = UUID.randomUUID()
-      val btk       = BehaviorTestKit(Room(roomId, withUsers(user)), roomId.toString)
+      val btk       =
+        BehaviorTestKit(
+          Room(roomId, withUsers(user), testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
       btk.retrieveAllEffects()
 
       // Message silence is a veto on stopping, not a reason to stop: five people arguing
@@ -1046,7 +1056,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "stop on a tick when it holds no connection" in {
       val roomId = UUID.randomUUID()
-      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
+      val btk    =
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
 
       // Never connected at all, which is the never-joined room this bounds: /join
       // without the /events that should have followed it.
@@ -1058,7 +1072,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "stop on a tick once its last member has left" in {
       val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
       val roomId    = UUID.randomUUID()
-      val btk       = BehaviorTestKit(Room(roomId, withUsers(user)), roomId.toString)
+      val btk       =
+        BehaviorTestKit(
+          Room(roomId, withUsers(user), testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
 
       // Leave drops the connection; the member row outlives it until ConfirmLeave.
       btk.run(Room.Leave(user.id, user.ref))
@@ -1092,6 +1110,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 end RoomSpec
 
 object RoomSpec:
+  import RoomDataFixtures.*
+
   def expectSnapshot(probe: TestProbe): RoomSnapshot =
     probe.expectMsgType[RoomSnapshot]
 
@@ -1104,8 +1124,8 @@ object RoomSpec:
   def createRoom(
       roomId: UUID,
       data: RoomData,
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod,
-      stopAfterIdle: FiniteDuration = Room.defaultStopAfterIdle
+      gracePeriod: FiniteDuration = testGracePeriod,
+      stopAfterIdle: FiniteDuration = testStopAfterIdle
   )(using
       testKit: ActorTestKit
   ): (UUID, ActorRef[Room.Command]) =

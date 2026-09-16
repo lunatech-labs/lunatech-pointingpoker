@@ -25,7 +25,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
   "RoomManager Actor" should {
     "create room" in {
-      val managerRef = testKit.spawn(RoomManager())
+      val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
       val sender     = testKit.createTestProbe[RoomManager.Response]()
 
       managerRef ! RoomManager.CreateRoom(sender.ref)
@@ -37,7 +37,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val user1Probe = TestProbe()(testKit.system.classicSystem)
       val user2Probe = TestProbe()(testKit.system.classicSystem)
       val token1     = Room.SessionToken.mint()
@@ -53,7 +59,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "no-op ConnectToRoom for an unknown room" in {
-      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
       val unknownRoomId   = UUID.randomUUID()
       val probe           = TestProbe()(testKit.system.classicSystem)
 
@@ -74,7 +80,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "pass RequestSession through to the room, auto-creating it if needed" in {
-      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
       val roomId          = UUID.randomUUID()
       val sessionProbe    = testKit.createTestProbe[Room.SessionMinted]()
 
@@ -88,7 +94,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val resultProbe = testKit.createTestProbe[Room.TokenResolution]()
       val token       = Room.SessionToken.mint()
 
@@ -101,7 +113,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
@@ -110,7 +128,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "resolve ValidateToken against an unknown room as Unresolved instead of creating it" in {
-      val behaviorTestKit = BehaviorTestKit(RoomManager())
+      val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
       val roomId          = UUID.randomUUID()
       val resultProbe     = testKit.createTestProbe[Room.TokenResolution]()
 
@@ -181,7 +199,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val userId = UUID.randomUUID()
       val ref    = TestProbe()(testKit.system.classicSystem).ref
 
@@ -194,7 +218,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val userId = UUID.randomUUID()
       val ref    = TestProbe()(testKit.system.classicSystem).ref
 
@@ -207,7 +237,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
       val token = Room.SessionToken.mint()
 
       managerRef ! RoomManager.Vote(roomId, Some(token), "5")
@@ -229,7 +265,11 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomProbe     = testKit.createTestProbe[Room.Command]()
       val managerRef    =
         testKit.spawn(
-          RoomManager.receiveBehaviour(RoomManagerData(Map(knownRoomId -> roomProbe.ref)))
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(knownRoomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
         )
 
       managerRef ! RoomManager.Vote(unknownRoomId, Some(Room.SessionToken.mint()), "5")
@@ -241,7 +281,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomProbe.ref))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomProbe.ref)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
 
       managerRef ! RoomManager.Vote(roomId, None, "5")
 
@@ -257,10 +303,18 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val alice       = Attendee(userId, "Alice", false, "", firstProbe.ref, token)
       // Alice's session exists before her member does, which is the state ConnectToRoom
       // always arrives in; without it the room's Join guard drops the connection.
-      val roomRef    = testKit.spawn(Room(roomId, withUsers().withMemberlessSession(alice)))
+      val roomRef = testKit.spawn(
+        Room(roomId, withUsers().withMemberlessSession(alice), testGracePeriod, testStopAfterIdle)
+      )
       val dataProbe  = testKit.createTestProbe[Room.DataStatus]()
       val managerRef =
-        testKit.spawn(RoomManager.receiveBehaviour(RoomManagerData(Map(roomId -> roomRef))))
+        testKit.spawn(
+          RoomManager.receiveBehaviour(
+            RoomManagerData(Map(roomId -> roomRef)),
+            testGracePeriod,
+            testStopAfterIdle
+          )
+        )
 
       managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, firstProbe.ref)
       // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
@@ -280,7 +334,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId       = UUID.randomUUID()
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val managerRef   = testKit.spawn(
-        RoomManager.receiveBehaviour(RoomManagerData.empty, Room.defaultGracePeriod, 200.millis)
+        RoomManager.receiveBehaviour(RoomManagerData.empty, testGracePeriod, 200.millis)
       )
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)

@@ -158,17 +158,14 @@ object Room:
 
   private case object IdleTickKey
 
-  val defaultGracePeriod: FiniteDuration   = 6.seconds
-  val defaultStopAfterIdle: FiniteDuration = 2.hours
-
   private def armIdleTick(timers: TimerScheduler[Command], stopAfterIdle: FiniteDuration): Unit =
     timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
 
   def apply(
       roomId: UUID,
       initialData: RoomData = RoomData.empty,
-      gracePeriod: FiniteDuration = defaultGracePeriod,
-      stopAfterIdle: FiniteDuration = defaultStopAfterIdle
+      gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration
   ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
