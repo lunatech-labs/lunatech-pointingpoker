@@ -47,7 +47,7 @@ Carried from the 4a plan, still binding:
 - **The name is `stop-after-idle`, never `idle-timeout`.**
   `pointing-poker.probe.idle-timeout` is the pekko-http server binding timeout
   and is correctly named for that. Do not touch it.
-- **The configured chain is `retry < grace << idle`**, validated by three
+- **The configured chain is `retry < grace << idle`**, validated by four
   `require`s in one `LifecycleConfig.load`. No config change in this plan.
 
 New to this plan:

@@ -154,7 +154,7 @@ object Room:
     end of
   end RoomData
 
-  final private[actors] case object IdleTick extends Command
+  private[actors] case object IdleTick extends Command
 
   private case object IdleTickKey
 
@@ -186,8 +186,8 @@ object Room:
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
-        // Any message re-arms the tick a full delay out, so none lands between ValidateToken
-        // and ConnectToRoom. Invariant: connections change only here, so the timer is exact.
+        // Any message re-arms the tick a full delay out, so none lands between ValidateToken and
+        // ConnectToRoom. Invariant: connections change only on this path, so the timer is exact.
         if message != IdleTick then armIdleTick(timers, stopAfterIdle)
         // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
         // from a superseded generation. Verified against pekko-actor-typed 1.7.0.

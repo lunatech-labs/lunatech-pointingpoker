@@ -12,6 +12,7 @@ import org.apache.pekko.actor.testkit.typed.scaladsl.{
   TestInbox
 }
 import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
 import com.lunatech.pointingpoker.actors.RoomDataFixtures.Attendee
@@ -1013,16 +1014,18 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "stop itself once it has held no connection for the idle timeout" in {
-      val watcher      = testKit.createTestProbe()
+      val watcher      = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef) = createRoom(
         UUID.randomUUID(),
         RoomData.empty,
         stopAfterIdle = 200.millis
       )
+      watcher.watch(roomRef.toClassic)
 
       // A never-joined room is bounded too: it holds no connection from the start.
       // The one case proving pekko delivers the tick after the delay, which BehaviorTestKit cannot.
-      watcher.expectTerminated(roomRef, 3.seconds)
+      watcher.expectNoMessage(150.millis)
+      watcher.expectTerminated(roomRef.toClassic, 3.seconds)
     }
 
     "survive a tick while a connection is attached, and re-arm" in {
@@ -1036,7 +1039,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       btk.run(Room.IdleTick)
 
       btk.isAlive mustBe true
-      onlyTimer(btk.retrieveAllEffects()).overriding mustBe true
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      timer.mode mustBe Effect.TimerScheduled.SingleMode
+      timer.overriding mustBe true
     }
 
     "stop on a tick when it holds no connection" in {

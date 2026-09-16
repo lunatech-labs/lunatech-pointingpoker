@@ -284,11 +284,17 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       )
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
-      sessionProbe.expectMessageType[Room.SessionMinted]
+      val first = sessionProbe.expectMessageType[Room.SessionMinted]
 
       // The room never gains a connection, so its own idle tick stops it. Terminated is the
       // only thing that can drop it from the map now that removeRoom is gone.
       Thread.sleep(500)
+
+      // A surviving original room would still resolve this token, so this is what
+      // discriminates a fresh room from the one that minted it.
+      val tokenProbe = testKit.createTestProbe[Room.TokenResolution]()
+      managerRef ! RoomManager.ValidateToken(roomId, first.token, tokenProbe.ref)
+      tokenProbe.expectMessage(Room.Unresolved)
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
       sessionProbe.expectMessageType[Room.SessionMinted]

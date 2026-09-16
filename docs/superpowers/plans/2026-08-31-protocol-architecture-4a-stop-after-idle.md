@@ -51,7 +51,7 @@ step 5a (#403) on step 5 (#402), so this branch is the fourth level and needs a
   second path. Reversing them would leave one commit with no stop path at all,
   which matters on the fourth level of a four-deep stack where each merge below
   forces a `rebase --onto`.
-- **The configured chain is `retry < grace << idle`**, and all three `require`s
+- **The configured chain is `retry < grace << idle`**, and all four `require`s
   live in one `load`. Exact keys: `pointing-poker.room.grace-period`,
   `pointing-poker.room.stop-after-idle`, `pointing-poker.sse.retry`. Exact
   environment variables: `ROOM_GRACE_PERIOD`, `ROOM_STOP_AFTER_IDLE`, `SSE_RETRY`.

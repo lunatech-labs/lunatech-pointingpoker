@@ -952,7 +952,7 @@ keeping apart:
    history, to a coffee break. It lands at step 4a.
 
 **Idle means `connections` has been empty continuously for the idle period, and
-no message has arrived since the previous tick.** It is a duration rather than an
+no message has arrived since the timer was last armed.** It is a duration rather than an
 instantaneous check: the tick fires only after a full idle period with no
 message to re-arm it, and it stops the actor if `connections` is still empty at
 that moment. Connections present means never idle,
@@ -982,8 +982,8 @@ become.
 
 **The tick needs no elapsed comparison of its own.** The `IdleTick` branch in
 `receiveBehaviour` asks only whether `connections` is empty. The re-armed
-`IdleTick` timer already carried the elapsed part a comparison would have
-needed: it could not fire sooner than a full idle timeout after the last
+`IdleTick` timer carries the elapsed part a comparison would have
+needed: it cannot fire sooner than a full idle timeout after the last
 message, and the stamp such a comparison would have read, written only by a
 message handler, could never be later than that message. A timestamp
 comparison could therefore only ever have disagreed with the timer when the

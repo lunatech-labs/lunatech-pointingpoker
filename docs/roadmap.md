@@ -185,8 +185,8 @@ directly in the new frontend.
       completed join to keep a room alive, so an abandoned tab, a network failure
       before `/join`, or stray traffic could accumulate rooms that lived for the
       life of the process. **Landed as step 4a's stop-after-idle**, which stops a
-      room two hours after its last connection goes, joined or not. See
-      `docs/known-issues.md`.
+      room two hours after the grace period following its last connection ends,
+      joined or not. See `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,
       not by oversight. More load-bearing than it looks now that nothing is
