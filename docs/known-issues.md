@@ -449,11 +449,13 @@ roadmap item instead of leaving it here as stale history.
   cheap and should be the habit: mutate the mechanism the test names, expect red,
   revert. That found every instance above and cost one targeted run each. The
   entry below reasons in exactly this frame, and is the model, since it argues
-  case by case that its waits can only fail safe. Mutation tooling would automate
-  the sweep permanently; Stryker4s has never been assessed against this project's
-  Scala 3 and sbt setup, so whether it is viable here is unknown. Browser cases
-  stay manual regardless, since mutating the server and re-running the suite costs
-  minutes per mutant.
+  case by case that its waits can only fail safe. On mutation tooling: Stryker4s
+  1.0 documents Scala 3 and sbt 1.x support and does coverage-based test
+  selection, so it is worth a timeboxed spike against `Room.scala`, but nothing
+  has been run here yet. Expect it to be a periodic audit rather than a per-PR
+  gate, since the cost is mutants times covering-test runtime, and expect triage
+  of equivalent mutants to be the real work. Browser cases stay manual regardless,
+  since mutating the server and re-running the suite costs minutes per mutant.
 
 ### Two SSE tests settle on a wall clock, not a synchronization primitive
 
