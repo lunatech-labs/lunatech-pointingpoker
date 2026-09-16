@@ -531,15 +531,7 @@ Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
-
-emptySince    Option[Instant]  // step 4a: empty since when, Some at creation
 ```
-
-The last is actor bookkeeping rather than a fifth group of state. It sits beside
-`connections` rather than inside `RoomState`, because it is derived from the
-connection layer: an `Instant` is not a handle, but putting it in the room's own
-data would break the rule below in spirit while satisfying it in letter. "Two
-lifetimes, not one" specifies what it means.
 
 **`connections` maps a member to a set because one person can hold several
 connections at once**: a second tab, or a replacement opened because the first
@@ -639,7 +631,7 @@ half of what the client does client-side today and has to move with the reveal
 itself.
 
 `RoomData` keeps its name as the actor's state container and holds all four
-groups plus the idle bookkeeping; `RoomState` is the room's own data within it,
+groups; `RoomState` is the room's own data within it,
 which is what the `publish` snippet below reaches through. `history` is the
 within-session round record, specified under "Round history" below. The rule
 forbids a connection handle anywhere in this group, which is why `connections` is
@@ -706,7 +698,7 @@ nothing to forget.
 **Each of the three is removed at a different moment, and the differences are the
 design rather than an accident.** A ref leaves its member's set the instant its
 stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
-dead ref is a no-op anyway, and `emptySince` has to reflect reality. Termination
+dead ref is a no-op anyway. Termination
 is now the only thing that drains the set, where the wholesale replacement above
 used to evict a stale ref as a side effect too: `connect` adds to a `Set` and
 leaves what is already there, so a lost `Leave` would strand a ref that nothing
@@ -961,9 +953,9 @@ keeping apart:
 
 **Idle means `connections` has been empty continuously for the idle period, and
 no message has arrived since the previous tick.** It is a duration rather than an
-instantaneous check: `emptySince` is set when `connections` becomes empty and
-cleared when it becomes non-empty, and the tick stops the actor once
-`connections` is empty when it fires. Connections present means never idle,
+instantaneous check: the tick fires only after a full idle period with no
+message to re-arm it, and it stops the actor if `connections` is still empty at
+that moment. Connections present means never idle,
 whether or not anyone is clicking, and a short emptiness is survivable, which is
 the coffee-break requirement above. That makes this step a consumer of the
 removal moments above: since step 4, only stream termination drains a member's
@@ -990,12 +982,14 @@ become.
 
 **The tick needs no elapsed comparison of its own.** The `IdleTick` branch in
 `receiveBehaviour` asks only whether `connections` is empty. The re-armed
-`IdleTick` timer already carries the elapsed part: it cannot fire sooner than a
-full idle timeout after the last message, and `emptySince`, written only by a
-message handler, can never be later than that message. A timestamp comparison
-could therefore only ever disagree with the timer when the system clock stepped
-backwards, which is the wall-clock defect `docs/known-issues.md` used to record
-as accepted. Removing the comparison removes the defect instead of managing it.
+`IdleTick` timer already carried the elapsed part a comparison would have
+needed: it could not fire sooner than a full idle timeout after the last
+message, and the stamp such a comparison would have read, written only by a
+message handler, could never be later than that message. A timestamp
+comparison could therefore only ever have disagreed with the timer when the
+system clock stepped backwards, which is the wall-clock defect
+`docs/known-issues.md` used to record as accepted. That is why the comparison
+was removed rather than managed.
 
 **Invariant: `connections` changes only on the message path.** Every mutation
 arrives as a `Command` and therefore re-arms the tick, which is what makes the
@@ -2316,9 +2310,9 @@ ordered chain, `retryMillis` well under `gracePeriod` and `gracePeriod` under
 `stopAfterIdle`. `Room` arms a single-shot `IdleTick` timer in
 `Behaviors.withTimers`, re-armed on every message except the tick itself, and
 stops via `Behaviors.stopped` when the tick finds the room holds no connection,
-with no elapsed comparison; `emptySince` stamps at the room's own setup
-for a never-joined room and at the last disconnect otherwise, and clears on
-connect. `Room.StreamCompleted` completes every attached SSE stream when the
+with no elapsed comparison of any kind: the tick reads `connections` directly,
+so a never-joined room and one whose last member just left are bounded the
+same way. `Room.StreamCompleted` completes every attached SSE stream when the
 room stops, recognized by `completionMatcher` as `CompletionStrategy.immediately`,
 as this section specifies. `ConfirmLeave` no longer stops the room when its
 membership empties, and with every `ConfirmLeave` answer now identical the whole
@@ -2334,7 +2328,8 @@ since a short wait with no other room traffic never gave the room a chance to
 notice the departure, so the case was dropped rather than stretched into a
 roughly 40-second-per-browser wait. The survival behaviour is instead pinned at
 the JVM level, by `RoomSpec`'s "stay alive when its last member is removed" and
-the four idle-timeout cases beside it, all deterministic and clock-free;
+the idle-timeout cases beside it, all deterministic `BehaviorTestKit` cases
+except one, which uses real time to prove the timer is delivered at all;
 `docs/known-issues.md` records the gap as "A room outliving its last member is
 not covered end to end." What it leaves open: a client looping requests at an
 empty room re-arms the timer indefinitely, so bounding that abuse still belongs

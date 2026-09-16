@@ -1128,8 +1128,10 @@ git commit -m "docs: record stop-after-idle as landed and close the three issues
 
 Before opening the PR:
 
-- `sbt scalafmtAll scalafmtCheckAll test` green, JVM case count up by 8 over
-  step 4's 124, to 132.
+- `sbt scalafmtAll scalafmtCheckAll test` green, JVM case count up by 12 over
+  step 4's 124, to 136, not the 132 claimed above:
+  `2026-09-16-idle-stop-without-the-wall-clock.md` changed the count further
+  after this plan shipped.
 - `npm run e2e` green across chromium and firefox, case count unchanged. The
   planned case was dropped rather than written; see Deviations, item 6.
 - `grep -rn "SseConfig\|Room.Response\|RoomResponseWrapper" src testkit e2e` prints

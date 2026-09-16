@@ -262,11 +262,12 @@ roadmap item instead of leaving it here as stale history.
   attempt with a 6 second wait passed identically before and after the change,
   which is worse than no case at all.
 - **Resolution:** Accepted. The behaviour is pinned at the JVM level by
-  `RoomSpec`'s "stay alive when its last member is removed" and by the five idle
-  cases beside it, all deterministic and clock-free. The e2e cost buys a weaker
-  guard than those already provide, since its strength depends on detection
-  landing inside the wait on CI hardware. Revisit if the detection path ever
-  becomes clock-driven rather than write-driven.
+  `RoomSpec`'s "stay alive when its last member is removed" and by the idle
+  cases beside it, all deterministic `BehaviorTestKit` cases except one, which
+  uses real time to prove the timer is delivered at all. The e2e cost buys a
+  weaker guard than those already provide, since its strength depends on
+  detection landing inside the wait on CI hardware. Revisit if the detection
+  path ever becomes clock-driven rather than write-driven.
 
 ### A second tab on the same room displaces the first tab's identity
 

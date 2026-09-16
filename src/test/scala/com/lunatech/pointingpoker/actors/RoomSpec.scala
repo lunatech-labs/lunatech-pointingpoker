@@ -1020,8 +1020,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         stopAfterIdle = 200.millis
       )
 
-      // Never connected at all, which is the never-joined room the stamp at creation covers:
-      // written as a transition-only field this room would run for the life of the process.
+      // A never-joined room is bounded too: it holds no connection from the start.
       // The one case proving pekko delivers the tick after the delay, which BehaviorTestKit cannot.
       watcher.expectTerminated(roomRef, 3.seconds)
     }
@@ -1081,8 +1080,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.Leave(user.id, user.ref)
       roomRef ! Room.GetData(dataProbe.ref)
-      // Stamped at the disconnect, not at the member's removal: the two are a grace period apart
-      // and it is the connection layer this is derived from.
+      // Empty at the disconnect, not at the member's removal: the two are a grace period apart.
       dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
     }
   }
