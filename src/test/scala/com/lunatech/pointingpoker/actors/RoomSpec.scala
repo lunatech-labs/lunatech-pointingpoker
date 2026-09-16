@@ -4,7 +4,13 @@ import java.util.UUID
 
 import scala.concurrent.duration.*
 
-import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, LoggingTestKit}
+import org.apache.pekko.actor.testkit.typed.Effect
+import org.apache.pekko.actor.testkit.typed.scaladsl.{
+  ActorTestKit,
+  BehaviorTestKit,
+  LoggingTestKit,
+  TestInbox
+}
 import org.apache.pekko.actor.typed.ActorRef
 import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
@@ -21,6 +27,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   override def afterAll(): Unit =
     testKit.shutdownTestKit()
+
+  // BehaviorTestKit records timer scheduling without running timers, which is what
+  // lets these cases run at the real two-hour default.
+  def onlyTimer(effects: Seq[Effect]): Effect.TimerScheduled[?] = effects match
+    case Seq(t: Effect.TimerScheduled[?]) => t
+    case other => fail(s"expected exactly one scheduled timer, got $other")
 
   "Room Actor" should {
     "update the current issue and publish it to everyone" in {
@@ -974,6 +986,32 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       user2Probe.expectMsg(Room.StreamCompleted)
     }
 
+    "arm a single-shot idle timer at setup, for the configured delay" in {
+      val roomId = UUID.randomUUID()
+      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
+
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      timer.msg mustBe Room.IdleTick
+      timer.delay mustBe Room.defaultStopAfterIdle
+      timer.mode mustBe Effect.TimerScheduled.SingleMode
+      timer.overriding mustBe false
+    }
+
+    "re-arm the timer, superseding the pending tick, on any non-tick message" in {
+      val roomId = UUID.randomUUID()
+      val btk    = BehaviorTestKit(Room(roomId, RoomData.empty), roomId.toString)
+      btk.retrieveAllEffects()
+
+      // The re-arm is what the branch chose instead of a sawMessage field, and
+      // overriding is what voids a tick already queued from the old generation.
+      btk.run(Room.GetData(TestInbox[Room.DataStatus]().ref))
+
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      timer.msg mustBe Room.IdleTick
+      timer.delay mustBe Room.defaultStopAfterIdle
+      timer.overriding mustBe true
+    }
+
     "stop itself once it has held no connection for the idle timeout" in {
       val watcher      = testKit.createTestProbe()
       val (_, roomRef) = createRoom(
@@ -987,41 +1025,18 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       watcher.expectTerminated(roomRef, 3.seconds)
     }
 
-    "stay alive while a connection is attached, however quiet the room is" in {
-      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
-      val watcher      = testKit.createTestProbe()
-      val (_, roomRef) = createRoom(
-        UUID.randomUUID(),
-        withUsers(user),
-        stopAfterIdle = 200.millis
-      )
+    "survive a tick while a connection is attached, and re-arm" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+      val roomId    = UUID.randomUUID()
+      val btk       = BehaviorTestKit(Room(roomId, withUsers(user)), roomId.toString)
+      btk.retrieveAllEffects()
 
-      // Message silence is a veto on stopping, not a reason to stop: five people arguing for
-      // two hours before anyone clicks a card must not be disconnected mid-meeting.
-      watcher.expectNoMessage(700.millis)
+      // Message silence is a veto on stopping, not a reason to stop: five people arguing
+      // for two hours before anyone clicks a card must not be disconnected mid-meeting.
+      btk.run(Room.IdleTick)
 
-      val dataProbe = testKit.createTestProbe[Room.DataStatus]()
-      roomRef ! Room.GetData(dataProbe.ref)
-      dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user.id)
-    }
-
-    "defer its stop by a full delay when any message arrives" in {
-      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val watcher      = testKit.createTestProbe()
-      val (_, roomRef) = createRoom(
-        UUID.randomUUID(),
-        RoomData.empty,
-        stopAfterIdle = 300.millis
-      )
-
-      // A stray message re-arms the timer, which is what stops a tick landing between
-      // ConnectToRoom's send and its delivery. It also defers an abandoned room by a delay.
-      Thread.sleep(250)
-      roomRef ! Room.GetData(dataProbe.ref)
-      dataProbe.expectMessageType[Room.DataStatus]
-      watcher.expectNoMessage(200.millis)
-
-      watcher.expectTerminated(roomRef, 3.seconds)
+      btk.isAlive mustBe true
+      onlyTimer(btk.retrieveAllEffects()).overriding mustBe true
     }
 
     "stop after the idle timeout once its last member has left" in {
