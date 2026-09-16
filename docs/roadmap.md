@@ -35,9 +35,12 @@ inside a long-lived socket payload.
       once server-side per WebSocket connection as before.
 - [ ] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
       from fire-and-forget (`roomManager ! ...`) to the ask-pattern already used by
-      `create-room`, so `Room`/`RoomManager` can reply with a real result (applied /
-      room not found / not a member) instead of the API always answering `204`
-      regardless of what happened. Natural to build alongside the identity
+      `create-room`, so `Room`/`RoomManager` can reply with a real result
+      instead of the API always answering `204` regardless of what happened. The
+      design settles that result at four outcomes: applied, no session, not a
+      member, and the round already revealed. An unrecognized room id is
+      answered as no session rather than as a not-found of its own, for the
+      reason recorded under step 6. Natural to build alongside the identity
       validation above, since both need the same request/response plumbing.
       **Becomes step 6**, alongside idempotent `/join` and the explicit leave
       endpoint.

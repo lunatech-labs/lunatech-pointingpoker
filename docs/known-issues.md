@@ -209,8 +209,12 @@ roadmap item instead of leaving it here as stale history.
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
   (`estimationValues`). Step 6 describes the endpoints with tapir, which buys
-  types and shape rather than values, so an empty string satisfies the schema
-  there too unless a validator is declared, which nothing plans. As with the
+  types and shape rather than values, so an empty string would satisfy the schema
+  there too unless a validator is declared. That step declares one, on the
+  estimation alone: a blank is refused at the edge with `400` instead of reaching
+  the actor, which moves the refusal recorded above from `RoomData.vote` to the
+  request and leaves that guard as insurance. Nothing else gains a validator, so
+  the name on `/join` and the text on `/edit-issue` are untouched. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
   and wants its own piece of work rather than a patch per endpoint.
 
@@ -430,8 +434,9 @@ roadmap item instead of leaving it here as stale history.
   click in silence. Nothing detects either mismatch, and a version field on the
   wire would not have caught this one: step 3a changed which votes the server
   accepts without changing the snapshot's shape at all.
-- **Resolution:** Open, and worth folding into step 6 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`.
+- **Resolution:** Open, and folded into step 6 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  whose step 6 paragraph now carries it.
   `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
   is then always revalidated, costing one conditional request that answers 304
   with no body, where `no-store` would re-send all 19.7KB per load. The header
@@ -918,7 +923,9 @@ roadmap item instead of leaving it here as stale history.
   whose ask pattern gives `/vote` a real result and makes both refusals
   reportable when they happen, which is what section 5 already says the reply is
   for. The POST travels over HTTP and works when the SSE stream does not, so the
-  answer reaches precisely the client that cannot see the state. What is left
+  answer reaches precisely the client that cannot see the state. The same step
+  deletes the optimistic assignment described above, so the false card has no
+  path to appear rather than being corrected after the fact. What is left
   after that is general: a client with a dead stream is stale in every respect,
   which is the backlog's connection-liveness watchdog and not this entry. Remove
   this entry when step 6 lands.

@@ -1291,6 +1291,19 @@ Three additions, each closing something documented:
   both beacons see a set of two, both do nothing, and that departure falls back to
   the grace period. Rare, and the outcome is today's behaviour.
 
+  **It answers `204` on both branches**, the removal and the no-op. `sendBeacon`
+  reads no response, and nothing a caller could do differs between the two; a
+  request written by hand still draws the `401` and `403` of the result set under
+  step 6 below. Removing the member also cancels any `ConfirmLeave` the grace
+  period has pending for that id, so the two paths to a departure cannot both
+  publish one.
+
+  **The Leave link posts it too.** The beacon is what closes the tab-close entry
+  in `docs/known-issues.md`, but a deliberate click on Leave waits out the same
+  grace period today for no reason at all, and the endpoint it needs is the one
+  this step adds. It posts before closing its own stream, so the member still
+  holds the connection the cardinality test counts.
+
   **It clears no cookie, and that is deliberate.** `pagehide` fires on reload as
   well as on close and nothing on the event tells the two apart, so a leave
   response carrying `Set-Cookie: …; Max-Age=0` would delete the identity of a tab
@@ -1346,6 +1359,12 @@ a second participant, and it is the nearest this app has to a rename. It writes
 that name to the `Session`, and to the `Member` only where one already exists;
 section 3 says why `/join` never creates a member. The consequence to know is that
 a second tab opened with a different name renames the person in both.
+
+**The rename has to move the session and the member together.** `RoomData.of`
+requires a member's name to equal the name on the session resolving its id, so
+writing one side alone makes the room unconstructible at the next `of`. That is
+step 5a's invariant doing the job it was added for rather than an obstacle to
+route around.
 
 That matters because the reload, not the tab close, is the form users actually
 report: today `/join` mints a fresh identity on every call, so someone reloading
@@ -1484,12 +1503,28 @@ Three details are load-bearing rather than polish:
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears the
   confirmation and keeps the value while `clear()` drops both, so "I have an
   estimation showing but the server does not consider me voted" is exactly the
-  revote state and nothing else. The optimistic assignment in
-  `vote()` stays, and corrects itself on the next publish rather than promptly:
-  a failed vote POST leaves the server holding the old estimation, so the
-  selection stays visibly confirmed until somebody else acts, which in an idle
-  room can be a while. Step 6's ask-pattern reply is what makes a failed vote
-  reportable at the time it fails; this derivation only stops it persisting.
+  revote state and nothing else.
+
+  **The optimistic assignment in `vote()` goes at step 6**, and the reason it
+  survived until then expires there. It was tolerated because a failed vote POST
+  was unreportable, so the flag corrected itself on the next publish rather than
+  promptly, leaving the selection visibly confirmed until somebody else acted.
+  With the ask reply the wrong state does not have to be created at all, and the
+  snapshot is then the only writer, which is what "derived, not carried" says.
+
+  Removing it costs less than it looks, because the flag never selects a card.
+  The selection is `user.estimation`, which only the `onmessage` handler writes
+  from a snapshot, and the flag chooses between the `estimation-button-selected`
+  and `estimation-button-uncomfirmed` styles of a card already selected, which
+  differ in the re-vote state alone. So the assignment was invisible on an
+  ordinary first vote, right when re-confirming a kept estimate, and wrong when
+  clicking a different card during a re-vote, where it styled the previous card
+  as confirmed for one round trip. What is given up is the instant feedback on
+  that re-confirm, which then behaves like every other vote in the app: the
+  publish and the `204` leave the actor on the same pass through `Room`'s `Vote`
+  handler, so the wait is one round trip and no timer. A third style for a vote
+  in flight is the escape hatch if that ever reads as unresponsive, and it
+  belongs to step 8's components, since it is state the snapshot does not own.
 
 `showUserEstimation` re-points at `hasEstimation`. That is the one client change
 the redaction forces, and it is why the confidentiality step is not server-side
@@ -1739,14 +1774,24 @@ Added, each with the step it lands at so nothing here is unassigned:
   record: the blank-estimation case changed with the vote refusal, and step 4's
   landed note carries what it became and why.
 
-  Step 6 adds two that need one browser context rather than two, since they are
-  about the shared
-  room cookie: two tabs on the same room resolving to one participant, with a vote
-  in either showing in both and closing one leaving the other connected and
-  present; and a reload keeping its identity and its vote instead of duplicating
-  its participant. The rejoin on a snapshot that does not name the client as a
-  member is not one of these, since the race that produces it cannot be forced in
-  a browser; it is a unit test over a snapshot fixture instead.
+  Step 6 adds three. Two need one browser context rather than two, since they
+  are about the shared room cookie: two tabs on the same room resolving to one
+  participant, with a vote in either showing in both and closing one leaving the
+  other connected and present; and a reload keeping its identity and its vote
+  instead of duplicating its participant.
+
+  The third is the rejoin on a snapshot that does not name the
+  client as a member. An earlier draft called that race unforceable in a browser
+  and sent it to a unit test over a snapshot fixture, which was wrong twice: the
+  leave endpoint landing in this same step makes it forceable, and there is
+  nowhere for such a unit test to live, `applySnapshot` being inline in
+  `index.html` with nothing importing it and `npm test` covering the testkit
+  alone. The case posts `/leave` through the browser context's own request API,
+  which shares the cookie jar, httpOnly cookies included. `Depart` drops the
+  member and not the connection, and `publish` iterates `connections` while
+  `RoomSnapshot.of` derives `users` from `members`, so the still-attached tab
+  receives exactly the snapshot the rule exists for. It covers the endpoint's
+  single-connection branch on the way.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -1761,8 +1806,11 @@ Added, each with the step it lands at so nothing here is unassigned:
   while a newly added server field passes, which is the direction the additive
   field strategy depends on being safe and which a schema diff would flag as
   noise.
-- **`openapi-typescript` over tapir's OpenAPI document** (step 6 onward) with a
-  CI step that regenerates and fails on a diff, covering the command endpoints.
+- **`openapi-typescript` over tapir's OpenAPI document** (step 8, with the first
+  consumer of the generated types) with a CI step that regenerates and fails on a
+  diff, covering the command endpoints. Step 6 lands the tapir descriptions and
+  stops there, the document being derivable from them whenever it is wanted and
+  read by nothing before step 8.
 
 ## Accepted costs
 
@@ -2260,7 +2308,7 @@ step ends where it started, at `data`, `gracePeriod` and `stopAfterIdle`. Most o
 churn is mechanical probe wiring, and step 4 has already rewritten those cases
 for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
 not revive this**: its reply is an ask answered to the HTTP route, carrying the
-applied / not-a-member results the ask pattern is for, so a `Response` ADT
+four-outcome result set the ask pattern is for, so a `Response` ADT
 reappearing there is a new type under an old name rather than this one
 returning.
 
@@ -2473,13 +2521,51 @@ size of a member's connection set. That set has to be read through an `Option`:
 step 4's `RoomData.disconnect` drops a member's `connections` entry once its refs
 are gone, and the late beacon, arriving after its own stream has already
 terminated, is exactly the ordering where the entry is already absent, so
-`connections(id).size` throws on the case the rule exists for. About 190 and 175.
+`connections(id).size` throws on the case the rule exists for. About 190 and
+175, sized before the cache-header line and the third browser case the
+paragraphs below add.
 
-**Its result set gains a third case from step 3a**, refused because the round is
-revealed, beside applied and not-a-member. That refusal exists from 3a onward and
-is unreportable until here, which is the same gap the failed vote in section 5
-describes: the disabled deck prevents the ordinary click, and the ask reply is
+**Its result set is four outcomes and their statuses are part of the contract.**
+`Applied` answers `204`. `NoSession` answers `401` and covers a missing,
+unparseable or unresolved token as well as a room id the manager does not hold.
+`NotAMember` answers `403`, a token resolving to a session whose user is no
+longer a member. `RoundRevealed` answers `409`, on `/vote` alone. A blank
+estimation is refused at the edge with `400` by a tapir validator, and
+`RoomData.vote` keeps its own blank and revealed guards behind that as insurance,
+the way `RoomData.of`'s `require`s are insurance rather than the check anything
+relies on. An ask that fails or times out answers `500`, which is what
+`create-room`'s own failure branch already does.
+
+**The revealed case comes from step 3a**, and it exists from 3a onward while
+being unreportable until here, which is the same gap the failed vote in section
+5 describes: the disabled deck prevents the ordinary click, and the ask reply is
 what answers a click that raced the reveal or a request written by hand.
+
+**`401` and `403` are separated because the client acts differently on them**,
+and step 5 is what made the distinction real. A retained session resolves for
+the life of the actor, so `NoSession` now means the room is gone or the cookie
+is forged, where `NotAMember` means the member was removed at grace expiry or by
+the leave endpoint. The first gets the terminal "Your session has ended" message
+the page already shows for `/events`, from `EventSource`'s `onerror` on a closed
+stream; the second gets section 5's rejoin, which recovers with nothing asked of
+the user.
+
+**An unknown room answers `401` rather than `404`**, matching what
+`RoomManager`'s `ValidateToken` already answers for one. A `404` would be more
+honest about the resource and would hand out a room-existence oracle: a request
+with no cookie would draw `404` for an absent room and `401` for a live one, and
+the two checks cannot be reordered, since only the room can validate a token.
+That is harmless against UUIDs and much less so at step 7, where ids become
+three guessable words while rate limiting stays open in `docs/known-issues.md`.
+A `404` would also be falsified by the reload that silently re-creates the room.
+
+**The reply travels by relay**, each `RoomManager` command carrying a `replyTo`
+through to the room, which is how `RequestSession` and `ValidateToken` already
+work. The manager answers `NoSession` itself for an unknown room and for the
+missing-cookie case its `Option` silently drops today, so room refs stay inside
+their owner and a stopped room is answered from the map's absence rather than by
+an ask timing out. This does not revive the reply channel step 4a deleted, for
+the reason recorded there.
 
 tapir lands here rather than later because this step already rewrites all five
 command endpoints plus `/join`, `/events` and the leave endpoint it adds, so
@@ -2488,6 +2574,19 @@ issue and the same-room two-tab collision, and it closes the reload duplicate
 structurally rather than by beacon timing. The routes themselves do not move:
 there is no `:tabId` segment, and the cookie keeps the `/rooms/:slug` path 08-20
 gave it.
+
+**It lands as endpoint descriptions only.** The OpenAPI document and the
+`openapi-typescript` gate wait for step 8, where the generated types get a
+consumer: a document nothing reads is the no-consumer case this design applies to
+`version` and `scale`, and it is a few lines derived from the descriptions on the
+day it is wanted. What the descriptions buy immediately is one place declaring
+each endpoint's inputs, outputs and status codes, and the `400` validator above.
+
+**It also carries the one-line cache fix** `docs/known-issues.md` schedules here,
+`Cache-Control: no-cache` on the two `getFromFile` routes, so a deploy cannot pair
+a cached page with a new server. That entry's own argument for folding it in is
+the ordered rebase: doing it on a branch of its own adds an `API.scala` conflict
+to a stack this step is already editing that file in.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
