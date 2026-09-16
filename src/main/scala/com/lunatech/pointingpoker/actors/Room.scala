@@ -1,6 +1,5 @@
 package com.lunatech.pointingpoker.actors
 
-import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -71,29 +70,20 @@ object Room:
       state: RoomState,
       members: Map[UUID, Member],
       sessions: Map[SessionToken, Session],
-      connections: Map[UUID, Set[UntypedRef]],
-      emptySince: Option[Instant]
+      connections: Map[UUID, Set[UntypedRef]]
   ):
     private[Room] def connect(userId: UUID, name: String, ref: UntypedRef): RoomData =
       this.copy(
         members = this.members + (userId -> Member(name)),
         connections =
-          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref)),
-        emptySince = None
+          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref))
       )
 
-    private[Room] def disconnect(userId: UUID, ref: UntypedRef, now: Instant): RoomData =
+    private[Room] def disconnect(userId: UUID, ref: UntypedRef): RoomData =
       // The entry goes when its set empties, so "holds no connection" means what it says.
-      val next = this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
-      this.copy(connections = next, emptySince = Option.when(next.isEmpty)(now))
-
-    private[Room] def startedAt(now: Instant): RoomData =
-      // Some at creation, not None: a room whose /events never followed its /join has been
-      // empty without ever becoming empty, and that is the never-joined room this bounds.
-      this.copy(emptySince = Option.when(this.connections.isEmpty)(now))
-
-    def idleFor(timeout: FiniteDuration, now: Instant): Boolean =
-      this.emptySince.exists(since => !since.isAfter(now.minusMillis(timeout.toMillis)))
+      this.copy(connections =
+        this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
+      )
 
     private[Room] def removeMember(userId: UUID): RoomData =
       // Estimates are keyed by id and survive a departure; only clear or the round ends one.
@@ -142,8 +132,7 @@ object Room:
         state: RoomState = RoomState.empty,
         members: Map[UUID, Member] = Map.empty,
         sessions: Map[SessionToken, Session] = Map.empty,
-        connections: Map[UUID, Set[UntypedRef]] = Map.empty,
-        emptySince: Option[Instant] = None
+        connections: Map[UUID, Set[UntypedRef]] = Map.empty
     ): RoomData =
       // Every id resolves to a session, which is conspicuously not "every id is a member":
       // a connection or an estimate outliving its member is a state this design requires.
@@ -161,7 +150,7 @@ object Room:
       state.round.estimates.keys.foreach(id =>
         require(identities.contains(id), s"the estimate for $id resolves to no session")
       )
-      RoomData(state, members, sessions, connections, emptySince)
+      RoomData(state, members, sessions, connections)
     end of
   end RoomData
 
@@ -184,13 +173,7 @@ object Room:
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
         armIdleTick(timers, stopAfterIdle)
-        receiveBehaviour(
-          roomId,
-          initialData.startedAt(Instant.now()),
-          gracePeriod,
-          stopAfterIdle,
-          timers
-        )
+        receiveBehaviour(roomId, initialData, gracePeriod, stopAfterIdle, timers)
       }
     }
 
@@ -285,7 +268,7 @@ object Room:
           case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
-            val next = data.disconnect(userId, ref, Instant.now())
+            val next = data.disconnect(userId, ref)
             if !next.holdsConnection(userId) && next.isMember(userId) then
               timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
             receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)

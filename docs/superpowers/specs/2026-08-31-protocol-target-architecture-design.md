@@ -969,12 +969,7 @@ the coffee-break requirement above. That makes this step a consumer of the
 removal moments above: since step 4, only stream termination drains a member's
 set, so a ref stranded by a lost `Leave` leaves its room permanently non-idle.
 
-**`emptySince` starts as `Some(now)` at the actor's creation and not as `None`**,
-which reads as a detail and is not one. A room whose `/events` never follows its
-`/join` has connections that are empty without ever having *become* empty, and
-that is exactly the never-joined half of the abandoned-room issue this step claims
-to close. Written as a transition-only field it would leave such a room running
-for the life of the process.
+A never-joined room is bounded too, since it holds no connection from the start.
 
 **The tick is a single-shot timer re-armed on every message, and its delay is the
 idle timeout itself.** The stop therefore lands one delay after the later of the

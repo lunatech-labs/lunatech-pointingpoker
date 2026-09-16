@@ -71,6 +71,10 @@ step 5a (#403) on step 5 (#402), so this branch is the fourth level and needs a
 - `scalafmt` runs at 100 columns. Run `sbt scalafmtAll` before any commit that
   touches Scala.
 
+**Deviation:** this plan specified `emptySince` and `idleFor`, but once the idle
+tick reads `connections` directly they have no reader left, so
+`2026-09-16-idle-stop-without-the-wall-clock.md` removes both.
+
 ---
 
 ## File Structure

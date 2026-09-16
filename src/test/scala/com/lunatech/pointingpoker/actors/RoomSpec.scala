@@ -1063,7 +1063,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       btk.isAlive mustBe false
     }
 
-    "clear the idle stamp on a connection and restamp it when the last one goes" in {
+    "hold no connection until a join, and none again once the last one goes" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(
@@ -1073,17 +1073,17 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
 
       roomRef ! Room.GetData(dataProbe.ref)
-      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe defined
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
 
       roomRef ! user.joinMessage
       roomRef ! Room.GetData(dataProbe.ref)
-      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe None
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe false
 
       roomRef ! Room.Leave(user.id, user.ref)
       roomRef ! Room.GetData(dataProbe.ref)
       // Stamped at the disconnect, not at the member's removal: the two are a grace period apart
       // and it is the connection layer this is derived from.
-      dataProbe.expectMessageType[Room.DataStatus].data.emptySince mustBe defined
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
     }
   }
 end RoomSpec
