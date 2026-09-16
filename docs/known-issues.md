@@ -18,12 +18,12 @@ roadmap item instead of leaving it here as stale history.
   (`RequestSession`'s find-or-create).
 - **Issue:** `/join` (and, transitively, `/events`) auto-creates a room for any
   `roomId` it doesn't recognize, rather than rejecting it. A bookmarked room link
-  therefore never *errors* - but if the room's actor has already been reaped (its
-  last member left, or the process restarted), the link silently opens a brand-new,
-  empty room under the same UUID: no prior participants, no vote history, no
-  in-progress issue. There is currently no way for the server to tell "this UUID was
-  never used" apart from "this UUID was a real room, but everyone left" - both look
-  identical: an absent map entry.
+  therefore never *errors* - but if the room's actor has already been reaped (idle
+  long enough to stop, or the process restarted), the link silently opens a
+  brand-new, empty room under the same UUID: no prior participants, no vote
+  history, no in-progress issue. There is currently no way for the server to tell
+  "this UUID was never used" apart from "this UUID was a real room that went idle"
+  - both look identical: an absent map entry.
 - **Resolution:** Stays open, and reclassified rather than scheduled.
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
   establishes that teams pin one room URL for years and want a *blank* room at the
@@ -33,69 +33,6 @@ roadmap item instead of leaving it here as stale history.
   existed, which that design declines to keep, and its residual value is telling
   someone they mistyped a slug rather than leaving them alone in a phantom
   room.
-
-### No garbage collection for abandoned or never-joined rooms
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`RoomManagerData`).
-- **Issue:** A room is only removed from memory when its last joined participant
-  leaves. `POST /create-room` no longer requires a completed join to keep a room
-  alive, so an abandoned tab, a network failure before `/join`, or stray traffic
-  can accumulate rooms that live for the life of the process.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle: a room stops two to four
-  hours after its last connection goes, whether or not anyone ever joined. That
-  closes the accidental form. It does not close the abusive one, since any message
-  arriving in an interval defers the stop by another, so a client looping requests
-  at an empty room keeps it alive; bounding that belongs to the rate-limiting
-  entry below. Remove this entry when step 4a lands.
-
-### Every session a room mints lives as long as the room does
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData.sessions`, `registerSession`).
-- **Issue:** Same shape as the room-level GC issue above, one level deeper. A
-  `Session` created by `RequestSession` (backing `/join`) is never removed. Step
-  5 retains it past promotion, so that a member removed at grace expiry can still
-  reconnect, and it deliberately adds no TTL. A room therefore accumulates one
-  entry per `/join` it ever answered: tabs that connected, tabs that failed
-  between `/join` and `/events`, and people who joined and left hours ago.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle, so a room's sessions go
-  with it two to four hours after its last connection instead of living for the
-  process. A TTL was considered there and dropped: its useful range is squeezed
-  below by needing to outlast a realistic in-meeting outage and above by the idle
-  stop, and what it would reclaim is a hundred bytes per abandoned session. What
-  is left after step 4a is a room held open for hours with heavy tab churn, which
-  is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
-  when step 4a lands.
-
-### A disconnection that outlasts the grace period still forces a reload for the room's last member
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`ConfirmLeave`'s stop-when-empty branch);
-  `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`ValidateToken` for an absent room).
-- **Issue:** Step 5 keeps a token resolvable past its member's removal, so a
-  reconnect after grace expiry rejoins under the same identity. That relies on
-  the room still being there to resolve against. `ConfirmLeave` stops the room
-  when the removal leaves `users` empty, and `ValidateToken` answers
-  `Unresolved` for a room the manager no longer holds, so `/events` returns
-  `401`, `EventSource` stops retrying, and the tab reads "Your session has
-  ended. Please reload the page to rejoin." This is the last connected member,
-  not only a lone one: it also catches whoever is left once the others have
-  gone. The `onerror` comment in `src/main/resources/pages/index.html` names
-  this cause. Step 5 removed the consumed-session cause behind it, leaving
-  this one and a process restart, which takes every room and session with it.
-- **Resolution:** Scheduled as step 4a of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which replaces stop-when-empty with stop-after-idle: the room outlives its
-  last member by two to four hours, far longer than any outage the retry has to
-  cross, so the token resolves and the retry succeeds. How long the window is
-  before this fires at all is the detection-delay entry below. Remove this entry
-  when step 4a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
@@ -225,6 +162,12 @@ roadmap item instead of leaving it here as stale history.
   What is left is the plain form. Nothing bounds the rate, and room creation
   (`POST /create-room`) is unauthenticated as well as unthrottled, which the
   target design notes it does not close.
+
+  Now that a room is bounded by the idle timeout rather than by its last member,
+  an unthrottled client can still keep an otherwise-empty room alive indefinitely
+  by looping any request at it, since each one re-arms the idle timer. The same
+  lack of a rate limit lets heavy tab churn hold a room open for hours by minting
+  a fresh session on every reconnect, since sessions carry no TTL of their own.
 - **Resolution:** Unscheduled. The underlying gap, no per-user/per-endpoint
   rate limiting anywhere in this API, is broader than any one symptom and
   should be addressed as its own piece of work if abuse becomes a real
@@ -304,6 +247,68 @@ roadmap item instead of leaving it here as stale history.
   heartbeat write failing. Shortening the heartbeat would speed detection at the
   cost of traffic on every open connection, and no step in the target design
   schedules that trade.
+
+### A room outliving its last member is not covered end to end
+
+- **Where:** `e2e/room.spec.js`; the behaviour itself is in
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`ConfirmLeave`,
+  which no longer stops the actor) and the idle tick that replaced it.
+- **Issue:** The browser suite cannot cheaply prove that a room survives its last
+  member leaving. The room only learns of a departure when a heartbeat write to
+  the dead connection fails, measured at about 35.5 seconds in a quiet room under
+  the e2e profile by the entry above, and when the departing member is the last
+  one there is nobody left to generate the traffic that would detect it sooner.
+  An honest case therefore needs a wait of roughly 40 seconds per browser. A first
+  attempt with a 6 second wait passed identically before and after the change,
+  which is worse than no case at all.
+- **Resolution:** Accepted. The behaviour is pinned at the JVM level by
+  `RoomSpec`'s "stay alive when its last member is removed" and by the idle
+  cases beside it, all deterministic `BehaviorTestKit` cases except one, which
+  uses real time to prove the timer is delivered at all. The e2e cost buys a
+  weaker guard than those already provide, since its strength depends on
+  detection landing inside the wait on CI hardware. Revisit if the detection
+  path ever becomes clock-driven rather than write-driven.
+
+### The timer generation discard the idle stop relies on has no test
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`receiveBehaviour`'s re-arm, and the comment naming the pekko version it was
+  verified against).
+- **Issue:** Idle time is carried entirely by a single-shot timer re-armed on
+  every non-tick message, which is correct only because pekko discards a tick
+  already queued from a superseded generation. That guarantee was verified by
+  reading `TimerSchedulerImpl` in pekko-actor-typed 1.7.0, not by a test.
+  `overriding mustBe true` asserts only that `startSingleTimer` was called
+  against an existing key. `BehaviorTestKit` cannot close the gap either, since
+  hand-delivering `IdleTick` bypasses the `TimerMsg` wrapper where the discard
+  happens.
+- **Resolution:** Accepted, and bounded. A stale tick that survived would fire a
+  full delay after a real message, so the worst case is a stop landing one delay
+  later than intended, never while a connection is attached. Re-verify the
+  guarantee when pekko is upgraded rather than trying to test it from here; the
+  code comment pins the version the reading was done against, so a bump is the
+  moment the claim needs rechecking.
+
+### The room's two timeouts are distinguished only by argument order
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/Main.scala` (the
+  `RoomManager` spawn), and the `gracePeriod`/`stopAfterIdle` parameter pairs it
+  feeds through `RoomManager` into `Room`.
+- **Issue:** Both are `FiniteDuration`, so transposing them compiles. The four
+  `require`s in `LifecycleConfig.load` validate the values before this call and
+  cannot see a swap after it, and no JVM test covers `Main`'s wiring, so a
+  transposition there would ship a two-hour grace period and a six-second idle
+  timeout with only the browser suite to notice.
+- **Resolution:** Mitigated, not prevented. `Main`'s spawn names both arguments,
+  which makes a swap visible to a reader but enforces nothing; the forwarding
+  calls inside `RoomManager` stay positional, where each argument carries the name
+  of the parameter it feeds and tests cover the result. The fallback half of this
+  is closed: `Room` and `RoomManager` no longer carry default durations, so a call
+  site that omits them does not compile and no omission can silently resolve to a
+  value that happens to match production. What remains is the transposition, whose
+  structural fix is to give each duration its own type (`opaque type GracePeriod
+  <: FiniteDuration`, and likewise for the idle timeout). Reconsider once the
+  stack has landed.
 
 ### A second tab on the same room displaces the first tab's identity
 
@@ -438,22 +443,70 @@ roadmap item instead of leaving it here as stale history.
   next vote, so step 6 is soon enough. Step 8's frontend rewrite would
   close it structurally with fingerprinted assets if step 6 does not.
 
-### A stalled-client SSE test settles on a wall clock, not a synchronization primitive
+### Tests that pass with the mechanism they name deleted, as a recurring pattern
+
+- **Where:** the suite generally. The instances found so far are in `RoomSpec`
+  (the retired "defer its stop by a full delay when any message arrives", the
+  `expectNoMessage` line in the equally retired "stay alive while a connection is
+  attached", and "survive a tick while a connection is attached, and re-arm"),
+  `RoomManagerSpec` ("drop a stopped room from its map so a later request creates
+  a fresh one"), and the straggler-reload case recorded in the ghost-participant
+  entry above.
+- **Issue:** Individual instances are recorded across this file; the pattern is
+  not, and it keeps recurring. On the 2026-09-16 branch four separate cases were
+  found to pass with the mechanism they name removed outright. The deferral case
+  went green with the message re-arm replaced by `if false`, which was the only
+  regression test behind the mechanism the branch had chosen instead of a
+  `sawMessage` field. The `RoomManager` case asserted only that a session could be
+  minted, which a surviving room satisfies exactly as well as a restarted one, so
+  it was green for the opposite of the reason its name gives. Two of the first
+  three rested on the same false belief, that a typed `TestProbe` observes
+  termination:
+  it registers a death-watch only inside `expectTerminated`, so an
+  `expectNoMessage` placed before it asserts nothing at all. A proposed fix for
+  one of them repeated that error and was caught only by running it. The fourth
+  was found during the branch's own review and is the sharpest, because it was
+  written on this branch to fix the pattern: "survive a tick while a connection is
+  attached, and re-arm" asserted that a timer was scheduled and that it overrode a
+  pending one, but never the delay, so hard-coding that call site's duration left
+  the whole suite green. `Room` re-arms from two call sites, and the case named for
+  the branch's mechanism covered only the other one. The common shapes are
+  assertions of absence, assertions satisfied by either outcome, waits shorter than
+  the detection path they depend on, and assertions that stop one field short of
+  the value in question, which is the same failure the ghost-participant and
+  artifact-upload entries describe in their own terms.
+- **Resolution:** No audit has been done and no tooling is in place. What works is
+  cheap and should be the habit: mutate the mechanism the test names, expect red,
+  revert. That found every instance above and cost one targeted run each. The
+  entry below reasons in exactly this frame, and is the model, since it argues
+  case by case that its waits can only fail safe. On mutation tooling: Stryker4s
+  1.0 documents Scala 3 and sbt 1.x support and does coverage-based test
+  selection, so it is worth a timeboxed spike against `Room.scala`, but nothing
+  has been run here yet. Expect it to be a periodic audit rather than a per-PR
+  gate, since the cost is mutants times covering-test runtime, and expect triage
+  of equivalent mutants to be the real work. Browser cases stay manual regardless,
+  since mutating the server and re-running the suite costs minutes per mutant.
+
+### Two SSE tests settle on a wall clock, not a synchronization primitive
 
 - **Where:** `src/test/scala/com/lunatech/pointingpoker/sse/SSESpec.scala`
   ("keep a stalled client's stream open and hand it the newest snapshot, not a
-  stale queued one").
-- **Issue:** The case sends five snapshots with no demand yet granted, then calls
-  `probe.expectNoMessage(300.millis)` before requesting demand, so that all five
-  sends have landed and been resolved by `dropHead` before the assertion runs.
-  That wait is a deliberate wall-clock settle, not a synchronization primitive
-  like the barriers used elsewhere in this suite.
-- **Resolution:** Accepted as-is. The wait can only fail safe: if fewer than five
-  sends have landed by the time demand arrives, the surviving element is a
-  lower-numbered issue than expected, and the assertion goes red rather than
-  passing on a race. No arrangement of timings produces a green result out of a
-  broken `dropHead`, so the 300ms settle costs a small amount of suite time
-  against a real synchronization primitive and buys nothing in return.
+  stale queued one", and "drop a queued snapshot rather than render a room that
+  no longer exists").
+- **Issue:** Each case sends with no demand yet granted, then calls
+  `probe.expectNoMessage(300.millis)` before requesting demand, so that the sends
+  have landed and been resolved before the assertion runs. That wait is a
+  deliberate wall-clock settle, not a synchronization primitive like the barriers
+  used elsewhere in this suite.
+- **Resolution:** Accepted as-is. The wait can only fail safe in both cases. In
+  the first, if fewer than five sends have landed by the time demand arrives, the
+  surviving element is a lower-numbered issue than expected and the assertion goes
+  red rather than passing on a race. In the second, if the completion has not
+  landed, the queued snapshot is emitted and `expectComplete` sees an element,
+  which is also red. No arrangement of timings produces a green result out of a
+  broken `dropHead` or a broken completion strategy, so the settles cost a small
+  amount of suite time against a real synchronization primitive and buy nothing in
+  return.
 
 ### The browser suite's apt step is unbounded and now dominates the CI job
 

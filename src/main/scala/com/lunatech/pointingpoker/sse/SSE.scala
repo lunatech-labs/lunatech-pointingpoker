@@ -28,7 +28,7 @@ object SSE:
   val heartbeatInterval = 15.seconds
 
   /** Fallback for `retryMillis` below when unspecified; production wires the real value from
-    * `SseConfig` instead - see `Main.scala`.
+    * `LifecycleConfig` instead - see `Main.scala`.
     */
   val defaultRetryMillis = 2000
 
@@ -61,9 +61,11 @@ object SSE:
       .map(snapshot => ServerSentEvent(data = snapshot.asJson.noSpaces, retry = Some(retryMillis)))
       .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
 
-  // No message ever completes the stream from the outside; it ends only via
-  // watchTermination (client disconnect, stream failure, etc).
-  private val completionMatcher: PartialFunction[Any, CompletionStrategy] = PartialFunction.empty
+  // Room.StreamCompleted is the one thing that ends a stream from outside; everything else
+  // ends it via watchTermination (client disconnect, stream failure, etc).
+  private val completionMatcher: PartialFunction[Any, CompletionStrategy] = {
+    case Room.StreamCompleted => CompletionStrategy.immediately
+  }
 
   private val failureMatcher: PartialFunction[Any, Throwable] = PartialFunction.empty
 end SSE

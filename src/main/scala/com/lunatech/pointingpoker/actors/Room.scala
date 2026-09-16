@@ -4,7 +4,7 @@ import java.util.UUID
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-import org.apache.pekko.actor.typed.{ActorRef, Behavior}
+import org.apache.pekko.actor.typed.{ActorRef, Behavior, PostStop}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import org.apache.pekko.actor.ActorRef as UntypedRef
 
@@ -20,9 +20,8 @@ object Room:
   sealed trait Command
   final case class Join(userId: UUID, name: String, token: SessionToken, ref: UntypedRef)
       extends Command
-  final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final private[actors] case class ConfirmLeave(userId: UUID, replyTo: ActorRef[Response])
-      extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef)                           extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID)                     extends Command
   final case class Vote(token: SessionToken, estimation: String)                  extends Command
   final case class ClearVotes(token: SessionToken)                                extends Command
   final case class ReVote(token: SessionToken)                                    extends Command
@@ -40,9 +39,8 @@ object Room:
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
   case object Unresolved                                extends TokenResolution
 
-  sealed trait Response
-  final case class Running(roomId: UUID) extends Response
-  final case class Stopped(roomId: UUID) extends Response
+  // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
+  case object StreamCompleted
 
   final case class Estimate private (value: String, confirmed: Boolean):
     // copy is private with the constructor, so the re-vote transition lives on the type.
@@ -156,16 +154,23 @@ object Room:
     end of
   end RoomData
 
-  val defaultGracePeriod: FiniteDuration = 6.seconds
+  private[actors] case object IdleTick extends Command
+
+  private case object IdleTickKey
+
+  private def armIdleTick(timers: TimerScheduler[Command], stopAfterIdle: FiniteDuration): Unit =
+    timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
 
   def apply(
       roomId: UUID,
       initialData: RoomData = RoomData.empty,
-      gracePeriod: FiniteDuration = defaultGracePeriod
+      gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration
   ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
-        receiveBehaviour(roomId, initialData, gracePeriod, timers)
+        armIdleTick(timers, stopAfterIdle)
+        receiveBehaviour(roomId, initialData, gracePeriod, stopAfterIdle, timers)
       }
     }
 
@@ -173,93 +178,130 @@ object Room:
       roomId: UUID,
       data: RoomData,
       gracePeriod: FiniteDuration,
+      stopAfterIdle: FiniteDuration,
       timers: TimerScheduler[Command]
   ): Behavior[Command] =
-    Behaviors.receive[Command] { (context, message) =>
-      message match
-        case Join(userId, name, token, ref) =>
-          // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
-          // the room; a refused joiner gets no snapshot and, deliberately, no connection.
-          if data.sessions.get(token).contains(Session(userId, name)) then
-            // The arriving connection cancels any pending removal, so ConfirmLeave needs no
-            // staleness check of its own.
-            timers.cancel(userId)
-            val newData = publish(data.connect(userId, name, ref), context)
-            receiveBehaviour(roomId, newData, gracePeriod, timers)
-          else
-            val reason =
-              if data.sessions.contains(token) then "its token's session names a different identity"
-              else "its token resolves to no session"
-            context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
+    Behaviors
+      .receive[Command] { (context, message) =>
+        // Any message re-arms the tick a full delay out, so none lands between ValidateToken and
+        // ConnectToRoom. Invariant: connections change only on this path, so the timer is exact.
+        if message != IdleTick then armIdleTick(timers, stopAfterIdle)
+        // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
+        // from a superseded generation. Verified against pekko-actor-typed 1.7.0.
+        message match
+          case IdleTick =>
+            if data.connections.isEmpty then
+              context.log.info("Stopping room {}: no connection for {}", roomId, stopAfterIdle)
+              Behaviors.stopped
+            else
+              armIdleTick(timers, stopAfterIdle)
+              Behaviors.same
+          case Join(userId, name, token, ref) =>
+            // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
+            // the room; a refused joiner gets no snapshot and, deliberately, no connection.
+            if data.sessions.get(token).contains(Session(userId, name)) then
+              // The arriving connection cancels any pending removal, so ConfirmLeave needs no
+              // staleness check of its own.
+              timers.cancel(userId)
+              val newData = publish(data.connect(userId, name, ref), context)
+              receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+            else
+              val reason =
+                if data.sessions.contains(token) then
+                  "its token's session names a different identity"
+                else "its token resolves to no session"
+              context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
+              Behaviors.same
+          case RequestSession(name, replyTo) =>
+            val userId  = UUID.randomUUID()
+            val token   = SessionToken.mint()
+            val newData = data.registerSession(token, userId, name)
+            replyTo ! SessionMinted(userId, token)
+            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+          case Vote(token, estimation) =>
+            data.actingMember(token) match
+              case Some(userId) =>
+                receiveBehaviour(
+                  roomId,
+                  publish(data.vote(userId, estimation), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
+              case None => Behaviors.same
+          case ClearVotes(token) =>
+            data.actingMember(token) match
+              case Some(_) =>
+                receiveBehaviour(
+                  roomId,
+                  publish(data.clear(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
+              case None => Behaviors.same
+          case ReVote(token) =>
+            data.actingMember(token) match
+              case Some(_) =>
+                receiveBehaviour(
+                  roomId,
+                  publish(data.reVote(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
+              case None => Behaviors.same
+          case ShowVotes(token) =>
+            data.actingMember(token) match
+              case Some(_) =>
+                receiveBehaviour(
+                  roomId,
+                  publish(data.show(), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
+              case None => Behaviors.same
+          case Leave(userId, ref) =>
+            // Answerable at the moment of the event now that connections are their own map: a
+            // member still holding one, or already removed, schedules nothing.
+            val next = data.disconnect(userId, ref)
+            if !next.holdsConnection(userId) && next.isMember(userId) then
+              timers.startSingleTimer(key = userId, msg = ConfirmLeave(userId), delay = gracePeriod)
+            receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
+          case ConfirmLeave(userId) =>
+            val newData = publish(data.removeMember(userId), context)
+            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+          case EditIssue(token, issue) =>
+            data.actingMember(token) match
+              case Some(_) =>
+                receiveBehaviour(
+                  roomId,
+                  publish(data.editIssue(issue), context),
+                  gracePeriod,
+                  stopAfterIdle,
+                  timers
+                )
+              case None => Behaviors.same
+          case ValidateToken(token, replyTo) =>
+            // The map is the single authority now that it is retained: a member removed at
+            // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
+            val resolution = data.sessions.get(token) match
+              case Some(session) => Resolved(session.userId, session.name)
+              case None          => Unresolved
+            replyTo ! resolution
             Behaviors.same
-        case RequestSession(name, replyTo) =>
-          val userId  = UUID.randomUUID()
-          val token   = SessionToken.mint()
-          val newData = data.registerSession(token, userId, name)
-          replyTo ! SessionMinted(userId, token)
-          receiveBehaviour(roomId, newData, gracePeriod, timers)
-        case Vote(token, estimation) =>
-          data.actingMember(token) match
-            case Some(userId) =>
-              receiveBehaviour(
-                roomId,
-                publish(data.vote(userId, estimation), context),
-                gracePeriod,
-                timers
-              )
-            case None => Behaviors.same
-        case ClearVotes(token) =>
-          data.actingMember(token) match
-            case Some(_) =>
-              receiveBehaviour(roomId, publish(data.clear(), context), gracePeriod, timers)
-            case None => Behaviors.same
-        case ReVote(token) =>
-          data.actingMember(token) match
-            case Some(_) =>
-              receiveBehaviour(roomId, publish(data.reVote(), context), gracePeriod, timers)
-            case None => Behaviors.same
-        case ShowVotes(token) =>
-          data.actingMember(token) match
-            case Some(_) =>
-              receiveBehaviour(roomId, publish(data.show(), context), gracePeriod, timers)
-            case None => Behaviors.same
-        case Leave(userId, ref, replyTo) =>
-          // Answerable at the moment of the event now that connections are their own map: a
-          // member still holding one, or already removed, schedules nothing.
-          val next = data.disconnect(userId, ref)
-          if !next.holdsConnection(userId) && next.isMember(userId) then
-            timers.startSingleTimer(
-              key = userId,
-              msg = ConfirmLeave(userId, replyTo),
-              delay = gracePeriod
-            )
-          receiveBehaviour(roomId, next, gracePeriod, timers)
-        case ConfirmLeave(userId, replyTo) =>
-          val newData = publish(data.removeMember(userId), context)
-          if newData.members.isEmpty then
-            replyTo ! Stopped(roomId)
-            Behaviors.stopped
-          else
-            replyTo ! Running(roomId)
-            receiveBehaviour(roomId, newData, gracePeriod, timers)
-        case EditIssue(token, issue) =>
-          data.actingMember(token) match
-            case Some(_) =>
-              receiveBehaviour(roomId, publish(data.editIssue(issue), context), gracePeriod, timers)
-            case None => Behaviors.same
-        case ValidateToken(token, replyTo) =>
-          // The map is the single authority now that it is retained: a member removed at
-          // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
-          val resolution = data.sessions.get(token) match
-            case Some(session) => Resolved(session.userId, session.name)
-            case None          => Unresolved
-          replyTo ! resolution
-          Behaviors.same
-        case GetData(replyTo) =>
-          replyTo ! Room.DataStatus(data)
-          Behaviors.same
+          case GetData(replyTo) =>
+            replyTo ! Room.DataStatus(data)
+            Behaviors.same
+        end match
 
-    }
+      }
+      .receiveSignal { case (_, PostStop) =>
+        // A room that stops owes its attached streams an answer; the alternative is silence.
+        data.connections.values.flatten.foreach(_ ! StreamCompleted)
+        Behaviors.same
+      }
 
   private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
     // The Join to publish hop races a new connection's demand, benign while dropHead leaves a

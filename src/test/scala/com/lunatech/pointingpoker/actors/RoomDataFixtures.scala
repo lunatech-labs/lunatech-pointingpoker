@@ -2,11 +2,18 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import scala.concurrent.duration.*
+
 import org.apache.pekko.actor.ActorRef as UntypedRef
 
 import com.lunatech.pointingpoker.actors.Room.RoomData
 
 object RoomDataFixtures:
+
+  // Room and RoomManager take these explicitly, so the defaults live here rather than in
+  // production code. They only need to outlast a case; nothing checks them against any config.
+  val testGracePeriod: FiniteDuration   = 6.seconds
+  val testStopAfterIdle: FiniteDuration = 2.hours
 
   // One person's state groups as a single test record, so a fixture site reads as a
   // participant rather than as an entry in each of three maps.

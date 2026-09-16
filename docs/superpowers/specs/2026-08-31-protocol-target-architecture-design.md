@@ -531,16 +531,7 @@ Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
-
-emptySince    Option[Instant]  // step 4a: empty since when, Some at creation
-sawMessage    Boolean          // step 4a: any message since the previous idle tick
 ```
-
-The last two are actor bookkeeping rather than a fifth group of state. They sit
-beside `connections` rather than inside `RoomState`, because both are derived from
-the connection layer: an `Instant` is not a handle, but putting either in the
-room's own data would break the rule below in spirit while satisfying it in
-letter. "Two lifetimes, not one" specifies what they mean.
 
 **`connections` maps a member to a set because one person can hold several
 connections at once**: a second tab, or a replacement opened because the first
@@ -640,7 +631,7 @@ half of what the client does client-side today and has to move with the reveal
 itself.
 
 `RoomData` keeps its name as the actor's state container and holds all four
-groups plus the idle bookkeeping; `RoomState` is the room's own data within it,
+groups; `RoomState` is the room's own data within it,
 which is what the `publish` snippet below reaches through. `history` is the
 within-session round record, specified under "Round history" below. The rule
 forbids a connection handle anywhere in this group, which is why `connections` is
@@ -707,7 +698,7 @@ nothing to forget.
 **Each of the three is removed at a different moment, and the differences are the
 design rather than an accident.** A ref leaves its member's set the instant its
 stream terminates, on `ConnectionCompleted` or `ConnectionFailure`: sending to a
-dead ref is a no-op anyway, and `emptySince` has to reflect reality. Termination
+dead ref is a no-op anyway. Termination
 is now the only thing that drains the set, where the wholesale replacement above
 used to evict a stale ref as a side effect too: `connect` adds to a `Set` and
 leaves what is already there, so a lost `Leave` would strand a ref that nothing
@@ -950,8 +941,8 @@ with triggers".
 
 #### Two lifetimes, not one
 
-Today a room dies with its last member, which conflates two things worth keeping
-apart:
+A room used to die with its last member, which conflated two things worth
+keeping apart:
 
 1. **The connection**, ending when the SSE stream does, with the grace period
    covering transient drops.
@@ -961,43 +952,66 @@ apart:
    history, to a coffee break. It lands at step 4a.
 
 **Idle means `connections` has been empty continuously for the idle period, and
-no message has arrived since the previous tick.** It is a duration rather than an
-instantaneous check: `emptySince` is set when `connections` becomes empty and
-cleared when it becomes non-empty, and the tick stops the actor once that stamp
-is older than the timeout. Connections present means never idle, whether or not
-anyone is clicking, and a short emptiness is survivable, which is the
-coffee-break requirement above. That makes this step a consumer of the removal
-moments above: since step 4, only stream termination drains a member's set, so a
-ref stranded by a lost `Leave` leaves its room permanently non-idle.
+no message has arrived since the timer was last armed.** It is a duration rather than an
+instantaneous check: the tick fires only after a full idle period with no
+message to re-arm it, and it stops the actor if `connections` is still empty at
+that moment. Connections present means never idle,
+whether or not anyone is clicking, and a short emptiness is survivable, which is
+the coffee-break requirement above. That makes this step a consumer of the
+removal moments above: since step 4, only stream termination drains a member's
+set, so a ref stranded by a lost `Leave` leaves its room permanently non-idle.
 
-**`emptySince` starts as `Some(now)` at the actor's creation and not as `None`**,
-which reads as a detail and is not one. A room whose `/events` never follows its
-`/join` has connections that are empty without ever having *become* empty, and
-that is exactly the never-joined half of the abandoned-room issue this step claims
-to close. Written as a transition-only field it would leave such a room running
-for the life of the process.
+A never-joined room is bounded too, since it holds no connection from the start.
 
-**The tick interval is the idle timeout itself.** A room emptying just after a
-tick is therefore not seen as idle until the tick after next, so the actual stop
-lands between one and two intervals after the last departure: **two to four
-hours**, on the figures above. Nothing distinguishes those outcomes, and one
-periodic timer is easier to test than a single-shot one that has to be cancelled
-and rescheduled. The actor idle timeout is the only value this design adds to
-the configuration; step 4a says where it lives and what the keys become.
+**The tick is a single-shot timer re-armed on every message, and its delay is the
+idle timeout itself.** The stop therefore lands one delay after the later of the
+last message and the moment `connections` emptied: **two hours**, on the figures
+above. Re-arming needs no cancellation, since `startSingleTimer` replaces a timer
+sharing its key, which is the same mechanism the grace period already relies on
+to absorb a duplicate `Leave`. It needs no staleness check either, and that is
+the part worth writing down: Pekko stamps each timer message with a generation
+and discards one from a superseded generation before the behaviour sees it, so a
+tick already queued behind a message is voided when that message re-arms the
+key. The opposite order is not covered and does not need to be: a tick dequeued
+ahead of a message stops the room, and that message then meets an actor that has
+already stopped, which is the case the two siblings below own and which fails
+loudly. Without the generation guarantee the queued-tick half would need a flag.
+The actor idle timeout is the only value this
+design adds to the configuration; step 4a says where it lives and what the keys
+become.
 
-**The no-message term is what stops a join being lost.** `ConnectToRoom` is
+**The tick needs no elapsed comparison of its own.** The `IdleTick` branch in
+`receiveBehaviour` asks only whether `connections` is empty. The re-armed
+`IdleTick` timer carries the elapsed part a comparison would have
+needed: it cannot fire sooner than a full idle timeout after the last
+message, and the stamp such a comparison would have read, written only by a
+message handler, could never be later than that message. A timestamp
+comparison could therefore only ever have disagreed with the timer when the
+system clock stepped backwards, which is the wall-clock defect
+`docs/known-issues.md` used to record as accepted. That is why the comparison
+was removed rather than managed.
+
+**Invariant: `connections` changes only on the message path.** Every mutation
+arrives as a `Command` and therefore re-arms the tick, which is what makes the
+timer a complete account of idle time. A connection dropped from a signal
+handler instead, such as a `Terminated` watch replacing write-failure
+detection, would not re-arm, so the stop would land a delay after the last
+message rather than after the room emptied. That is a change worth making
+deliberately rather than by accident.
+
+**Re-arming on every message is what stops a join being lost.** `ConnectToRoom` is
 fire-and-forget and is sent from `mapMaterializedValue`, which is after the 200
 and the `text/event-stream` headers have gone out. A tick landing between that
 send and its delivery would dead-letter it, leaving the client holding an open,
 heartbeating stream that never receives a snapshot: no error, no `onerror`, no
 reconnect, a blank room until reload. The ordering that prevents it is causal
 rather than lucky, since `ConnectToRoom` is only ever sent after the same actor
-has answered `ValidateToken`, and a mailbox is sequential, so any tick able to
-sit between them was itself preceded by that `ValidateToken` in the same
-interval. The term costs one field, `sawMessage` above, set by any command and
-cleared by each tick, and it lets a stray message defer an abandoned room's stop
-by one interval, which costs a few kilobytes of memory for a couple of hours. A
-message every interval defers it indefinitely, and nothing here bounds the rate,
+has answered `ValidateToken`, and a mailbox is sequential, so that
+`ValidateToken` has already pushed the tick a full delay out before the
+`ConnectToRoom` it precedes can be in flight. The deferral costs no state at all,
+the timer carries it, and it lets a stray message defer an abandoned room's stop
+by a full delay, which costs a few kilobytes of memory for a couple of hours. A
+message every delay defers it indefinitely, and nothing here bounds the rate,
 so step 4a closes the abandoned-room issue against accidental abandonment rather
 than against a loop. Bounding the loop is the rate-limiting entry in
 `docs/known-issues.md`, which stays open.
@@ -1005,8 +1019,8 @@ than against a loop. Bounding the loop is the rate-limiting entry in
 **Its two siblings get nothing, deliberately.** `RoomManager` keeps a stopping
 room in its map until `Terminated` arrives one hop later, so a `RequestSession`
 from `/join`, or a `ValidateToken` from `/events`, can be routed to an actor that
-has already stopped. Neither is covered by `sawMessage`, since each can be the
-first message after a long idle and so has nothing prior to defer the tick with.
+has already stopped. Neither is covered by the re-arm, since each can be the
+first message after a long idle and so arrives at an actor whose tick has fired.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
 (`index.html:462-466`), and the retry lands on a freshly created room.
@@ -1039,16 +1053,17 @@ and today there is none.** `Source.actorRef`'s materialized ref has no lifecycle
 link to the room in either direction, and `completionMatcher` is deliberately
 `PartialFunction.empty`, so a room that stops leaves every attached stream
 heartbeating from the `keepAlive` stage with no snapshot ever arriving again.
-That is the same symptom `sawMessage` above exists to prevent, from a second
+That is the same symptom the re-arm above exists to prevent, from a second
 cause, and it is cheaper to close: `Room` handles `PostStop` by sending a
 completion message to every ref in `connections`, and `completionMatcher`
 recognizes it. The comment quoted above therefore becomes the thing being changed
 rather than a rule to preserve.
 
 Idle stop is not the cause, since `connections` is empty whenever the tick fires.
-The live cause is a crash, where Pekko typed's default supervision stops the actor,
-and the future one is the deferred destroy-room action, which currently has no way
-to evict anybody. What the client does next is the existing terminal path and an
+The live causes are a crash, where Pekko typed's default supervision stops the
+actor, and a process shutdown or parent stop, which a deploy produces for every
+room at once; the future one is the deferred destroy-room action, which currently
+has no way to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
@@ -1073,7 +1088,7 @@ Three words over a few hundred each gives tens of millions of combinations,
 which is where the namespace size comes from instead.
 
 **A pinned slug is not reserved while its room is stopped, and that is the one
-hazard worth naming.** A team's room stops two to four hours after their meeting,
+hazard worth naming.** A team's room stops two hours after their meeting,
 so for most of the fortnight their slug is free and `create-room` could draw it
 for someone else. Their pinned link would then open a room another team is in.
 The chance is negligible, one specific triple out of tens of millions against a
@@ -1221,7 +1236,7 @@ Three additions, each closing something documented:
   single authority for resolution in section 3.
 
   **They carry no TTL of their own**, and the earlier draft's one is dropped. A
-  session lives as long as the actor, which step 4a already bounds at two to four
+  session lives as long as the actor, which step 4a already bounds at two
   hours after a room empties, so a TTL would bound something already bounded: its
   useful range is squeezed below by needing to outlast a realistic in-meeting
   outage and above by the idle stop, leaving about an hour, to reclaim a hundred
@@ -2194,7 +2209,7 @@ splitting balances nothing. The two halves also total about 20 production and 30
 test lines more than the combined step did, which is what separating the review
 questions costs. What it separates is two questions a reviewer would
 otherwise answer at once: whether behaviour changed, which step 4 answers with
-the two exceptions above and nothing else, and whether two to four hours is right
+the two exceptions above and nothing else, and whether two hours is right
 and the tick does what it claims. This document applies the same argument one
 level up when it declines to fold the split into step 1.
 
@@ -2239,7 +2254,9 @@ no-consumer case this design applies to `version` and `scale`, so `Response` and
 recursive calls in the `CreateRoom`, `RequestSession`, `Stopped` and
 `Terminated` branches and the one in `RoomManager.apply`, with the two
 `Room.Leave` sends going when `replyTo` does. That takes
-`RoomManager.receiveBehaviour` from three parameters to two. Most of the test
+`RoomManager.receiveBehaviour` from three parameters to two, and the idle
+timeout's own `stopAfterIdle` puts a third back, since `createRoom` needs it: the
+step ends where it started, at `data`, `gracePeriod` and `stopAfterIdle`. Most of the test
 churn is mechanical probe wiring, and step 4 has already rewritten those cases
 for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
 not revive this**: its reply is an ask answered to the HTTP route, carrying the
@@ -2282,10 +2299,53 @@ Production overrides neither `SSE_GRACE_PERIOD` nor `SSE_RETRY` as of
 2026-09-14, so the rename reaches nothing but the e2e profile, which sets the
 grace period and gains the idle timeout. Should either be set later, updating
 it is a post-deploy edit rather than a blocker, provided whoever merges is told.
+
+A rename here fails silently rather than loudly, since every key carries a
+default and an unread variable means the default, not a refusal. The ordered
+chain is also the test for that: each variable gates a `require` in
+`LifecycleConfig.load`, so giving one a constraint-violating value must refuse
+the boot, and a boot that succeeds anyway proves the variable is not being read.
+`ROOM_STOP_AFTER_IDLE` below the grace period, `ROOM_GRACE_PERIOD` below twice
+the retry, and `SSE_RETRY` at zero each refuse with their own message; the
+retired `SSE_GRACE_PERIOD` set to the same failing value boots clean, which is
+the silent fallback made visible. Reach for this whenever one of these keys is
+renamed, rather than inferring the wiring from a green suite, which cannot see
+it.
 The delivered step 0 plans and the cancelled 08-26 and 08-28 specs keep the old
 names as history; 08-30's §3 table carries the variables, and 08-30 §2 and
 `docs/roadmap.md`'s instrumentation entry name the class, all in the present
 tense and all moving with it.
+
+Landed. `LifecycleConfig` replaces `SseConfig`, carrying `gracePeriod`,
+`retryMillis` and the new `stopAfterIdle` behind one `load` that enforces the
+ordered chain, `retryMillis` well under `gracePeriod` and `gracePeriod` under
+`stopAfterIdle`. `Room` arms a single-shot `IdleTick` timer in
+`Behaviors.withTimers`, re-armed on every message except the tick itself, and
+stops via `Behaviors.stopped` when the tick finds the room holds no connection,
+with no elapsed comparison of any kind: the tick reads `connections` directly,
+so a never-joined room and one whose last member just left are bounded the
+same way. `Room.StreamCompleted` completes every attached SSE stream when the
+room stops, recognized by `completionMatcher` as `CompletionStrategy.immediately`,
+as this section specifies. `ConfirmLeave` no longer stops the room when its
+membership empties, and with every `ConfirmLeave` answer now identical the whole
+reply channel came with it: `Response`, `Running`, `Stopped`,
+`RoomManager`'s `RoomResponseWrapper`, and `replyTo` off `Leave`/`ConfirmLeave`.
+
+It closes three `docs/known-issues.md` entries outright: no GC for abandoned or
+never-joined rooms, every session living as long as the room, and a
+disconnection outlasting the grace period forcing a reload. It deviates from
+the plan on end-to-end coverage: the browser case the plan specified for a room
+outliving its last member passed identically before and after the deletion,
+since a short wait with no other room traffic never gave the room a chance to
+notice the departure, so the case was dropped rather than stretched into a
+roughly 40-second-per-browser wait. The survival behaviour is instead pinned at
+the JVM level, by `RoomSpec`'s "stay alive when its last member is removed" and
+the idle-timeout cases beside it, all deterministic `BehaviorTestKit` cases
+except one, which uses real time to prove the timer is delivered at all;
+`docs/known-issues.md` records the gap as "A room outliving its last member is
+not covered end to end." What it leaves open: a client looping requests at an
+empty room re-arms the timer indefinitely, so bounding that abuse still belongs
+to the rate-limiting entry.
 
 **Step 5. Retained sessions.** Waits on step 1 only, and step 4 waits on it.
 About 40 and 90, having lost the TTL and its expiry check. Closes the
@@ -2364,11 +2424,12 @@ an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
 unreachable. The resolution at `API.scala:126-128` and the `Join` that
 `RoomManager.ConnectToRoom` forwards are two steps of one request, and they can
-address two different room actors: the room can empty and stop in between, at
-`ConfirmLeave`'s stop-when-empty, and `RequestSession` can then recreate it
-through `createRoom` under the same id with no sessions, which is the one path
-that does so. The guard then refuses a token the new room never minted, which is
-what it is for. Without the recreation the client gets the same silent stream
+address two different room actors: the room can stop in between, at the idle
+tick that replaced `ConfirmLeave`'s stop-when-empty at step 4a, and
+`RequestSession` can then recreate it through `createRoom` under the same id
+with no sessions, which is the one path that does so. The guard then refuses a
+token the new room never minted, which is what it is for. Without the
+recreation the client gets the same silent stream
 anyway, `ConnectToRoom` finding no room and sending no `Join` at all. The
 duplicate-`Leave` warning answered the same shape of question the same way, for a
 `Leave` that arrived twice on one connection, until step 4 deleted it with the

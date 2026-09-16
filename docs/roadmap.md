@@ -178,15 +178,15 @@ directly in the new frontend.
       nobody commanded.
 - [ ] Room-creation hardening (rate limiting, caps on unauthenticated room
       creation).
-- [ ] Garbage collection for abandoned or never-joined rooms. Not in the original
-      list; found during review of the SSE transport PR. A room is only removed
-      from memory when its last joined participant leaves
-      (`actors/RoomManager.scala`), but `POST /create-room` no longer requires a
+- [x] Garbage collection for abandoned or never-joined rooms. Not in the original
+      list; found during review of the SSE transport PR. A room was only removed
+      from memory when its last joined participant left
+      (`actors/RoomManager.scala`), but `POST /create-room` no longer required a
       completed join to keep a room alive, so an abandoned tab, a network failure
-      before `/join`, or stray traffic can accumulate rooms that live for the life
-      of the process. **Absorbed by step 4a**, which stops a room two to four
-      hours after its last connection goes, joined or not. See
-      `docs/known-issues.md`.
+      before `/join`, or stray traffic could accumulate rooms that lived for the
+      life of the process. **Landed as step 4a's stop-after-idle**, which stops a
+      room two hours after the grace period following its last connection ends,
+      joined or not. See `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,
       not by oversight. More load-bearing than it looks now that nothing is
@@ -221,7 +221,7 @@ directly in the new frontend.
       and how long they sit idle before dying; participants per room and rounds
       per session; and how often a round is revealed by Show rather than by the
       vote latch. Each of those is a number some existing decision was guessed
-      at, and `config/SseConfig.scala` says so about its own, calling them
+      at, and `config/LifecycleConfig.scala` says so about its own, calling them
       "heuristics, not measured figures".
       **This blocks nothing and must not be made to.** Emitting the lines is
       additive and depends on no other step; acting on what they say needs weeks

@@ -4,8 +4,15 @@ import java.util.UUID
 
 import scala.concurrent.duration.*
 
-import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, LoggingTestKit}
+import org.apache.pekko.actor.testkit.typed.Effect
+import org.apache.pekko.actor.testkit.typed.scaladsl.{
+  ActorTestKit,
+  BehaviorTestKit,
+  LoggingTestKit,
+  TestInbox
+}
 import org.apache.pekko.actor.typed.ActorRef
+import org.apache.pekko.actor.typed.scaladsl.adapter.*
 import org.apache.pekko.testkit.TestProbe
 import com.lunatech.pointingpoker.actors.Room.RoomData
 import com.lunatech.pointingpoker.actors.RoomDataFixtures.Attendee
@@ -21,6 +28,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   override def afterAll(): Unit =
     testKit.shutdownTestKit()
+
+  // BehaviorTestKit records timer scheduling without running timers, so these cases can
+  // assert a delay of hours without waiting one.
+  def onlyTimer(effects: Seq[Effect]): Effect.TimerScheduled[?] = effects match
+    case Seq(t: Effect.TimerScheduled[?]) => t
+    case other => fail(s"expected exactly one scheduled timer, got $other")
 
   "Room Actor" should {
     "update the current issue and publish it to everyone" in {
@@ -161,14 +174,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "delay a leave publish by the grace period instead of acting immediately" in {
       val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
-      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2),
         gracePeriod = 200.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       user2Probe.expectNoMessage(50.millis)
       expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
@@ -177,7 +189,6 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "swallow a Leave entirely if the same user reconnects within the grace period" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
-      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
@@ -185,7 +196,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         gracePeriod = 200.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       // Reconnect well within the grace period, under a new ref but the same user id/token.
       val reconnectedUserProbe = TestProbe()(testKit.system.classicSystem)
@@ -200,7 +211,6 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessage(
         Room.DataStatus(data = withUsers(reconnectedUser, user2))
       )
-      roomResponseProbe.expectNoMessage()
     }
 
     "restart the grace period when a second Leave arrives on a connection already dropped" in {
@@ -208,47 +218,45 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // duplicate Leave; the Join branch's timers.cancel is what made the staleness check go.
       val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
-      val firstReplyProbe     = testKit.createTestProbe[Room.Response]()
-      val secondReplyProbe    = testKit.createTestProbe[Room.Response]()
-      val (roomId, roomRef)   = createRoom(
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2),
         gracePeriod = 200.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, firstReplyProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       Thread.sleep(120) // still inside the first call's grace window
 
-      roomRef ! Room.Leave(user.id, user.ref, secondReplyProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       // Past the first call's original 200ms deadline, but the timer was reset by the
       // second call, so nothing has fired yet.
       user2Probe.expectNoMessage(120.millis)
 
-      // Fires exactly once, delivering the second call's replyTo - proving the timer
-      // was replaced, not run twice in parallel.
+      // Fires exactly once: a duplicated timer would publish a second time and the second
+      // removal would find nobody, so one publish and one surviving member is the proof.
       expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
-      secondReplyProbe.expectMessage(Room.Running(roomId))
-      firstReplyProbe.expectNoMessage()
+      user2Probe.expectNoMessage(200.millis)
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.members.keySet mustBe Set(user2.id)
     }
 
     "remove a user on leave and publish the smaller room" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "8")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
-      val (roomId, roomRef)   = createRoom(
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2),
         gracePeriod = 50.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       // Waits past the short grace period.
       expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
-      roomResponseProbe.expectMessage(Room.Running(roomId))
 
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -260,25 +268,29 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data mustBe withUsers(user2).withMemberlessSession(user).withEstimate(user)
     }
 
-    "stop itself if empty" in {
+    "stay alive when its last member is removed" in {
       val probe = TestProbe()(testKit.system.classicSystem)
       val user  =
         Attendee(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
       val user2 =
         Attendee(UUID.randomUUID(), "user2", false, "", probe.ref, Room.SessionToken.mint())
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
 
       val roomId = UUID.randomUUID()
       // Seeded rather than joined: Join is not what this case is about, and a refused
       // Join would leave the room empty and pass the assertion for the wrong reason.
       val behaviorTestKit =
-        BehaviorTestKit(Room(roomId, withUsers(user, user2)), roomId.toString)
+        BehaviorTestKit(
+          Room(roomId, withUsers(user, user2), testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
 
       // BehaviorTestKit doesn't drive real timers, so send the post-grace-period effect
       // directly rather than Leave (which only schedules it).
-      behaviorTestKit.run(Room.ConfirmLeave(user.id, roomResponseProbe.ref))
-      behaviorTestKit.run(Room.ConfirmLeave(user2.id, roomResponseProbe.ref))
-      behaviorTestKit.isAlive mustBe false
+      behaviorTestKit.run(Room.ConfirmLeave(user.id))
+      behaviorTestKit.run(Room.ConfirmLeave(user2.id))
+
+      // An empty room is idle, not dead: task 3's tick is what ends it, hours later.
+      behaviorTestKit.isAlive mustBe true
     }
 
     "ignore a Join whose token is in no session" in {
@@ -446,12 +458,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "resolve a token whose member was removed at grace expiry" in {
-      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
-      val resultProbe       = testKit.createTestProbe[Room.TokenResolution]()
-      val responseProbe     = testKit.createTestProbe[Room.Response]()
-      val userProbe         = TestProbe()(testKit.system.classicSystem)
-      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
-      val (roomId, roomRef) = createRoom(
+      val sessionProbe        = testKit.createTestProbe[Room.SessionMinted]()
+      val resultProbe         = testKit.createTestProbe[Room.TokenResolution]()
+      val userProbe           = TestProbe()(testKit.system.classicSystem)
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user2),
         gracePeriod = 50.millis
@@ -462,11 +473,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
+      // Alice's Join publishes too, so consume it before the next publish can be the barrier.
+      expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user2.id, minted.userId)
 
-      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
-      // Running is the confirmation that ConfirmLeave fired and removed the member while the
-      // room stayed up, which is the state a reconnect past the window arrives in.
-      responseProbe.expectMessage(Room.Running(roomId))
+      roomRef ! Room.Leave(minted.userId, userProbe.ref)
+      // ConfirmLeave's own publish: Alice is gone from the list and the room is still up,
+      // which is the state a reconnect past the window arrives in.
+      expectSnapshot(user2Probe).users.map(_.id) mustBe List(user2.id)
 
       roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
 
@@ -474,13 +487,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "refuse every command from a token whose member was removed at grace expiry" in {
-      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
-      val responseProbe     = testKit.createTestProbe[Room.Response]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val userProbe         = TestProbe()(testKit.system.classicSystem)
-      val (user2, _)        = createUser(UUID.randomUUID(), "user2", true, "3")
-      val (user3, _)        = createUser(UUID.randomUUID(), "user3", true, "5")
-      val (roomId, roomRef) = createRoom(
+      val sessionProbe        = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe           = TestProbe()(testKit.system.classicSystem)
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "3")
+      val (user3, _)          = createUser(UUID.randomUUID(), "user3", true, "5")
+      val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user2, user3),
         gracePeriod = 50.millis
@@ -491,9 +503,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
+      // Alice's Join publishes too, so consume it before the next publish can be the barrier.
+      expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user2.id, user3.id, minted.userId)
 
-      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
-      responseProbe.expectMessage(Room.Running(roomId))
+      roomRef ! Room.Leave(minted.userId, userProbe.ref)
+      // ConfirmLeave's own publish: Alice is gone from the list and the room is still up,
+      // which is the state a reconnect past the window arrives in.
+      expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user2.id, user3.id)
 
       // Both members voted with the round unrevealed, the state a room is in after an unvoted
       // member's grace expiry, so any of the five honoured wrongly would visibly change it.
@@ -860,12 +876,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "schedule no removal when the connection that drops is not the member's last" in {
-      val (user, _)         = createUser(UUID.randomUUID(), "user1", false, "")
-      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
-      val replacement       = TestProbe()(testKit.system.classicSystem)
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef)      = createRoom(
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val replacement  = TestProbe()(testKit.system.classicSystem)
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2),
         gracePeriod = 50.millis
@@ -874,11 +889,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       // The race itself, driven rather than seeded: the replacement stream is established
       // before the old one's termination arrives, so the set briefly holds two refs.
       roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
-      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       // Problem C made unrepresentable: the question is answered at Leave time, so the
       // racing reconnect leaves no timer to go stale rather than a check to absorb it.
-      roomResponseProbe.expectNoMessage(200.millis)
+      Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.members.keySet mustBe Set(user.id, user2.id)
@@ -886,20 +901,19 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "schedule no removal when the connection that drops belongs to no member" in {
-      val (user, _)         = createUser(UUID.randomUUID(), "user1", false, "")
-      val (departed, _)     = createUser(UUID.randomUUID(), "user2", false, "")
-      val roomResponseProbe = testKit.createTestProbe[Room.Response]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef)      = createRoom(
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (departed, _) = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)  = createRoom(
         UUID.randomUUID(),
         withUsers(user, departed).withDeparted(departed),
         gracePeriod = 50.millis
       )
 
-      roomRef ! Room.Leave(departed.id, departed.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(departed.id, departed.ref)
 
       // Section 4's leave endpoint: membership ended first, so the tab's own drop removes nobody.
-      roomResponseProbe.expectNoMessage(200.millis)
+      Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
       roomRef ! Room.GetData(dataProbe.ref)
 
       // The ref went, which is what tells a declined removal apart from a Leave that never landed.
@@ -925,14 +939,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val secondTab           = TestProbe()(testKit.system.classicSystem)
-      val roomResponseProbe   = testKit.createTestProbe[Room.Response]()
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2).withSecondConnection(user, secondTab.ref),
         gracePeriod = 200.millis
       )
 
-      roomRef ! Room.Leave(user.id, user.ref, roomResponseProbe.ref)
+      roomRef ! Room.Leave(user.id, user.ref)
 
       // A transient drop changes no snapshot, so it produces no wire traffic at all.
       user2Probe.expectNoMessage(300.millis)
@@ -963,10 +976,152 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.members.keySet mustBe Set(user.id)
       data.connections.keySet mustBe Set(user.id, departed.id)
     }
+
+    "tell every attached connection when it stops" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val (_, roomRef)        = createRoom(UUID.randomUUID(), withUsers(user, user2))
+
+      testKit.stop(roomRef)
+
+      // Without this a stopped room leaves every tab heartbeating from the keepAlive stage
+      // with no snapshot ever arriving again, which is silence rather than an error.
+      userProbe.expectMsg(Room.StreamCompleted)
+      user2Probe.expectMsg(Room.StreamCompleted)
+    }
+
+    "arm a single-shot idle timer at setup, for the configured delay" in {
+      val roomId = UUID.randomUUID()
+      val btk    =
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, notADefaultIdle),
+          roomId.toString
+        )
+
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      timer.msg mustBe Room.IdleTick
+      timer.delay mustBe notADefaultIdle
+      timer.mode mustBe Effect.TimerScheduled.SingleMode
+      timer.overriding mustBe false
+    }
+
+    "re-arm the timer, superseding the pending tick, on any non-tick message" in {
+      val roomId = UUID.randomUUID()
+      val btk    =
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, notADefaultIdle),
+          roomId.toString
+        )
+      btk.retrieveAllEffects()
+
+      // The re-arm is what the branch chose instead of a sawMessage field, and
+      // overriding is what voids a tick already queued from the old generation.
+      btk.run(Room.GetData(TestInbox[Room.DataStatus]().ref))
+
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      timer.msg mustBe Room.IdleTick
+      timer.delay mustBe notADefaultIdle
+      timer.overriding mustBe true
+    }
+
+    "stop itself once it has held no connection for the idle timeout" in {
+      val watcher      = TestProbe()(testKit.system.classicSystem)
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty,
+        stopAfterIdle = 200.millis
+      )
+      watcher.watch(roomRef.toClassic)
+
+      // A never-joined room is bounded too: it holds no connection from the start.
+      // The one case proving pekko delivers the tick after the delay, which BehaviorTestKit cannot.
+      watcher.expectNoMessage(150.millis)
+      watcher.expectTerminated(roomRef.toClassic, 3.seconds)
+    }
+
+    "survive a tick while a connection is attached, and re-arm" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+      val roomId    = UUID.randomUUID()
+      val btk       =
+        BehaviorTestKit(
+          Room(roomId, withUsers(user), testGracePeriod, notADefaultIdle),
+          roomId.toString
+        )
+      btk.retrieveAllEffects()
+
+      // Message silence is a veto on stopping, not a reason to stop: five people arguing
+      // for two hours before anyone clicks a card must not be disconnected mid-meeting.
+      btk.run(Room.IdleTick)
+
+      btk.isAlive mustBe true
+      val timer = onlyTimer(btk.retrieveAllEffects())
+      // This branch re-arms from its own call site, not the one every other message takes.
+      timer.delay mustBe notADefaultIdle
+      timer.mode mustBe Effect.TimerScheduled.SingleMode
+      timer.overriding mustBe true
+    }
+
+    "stop on a tick when it holds no connection" in {
+      val roomId = UUID.randomUUID()
+      val btk    =
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
+
+      // Never connected at all, which is the never-joined room this bounds: /join
+      // without the /events that should have followed it.
+      btk.run(Room.IdleTick)
+
+      btk.isAlive mustBe false
+    }
+
+    "stop on a tick once its last member has left" in {
+      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
+      val roomId    = UUID.randomUUID()
+      val btk       =
+        BehaviorTestKit(
+          Room(roomId, withUsers(user), testGracePeriod, testStopAfterIdle),
+          roomId.toString
+        )
+
+      // Leave drops the connection; the member row outlives it until ConfirmLeave.
+      btk.run(Room.Leave(user.id, user.ref))
+      btk.run(Room.IdleTick)
+
+      btk.isAlive mustBe false
+    }
+
+    "hold no connection until a join, and none again once the last one goes" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        withUsers().withMemberlessSession(user),
+        gracePeriod = 50.millis
+      )
+
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
+
+      roomRef ! user.joinMessage
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe false
+
+      roomRef ! Room.Leave(user.id, user.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      // Empty at the disconnect, not at the member's removal: the two are a grace period apart.
+      dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
+    }
   }
 end RoomSpec
 
 object RoomSpec:
+  import RoomDataFixtures.*
+
+  // Nobody's default, so a delay assertion can only be satisfied by the argument passed in.
+  val notADefaultIdle: FiniteDuration = 90.minutes
+
   def expectSnapshot(probe: TestProbe): RoomSnapshot =
     probe.expectMsgType[RoomSnapshot]
 
@@ -979,10 +1134,12 @@ object RoomSpec:
   def createRoom(
       roomId: UUID,
       data: RoomData,
-      gracePeriod: FiniteDuration = Room.defaultGracePeriod
+      gracePeriod: FiniteDuration = testGracePeriod,
+      stopAfterIdle: FiniteDuration = testStopAfterIdle
   )(using
       testKit: ActorTestKit
   ): (UUID, ActorRef[Room.Command]) =
-    val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod))
+    val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod, stopAfterIdle))
     (roomId, roomRef)
+  end createRoom
 end RoomSpec
