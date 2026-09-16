@@ -18,13 +18,11 @@ object Room:
     extension (token: SessionToken) def raw: String = token.toString
 
   sealed trait Command
-  final case class Join(user: User)                                                  extends Command
+  final case class Join(userId: UUID, name: String, token: SessionToken, ref: UntypedRef)
+      extends Command
   final case class Leave(userId: UUID, ref: UntypedRef, replyTo: ActorRef[Response]) extends Command
-  final private[actors] case class ConfirmLeave(
-      userId: UUID,
-      ref: UntypedRef,
-      replyTo: ActorRef[Response]
-  ) extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID, replyTo: ActorRef[Response])
+      extends Command
   final case class Vote(token: SessionToken, estimation: String)                  extends Command
   final case class ClearVotes(token: SessionToken)                                extends Command
   final case class ReVote(token: SessionToken)                                    extends Command
@@ -46,86 +44,115 @@ object Room:
   final case class Running(roomId: UUID) extends Response
   final case class Stopped(roomId: UUID) extends Response
 
-  final case class User(
-      id: UUID,
-      name: String,
-      voted: Boolean,
-      estimation: String,
-      ref: UntypedRef,
-      token: SessionToken
-  )
+  final case class Estimate private (value: String, confirmed: Boolean):
+    // copy is private with the constructor, so the re-vote transition lives on the type.
+    def unconfirmed: Estimate = this.copy(confirmed = false)
+
+  object Estimate:
+    def of(value: String, confirmed: Boolean = true): Estimate =
+      // vote refuses a blank before this, so an invalid estimate is a programming error.
+      require(!value.isBlank, "an estimate needs a value")
+      Estimate(value, confirmed)
+
+  final case class Round(estimates: Map[UUID, Estimate], revealed: Boolean)
+
+  object Round:
+    val fresh: Round = Round(Map.empty[UUID, Estimate], revealed = false)
+
+  final case class RoomState(currentIssue: String, round: Round)
+
+  object RoomState:
+    val empty: RoomState = RoomState("", Round.fresh)
 
   final case class Session(userId: UUID, name: String)
 
+  final case class Member(name: String)
+
   final case class RoomData private (
-      users: List[User],
-      currentIssue: String,
-      revealed: Boolean = false,
-      sessions: Map[SessionToken, Session] = Map.empty
+      state: RoomState,
+      members: Map[UUID, Member],
+      sessions: Map[SessionToken, Session],
+      connections: Map[UUID, Set[UntypedRef]]
   ):
-    private[Room] def joinUser(user: User): RoomData =
-      // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
-      // ref actually differs on a reconnect, there being no rename feature.
-      val kept = this.users
-        .find(_.id == user.id)
-        .fold(user)(old => user.copy(voted = old.voted, estimation = old.estimation))
-      this.copy(users = kept :: this.users.filterNot(_.id == user.id))
-    end joinUser
+    private[Room] def connect(userId: UUID, name: String, ref: UntypedRef): RoomData =
+      this.copy(
+        members = this.members + (userId -> Member(name)),
+        connections =
+          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref))
+      )
+
+    private[Room] def disconnect(userId: UUID, ref: UntypedRef): RoomData =
+      // The entry goes when its set empties, so "holds no connection" means what it says.
+      this.copy(connections =
+        this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
+      )
+
+    private[Room] def removeMember(userId: UUID): RoomData =
+      // Estimates are keyed by id and survive a departure; only clear or the round ends one.
+      this.copy(members = this.members - userId)
 
     private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
-    def vote(userId: UUID, estimation: String): RoomData =
-      // The reveal closes the round: no vote lands, first or changed, until clear or reVote.
-      if this.revealed then this
+    // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
+    def actingMember(token: SessionToken): Option[UUID] =
+      this.sessions.get(token).map(_.userId).filter(this.members.contains)
+
+    def isMember(userId: UUID): Boolean = this.members.contains(userId)
+
+    def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
+
+    def vote(userId: UUID, estimation: String): RoomData = // unchanged from task 1
+      if this.state.round.revealed || estimation.isBlank then this
       else
-        val voted = this.users.map { u =>
-          if userId == u.id then u.copy(voted = true, estimation = estimation)
-          else u
-        }
-        // Still a latch: revealed is false here, and only a vote or ShowVotes sets it, so a
-        // departure satisfying the same predicate cannot reveal the round.
-        this.copy(users = voted, revealed = voted.nonEmpty && voted.forall(_.voted))
+        val estimates = this.state.round.estimates + (userId -> Estimate.of(estimation))
+        withRound(Round(estimates, everyMemberHasVoted(estimates)))
     end vote
 
-    def show(): RoomData =
-      this.copy(revealed = true)
-
-    def clear(): RoomData =
-      this.copy(users = this.users.map(_.copy(voted = false, estimation = "")), revealed = false)
-
+    def show(): RoomData   = withRound(this.state.round.copy(revealed = true))
+    def clear(): RoomData  = withRound(Round.fresh)
     def reVote(): RoomData =
-      // Keeps estimation, which is what makes "estimation but not voted" mean re-vote.
-      this.copy(users = this.users.map(u => u.copy(voted = false)), revealed = false)
-
-    def leave(userId: UUID, ref: UntypedRef): RoomData =
-      // Scoped to the specific connection's ref, not just userId, so a stale connection's
-      // delayed teardown can't evict a newer connection the same user reconnected with.
-      this.copy(users = this.users.filterNot(u => u.id == userId && u.ref == ref))
+      withRound(
+        Round(this.state.round.estimates.view.mapValues(_.unconfirmed).toMap, revealed = false)
+      )
 
     def editIssue(issue: String): RoomData =
-      this.copy(currentIssue = issue)
+      this.copy(state = this.state.copy(currentIssue = issue))
+
+    private def withRound(round: Round): RoomData =
+      this.copy(state = this.state.copy(round = round))
+
+    private def everyMemberHasVoted(estimates: Map[UUID, Estimate]): Boolean =
+      // nonEmpty is insurance rather than a live case: only a Vote ever runs this.
+      this.members.nonEmpty && this.members.keys.forall(id => estimates.get(id).exists(_.confirmed))
   end RoomData
 
   object RoomData:
-    val empty: RoomData = RoomData(List.empty[User], "")
+    val empty: RoomData = of()
 
     def of(
-        users: List[User],
-        sessions: Map[SessionToken, Session],
-        currentIssue: String = "",
-        revealed: Boolean = false
+        state: RoomState = RoomState.empty,
+        members: Map[UUID, Member] = Map.empty,
+        sessions: Map[SessionToken, Session] = Map.empty,
+        connections: Map[UUID, Set[UntypedRef]] = Map.empty
     ): RoomData =
-      // Invariant 5: ConnectToRoom creates every member off a resolved session, so a
-      // member whose session is missing or disagrees is a fixture error, never a state.
-      users.foreach { u =>
-        require(sessions.contains(u.token), s"member ${u.name} (${u.id}) has no session")
+      // Every id resolves to a session, which is conspicuously not "every id is a member":
+      // a connection or an estimate outliving its member is a state this design requires.
+      val identities = sessions.values.map(s => s.userId -> s).toMap
+      members.foreach { (id, member) =>
+        require(identities.contains(id), s"member ${member.name} ($id) has no session")
         require(
-          sessions(u.token) == Session(u.id, u.name),
-          s"the session for member ${u.name} (${u.id}) holds a different identity"
+          identities(id).name == member.name,
+          s"the session for member ${member.name} ($id) holds a different name"
         )
       }
-      RoomData(users, currentIssue, revealed, sessions)
+      connections.keys.foreach(id =>
+        require(identities.contains(id), s"the connection for $id resolves to no session")
+      )
+      state.round.estimates.keys.foreach(id =>
+        require(identities.contains(id), s"the estimate for $id resolves to no session")
+      )
+      RoomData(state, members, sessions, connections)
     end of
   end RoomData
 
@@ -150,17 +177,20 @@ object Room:
   ): Behavior[Command] =
     Behaviors.receive[Command] { (context, message) =>
       message match
-        case Join(user) =>
+        case Join(userId, name, token, ref) =>
           // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
-          // the room; publish is member-scoped, so a refused joiner gets no snapshot.
-          if data.sessions.get(user.token).contains(Session(user.id, user.name)) then
-            receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
+          // the room; a refused joiner gets no snapshot and, deliberately, no connection.
+          if data.sessions.get(token).contains(Session(userId, name)) then
+            // The arriving connection cancels any pending removal, so ConfirmLeave needs no
+            // staleness check of its own.
+            timers.cancel(userId)
+            val newData = publish(data.connect(userId, name, ref), context)
+            receiveBehaviour(roomId, newData, gracePeriod, timers)
           else
             val reason =
-              if data.sessions.contains(user.token) then
-                "its token's session names a different identity"
+              if data.sessions.contains(token) then "its token's session names a different identity"
               else "its token resolves to no session"
-            context.log.warn("Ignoring Join for user {} in room {}: {}.", user.id, roomId, reason)
+            context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
             Behaviors.same
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
@@ -169,67 +199,51 @@ object Room:
           replyTo ! SessionMinted(userId, token)
           receiveBehaviour(roomId, newData, gracePeriod, timers)
         case Vote(token, estimation) =>
-          data.users.find(_.token == token) match
-            case Some(user) =>
-              val newData = publish(data.vote(user.id, estimation), context)
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+          data.actingMember(token) match
+            case Some(userId) =>
+              receiveBehaviour(
+                roomId,
+                publish(data.vote(userId, estimation), context),
+                gracePeriod,
+                timers
+              )
             case None => Behaviors.same
         case ClearVotes(token) =>
-          data.users.find(_.token == token) match
+          data.actingMember(token) match
             case Some(_) =>
               receiveBehaviour(roomId, publish(data.clear(), context), gracePeriod, timers)
             case None => Behaviors.same
         case ReVote(token) =>
-          data.users.find(_.token == token) match
+          data.actingMember(token) match
             case Some(_) =>
               receiveBehaviour(roomId, publish(data.reVote(), context), gracePeriod, timers)
             case None => Behaviors.same
         case ShowVotes(token) =>
-          data.users.find(_.token == token) match
+          data.actingMember(token) match
             case Some(_) =>
               receiveBehaviour(roomId, publish(data.show(), context), gracePeriod, timers)
             case None => Behaviors.same
         case Leave(userId, ref, replyTo) =>
-          // Delay acting on this until the grace period elapses (see ConfirmLeave below),
-          // instead of removing the user and broadcasting Leave right away. A reconnect
-          // within that window (retry after a dropped SSE stream, a page refresh, an
-          // ordinary network blip) replaces this ref via Join before the timer fires, so
-          // the rest of the room never sees a spurious leave-then-rejoin flicker.
-          //
-          // Keying the timer on (userId, ref) relies on RoomManager calling Leave at most
-          // once per connection (ConnectionCompleted and ConnectionFailure are mutually
-          // exclusive outcomes of the same watchTermination). If that ever stops holding, a
-          // second Leave for the same (userId, ref) replaces the pending timer rather than
-          // running two independent ones, restarting the grace period from the second call
-          // instead of the first - see the "reset the grace period" case in RoomSpec.
-          if timers.isTimerActive((userId, ref)) then
-            context.log.warn(
-              "Leave received again for user {} on the same connection before its prior " +
-                "grace period elapsed; resetting the grace period instead of firing twice. " +
-                "RoomManager is expected to call Leave at most once per connection.",
-              userId
+          // Answerable at the moment of the event now that connections are their own map: a
+          // member still holding one, or already removed, schedules nothing.
+          val next = data.disconnect(userId, ref)
+          if !next.holdsConnection(userId) && next.isMember(userId) then
+            timers.startSingleTimer(
+              key = userId,
+              msg = ConfirmLeave(userId, replyTo),
+              delay = gracePeriod
             )
-          timers.startSingleTimer(
-            key = (userId, ref),
-            msg = ConfirmLeave(userId, ref, replyTo),
-            delay = gracePeriod
-          )
-          Behaviors.same
-        case ConfirmLeave(userId, ref, replyTo) =>
-          if data.users.exists(u => u.id == userId && u.ref == ref) then
-            val newData = publish(data.leave(userId, ref), context)
-            if newData.users.isEmpty then
-              replyTo ! Stopped(roomId)
-              Behaviors.stopped
-            else
-              replyTo ! Running(roomId)
-              receiveBehaviour(roomId, newData, gracePeriod, timers)
+          receiveBehaviour(roomId, next, gracePeriod, timers)
+        case ConfirmLeave(userId, replyTo) =>
+          val newData = publish(data.removeMember(userId), context)
+          if newData.members.isEmpty then
+            replyTo ! Stopped(roomId)
+            Behaviors.stopped
           else
-            // Stale teardown: this userId already reconnected under a different ref
-            // (joinUser replaced the entry), so there's nothing left to remove.
-            Behaviors.same
+            replyTo ! Running(roomId)
+            receiveBehaviour(roomId, newData, gracePeriod, timers)
         case EditIssue(token, issue) =>
-          data.users.find(_.token == token) match
+          data.actingMember(token) match
             case Some(_) =>
               receiveBehaviour(roomId, publish(data.editIssue(issue), context), gracePeriod, timers)
             case None => Behaviors.same
@@ -250,10 +264,12 @@ object Room:
   private[actors] def publish(data: RoomData, context: ActorContext[Command]): RoomData =
     // The Join to publish hop races a new connection's demand, benign while dropHead leaves a
     // newer full snapshot. 08-24 measured it under fail; re-check if that guarantee changes.
-    context.log.debug("Publishing to {} users", data.users.size)
-    // Recipient and redaction target are one value here, so the pairing holds by construction.
-    // Step 4's connections map makes it a lookup; RoomSpec's two-probe cases are its guard.
-    data.users.foreach(user => user.ref ! RoomSnapshot.of(data, user.id))
+    context.log.debug("Publishing to {} connected members", data.connections.size)
+    // One snapshot per member, shared by that member's connections: redaction is per identity.
+    data.connections.foreach { (id, refs) =>
+      val snapshot = RoomSnapshot.of(data, id)
+      refs.foreach(_ ! snapshot)
+    }
     data
   end publish
 end Room

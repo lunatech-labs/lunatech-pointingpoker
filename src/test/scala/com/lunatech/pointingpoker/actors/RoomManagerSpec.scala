@@ -50,12 +50,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.ConnectToRoom(roomId, userId1, user1Name, token1, user1Probe.ref)
       managerRef ! RoomManager.ConnectToRoom(roomId, userId2, user2Name, token2, user2Probe.ref)
 
-      roomProbe.expectMessage(
-        Room.Join(Room.User(userId1, user1Name, false, "", user1Probe.ref, token1))
-      )
-      roomProbe.expectMessage(
-        Room.Join(Room.User(userId2, user2Name, false, "", user2Probe.ref, token2))
-      )
+      roomProbe.expectMessage(Room.Join(userId1, user1Name, token1, user1Probe.ref))
+      roomProbe.expectMessage(Room.Join(userId2, user2Name, token2, user2Probe.ref))
     }
 
     "no-op ConnectToRoom for an unknown room" in {
@@ -283,7 +279,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val token       = Room.SessionToken.mint()
       val firstProbe  = TestProbe()(testKit.system.classicSystem)
       val secondProbe = TestProbe()(testKit.system.classicSystem)
-      val alice       = Room.User(userId, "Alice", false, "", firstProbe.ref, token)
+      val alice       = Attendee(userId, "Alice", false, "", firstProbe.ref, token)
       // Alice's session exists before her member does, which is the state ConnectToRoom
       // always arrives in; without it the room's Join guard drops the connection.
       val roomRef       = testKit.spawn(Room(roomId, withUsers().withMemberlessSession(alice)))
@@ -303,8 +299,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       secondProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.GetData(dataProbe.ref)
 
-      val users = dataProbe.expectMessageType[Room.DataStatus].data.users
-      users.map(u => (u.voted, u.estimation)) mustBe List((true, "5"))
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      data.estimateFor(alice) mustBe Some(("5", true))
     }
   }
 end RoomManagerSpec

@@ -42,14 +42,14 @@ roadmap item instead of leaving it here as stale history.
   leaves. `POST /create-room` no longer requires a completed join to keep a room
   alive, so an abandoned tab, a network failure before `/join`, or stray traffic
   can accumulate rooms that live for the life of the process.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: a room stops two to four
   hours after its last connection goes, whether or not anyone ever joined. That
   closes the accidental form. It does not close the abusive one, since any message
   arriving in an interval defers the stop by another, so a client looping requests
   at an empty room keeps it alive; bounding that belongs to the rate-limiting
-  entry below. Remove this entry when step 4 lands.
+  entry below. Remove this entry when step 4a lands.
 
 ### Every session a room mints lives as long as the room does
 
@@ -61,16 +61,16 @@ roadmap item instead of leaving it here as stale history.
   reconnect, and it deliberately adds no TTL. A room therefore accumulates one
   entry per `/join` it ever answered: tabs that connected, tabs that failed
   between `/join` and `/events`, and people who joined and left hours ago.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle, so a room's sessions go
   with it two to four hours after its last connection instead of living for the
   process. A TTL was considered there and dropped: its useful range is squeezed
   below by needing to outlast a realistic in-meeting outage and above by the idle
   stop, and what it would reclaim is a hundred bytes per abandoned session. What
-  is left after step 4 is a room held open for hours with heavy tab churn, which
+  is left after step 4a is a room held open for hours with heavy tab churn, which
   is abuse-shaped and belongs to the rate-limiting entry below. Remove this entry
-  when step 4 lands.
+  when step 4a lands.
 
 ### A disconnection that outlasts the grace period still forces a reload for the room's last member
 
@@ -89,13 +89,13 @@ roadmap item instead of leaving it here as stale history.
   gone. The `onerror` comment in `src/main/resources/pages/index.html` names
   this cause. Step 5 removed the consumed-session cause behind it, leaving
   this one and a process restart, which takes every room and session with it.
-- **Resolution:** Scheduled as step 4 of
+- **Resolution:** Scheduled as step 4a of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   which replaces stop-when-empty with stop-after-idle: the room outlives its
   last member by two to four hours, far longer than any outage the retry has to
   cross, so the token resolves and the retry succeeds. How long the window is
   before this fires at all is the detection-delay entry below. Remove this entry
-  when step 4 lands.
+  when step 4a lands.
 
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
@@ -248,15 +248,24 @@ roadmap item instead of leaving it here as stale history.
   or injection one. Body size falls back to the pekko-http default,
   `application.conf` configuring no parsing limits.
 
-  One case is already scheduled to change behaviour. `RoomSnapshot`'s
-  `hasEstimation` is `estimation.nonEmpty`, so an empty estimation reads as
-  voted with no estimation, and step 4 re-expresses the field as the entry
-  existing in `round.estimates`, which gives that same row the withheld-value
-  icon. The target design records that beside `hasEstimation`.
+  The empty-estimation case closed at step 4, and its consequence was larger
+  than the icon it first appeared to be. `RoomSnapshot`'s `hasEstimation` was
+  `estimation.nonEmpty`, so an empty estimation read as voted with no estimation;
+  step 4 re-expressed the field as the entry existing in `round.estimates`, and
+  the client reads that field twice, in `showUserEstimation` for the
+  withheld-value icon and in `applySnapshot` to gate the vote tally. Presence
+  alone would therefore have admitted a `""` bucket to the distribution, which is
+  the defect step 3 exists to remove. So `RoomData.vote` refuses a blank
+  estimation rather than the row being re-rendered, which is a refusal of the
+  absence of a value and not the validation this entry's resolution defers. The
+  endpoint is unchanged: it still takes any body and still answers `204`, and the
+  refusal happens in the actor, which is why the entry stays open. What is left of
+  the estimation half is the non-blank nonsense estimation behind the `scale`
+  item. The target design records the reasoning beside `hasEstimation`.
 - **Resolution:** Unscheduled, and the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
-  (`index.html:373`). Step 6 describes the endpoints with tapir, which buys
+  (`estimationValues`). Step 6 describes the endpoints with tapir, which buys
   types and shape rather than values, so an empty string satisfies the schema
   there too unless a validator is declared, which nothing plans. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
@@ -531,6 +540,37 @@ roadmap item instead of leaving it here as stale history.
   a session without a member went from four to five in the same commit, and
   the step 5a section still said four.
 
+  Step 4 swept both files again and converted rather than renumbered, the split
+  having moved or deleted nearly every `Room.scala` site the earlier sweeps had
+  corrected. In the design that took the numbers off the two-check argument's
+  five command-path citations, the `clear`/`reVote` pair in sections 3 and 5, the
+  `Behaviors.withTimers` pair, `RoomData.empty`, step 1's successor pointer for
+  the `publish` caveat, and step 5a's own paragraph's four pointers into
+  `Room.scala` and `RoomManager.scala`, each leaving the symbol the sentence
+  already named. Where the cited code was deleted outright the sentence went into
+  the past tense instead, there being no line left to point at: the delayed
+  decision, `ConfirmLeave`'s stale-ref branch and the duplicate-`Leave` warning.
+  In this file the same conversion covered the four pointers at `Room.scala:80`,
+  `:83` and `:97-99`, which are `RoomData.vote` and `RoomData.reVote`. The
+  design's two `RoomSpec` and `RoomManagerSpec` citations went the same way, to
+  case names, one of the two cases they named having gone with the staleness
+  check.
+
+  **Pinning was not available to this step**, which is worth recording because
+  the form below recommends it. A pre-step-4 pin would have to name a commit on
+  this branch, and the branch is squash-merged, so the hash would resolve for as
+  long as the branch existed and no longer. Pinning is for a citation into a tree
+  that `main` already has, which is what `91f783d` and `1bbe1cf` are.
+
+  Two pointers into a document rather than into code were found stale and
+  converted to section headings on the way past. This file's reference to the
+  design's additive-views passage read `:1018-1020`, about a hundred lines short
+  and landing on the `setReceiveTimeout` argument; its reference to the re-vote
+  tally rule read `:1318-1331` and landed on the idempotent-`/join` passage. Both
+  were correct when written and neither was broken by this step's own diff, but
+  this step's edits to the design would have moved both again, which is the
+  sweep-every-changed-file rule reaching across files rather than within one.
+
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
   reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
@@ -552,7 +592,8 @@ roadmap item instead of leaving it here as stale history.
   `docs/superpowers/specs/2026-08-30-e2e-testkit-design.md` (`:8`, `:47-48`,
   `:318`) is outside this entry's scope and still reads as live. Step 3's sweep
   also missed the vote-survival pointer, stale since before step 5's branch and
-  corrected by it to `e2e/room.spec.js:399`.
+  corrected by it to `e2e/room.spec.js:399`, which step 4's own three added lines
+  then broke again. It is a case name now.
 
   A fourth kind, also unswept, is a delivered plan describing code that no longer exists:
   `docs/superpowers/plans/2026-08-31-protocol-architecture-0-playwright.md:876`
@@ -562,18 +603,29 @@ roadmap item instead of leaving it here as stale history.
   controls as green, which is correct as a record of what step 0 was told to
   build. The plan is delivered, so this is recorded rather than edited.
 
-  The design's step 4 section carries the same fourth kind, at `:1854`: the
-  caveat that `Room.scala:125-130` is the code's only pointer to 08-24's
+  The design's step 1 section carries the same fourth kind, in "One caveat to
+  carry rather than delete with the code it annotates": that
+  `Room.scala:125-130` is the code's only pointer to 08-24's
   connection-establishment finding, and that deleting `setupNewUser` takes the
-  pointer with it. Step 1 deleted it already, and a successor comment sits at
-  `Room.scala:251-252`, so the caveat is spent and its citation is now one of
-  the deliberate pre-step-1 pointers the second trap below protects. Step 4
-  owns that section.
+  pointer with it. Step 1 deleted it already, and a successor comment sits on
+  `publish`, which step 4 carried through its rewrite of that method, so the
+  caveat is spent and its citation is now one of the deliberate pre-step-1
+  pointers the second trap below protects. Step 1's
+  section is landed, so the disposal is the annotation prescribed above rather
+  than an edit.
 
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
-  given here on purpose. Three review rounds produced a different count each
+  given here on purpose.
+
+  Renumbering a step has a fourth shape, and it is not a citation: a step named
+  in a table cell rather than in a sentence. Splitting step 4 swept the prose and
+  left three rows behind, two in the design's "Known issues disposition" and one
+  in "Deferred, with triggers", because scanning prose does not read like
+  scanning a table. Those two tables are the only place that answers which step
+  closes a given entry, so a renumbering that misses them leaves the design
+  contradicting this file. Three review rounds produced a different count each
   time, and the count was never what a sweep needed.
 
   Sweep last, and sweep again after any later commit touches a cited file. A
@@ -707,7 +759,7 @@ roadmap item instead of leaving it here as stale history.
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
-  the rest in insertion order. Against the cards at `:373` that puts `0` to `89`
+  the rest in insertion order. Against `estimationValues` that puts `0` to `89`
   first and leaves `0.5` and `?` behind all of them. So a 2-2 split on `5` and
   `8` reports `5`, a 2-2 split on `0.5` and `89` reports `89`, and a 2-2 split on
   `0.5` and `?` is decided by `s.users` iteration order, the one case not
@@ -722,7 +774,8 @@ roadmap item instead of leaving it here as stale history.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
   are all defensible, and the third is worth weighing since the table already
   shows it. Whoever builds step 9's history views should decide it there:
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1018-1020`
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
+  under "Round history, within the session",
   already lists highest and lowest, majority, and most voted as additive views
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
@@ -731,27 +784,28 @@ roadmap item instead of leaving it here as stale history.
 
 ### A Show during a partial re-vote tallies two rounds as one distribution
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:97-99`
-  (`reVote` keeping every estimation) and `:83` (`vote` overwriting one), with the
-  tally at `src/main/resources/pages/index.html:355` read at `:276-282` under the
-  "Most voted estimation" heading.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.reVote` keeping every estimation and `RoomData.vote` overwriting
+  one), with the tally at `src/main/resources/pages/index.html:355` read at
+  `:276-282` under the "Most voted estimation" heading.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
   round that some participants have re-voted and others have not holds answers to
   two different rounds at once. A Show there counts both. Alice, Bob and Carol
   finish a round on 8, 8 and 3, somebody presses Re-vote, Carol re-votes to 5, and
   a Show before Alice and Bob pick reports 8 as the most voted estimation: two
   participants' answer to the previous round and nobody's answer to this one.
-  Since step 3a a revealed round refuses every vote (`Room.scala:80`), so the
+  Since step 3a a revealed round refuses every vote, in `RoomData.vote`, so the
   holders of a stale value cannot replace it in place. The recovery is another
   Re-vote, which reopens the round for everyone, or a Clear.
 
   This follows from two deliberate decisions, which is why it is recorded rather
   than fixed. `reVote` keeps the values so that an estimation without a
   confirmation can mean a re-vote in progress, and the summary counts exactly the
-  non-blank estimation cells the table beside it displays, which
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md:1318-1331`
-  argues for and `e2e/room.spec.js:338-340` asserts. It is the same failure class as
-  the tie-break above, a headline decided by something other than this round's
+  non-blank estimation cells the table beside it displays, which section 5 of
+  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
+  argues for under "The tally counts whoever has an estimation" and
+  `e2e/room.spec.js:338-340` asserts. It is the same failure class as the
+  tie-break above, a headline decided by something other than this round's
   votes, and it is mitigated the same way but only halfway: the table renders a
   stale row with no check-circle (`index.html:318`), so anyone looking down from
   the headline can see who has not confirmed. The distribution itself carries no
@@ -761,17 +815,19 @@ roadmap item instead of leaving it here as stale history.
   reason: once a revealed round refuses votes, a changed mind is a room-level act
   and the room's two answers are worth reading together. Neither scheduled step
   closes it. Step 6 is about a refusal reaching the client that cast it, not about
-  which round an estimate belongs to. Step 4 keeps these semantics on purpose: the
-  design's `:606-613` removes estimates only on `clear` or the round ending, with a
-  `reVote` leaving the values in place and clearing `confirmed`, which is the state
-  `Estimate` exists to express. Remove this entry once the previous estimate is
+  which round an estimate belongs to. Step 4 kept these semantics on purpose: the
+  design's "Each of the three is removed at a different moment" removes estimates
+  only on `clear` or the round ending, with a `reVote` leaving the values in
+  place and clearing `confirmed`, which is the state `Estimate` exists to
+  express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
   estimation on `reVote`.
 
 ### A vote refused by a revealed round is silent, and can read as accepted
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`
-  (the refusal), `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
+- **Where:** `RoomData.vote` in
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (the refusal),
+  `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
   (`/vote` answering `NoContent` whatever happens) and
   `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
   optimistic flag).
@@ -781,6 +837,15 @@ roadmap item instead of leaving it here as stale history.
   `votesRevealed`, which only refreshes over SSE. A client whose stream is dead
   therefore still has a live deck over a closed round, and `POST /vote` returns
   `204` either way.
+
+  Step 4 added a second refusal to the same branch, of a blank estimation, and it
+  is silent in exactly the same way. That one is unreachable from the page, whose
+  card values are hardcoded, so it costs nobody a vote today; what it costs is a
+  hand-written request that gets a `204` for a write that never happened. Both
+  sit here as one entry rather than two, because the gap is the unconditional
+  `204` rather than either refusal: `RoomData.vote` returns the data unchanged
+  through the same `publish` in both cases, and the route cannot tell that from a
+  vote that landed.
 
   What makes it worse than a no-op is the optimistic assignment, and what step 3a
   changed there is not the display but what stands behind it. Take a
@@ -797,19 +862,19 @@ roadmap item instead of leaving it here as stale history.
   error on a dead stream is now a lost vote as well.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  whose ask pattern gives `/vote` a real result and makes the refusal reportable
-  when it happens, which is what section 5 already says the reply is for. The POST
-  travels over HTTP and works when the SSE stream does not, so the answer reaches
-  precisely the client that cannot see the state. What is left after that is
-  general: a client with a dead stream is stale in every respect, which is the
-  backlog's connection-liveness watchdog and not this entry. Remove this entry
-  when step 6 lands.
+  whose ask pattern gives `/vote` a real result and makes both refusals
+  reportable when they happen, which is what section 5 already says the reply is
+  for. The POST travels over HTTP and works when the SSE stream does not, so the
+  answer reaches precisely the client that cannot see the state. What is left
+  after that is general: a client with a dead stream is stale in every respect,
+  which is the backlog's connection-liveness watchdog and not this entry. Remove
+  this entry when step 6 lands.
 
 ### A reload during a revealed round locks the participant out of it
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`RequestSession`'s fresh `userId` per call) and
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala:80`.
+  (`RequestSession`'s fresh `userId` per call) and `RoomData.vote` in
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`.
 - **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
   as a new member with no estimation. Since step 3a a revealed round refuses every
   vote, including a first one, so that member cannot vote at all until somebody

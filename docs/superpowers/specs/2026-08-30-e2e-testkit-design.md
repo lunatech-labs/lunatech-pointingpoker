@@ -189,7 +189,7 @@ them. All nine belonged to 08-28's proposed configuration surface, none of them
 was ever built, and the target architecture cancels every one. The heartbeat is
 worth singling out, since it stays real while its variable does not: it is a
 hardcoded `val heartbeatInterval = 15.seconds` (`SSE.scala:34`), so no case may
-depend on turning it down. The profile grows again at step 4, which makes the
+depend on turning it down. The profile grows again at step 4a, which makes the
 actor idle timeout configurable and will want it turned right down to test
 stop-after-idle.
 

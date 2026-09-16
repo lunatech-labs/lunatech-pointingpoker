@@ -42,9 +42,6 @@ object RoomManager:
   sealed trait Response
   case class RoomId(value: String) extends Response
 
-  val InitialVoteState  = false
-  val InitialEstimation = ""
-
   final case class RoomManagerData(rooms: Map[UUID, ActorRef[Room.Command]]):
     def addRoom(roomId: UUID, roomActor: ActorRef[Room.Command]): RoomManagerData =
       this.copy(rooms = this.rooms + (roomId -> roomActor))
@@ -77,11 +74,7 @@ object RoomManager:
             replyTo ! RoomId(roomId.toString)
             receiveBehaviour(newData, roomResponseWrapper, gracePeriod)
           case ConnectToRoom(roomId, userId, name, token, ref) =>
-            data.rooms.get(roomId).foreach { room =>
-              room ! Room.Join(
-                Room.User(userId, name, InitialVoteState, InitialEstimation, ref, token)
-              )
-            }
+            data.rooms.get(roomId).foreach(room => room ! Room.Join(userId, name, token, ref))
             Behaviors.same
           case RequestSession(roomId, name, replyTo) =>
             data.rooms

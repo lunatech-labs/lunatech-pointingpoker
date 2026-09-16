@@ -184,8 +184,9 @@ directly in the new frontend.
       (`actors/RoomManager.scala`), but `POST /create-room` no longer requires a
       completed join to keep a room alive, so an abandoned tab, a network failure
       before `/join`, or stray traffic can accumulate rooms that live for the life
-      of the process. **Absorbed by step 4**, which stops a room two to four hours
-      after its last connection goes, joined or not. See `docs/known-issues.md`.
+      of the process. **Absorbed by step 4a**, which stops a room two to four
+      hours after its last connection goes, joined or not. See
+      `docs/known-issues.md`.
 - [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,
       not by oversight. More load-bearing than it looks now that nothing is
@@ -224,14 +225,14 @@ directly in the new frontend.
       "heuristics, not measured figures".
       **This blocks nothing and must not be made to.** Emitting the lines is
       additive and depends on no other step; acting on what they say needs weeks
-      of accumulation, and the two are separate work. In particular step 4 does
+      of accumulation, and the two are separate work. In particular step 4a does
       not wait for it: that step already reasons its way to a two-hour idle
-      timeout, and the protocol spec makes it "the only value this design makes
-      configurable", so a later correction is a deploy rather than a release.
-      Gating step 4 would also gate step 6 behind it, which is the fix for the
-      ghost this instrumentation exists to measure, so the gate would delay the
-      thing it is trying to inform. Ship the lines whenever convenient and let
-      the data catch up.
+      timeout, and the protocol spec makes it the one value that design adds to
+      the configuration, so a later correction is a deploy rather than a release.
+      Step 6 no longer sits behind it either, waiting on step 4 rather than on
+      4a, which removes the sharpest version of this argument and leaves the
+      plain one: there is nothing to gain by holding a value that a deploy can
+      correct. Ship the lines whenever convenient and let the data catch up.
       Do not expect a fast answer. At one or two meetings a week for one team,
       even a month is a handful of sessions, which will not size a rare event.
       The ghost rate becomes real only across every team using the tool, on a

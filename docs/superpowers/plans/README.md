@@ -65,7 +65,25 @@ that designed them, under TDD where there was production code to drive, and unde
 the substitute step 3b's own entry in the design records: a characterization case
 arrives green, so it was verified by reintroducing the defect it exists to catch.
 
-Step 4 will have one. It rewrites the actor's state model and `RoomSpec` with it.
+Step 4 had one. It rewrote the actor's state model and `RoomSpec` with it, and
+what the plan turned out to carry is a second thing worth keeping. It decomposed
+into two production tasks rather than one, because no tree compiles between the
+halves of a single rewrite: the round had to leave the participant before the
+participant could be split into a member, a session and a connection, and
+stopping anywhere in the middle leaves nothing that builds, let alone a suite
+that runs. A plan is what lets each half be a reviewable commit with a green
+suite behind it. The later large steps, 6 and 8, are the same shape, and they
+can reuse it.
+
+Step 4a will not, and the split between them is the clearest illustration of the
+two axes above. Step 4a was carved out of step 4's scope during the brainstorm
+that designed both, so its decision weight was settled in the same conversation
+and is written into the design's own step 4a section. What is left is about sixty
+production lines and eighty of tests across the idle timeout, the stream
+completion on stop, the reply-channel deletion and a config rename, with no
+handover, which is the small-surface-area case. It is executed directly under
+test-driven development, and anything not test-driven goes in the living spec
+rather than only in the log.
 
 Step 5 has one, added late to this record. Its production change is one file and
 about forty lines, which on surface area alone is borderline, but the plan earned
