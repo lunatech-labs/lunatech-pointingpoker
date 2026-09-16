@@ -97,41 +97,6 @@ roadmap item instead of leaving it here as stale history.
   before this fires at all is the detection-delay entry below. Remove this entry
   when step 4 lands.
 
-### `RoomData` can be constructed with a member who has no session
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
-  (`RoomData`'s constructor and `joinUser`); the fixtures in
-  `src/test/scala/com/lunatech/pointingpoker/actors/RoomSpec.scala` and
-  `RoomSnapshotSpec.scala`.
-- **Issue:** Invariant 5 of the design already implies this. A `members` entry,
-  today's `User`, is created by `ConnectToRoom` and by nothing else, and
-  `ConnectToRoom` runs only on a resolved session, so every member necessarily
-  has a `sessions` entry under its token holding its id. The design asserts
-  that for one reason, an unvotable member killing auto-reveal; step 5 gave it
-  a second, since making `sessions` the single authority `ValidateToken` reads
-  means such a member is also unresolvable. Production upholds it by
-  construction. Nothing enforces it. The constructor is public, and all but
-  three of the 48 fixture sites seed `users` with no `sessions` at all, so the
-  suite normalises a state production cannot reach. That has already cost
-  signal: three cases go red under a `Vote` rerouted onto `sessions` only
-  because their fixtures lack sessions, which deviation 7 of the step 5 plan
-  records as a trap for whoever fixes them. On the production side `joinUser`
-  adds whatever `User` it is handed and `Join` checks nothing, which is
-  unreachable today and load-bearing at step 4, where `Member` drops its token
-  and `sessions` becomes the only place a token lives.
-- **Resolution:** Scheduled as step 5a, between steps 5 and 4. A private
-  `RoomData` constructor with a validating `RoomData.of(users, sessions)`
-  factory, requiring the users' tokens to be a subset of the session keys
-  with matching ids; a `withUsers` sugar for the common seed; and a
-  test-scope `departed` extension for the retained-session-without-member
-  state that step 5 made normal. Scala 3.8.4 propagates a private
-  constructor to `copy` and `apply`, and every production mutator copies
-  from inside the class, so the lock costs production nothing. Valid
-  fixtures everywhere take the rerouted-`Vote` signal from four red cases to
-  the removed-member case alone, on deviation 7's reasoning, which is
-  acceptable only because that case guards it deliberately. Remove this entry
-  when step 5a lands.
-
 ### A deliberate tab close is as slow to announce as a transient reconnect
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -545,6 +510,27 @@ roadmap item instead of leaving it here as stale history.
   JavaScript key order" to "A reload during a revealed round locks the
   participant out of it", and none in this one.
 
+  Step 5a swept the same file's `Room.scala` citations again, for its own
+  `RoomData.of` insertion and `Join` guard: the two-check argument's five case
+  citations, the grace-timer-replaced-ref range twice over (once in the
+  delayed-decision argument, once beside the redundant-publish decision), the
+  `Behaviors.withTimers` pair, and its own paragraph's duplicate-`Leave`
+  citation all moved. This file's `Room.scala` citations sit inside
+  `RoomData`'s own methods, above both insertions, and needed nothing. The
+  sweep also found three pointers already wrong before this branch and left
+  them, being wrong in ways independent of what this step shifted:
+  `Room.scala:130` for `joinUser`'s call site, which is actually `:157`, and
+  `Room.scala:66-74` and `:67-74` for `joinUser` itself, which ends at `:73`.
+
+  That sweep then went stale inside its own branch. Widening the `Join` guard to
+  match `of`'s predicate added a line above every citation it had just moved,
+  and only the `joinUser` call site was re-fixed, because that one had jumped
+  far enough to be visible. The other nine sat one short until a re-run: the
+  five case citations, both timer ranges, the `withTimers` pair's second
+  number, and 5a's own duplicate-`Leave` citation. The count of sites needing
+  a session without a member went from four to five in the same commit, and
+  the step 5a section still said four.
+
   Claims go stale the same way, and a correct line number makes one more
   convincing rather than less. The design recommends that two `RoomSpec`
   reconnect cases be converted to drive `ConnectToRoom` at step 1; step 1 added
@@ -576,11 +562,61 @@ roadmap item instead of leaving it here as stale history.
   controls as green, which is correct as a record of what step 0 was told to
   build. The plan is delivered, so this is recorded rather than edited.
 
+  The design's step 4 section carries the same fourth kind, at `:1854`: the
+  caveat that `Room.scala:125-130` is the code's only pointer to 08-24's
+  connection-establishment finding, and that deleting `setupNewUser` takes the
+  pointer with it. Step 1 deleted it already, and a successor comment sits at
+  `Room.scala:251-252`, so the caveat is spent and its citation is now one of
+  the deliberate pre-step-1 pointers the second trap below protects. Step 4
+  owns that section.
+
   A sweep has to match three shapes, and missing one is how step 2's first sweep
   went wrong: `` `file.ext:NN` ``, a bare `` `:NN` `` continuing whichever file
   was named last, and a bare `` `NN-NN` `` with no colon at all. No totals are
   given here on purpose. Three review rounds produced a different count each
   time, and the count was never what a sweep needed.
+
+  Sweep last, and sweep again after any later commit touches a cited file. A
+  sweep is only true of the tree it ran against, so one that runs before a
+  step's final code commit certifies numbers that commit then shifts, which is
+  worse than not sweeping: the entry above asserts the sweep, so a reader trusts
+  it. Step 5a is the worked example. The same rule catches counts the prose
+  states, not just line numbers.
+
+  Re-read the deviations list before the final commit, for the same reason. A
+  step's late commits are the ones least likely to reach it: each is a small
+  decision taken on its own, and the list is a file nobody reopens once its
+  entries are written. Step 5a is again the worked example, four documentation
+  changes landing after the list was drafted and none recorded in it until the
+  code review asked. The check is mechanical and cheap. Diff the step's changed
+  files against the file list its tasks declared, and account for whatever the
+  two do not share. Then diff the content of each declared file against what
+  the task asked of it, which is the half that does the work: only one of step
+  5a's four was an undeclared file, and the other three landed inside declared
+  ones, where a file-list diff cannot see them.
+
+  Prefer a name to a number, and there is less to sweep. A wrong number fails
+  silently, landing on plausible neighbouring code while still reading as
+  current, which is how this branch shipped nine at once; a wrong name fails
+  loudly under `grep`, and only when the thing is renamed or deleted, which is
+  when the sentence around it wanted rereading anyway. Most of the design's
+  `Room.scala` citations already quote the symbol or the line beside the
+  number, so the number is the redundant half and the only half that rots.
+  Four forms, in the order of what they save: cite the symbol rather than the
+  line; drop the number where the prose already quotes the code; pin a
+  deliberately historical citation to the commit it resolves against, as
+  `Room.scala:125-130 as of 1bbe1cf^`, which `git show` resolves forever and
+  which the second trap below then need not protect; and cite a document's
+  section heading rather than its line, which is what made `:2030` here become
+  `:2032`. Ranges are the worst of the numbered forms and the majority of the
+  Scala ones, two moving endpoints apiece, and they nearly always mean "this
+  handler", which the name says shorter. No counts here, for the reason given
+  above: they were measured once and would need maintaining forever.
+
+  Do not retrofit what exists. A bulk conversion is the churn this paragraph
+  exists to reduce, and it would shift every count and cross-reference on the
+  way through. Convert what a step touches anyway, and the population drains
+  as the steps land.
 
   Two traps are worth naming, both of which caught the step 2 sweep. Checking
   what sits at the cited line is not enough: the question is whether the

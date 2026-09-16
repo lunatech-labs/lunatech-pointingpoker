@@ -66,3 +66,15 @@ the substitute step 3b's own entry in the design records: a characterization cas
 arrives green, so it was verified by reintroducing the defect it exists to catch.
 
 Step 4 will have one. It rewrites the actor's state model and `RoomSpec` with it.
+
+Step 5 has one, added late to this record. Its production change is one file and
+about forty lines, which on surface area alone is borderline, but the plan earned
+its place after the fact: it accumulated twelve deviations, and several of them
+correct the plan rather than the code, which is a record a commit log does not
+give you.
+
+Step 5a has one. Its production change is smaller still, a private constructor, a
+factory and a guard, but it rewrites all 48 fixture sites across three specs and
+adds a fourth file. That is the large-surface-area case above, and the handover
+matters more than usual here: a missed site is invisible until the last commit of
+the first task, when the constructor closes and the compiler finally objects.

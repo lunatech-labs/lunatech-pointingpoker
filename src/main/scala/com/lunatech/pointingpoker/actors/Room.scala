@@ -57,13 +57,13 @@ object Room:
 
   final case class Session(userId: UUID, name: String)
 
-  final case class RoomData(
+  final case class RoomData private (
       users: List[User],
       currentIssue: String,
       revealed: Boolean = false,
       sessions: Map[SessionToken, Session] = Map.empty
   ):
-    def joinUser(user: User): RoomData =
+    private[Room] def joinUser(user: User): RoomData =
       // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
       // ref actually differs on a reconnect, there being no rename feature.
       val kept = this.users
@@ -72,7 +72,7 @@ object Room:
       this.copy(users = kept :: this.users.filterNot(_.id == user.id))
     end joinUser
 
-    def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
+    private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
@@ -110,6 +110,25 @@ object Room:
   object RoomData:
     val empty: RoomData = RoomData(List.empty[User], "")
 
+    def of(
+        users: List[User],
+        sessions: Map[SessionToken, Session],
+        currentIssue: String = "",
+        revealed: Boolean = false
+    ): RoomData =
+      // Invariant 5: ConnectToRoom creates every member off a resolved session, so a
+      // member whose session is missing or disagrees is a fixture error, never a state.
+      users.foreach { u =>
+        require(sessions.contains(u.token), s"member ${u.name} (${u.id}) has no session")
+        require(
+          sessions(u.token) == Session(u.id, u.name),
+          s"the session for member ${u.name} (${u.id}) holds a different identity"
+        )
+      }
+      RoomData(users, currentIssue, revealed, sessions)
+    end of
+  end RoomData
+
   val defaultGracePeriod: FiniteDuration = 6.seconds
 
   def apply(
@@ -132,7 +151,17 @@ object Room:
     Behaviors.receive[Command] { (context, message) =>
       message match
         case Join(user) =>
-          receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
+          // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
+          // the room; publish is member-scoped, so a refused joiner gets no snapshot.
+          if data.sessions.get(user.token).contains(Session(user.id, user.name)) then
+            receiveBehaviour(roomId, publish(data.joinUser(user), context), gracePeriod, timers)
+          else
+            val reason =
+              if data.sessions.contains(user.token) then
+                "its token's session names a different identity"
+              else "its token resolves to no session"
+            context.log.warn("Ignoring Join for user {} in room {}: {}.", user.id, roomId, reason)
+            Behaviors.same
         case RequestSession(name, replyTo) =>
           val userId  = UUID.randomUUID()
           val token   = SessionToken.mint()
