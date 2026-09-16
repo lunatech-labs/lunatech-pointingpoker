@@ -992,13 +992,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "arm a single-shot idle timer at setup, for the configured delay" in {
       val roomId = UUID.randomUUID()
-      // A value that is nobody's default, so the delay can only have come from the argument.
-      val btk =
-        BehaviorTestKit(Room(roomId, RoomData.empty, testGracePeriod, 90.minutes), roomId.toString)
+      val btk    =
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, notADefaultIdle),
+          roomId.toString
+        )
 
       val timer = onlyTimer(btk.retrieveAllEffects())
       timer.msg mustBe Room.IdleTick
-      timer.delay mustBe 90.minutes
+      timer.delay mustBe notADefaultIdle
       timer.mode mustBe Effect.TimerScheduled.SingleMode
       timer.overriding mustBe false
     }
@@ -1006,7 +1008,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "re-arm the timer, superseding the pending tick, on any non-tick message" in {
       val roomId = UUID.randomUUID()
       val btk    =
-        BehaviorTestKit(Room(roomId, RoomData.empty, testGracePeriod, 90.minutes), roomId.toString)
+        BehaviorTestKit(
+          Room(roomId, RoomData.empty, testGracePeriod, notADefaultIdle),
+          roomId.toString
+        )
       btk.retrieveAllEffects()
 
       // The re-arm is what the branch chose instead of a sawMessage field, and
@@ -1015,7 +1020,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       val timer = onlyTimer(btk.retrieveAllEffects())
       timer.msg mustBe Room.IdleTick
-      timer.delay mustBe 90.minutes
+      timer.delay mustBe notADefaultIdle
       timer.overriding mustBe true
     }
 
@@ -1039,7 +1044,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val roomId    = UUID.randomUUID()
       val btk       =
         BehaviorTestKit(
-          Room(roomId, withUsers(user), testGracePeriod, 90.minutes),
+          Room(roomId, withUsers(user), testGracePeriod, notADefaultIdle),
           roomId.toString
         )
       btk.retrieveAllEffects()
@@ -1051,7 +1056,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       btk.isAlive mustBe true
       val timer = onlyTimer(btk.retrieveAllEffects())
       // This branch re-arms from its own call site, not the one every other message takes.
-      timer.delay mustBe 90.minutes
+      timer.delay mustBe notADefaultIdle
       timer.mode mustBe Effect.TimerScheduled.SingleMode
       timer.overriding mustBe true
     }
@@ -1113,6 +1118,9 @@ end RoomSpec
 
 object RoomSpec:
   import RoomDataFixtures.*
+
+  // Nobody's default, so a delay assertion can only be satisfied by the argument passed in.
+  val notADefaultIdle: FiniteDuration = 90.minutes
 
   def expectSnapshot(probe: TestProbe): RoomSnapshot =
     probe.expectMsgType[RoomSnapshot]

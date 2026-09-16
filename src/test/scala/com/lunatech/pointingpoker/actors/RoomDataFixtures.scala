@@ -11,7 +11,7 @@ import com.lunatech.pointingpoker.actors.Room.RoomData
 object RoomDataFixtures:
 
   // Room and RoomManager take these explicitly, so the defaults live here rather than in
-  // production code; they mirror application.conf, and a case wanting a short one says so.
+  // production code. They only need to outlast a case; nothing checks them against any config.
   val testGracePeriod: FiniteDuration   = 6.seconds
   val testStopAfterIdle: FiniteDuration = 2.hours
 

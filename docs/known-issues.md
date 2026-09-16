@@ -446,11 +446,11 @@ roadmap item instead of leaving it here as stale history.
 ### Tests that pass with the mechanism they name deleted, as a recurring pattern
 
 - **Where:** the suite generally. The instances found so far are in `RoomSpec`
-  (the retired "defer its stop by a full delay when any message arrives", and the
+  (the retired "defer its stop by a full delay when any message arrives", the
   `expectNoMessage` line in the equally retired "stay alive while a connection is
-  attached"), `RoomManagerSpec` ("drop a stopped room from its map so a later
-  request creates a fresh one"), "survive a tick while a connection is attached,
-  and re-arm", and the straggler-reload case recorded in the ghost-participant
+  attached", and "survive a tick while a connection is attached, and re-arm"),
+  `RoomManagerSpec` ("drop a stopped room from its map so a later request creates
+  a fresh one"), and the straggler-reload case recorded in the ghost-participant
   entry above.
 - **Issue:** Individual instances are recorded across this file; the pattern is
   not, and it keeps recurring. On the 2026-09-16 branch four separate cases were

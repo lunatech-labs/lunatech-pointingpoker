@@ -332,9 +332,10 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
     "drop a stopped room from its map so a later request creates a fresh one" in {
       val roomId       = UUID.randomUUID()
+      val idleTimeout  = 200.millis
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val managerRef   = testKit.spawn(
-        RoomManager.receiveBehaviour(RoomManagerData.empty, testGracePeriod, 200.millis)
+        RoomManager.receiveBehaviour(RoomManagerData.empty, testGracePeriod, idleTimeout)
       )
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
@@ -351,7 +352,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           tokenProbe.expectMessage(500.millis, Room.Unresolved)
         },
         10.seconds,
-        400.millis
+        idleTimeout * 2
       )
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
