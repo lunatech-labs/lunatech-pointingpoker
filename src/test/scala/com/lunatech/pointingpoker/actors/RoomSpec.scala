@@ -378,7 +378,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
-    "mint a session and store it as pending on RequestSession" in {
+    "mint a session and store it on RequestSession" in {
       val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
@@ -389,12 +389,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus]
-      data.data.pendingSessions.get(minted.token) mustBe Some(
-        Room.PendingSession(minted.userId, "Alice")
+      data.data.sessions.get(minted.token) mustBe Some(
+        Room.Session(minted.userId, "Alice")
       )
     }
 
-    "resolve a pending session by token" in {
+    "resolve a session minted for a tab that has not connected" in {
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
@@ -407,10 +407,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
     }
 
-    "resolve a confirmed member by token (reconnect)" in {
+    "resolve a token when the room already has members" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
-      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty.copy(users = List(user)))
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user), sessions = sessionsFor(user))
+      )
 
       roomRef ! Room.ValidateToken(user.token, resultProbe.ref)
 
@@ -426,11 +429,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       resultProbe.expectMessage(Room.Unresolved)
     }
 
-    "clear the pending session once Join promotes it to a member" in {
-      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val userProbe         = TestProbe()(testKit.system.classicSystem)
-      val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
+    "keep the session once Join promotes it to a member" in {
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe    = TestProbe()(testKit.system.classicSystem)
+      val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
       roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
@@ -439,8 +442,78 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus]
-      data.data.pendingSessions.get(minted.token) mustBe None
+      // Retained, so the member entry is no longer the token's only record.
+      data.data.sessions.get(minted.token) mustBe Some(
+        Room.Session(minted.userId, "Alice")
+      )
       data.data.users.map(_.id) must contain(minted.userId)
+    }
+
+    "resolve a token whose member was removed at grace expiry" in {
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
+      val resultProbe       = testKit.createTestProbe[Room.TokenResolution]()
+      val responseProbe     = testKit.createTestProbe[Room.Response]()
+      val userProbe         = TestProbe()(testKit.system.classicSystem)
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
+      val (roomId, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user2), sessions = sessionsFor(user2)),
+        gracePeriod = 50.millis
+      )
+
+      // Through RequestSession and Join, since promotion is what used to consume the entry:
+      // seeding the map directly leaves the case green with the old code.
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+      roomRef ! Room.Join(Room.User(minted.userId, "Alice", false, "", userProbe.ref, minted.token))
+
+      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
+      // Running is the confirmation that ConfirmLeave fired and removed the member while the
+      // room stayed up, which is the state a reconnect past the window arrives in.
+      responseProbe.expectMessage(Room.Running(roomId))
+
+      roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
+
+      resultProbe.expectMessage(Room.Resolved(minted.userId, "Alice"))
+    }
+
+    "refuse every command from a token whose member was removed at grace expiry" in {
+      val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
+      val responseProbe     = testKit.createTestProbe[Room.Response]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val userProbe         = TestProbe()(testKit.system.classicSystem)
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", true, "3")
+      val (user3, _)        = createUser(UUID.randomUUID(), "user3", true, "5")
+      val (roomId, roomRef) = createRoom(
+        UUID.randomUUID(),
+        RoomData.empty.copy(users = List(user2, user3), sessions = sessionsFor(user2, user3)),
+        gracePeriod = 50.millis
+      )
+
+      // Same setup as the resolve case above: Alice's token is retained in `sessions`
+      // after her member entry is removed at grace expiry.
+      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+      roomRef ! Room.Join(Room.User(minted.userId, "Alice", false, "", userProbe.ref, minted.token))
+
+      roomRef ! Room.Leave(minted.userId, userProbe.ref, responseProbe.ref)
+      responseProbe.expectMessage(Room.Running(roomId))
+
+      // Both members voted with the round unrevealed, the state a room is in after an unvoted
+      // member's grace expiry, so any of the five honoured wrongly would visibly change it.
+      roomRef ! Room.GetData(dataProbe.ref)
+      val before = dataProbe.expectMessageType[Room.DataStatus].data
+
+      def assertUnaffected(command: Room.Command): Unit =
+        roomRef ! command
+        roomRef ! Room.GetData(dataProbe.ref)
+        dataProbe.expectMessage(Room.DataStatus(data = before))
+
+      assertUnaffected(Room.Vote(minted.token, "8"))
+      assertUnaffected(Room.ClearVotes(minted.token))
+      assertUnaffected(Room.ReVote(minted.token))
+      assertUnaffected(Room.ShowVotes(minted.token))
+      assertUnaffected(Room.EditIssue(minted.token, "a different issue"))
     }
 
     "reveal the round when the last outstanding vote lands" in {
@@ -605,6 +678,9 @@ object RoomSpec:
     val probe = TestProbe()(testKit.system.classicSystem)
     val user  = Room.User(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint())
     (user, probe)
+
+  def sessionsFor(users: Room.User*): Map[Room.SessionToken, Room.Session] =
+    users.map(u => u.token -> Room.Session(u.id, u.name)).toMap
 
   def createRoom(
       roomId: UUID,

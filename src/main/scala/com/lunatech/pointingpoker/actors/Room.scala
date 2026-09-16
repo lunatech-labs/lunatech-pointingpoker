@@ -55,13 +55,13 @@ object Room:
       token: SessionToken
   )
 
-  final case class PendingSession(userId: UUID, name: String)
+  final case class Session(userId: UUID, name: String)
 
   final case class RoomData(
       users: List[User],
       currentIssue: String,
       revealed: Boolean = false,
-      pendingSessions: Map[SessionToken, PendingSession] = Map.empty
+      sessions: Map[SessionToken, Session] = Map.empty
   ):
     def joinUser(user: User): RoomData =
       // ConnectToRoom rebuilds the User with an empty vote, so keep the stored one; only
@@ -69,14 +69,11 @@ object Room:
       val kept = this.users
         .find(_.id == user.id)
         .fold(user)(old => user.copy(voted = old.voted, estimation = old.estimation))
-      this.copy(
-        users = kept :: this.users.filterNot(_.id == user.id),
-        pendingSessions = this.pendingSessions - user.token
-      )
+      this.copy(users = kept :: this.users.filterNot(_.id == user.id))
     end joinUser
 
     def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
-      this.copy(pendingSessions = this.pendingSessions + (token -> PendingSession(userId, name)))
+      this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
     def vote(userId: UUID, estimation: String): RoomData =
       // The reveal closes the round: no vote lands, first or changed, until clear or reVote.
@@ -208,12 +205,11 @@ object Room:
               receiveBehaviour(roomId, publish(data.editIssue(issue), context), gracePeriod, timers)
             case None => Behaviors.same
         case ValidateToken(token, replyTo) =>
-          val resolution = data.pendingSessions.get(token) match
-            case Some(pending) => Resolved(pending.userId, pending.name)
-            case None          =>
-              data.users.find(_.token == token) match
-                case Some(user) => Resolved(user.id, user.name)
-                case None       => Unresolved
+          // The map is the single authority now that it is retained: a member removed at
+          // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
+          val resolution = data.sessions.get(token) match
+            case Some(session) => Resolved(session.userId, session.name)
+            case None          => Unresolved
           replyTo ! resolution
           Behaviors.same
         case GetData(replyTo) =>

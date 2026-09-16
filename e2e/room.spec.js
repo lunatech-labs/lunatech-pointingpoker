@@ -415,6 +415,40 @@ test('a vote survives its own reconnect', async ({ join }) => {
   await expect(participantRow(alice.page, 'Bob')).toContainText('8')
 })
 
+test('a disconnection outlasting the grace period comes back without a reload', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  // Detection rides on the room's own traffic, so two writes to Bob's dead stream start his
+  // grace period; both are asserted on Alice's row, since Bob's page is stale while cut.
+  const aliceOnAlice = participantRow(alice.page, 'Alice')
+  await vote(alice.page, '5')
+  await expect(votedMark(aliceOnAlice)).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(aliceOnAlice)).toHaveCount(0)
+  // Bob's own row going is the grace period expiring, which is what this case needs and what
+  // departureWhileCut's reconnect stays inside: restoring sooner would prove nothing.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
+
+  await bob.restore()
+  // Any alert, not just the transient one: a consumed session ends here on the terminal
+  // "session has ended" banner, which is also an alert and would pass a filtered assertion.
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  // Bob is back and not duplicated. Identity reuse is not observable here, since his row
+  // was already gone: RoomSpec's grace-expiry resolve case is what pins the id.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
+  await expect(participantRows(bob.page)).toHaveCount(2, { timeout: 10_000 })
+
+  // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+})
+
 test('the issue box resyncs once the editor loses focus', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
