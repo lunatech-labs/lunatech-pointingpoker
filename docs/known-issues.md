@@ -449,23 +449,32 @@ roadmap item instead of leaving it here as stale history.
   (the retired "defer its stop by a full delay when any message arrives", and the
   `expectNoMessage` line in the equally retired "stay alive while a connection is
   attached"), `RoomManagerSpec` ("drop a stopped room from its map so a later
-  request creates a fresh one"), and the straggler-reload case recorded in the
-  ghost-participant entry above.
+  request creates a fresh one"), "survive a tick while a connection is attached,
+  and re-arm", and the straggler-reload case recorded in the ghost-participant
+  entry above.
 - **Issue:** Individual instances are recorded across this file; the pattern is
-  not, and it keeps recurring. On the 2026-09-16 branch three separate cases were
+  not, and it keeps recurring. On the 2026-09-16 branch four separate cases were
   found to pass with the mechanism they name removed outright. The deferral case
   went green with the message re-arm replaced by `if false`, which was the only
   regression test behind the mechanism the branch had chosen instead of a
   `sawMessage` field. The `RoomManager` case asserted only that a session could be
   minted, which a surviving room satisfies exactly as well as a restarted one, so
-  it was green for the opposite of the reason its name gives. Two of the three
-  rested on the same false belief, that a typed `TestProbe` observes termination:
+  it was green for the opposite of the reason its name gives. Two of the first
+  three rested on the same false belief, that a typed `TestProbe` observes
+  termination:
   it registers a death-watch only inside `expectTerminated`, so an
   `expectNoMessage` placed before it asserts nothing at all. A proposed fix for
-  one of them repeated that error and was caught only by running it. The common
-  shapes are assertions of absence, assertions satisfied by either outcome, and
-  waits shorter than the detection path they depend on, which is the same failure
-  the ghost-participant and artifact-upload entries describe in their own terms.
+  one of them repeated that error and was caught only by running it. The fourth
+  was found during the branch's own review and is the sharpest, because it was
+  written on this branch to fix the pattern: "survive a tick while a connection is
+  attached, and re-arm" asserted that a timer was scheduled and that it overrode a
+  pending one, but never the delay, so hard-coding that call site's duration left
+  the whole suite green. `Room` re-arms from two call sites, and the case named for
+  the branch's mechanism covered only the other one. The common shapes are
+  assertions of absence, assertions satisfied by either outcome, waits shorter than
+  the detection path they depend on, and assertions that stop one field short of
+  the value in question, which is the same failure the ghost-participant and
+  artifact-upload entries describe in their own terms.
 - **Resolution:** No audit has been done and no tooling is in place. What works is
   cheap and should be the habit: mutate the mechanism the test names, expect red,
   revert. That found every instance above and cost one targeted run each. The

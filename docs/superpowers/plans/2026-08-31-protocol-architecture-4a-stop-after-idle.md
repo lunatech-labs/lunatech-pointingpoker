@@ -75,6 +75,12 @@ step 5a (#403) on step 5 (#402), so this branch is the fourth level and needs a
 tick reads `connections` directly they have no reader left, so
 `2026-09-16-idle-stop-without-the-wall-clock.md` removes both.
 
+**Deviation:** this plan specified `Room.defaultGracePeriod` and
+`Room.defaultStopAfterIdle` as parameter defaults. The branch's review removed
+both: a defaulted duration means a call site can omit one silently, and defaults
+equal to the shipped config are what would hide such an omission. Both are now
+required parameters, and the test defaults live in `RoomDataFixtures`.
+
 ---
 
 ## File Structure

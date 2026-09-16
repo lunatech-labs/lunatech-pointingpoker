@@ -73,6 +73,12 @@ New to this plan:
   message or in `docs/known-issues.md`.
 - **No em dash in any prose this plan writes.**
 
+**Deviation:** the task bodies below assert `timer.delay mustBe
+Room.defaultStopAfterIdle` while building the room on that same default, which
+compares a symbol to itself and passes for any value. The branch's review deleted
+`Room.default*` outright and the cases now pass 90 minutes, which is nobody's
+default, so the delay can only have come from the argument.
+
 ---
 
 ## File Structure
@@ -631,10 +637,16 @@ once, without a total that needs maintaining."
   its name gives. It now asserts the first token stops resolving. Note what that
   changed: a slow runner used to make the case pass vacuously and now makes it
   fail red, which is the right direction and a new flake risk rather than none.
+  The branch's review then closed the flake risk too: the sleep is now an
+  `awaitAssert` whose interval is deliberately longer than the idle timeout,
+  because a poll reaches the room and re-arms it, so a fast loop would keep the
+  room alive and it would never go idle.
 - **Collapsing the two re-arm sites into one unconditional call.** The two
   express different things: deferring on a message, and re-arming after a tick
-  the room survived. Both are now covered by effect assertions, and an
-  unconditional arm would schedule a timer on the stopping path for nothing.
+  the room survived. An unconditional arm would also schedule a timer on the
+  stopping path for nothing. This plan claimed both were covered by effect
+  assertions; the branch's review found the tick site's *delay* was not, so
+  hard-coding that call's duration left the suite green. The case now asserts it.
 - **A warning when the retired `SSE_GRACE_PERIOD` is still exported.** The spec
   already records that production overrides neither variable and that telling
   whoever merges is the mitigation. Adding a log line is a separate, optional
