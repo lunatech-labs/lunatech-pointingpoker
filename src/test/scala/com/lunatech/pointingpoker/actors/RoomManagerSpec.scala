@@ -340,15 +340,19 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
       val first = sessionProbe.expectMessageType[Room.SessionMinted]
 
-      // The room never gains a connection, so its own idle tick stops it. Terminated is the
-      // only thing that can drop it from the map now that removeRoom is gone.
-      Thread.sleep(500)
-
-      // A surviving original room would still resolve this token, so this is what
-      // discriminates a fresh room from the one that minted it.
-      val tokenProbe = testKit.createTestProbe[Room.TokenResolution]()
-      managerRef ! RoomManager.ValidateToken(roomId, first.token, tokenProbe.ref)
-      tokenProbe.expectMessage(Room.Unresolved)
+      // The room's idle tick stops it and Terminated drops it from the map; a surviving
+      // original would still resolve the first token, so Unresolved is what discriminates.
+      // The interval must exceed stopAfterIdle: a poll is forwarded to the room and re-arms
+      // its timer, so a faster loop would keep the room busy and it would never go idle.
+      sessionProbe.awaitAssert(
+        {
+          val tokenProbe = testKit.createTestProbe[Room.TokenResolution]()
+          managerRef ! RoomManager.ValidateToken(roomId, first.token, tokenProbe.ref)
+          tokenProbe.expectMessage(500.millis, Room.Unresolved)
+        },
+        10.seconds,
+        400.millis
+      )
 
       managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
       sessionProbe.expectMessageType[Room.SessionMinted]
