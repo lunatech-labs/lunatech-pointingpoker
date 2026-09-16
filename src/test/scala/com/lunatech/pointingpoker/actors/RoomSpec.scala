@@ -1024,6 +1024,23 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       watcher.expectTerminated(roomRef, 3.seconds)
     }
 
+    "stop after the idle timeout once its last member has left" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val watcher      = testKit.createTestProbe()
+      val (_, roomRef) = createRoom(
+        UUID.randomUUID(),
+        withUsers(user),
+        gracePeriod = 50.millis,
+        stopAfterIdle = 300.millis
+      )
+
+      roomRef ! Room.Leave(user.id, user.ref)
+
+      // The production sequence end to end: the connection drops, the grace period removes the
+      // member, and the idle timeout ends a room that started this case fully occupied.
+      watcher.expectTerminated(roomRef, 5.seconds)
+    }
+
     "clear the idle stamp on a connection and restamp it when the last one goes" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()

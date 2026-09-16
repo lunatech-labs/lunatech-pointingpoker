@@ -162,6 +162,12 @@ roadmap item instead of leaving it here as stale history.
   What is left is the plain form. Nothing bounds the rate, and room creation
   (`POST /create-room`) is unauthenticated as well as unthrottled, which the
   target design notes it does not close.
+
+  Now that a room is bounded by the idle timeout rather than by its last member,
+  an unthrottled client can still keep an otherwise-empty room alive indefinitely
+  by looping any request at it, since each one re-arms the idle timer. The same
+  lack of a rate limit lets heavy tab churn hold a room open for hours by minting
+  a fresh session on every reconnect, since sessions carry no TTL of their own.
 - **Resolution:** Unscheduled. The underlying gap, no per-user/per-endpoint
   rate limiting anywhere in this API, is broader than any one symptom and
   should be addressed as its own piece of work if abuse becomes a real
@@ -256,11 +262,23 @@ roadmap item instead of leaving it here as stale history.
   attempt with a 6 second wait passed identically before and after the change,
   which is worse than no case at all.
 - **Resolution:** Accepted. The behaviour is pinned at the JVM level by
-  `RoomSpec`'s "stay alive when its last member is removed" and by the four idle
+  `RoomSpec`'s "stay alive when its last member is removed" and by the five idle
   cases beside it, all deterministic and clock-free. The e2e cost buys a weaker
   guard than those already provide, since its strength depends on detection
   landing inside the wait on CI hardware. Revisit if the detection path ever
   becomes clock-driven rather than write-driven.
+
+### The idle stop compares wall-clock time, not a monotonic clock
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.idleFor`, comparing `Instant`s).
+- **Issue:** `idleFor` measures elapsed idle time with `java.time.Instant`, which
+  follows the system clock rather than a monotonic source. A backward NTP step
+  during the idle window can make a tick find the room not yet idle and re-arm,
+  deferring the stop by up to one full timeout.
+- **Resolution:** Accepted deliberately, not a defect. Harmless at the two-hour
+  default, and `Instant` is far more testable here than `nanoTime`, which is why
+  the tests drive real wall-clock sleeps rather than a fake monotonic clock.
 
 ### A second tab on the same room displaces the first tab's identity
 

@@ -984,8 +984,12 @@ sharing its key, which is the same mechanism the grace period already relies on
 to absorb a duplicate `Leave`. It needs no staleness check either, and that is
 the part worth writing down: Pekko stamps each timer message with a generation
 and discards one from a superseded generation before the behaviour sees it, so a
-tick that fired in the instant before a message arrived cannot stop a room that
-message should have kept alive. Without that guarantee this would need a flag. The actor idle timeout is the only value this
+tick already queued behind a message is voided when that message re-arms the
+key. The opposite order is not covered and does not need to be: a tick dequeued
+ahead of a message stops the room, and that message then meets an actor that has
+already stopped, which is the case the two siblings below own and which fails
+loudly. Without the generation guarantee the queued-tick half would need a flag.
+The actor idle timeout is the only value this
 design adds to the configuration; step 4a says where it lives and what the keys
 become.
 
@@ -1050,9 +1054,10 @@ recognizes it. The comment quoted above therefore becomes the thing being change
 rather than a rule to preserve.
 
 Idle stop is not the cause, since `connections` is empty whenever the tick fires.
-The live cause is a crash, where Pekko typed's default supervision stops the actor,
-and the future one is the deferred destroy-room action, which currently has no way
-to evict anybody. What the client does next is the existing terminal path and an
+The live causes are a crash, where Pekko typed's default supervision stops the
+actor, and a process shutdown or parent stop, which a deploy produces for every
+room at once; the future one is the deferred destroy-room action, which currently
+has no way to evict anybody. What the client does next is the existing terminal path and an
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."

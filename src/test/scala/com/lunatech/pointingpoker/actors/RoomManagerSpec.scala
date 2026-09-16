@@ -3,6 +3,7 @@ package com.lunatech.pointingpoker.actors
 import java.util.UUID
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.DurationInt
 
 import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
 import org.apache.pekko.testkit.*
@@ -56,8 +57,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val unknownRoomId   = UUID.randomUUID()
       val probe           = TestProbe()(testKit.system.classicSystem)
 
-      // Drain the MessageAdapter effect that RoomManager()'s Behaviors.setup records on
-      // startup, so the assertion below reflects only effects from handling ConnectToRoom.
+      // No startup effects to drain: setup no longer spawns a MessageAdapter on this branch.
       behaviorTestKit.retrieveAllEffects()
 
       behaviorTestKit.run(
@@ -114,8 +114,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId          = UUID.randomUUID()
       val resultProbe     = testKit.createTestProbe[Room.TokenResolution]()
 
-      // Drain the MessageAdapter effect that RoomManager()'s Behaviors.setup records on
-      // startup, so the assertion below reflects only effects from handling ValidateToken.
+      // No startup effects to drain: setup no longer spawns a MessageAdapter on this branch.
       behaviorTestKit.retrieveAllEffects()
 
       behaviorTestKit.run(
@@ -275,6 +274,24 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.estimateFor(alice) mustBe Some(("5", true))
+    }
+
+    "drop a stopped room from its map so a later request creates a fresh one" in {
+      val roomId       = UUID.randomUUID()
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+      val managerRef   = testKit.spawn(
+        RoomManager.receiveBehaviour(RoomManagerData.empty, Room.defaultGracePeriod, 200.millis)
+      )
+
+      managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
+      sessionProbe.expectMessageType[Room.SessionMinted]
+
+      // The room never gains a connection, so its own idle tick stops it. Terminated is the
+      // only thing that can drop it from the map now that removeRoom is gone.
+      Thread.sleep(500)
+
+      managerRef ! RoomManager.RequestSession(roomId, "Alice", sessionProbe.ref)
+      sessionProbe.expectMessageType[Room.SessionMinted]
     }
   }
 end RoomManagerSpec

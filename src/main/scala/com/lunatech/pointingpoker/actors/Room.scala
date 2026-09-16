@@ -172,6 +172,9 @@ object Room:
   val defaultGracePeriod: FiniteDuration   = 6.seconds
   val defaultStopAfterIdle: FiniteDuration = 2.hours
 
+  private def armIdleTick(timers: TimerScheduler[Command], stopAfterIdle: FiniteDuration): Unit =
+    timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+
   def apply(
       roomId: UUID,
       initialData: RoomData = RoomData.empty,
@@ -180,7 +183,7 @@ object Room:
   ): Behavior[Command] =
     Behaviors.setup[Command] { _ =>
       Behaviors.withTimers[Command] { timers =>
-        timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+        armIdleTick(timers, stopAfterIdle)
         receiveBehaviour(
           roomId,
           initialData.startedAt(Instant.now()),
@@ -202,7 +205,7 @@ object Room:
       .receive[Command] { (context, message) =>
         // Any message pushes the tick a full delay out, which is what keeps one from landing
         // between ValidateToken and the ConnectToRoom it precedes.
-        if message != IdleTick then timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+        if message != IdleTick then armIdleTick(timers, stopAfterIdle)
         // Re-arming also voids a tick already in the mailbox: Pekko discards a timer message
         // from a superseded generation. Verified against pekko-actor-typed 1.7.0.
         message match
@@ -211,8 +214,9 @@ object Room:
               context.log.info("Stopping room {}: no connection for {}", roomId, stopAfterIdle)
               Behaviors.stopped
             else
-              // Occupied, so no message re-armed this one: ask again a delay from now.
-              timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
+              // Not what bounds a normal idle room, since connections only change on the message
+              // path. It is what keeps a backward clock step from stranding one; see known-issues.
+              armIdleTick(timers, stopAfterIdle)
               Behaviors.same
           case Join(userId, name, token, ref) =>
             // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
