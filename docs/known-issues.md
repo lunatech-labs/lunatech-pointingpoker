@@ -269,6 +269,26 @@ roadmap item instead of leaving it here as stale history.
   detection landing inside the wait on CI hardware. Revisit if the detection
   path ever becomes clock-driven rather than write-driven.
 
+### The timer generation discard the idle stop relies on has no test
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`receiveBehaviour`'s re-arm, and the comment naming the pekko version it was
+  verified against).
+- **Issue:** Idle time is carried entirely by a single-shot timer re-armed on
+  every non-tick message, which is correct only because pekko discards a tick
+  already queued from a superseded generation. That guarantee was verified by
+  reading `TimerSchedulerImpl` in pekko-actor-typed 1.7.0, not by a test.
+  `overriding mustBe true` asserts only that `startSingleTimer` was called
+  against an existing key. `BehaviorTestKit` cannot close the gap either, since
+  hand-delivering `IdleTick` bypasses the `TimerMsg` wrapper where the discard
+  happens.
+- **Resolution:** Accepted, and bounded. A stale tick that survived would fire a
+  full delay after a real message, so the worst case is a stop landing one delay
+  later than intended, never while a connection is attached. Re-verify the
+  guarantee when pekko is upgraded rather than trying to test it from here; the
+  code comment pins the version the reading was done against, so a bump is the
+  moment the claim needs rechecking.
+
 ### A second tab on the same room displaces the first tab's identity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`
