@@ -37,7 +37,10 @@ object Main extends App:
 
   val roomManagerFuture: Future[ActorRef[RoomManager.Command]] = system.ask { ref =>
     SpawnProtocol.Spawn(
-      RoomManager(lifecycleConfig.gracePeriod, lifecycleConfig.stopAfterIdle),
+      RoomManager(
+        gracePeriod = lifecycleConfig.gracePeriod,
+        stopAfterIdle = lifecycleConfig.stopAfterIdle
+      ),
       "room-manager",
       Props.empty,
       ref
