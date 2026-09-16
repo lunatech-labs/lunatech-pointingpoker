@@ -1133,11 +1133,17 @@ Before opening the PR:
   `2026-09-16-idle-stop-without-the-wall-clock.md` changed the count further
   after this plan shipped.
 - `npm run e2e` green across chromium and firefox, case count unchanged. The
-  planned case was dropped rather than written; see Deviations, item 6.
+  planned case was dropped rather than written; see Deviations, item 6. Re-run
+  green at 54 after `2026-09-16-idle-stop-without-the-wall-clock.md` removed the
+  wall clock, since the config-key rename is the one change in this branch that
+  a browser suite cannot see failing.
 - `grep -rn "SseConfig\|Room.Response\|RoomResponseWrapper" src testkit e2e` prints
   nothing.
 - The app starts on defaults and refuses to start with
-  `ROOM_STOP_AFTER_IDLE=5s`, which is the ordered chain doing its job.
+  `ROOM_STOP_AFTER_IDLE=5s`, which is the ordered chain doing its job. All three
+  renamed variables were later checked this way against the staged launcher, and
+  the retired `SSE_GRACE_PERIOD` confirmed inert; see the rename paragraphs in
+  the design's step 4a section for the method.
 
 ## Deviations from the plan, and why
 

@@ -2299,6 +2299,18 @@ Production overrides neither `SSE_GRACE_PERIOD` nor `SSE_RETRY` as of
 2026-09-14, so the rename reaches nothing but the e2e profile, which sets the
 grace period and gains the idle timeout. Should either be set later, updating
 it is a post-deploy edit rather than a blocker, provided whoever merges is told.
+
+A rename here fails silently rather than loudly, since every key carries a
+default and an unread variable means the default, not a refusal. The ordered
+chain is also the test for that: each variable gates a `require` in
+`LifecycleConfig.load`, so giving one a constraint-violating value must refuse
+the boot, and a boot that succeeds anyway proves the variable is not being read.
+`ROOM_STOP_AFTER_IDLE` below the grace period, `ROOM_GRACE_PERIOD` below twice
+the retry, and `SSE_RETRY` at zero each refuse with their own message; the
+retired `SSE_GRACE_PERIOD` set to the same failing value boots clean, which is
+the silent fallback made visible. Reach for this whenever one of these keys is
+renamed, rather than inferring the wiring from a green suite, which cannot see
+it.
 The delivered step 0 plans and the cancelled 08-26 and 08-28 specs keep the old
 names as history; 08-30's §3 table carries the variables, and 08-30 §2 and
 `docs/roadmap.md`'s instrumentation entry name the class, all in the present
