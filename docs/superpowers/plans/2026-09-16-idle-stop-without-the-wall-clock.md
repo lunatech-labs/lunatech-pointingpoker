@@ -620,10 +620,15 @@ once, without a total that needs maintaining."
   `connections` empty, so `PostStop` has nobody to notify and there is nothing
   to observe. Revisit with the deferred destroy-room action, which is what makes
   it observable.
-- **`RoomManagerSpec`'s `Thread.sleep(500)` against a 200ms timeout.** It fails
-  safe in the green direction on a slow runner, which is a real weakness, but it
-  needs a real room terminating so the manager sees `Terminated`. Nothing in
-  this plan changes that, and `BehaviorTestKit` cannot supply it.
+- **`RoomManagerSpec`'s `Thread.sleep(500)` against a 200ms timeout**, the sleep
+  itself. It needs a real room terminating so the manager sees `Terminated`, and
+  `BehaviorTestKit` cannot supply that. Deferring the case's *vacuity* alongside
+  it was a mistake this plan made and the whole-branch review caught: the case
+  asserted only that a session could be minted, which a surviving room satisfies
+  just as well as a restarted one, so it passed for the opposite of the reason
+  its name gives. It now asserts the first token stops resolving. Note what that
+  changed: a slow runner used to make the case pass vacuously and now makes it
+  fail red, which is the right direction and a new flake risk rather than none.
 - **Collapsing the two re-arm sites into one unconditional call.** The two
   express different things: deferring on a message, and re-arming after a tick
   the room survived. Both are now covered by effect assertions, and an
