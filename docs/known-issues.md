@@ -446,8 +446,8 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** the suite generally. The instances found so far are in `RoomSpec`
   (the retired "defer its stop by a full delay when any message arrives", and the
-  `expectNoMessage` line in the case that replaced "stay alive while a connection
-  is attached"), `RoomManagerSpec` ("drop a stopped room from its map so a later
+  `expectNoMessage` line in the equally retired "stay alive while a connection is
+  attached"), `RoomManagerSpec` ("drop a stopped room from its map so a later
   request creates a fresh one"), and the straggler-reload case recorded in the
   ghost-participant entry above.
 - **Issue:** Individual instances are recorded across this file; the pattern is

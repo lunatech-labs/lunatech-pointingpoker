@@ -34,8 +34,10 @@ which this plan amends. That plan specified `emptySince` and `idleFor`; tasks 2
 and 3 remove them and record the deviation there.
 
 **Branch:** land on the existing `20260831.protocol_architecture_4a_stop_after_idle`.
-It is local-only with no PR open, so these are additional commits on the same
-branch rather than a new one, and the stacked-merge position is unchanged.
+These are additional commits on the same branch rather than a new one, and the
+stacked-merge position is unchanged. The branch was local-only when this plan was
+written; PR #405 was opened against `20260831.protocol_architecture_4_state_split`
+later the same day, so these commits land in that PR.
 
 ## Global Constraints
 
