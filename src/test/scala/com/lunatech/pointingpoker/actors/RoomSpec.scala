@@ -912,7 +912,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.Leave(departed.id, departed.ref)
 
-      // Section 4's leave endpoint: membership ended first, so the tab's own drop removes nobody.
+      // The conjunct's second half: membership ended first, so the tab's own drop removes nobody.
       Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -965,12 +965,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       thrown.getMessage must include("resolves to no session")
     }
 
-    "allow a connection whose member has gone, which is what a departure produces" in {
+    "allow a connection whose member has gone, which nothing now produces" in {
       val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
       val (departed, _) = createUser(UUID.randomUUID(), "user2", false, "")
 
-      // Required rather than tolerated: section 4's leave endpoint removes the member
-      // while that tab's stream is still open, and step 6 is what recovers it.
+      // Tolerated rather than required: section 4's leave takes the ref with the member, and
+      // a guard in of would leave the tolerance unconstructible since apply and copy are shut.
       val data = withUsers(user, departed).withDeparted(departed)
 
       data.members.keySet mustBe Set(user.id)

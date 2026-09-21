@@ -673,10 +673,11 @@ that distinction is the load-bearing idea of this section. Expect an implementer
 to reach for the other two containments. An estimate outliving its member is a
 state this design *requires* to be legal, and the paragraphs above say so. A
 connection outliving its member is no longer one, section 4's leave rules having
-removed the last path to it, so whether `of` should gain that containment is open
-rather than answered by this paragraph. The check is fixture-only, since `of` has
-no production caller, every actor transition going through the private methods 5a
-shut from outside.
+removed the last path to it, and `of` still does not require that containment:
+the tolerance under `publish` below is kept on purpose, and since 5a shut `apply`
+and `copy`, a guard here would leave that state unconstructible and so
+untestable. The check is fixture-only, since `of` has no production caller, every
+actor transition going through the private methods 5a shut from outside.
 
 **Nesting the member inside its session was considered and declined.** It would
 make that one relation unrepresentable rather than validated, and it is sound,

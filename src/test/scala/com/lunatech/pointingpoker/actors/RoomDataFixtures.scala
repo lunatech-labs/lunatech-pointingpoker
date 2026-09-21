@@ -77,7 +77,7 @@ object RoomDataFixtures:
     def withNoConnection(user: Attendee): RoomData =
       RoomData.of(data.state, data.members, data.sessions, data.connections - user.id)
 
-    // Membership ended while the tab is still attached, which is step 6's leave endpoint.
+    // Membership ended while the tab is still attached: tolerated by of, produced by nothing.
     def withDeparted(user: Attendee): RoomData =
       RoomData.of(data.state, data.members - user.id, data.sessions, data.connections)
 
