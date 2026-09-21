@@ -625,8 +625,11 @@ through the same `publish`. That is not the estimation validation
 that the server has no notion of a *valid* estimation, the card values living in
 the client; refusing a blank one needs no such notion, because it refuses the
 absence of a value rather than judging one. Blank rather than empty, since
-whitespace tallies as its own bucket by the identical path. What stays open is a
-non-blank nonsense estimation, which remains the `scale` item's.
+whitespace tallies as its own bucket by the identical path. Step 6 moves the
+refusal itself to the edge, where a tapir validator answers `400` before the
+actor sees the request, and leaves this guard as insurance reporting the same
+code if a blank ever reaches it. What stays open is a non-blank nonsense
+estimation, which remains the `scale` item's.
 
 **Whether `Estimate` is a product or a two-case ADT is left open on purpose.**
 `Confirmed(value)` and `Unconfirmed(value)` would read better than a boolean, and
@@ -760,11 +763,10 @@ non-empty entry either way, and no timer.
 
 **Two orderings the conjunct does not cover.** The first is a beacon arriving
 after its own stream has already terminated, where the timer is pending before
-the member goes. `ConfirmLeave` then fires, removes nobody, and publishes a
-snapshot identical to the last. That is the redundant publish this design has
-already decided is cheap, under "The no-op publish guard goes with it" above, and
-it is still nothing accumulating: at most one timer per departure, and the tab
-that caused it is gone.
+the member goes. Section 4's leave cancels it on removing the member, the same
+`timers.cancel` the `Join` branch already does, so nothing fires and the two
+paths to a departure cannot both publish one. Nothing accumulates either: at
+most one timer per departure, and the tab that caused it is gone.
 
 The second is a sibling tab between retries. One person holding two tabs loses
 one stream, its entry goes by matching ref, the set still holds the other tab,
@@ -854,7 +856,19 @@ them is wrong.
 **The page mints one id per page instance** and carries it on every `/events` it
 opens. `EventSource` retries the URL it was given, so a retry arrives holding its
 predecessor's id either way; minting per page instance rather than per stream
-extends that to the second `doJoin` as well.
+extends that to the second `doJoin` as well. `ConnectionId` is an opaque type
+over `UUID` in the shape `SessionToken` already has, minted with
+`crypto.randomUUID()`, so tapir refuses a malformed one with the same `400` as a
+missing one. The secure context that call needs is already required of every
+page, the session cookie being `Secure`.
+
+**A page instance must not persist its id.** This is the half of "per page
+instance" most likely to be read backwards, the instinct being that the server
+should recognise a returning page. Reuse an id across instances and section 4's
+late-beacon guarantee fails: a reload gets the same id, the old instance's
+beacon then names an id now holding the new page's ref, and the leave endpoint
+removes by id because the id is all it has. That evicts a live ref, which is
+what the rule below forbids for terminations.
 
 **`connect` on an id already present replaces the ref**, and
 `ConnectionCompleted` and `ConnectionFailure` remove by matching ref value, never
@@ -1349,7 +1363,8 @@ Three additions, each closing something documented:
   stream, that page would come back holding one the room no longer publishes to,
   since the leave takes its ref out of `connections` along with the member, so it
   would render whatever it last saw, never update again, and send commands that
-  are silent no-ops, a resolved non-member being section 3's no-op case. Gating
+  draw the `403` this step gives a resolved non-member, with no stream left to
+  deliver the snapshot that would explain it. Gating
   on `persisted` removes
   that case instead of recovering from it, and it leaves the two triggers this
   endpoint is for untouched, a close and a reload both being discarded pages.
@@ -1382,19 +1397,25 @@ Three additions, each closing something documented:
   **The id is client-minted and carries no authority.** It selects a ref inside
   the set the cookie already resolved to, so a forged one reaches no connection
   the forger does not own. `EventSource` cannot set headers, which is why it
-  rides the query string rather than one, and `sendBeacon` cannot either, which
-  is why the leave request carries it in the body. It is the same per-connection
+  rides the query string rather than one, and `sendBeacon` cannot either, so the
+  leave request carries it the same way and sends no body at all. A body would
+  not survive the trip: `sendBeacon` sends a string as `text/plain`, which
+  `CirceSupport`'s unmarshaller refuses with a `415` the beacon cannot read,
+  leaving the departure to fall back on the grace period with nothing anywhere
+  to show that it failed. Carrying it identically on both requests is the other
+  half of the reason. It is the same per-connection
   slot the command-cursor row under "Deferred, with triggers" says a cursor would
   have to live in, so that row's blocker is gone ahead of it.
 
-  **It answers the same on every branch**, whether the member went with the ref,
-  the ref dropped with others still open, or the id named nothing. `sendBeacon`
-  reads no response and nothing a caller could do differs between them, so
-  separating them would buy nothing; a request written by hand still meets the
-  session and membership checks every write gets. Step 6's table below declares
-  the codes. Removing the member also cancels any `ConfirmLeave` the grace
-  period has pending for that id, so the two paths to a departure cannot both
-  publish one.
+  **It answers the same on every branch it reaches**, whether the member went
+  with the ref, the ref dropped with others still open, or the id named nothing.
+  A beacon arriving after grace expiry reaches none of them and draws the `403`
+  the table declares. `sendBeacon` reads no response and nothing a caller could
+  do differs between them, so separating them would buy nothing; a request
+  written by hand still meets the session and membership checks every write
+  gets. Step 6's table below declares the codes. Removing the member also
+  cancels any `ConfirmLeave` the grace period has pending for that id, so the
+  two paths to a departure cannot both publish one.
 
   **The Leave link posts it too.** The beacon is what closes the tab-close entry
   in `docs/known-issues.md`, but a deliberate click on Leave waits out the same
@@ -2437,9 +2458,8 @@ step ends where it started, at `data`, `gracePeriod` and `stopAfterIdle`. Most o
 churn is mechanical probe wiring, and step 4 has already rewritten those cases
 for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
 not revive this**: its reply is an ask answered to the HTTP route, carrying the
-four-outcome result set the ask pattern is for, so a `Response` ADT
-reappearing there is a new type under an old name rather than this one
-returning.
+statuses the table below declares for `/leave`, so a `Response` ADT reappearing
+there is a new type under an old name rather than this one returning.
 
 `receiveBehaviour`'s `receiveSignal` on `Terminated` becomes the single
 deregistration path, which it has to be anyway, since it is the only one that can
@@ -2572,9 +2592,10 @@ widening the factory would be a claim this step did not set out to make.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
-`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
-but three of the 48 fixture sites seed members with no sessions at all, so the
-suite normalises a state production cannot reach. Step 5's review measured the
+`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and before
+the `RoomDataFixtures` migration all but three fixture sites seeded members with
+no sessions at all, so the suite normalised a state production cannot reach.
+Step 5's review measured the
 cost: three cases go red under a `Vote` rerouted onto `sessions`, but only
 because their fixtures lack sessions, so an author fixing them the obvious way
 would seed sessions and remove the signal. Valid fixtures throughout leave the
@@ -2590,8 +2611,8 @@ state a room can reach; renaming on `/join` is step 6's target, not today's
 behaviour. `of` uses `require`, an invalid `RoomData` being a programming
 error rather than a runtime condition: production builds exactly one,
 `RoomData.empty`, holding no members, so the check is unreachable there, and an
-`Either` would push an unwrap through 48 test sites to encode a case that cannot
-happen.
+`Either` would push an unwrap through every site that calls `of` to encode a
+case that cannot happen.
 
 **The handler warns where `of` throws, on the same predicate.** `joinUser` is
 pure and holds no logger, so the guard sits in the `Join` case, which already
@@ -2657,7 +2678,8 @@ for. About 230 and 210,
 re-sized when the leave request gained its connection id. The client loses the
 rejoin rule and one browser case; the server gains the id threaded through
 `Join`, `ConnectToRoom` and `SSE.source`, a keyed `connections` with the
-replacement rules section 3 states, and the `/events` parameter that keys it. The
+replacement rules section 3 states, the `/events` parameter that keys it, and
+the outcome ADT `RoomData.vote` returns below. The
 test line goes up rather than down, since that threading reaches every
 construction of those three messages and every assertion written against a set.
 
@@ -2697,6 +2719,11 @@ unparseable or unresolved token as well as a room id the manager does not hold.
 `NotAMember` answers `403`, for a token resolving to a session whose user is no
 longer a member. And an ask that fails or times out answers `500`, which is what
 `create-room`'s own failure branch already does.
+
+**The rows enumerate what each handler decides**, which is what differs between
+them and what tapir needs per endpoint. The uniform failures are not repeated in
+them: the `500` above wherever an ask is made, and `400` or `415` on any endpoint
+taking a body, `CirceSupport`'s unmarshaller accepting `application/json` alone.
 
 **The `401`s carry no `WWW-Authenticate`, deliberately**, which RFC 7235 makes a
 MUST and which today's `/events` already omits. Authentication here is a session
@@ -2745,9 +2772,11 @@ the command, not the room, and the separation is what stops a recoverable state
 being reported as a terminal one.
 
 **The `409` and the `400` get no client surface, and that is settled rather than
-left open.** A `409` means somebody else pressed Show, so the snapshot that
-disables the deck is already in flight and lands within a round trip; that
-snapshot is the surface, and it arrives whether or not anyone clicked. The one
+left open.** A `409` means the round was revealed without this click, by someone
+pressing Show or by the last outstanding member's vote auto-revealing it, so the
+snapshot that disables the deck is already in flight and lands within a round
+trip; that snapshot is the surface, and it arrives whether or not anyone
+clicked. The one
 case where it does not is a dead stream, which `docs/known-issues.md` assigns to
 the backlog's connection-liveness watchdog rather than to this refusal. The `400`
 needs none either, the card values being hardcoded in the client, so only a
@@ -2766,9 +2795,11 @@ A `404` would also be falsified by the reload that silently re-creates the room.
 
 **What that buys is narrower than it sounds, and worth stating before someone
 notices `/join` and reopens this.** A guesser willing to join learns far more
-than a status code: `RequestSession` creates the room it does not find, so a
-guessed slug plus `/join` plus `/events` yields the participant list, the issue
-and the vote state. The difference is cost to the prober. A status probe is
+than a status code: against a room that exists, a guessed slug plus `/join` plus
+`/events` yields the participant list, the issue and the vote state. Against one
+that does not, `RequestSession` creates it and the prober learns only what they
+just made, which is the same nothing the `404` would have denied them. The
+difference is cost to the prober. A status probe is
 silent, free and repeatable; joining puts a name in `users` for everyone,
 moves the member count, and stalls auto-reveal until the intruder votes, since
 the round reveals when every member has. The page route discloses nothing either

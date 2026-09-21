@@ -928,15 +928,19 @@ roadmap item instead of leaving it here as stale history.
   error on a dead stream is now a lost vote as well.
 - **Resolution:** Scheduled as step 6 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  whose ask pattern gives `/vote` a real result and makes both refusals
-  reportable when they happen, which is what section 5 already says the reply is
-  for. The POST travels over HTTP and works when the SSE stream does not, so the
+  whose ask pattern gives `/vote` a real result and makes the revealed-round
+  refusal reportable when it happens, which is what section 5 already says the
+  reply is for. The blank half closes by a different mechanism in the same step,
+  a tapir validator refusing it at the edge with `400` before the ask, which
+  leaves the actor's guard as insurance rather than as the reporter. The POST
+  travels over HTTP and works when the SSE stream does not, so the
   answer reaches precisely the client that cannot see the state. The same step
   deletes the optimistic assignment described above, so the false card has no
   path to appear rather than being corrected after the fact. The page shows no
   message for the refusal itself and needs none: a `409` means the round was
-  revealed by somebody else, so the snapshot that disables the deck is already in
-  flight. What is left
+  revealed without this click, by someone pressing Show or by the last
+  outstanding member's vote auto-revealing it, so the snapshot that disables the
+  deck is already in flight. What is left
   after that is general: a client with a dead stream is stale in every respect,
   which is the backlog's connection-liveness watchdog and not this entry. Remove
   this entry when step 6 lands.
