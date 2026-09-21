@@ -315,11 +315,12 @@ unconditional `204`, under `/rooms/:slug/` as `join`, `leave`, `vote`, `show`,
 why that was dropped. The consequence here is that every route keeps the shape it
 has today, with the slug replacing the UUID at step 7 and nothing else moving.
 
-**`/events` does carry a client-minted connection id, as a query parameter.**
-Section 4's leave endpoint needs to name the connection that is going away. A
-query parameter is not a path segment and scopes no cookie, so the `:tabId`
-reasoning is untouched: what was rejected was identifying a tab in the route, not
-the server knowing which stream a request means.
+**`/events` and the leave request carry a client-minted connection id, as a
+query parameter.** Section 4's leave endpoint needs to name the connection that
+is going away, and section 4 says why both carry it the same way. A query
+parameter is not a path segment and scopes no cookie, so the `:tabId` reasoning
+is untouched: what was rejected was identifying a tab in the route, not the
+server knowing which stream a request means.
 
 The SSE response carries `Cache-Control: no-cache` and `X-Accel-Buffering: no`,
 and `README.md` gains a deployment note on proxy buffering. This closes the
@@ -2709,7 +2710,7 @@ and section 4 cites this table rather than carrying its own copy.
 | --- | --- |
 | `/vote` | `204` applied, `401` no session, `403` not a member, `409` round revealed, `400` blank estimation |
 | `/show`, `/clear`, `/revote`, `/edit-issue` | `204` applied, `401` no session, `403` not a member |
-| `/leave` | `204` on every branch, `401` no session, `403` not a member |
+| `/leave` | `204` on every branch, `401` no session, `403` not a member, `400` with no connection id |
 | `/join` | `204` with the session cookie, no body. Creates the room when the id is absent, so never `401` for an unknown one |
 | `/events` | the stream, `401` when the token does not resolve, `400` with no connection id |
 | `/create-room` | the room id, or `500` |

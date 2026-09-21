@@ -37,11 +37,13 @@ inside a long-lived socket payload.
       from fire-and-forget (`roomManager ! ...`) to the ask-pattern already used by
       `create-room`, so `Room`/`RoomManager` can reply with a real result
       instead of the API always answering `204` regardless of what happened. The
-      design settles that result at four outcomes: applied, no session, not a
-      member, and the round already revealed. An unrecognized room id is
-      answered as no session rather than as a not-found of its own, for the
-      reason recorded under step 6. Natural to build alongside the identity
-      validation above, since both need the same request/response plumbing.
+      design settles the result per endpoint, in the status table under step 6:
+      applied and the round already revealed are decided by the handler, while
+      no session and not a member are cross-cutting rules that run across every
+      endpoint. An unrecognized room id is answered as no session rather than as
+      a not-found of its own, for the reason recorded under step 6. Natural to
+      build alongside the identity validation above, since both need the same
+      request/response plumbing.
       **Becomes step 6**, alongside idempotent `/join` and the explicit leave
       endpoint.
 
