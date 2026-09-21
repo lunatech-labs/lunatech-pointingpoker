@@ -205,7 +205,8 @@ roadmap item instead of leaving it here as stale history.
   refusal happens in the actor, which is why the entry stays open. What is left of
   the estimation half is the non-blank nonsense estimation behind the `scale`
   item. The target design records the reasoning beside `hasEstimation`.
-- **Resolution:** Unscheduled, and the estimation half cannot close before the
+- **Resolution:** Unscheduled apart from the blank estimation, which step 6
+  refuses at the edge. The rest of the estimation half cannot close before the
   `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
   notion of a valid estimation, the card values being hardcoded in the client
   (`estimationValues`). Step 6 describes the endpoints with tapir, which buys
@@ -213,7 +214,8 @@ roadmap item instead of leaving it here as stale history.
   there too unless a validator is declared. That step declares one, on the
   estimation alone: a blank is refused at the edge with `400` instead of reaching
   the actor, which moves the refusal recorded above from `RoomData.vote` to the
-  request and leaves that guard as insurance. Nothing else gains a validator, so
+  request and leaves that guard as insurance, still able to report the same `400`
+  if a blank ever reaches it. Nothing else gains a validator, so
   the name on `/join` and the text on `/edit-issue` are untouched. As with the
   rate-limiting entry above, the underlying gap is broader than any one symptom
   and wants its own piece of work rather than a patch per endpoint.
@@ -446,7 +448,13 @@ roadmap item instead of leaving it here as stale history.
   instead would add an `API.scala` conflict to the stack's ordered rebase, and
   reaching the symptom at all needs a deploy to land between a page load and the
   next vote, so step 6 is soon enough. Step 8's frontend rewrite would
-  close it structurally with fingerprinted assets if step 6 does not.
+  close it structurally with fingerprinted assets if step 6 does not. The step 6
+  deploy is the one exposure the header cannot cover, since it protects only the
+  pages it serves: a page cached before it opens `/events` without the required
+  connection id, takes the `400`, and reports it as an ended session until the
+  user reloads. That is louder than the two mismatches above and recovers in one
+  action, which is why the design accepts it rather than making the parameter
+  optional.
 
 ### Tests that pass with the mechanism they name deleted, as a recurring pattern
 
@@ -925,7 +933,10 @@ roadmap item instead of leaving it here as stale history.
   for. The POST travels over HTTP and works when the SSE stream does not, so the
   answer reaches precisely the client that cannot see the state. The same step
   deletes the optimistic assignment described above, so the false card has no
-  path to appear rather than being corrected after the fact. What is left
+  path to appear rather than being corrected after the fact. The page shows no
+  message for the refusal itself and needs none: a `409` means the round was
+  revealed by somebody else, so the snapshot that disables the deck is already in
+  flight. What is left
   after that is general: a client with a dead stream is stale in every respect,
   which is the backlog's connection-liveness watchdog and not this entry. Remove
   this entry when step 6 lands.
