@@ -230,6 +230,8 @@ object Room:
                   "its token's session names a different identity"
                 else "its token resolves to no session"
               context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
+              // The stream is ended rather than left open: a refused page has nothing coming.
+              ref ! StreamCompleted
               Behaviors.same
           case RequestSession(name, replyTo) =>
             val userId  = UUID.randomUUID()

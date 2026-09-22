@@ -311,9 +311,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           data.connections.keySet must not contain stranger.id
         }(using testKit.system)
 
-      // Step 6 is expected to redden this: the send that recovers a refused joiner pairs
-      // with its rejoin, and the design's step 4 section carries why neither works alone.
-      strangerProbe.expectNoMessage()
+      // A refused joiner gets no snapshot and no silence: its stream is ended rather than
+      // left open receiving nothing.
+      strangerProbe.expectMsg(Room.StreamCompleted)
     }
 
     "ignore a Join whose token names a different identity" in {
@@ -337,9 +337,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           data.connections.keySet must not contain claimant.id
         }(using testKit.system)
 
-      // copy carries impostor's ref, so this is the claimant's own connection. Step 6
-      // reddens it for the same reason as the case above.
-      impostorProbe.expectNoMessage()
+      // copy carries impostor's ref, so this is the claimant's own connection, refused the
+      // same as the case above.
+      impostorProbe.expectMsg(Room.StreamCompleted)
     }
 
     "publish the whole room to a joiner and to everyone already in it" in {
