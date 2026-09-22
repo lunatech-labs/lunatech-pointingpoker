@@ -11,6 +11,7 @@ lazy val V = new {
   val pekko     = "1.7.0"
   val pekkoHttp = "1.4.0"
   val scalatest = "3.2.20"
+  val tapir     = "1.13.31"
 }
 
 lazy val root = project
@@ -24,6 +25,9 @@ lazy val root = project
     libraryDependencies += "io.circe"         %% "circe-core"                % V.circe,
     libraryDependencies += "io.circe"         %% "circe-parser"              % V.circe,
     libraryDependencies += "io.circe"         %% "circe-generic"             % V.circe,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-core"              % V.tapir,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-json-circe"        % V.tapir,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % V.tapir,
     libraryDependencies += "org.scalatest"    %% "scalatest"                 % V.scalatest % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream-testkit"      % V.pekko     % Test,

@@ -66,7 +66,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       probe.request(5)
       // bufferSize + 1 survive: the one already current, plus the newest queued behind it.
-      probe.expectNextN(2).last.data must include("issue 5")
+      probe.expectNextN(2).last.data.getOrElse("") must include("issue 5")
       probe.expectNoMessage()
     }
 
@@ -100,7 +100,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       probe.expectNoMessage(300.millis)
 
       probe.request(2)
-      probe.expectNext().data must include("first")
+      probe.expectNext().data.getOrElse("") must include("first")
       probe.expectComplete()
     }
   }

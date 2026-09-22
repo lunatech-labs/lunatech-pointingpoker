@@ -20,7 +20,7 @@ import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
 import com.lunatech.pointingpoker.JoinResponse
-import com.lunatech.pointingpoker.{CirceSupport, EditIssueRequest, VoteRequest}
+import com.lunatech.pointingpoker.{EditIssueRequest, VoteRequest}
 import io.circe.parser.decode
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
@@ -65,6 +65,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     API(roomManager, apiConfig, lifecycleConfig, probeConfig).route
   }
 
+  private def json[A: io.circe.Encoder](a: A): HttpEntity.Strict =
+    HttpEntity(ContentTypes.`application/json`, a.asJson.noSpaces)
+
   override def afterAll(): Unit =
     super.afterAll()
     testKit.shutdownTestKit()
@@ -94,17 +97,16 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
     }
     "create a room" in
-      // Deliberately no CirceSupport import here: create-room must stay a plain
-      // text/plain body containing the bare roomId, not a JSON-quoted string.
+      // The hazard was the generic circe marshaller hijacking a String completion; what keeps
+      // create-room plain now is stringBody on the endpoint, not the absence of an import.
       Post("/create-room") ~> apiRoute ~> check {
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
         responseAs[String] mustBe roomId
       }
-    "join a room, return a minted userId, and set a session cookie" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
+    "join a room, return a minted userId, and set a session cookie" in
+      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
-        val response = responseAs[JoinResponse]
+        val response = decode[JoinResponse](responseAs[String]).getOrElse(fail("bad JoinResponse"))
         response.userId.toString.length > 0 mustBe true
 
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
@@ -115,14 +117,13 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         cookieHeader.cookie.sameSite mustBe Some(SameSite.Strict)
         cookieHeader.cookie.maxAge mustBe None
       }
-    }
     "set the same session token on /join that /events later accepts" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      val cookieValue = Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
-        status.isSuccess() mustBe true
-        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
-        cookieHeader.cookie.value
-      }
+      val cookieValue =
+        Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+          status.isSuccess() mustBe true
+          val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+          cookieHeader.cookie.value
+        }
       cookieValue mustBe validToken.raw
 
       Get(s"/rooms/$roomId/events") ~> addHeader(
@@ -142,9 +143,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
 
     "dispatch a vote command" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
       val token = Room.SessionToken.mint()
-      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> addHeader(
+      Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
         Cookie("session", token.raw)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
@@ -179,11 +179,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "dispatch an edit-issue command" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
       val token = Room.SessionToken.mint()
       Post(
         s"/rooms/$roomId/edit-issue",
-        EditIssueRequest("new issue")
+        json(EditIssueRequest("new issue"))
       ) ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
@@ -231,8 +230,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "still return 204 for a vote with no session cookie (silently no-ops downstream)" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> apiRoute ~> check {
+      Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
       }
       // The API layer never rejects a missing/invalid credential for command endpoints.
