@@ -103,9 +103,8 @@ class API(
     events.serverLogic[Future] { (roomId, rawCookie, forwardedProto) =>
       resolveToken(rawCookie) match
         case None =>
-          // Pekko's own listener is always plain HTTP here (see Main's startup log) - TLS,
-          // if any, is terminated by a reverse proxy in front, so X-Forwarded-Proto is the
-          // only signal for whether the client's connection was actually secure.
+          // Pekko's listener is always plain HTTP; a reverse proxy terminates TLS, so this
+          // header is the only signal the client's connection was actually secure.
           val arrivedOverHttps = forwardedProto.exists(_.equalsIgnoreCase("https"))
           if apiConfig.secureCookies && !arrivedOverHttps then
             log.warn(
