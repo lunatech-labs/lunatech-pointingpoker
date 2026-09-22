@@ -7,7 +7,7 @@ decided rather than an unconditional `204`, `/join` resumes the identity its
 cookie already names, and a page that is going away says so through an explicit
 leave endpoint that names the connection it is leaving.
 
-**Architecture:** tapir describes all eight endpoints in one place, the five
+**Architecture:** tapir describes all nine endpoints in one place, the five
 commands plus `/join`, `/events`, `/leave` and `/create-room`, and a
 `PekkoHttpServerInterpreter` turns them into the `Route` that `API.scala` serves
 beside the two static page routes. Each command becomes an ask: `RoomManager`
@@ -27,12 +27,16 @@ ref.
 the section beginning "**Step 6. The write path becomes real.**" Section 4
 ("Identity and the write path") owns the leave rules, the connection id and
 idempotent `/join`; section 3 owns the keyed `connections` map and its three
-replacement rules; section 5 owns the client's three changes; section 6's step 6
+replacement rules; section 5 owns the client's two changes, `inRoom` and the
+optimistic assignment, the connection id and the beacon being section 4's;
+section 6's step 6
 paragraph owns the browser cases.
 
 **Branch:** `20260831.protocol_architecture_6_write_path`, based on `main` after
-step 4 merged. Step 6 waits on step 4 and on nothing else; step 4a may land
-either side of it.
+step 4 merged. Step 6 waits on step 4 and on nothing else. Step 4a could have
+landed either side of it and in fact landed first: the branch's merge-base is
+`458b05c`, step 4a's own merge, so this plan is written against a tree that
+already has it.
 
 ## Global Constraints
 
@@ -50,7 +54,9 @@ either side of it.
   Three rules run across it. `NoSession` answers `401`, covering a missing,
   unparseable or unresolved token as well as a room id the manager does not
   hold. `NotAMember` answers `403`. An ask that fails or times out answers
-  `500`.
+  `500`, the timeout being `apiConfig.timeout` and its value `5s`. That is now
+  user-facing: a stalled room holds a click open for five seconds before
+  answering, where the fire-and-forget path answered `204` at once.
 - **The `401`s carry no `WWW-Authenticate`.** Deliberate, and the spec records
   why. Do not add one because RFC 7235 makes it a MUST.
 - **The cookie is unchanged from 08-20:** `HttpOnly`, `SameSite=Strict`,
@@ -114,8 +120,8 @@ either side of it.
 
 - `src/main/resources/pages/index.html` The connection id minted per page
   instance, `/events` and `/leave` carrying it, the `pagehide` beacon, `doLeave`
-  posting, `inRoom` moving out of `applySnapshot` into the join path, and the
-  optimistic `ownVoteConfirmed` assignment deleted.
+  closing its stream before posting, `inRoom` moving out of `applySnapshot` into
+  the join path, and the optimistic `ownVoteConfirmed` assignment deleted.
 
 **Tests, modified:**
 
@@ -141,16 +147,18 @@ either side of it.
   and the two-pages-in-one-context comment updated now that it is this step's
   case rather than a note about a future one.
 - `e2e/room.spec.js` The directly posted blank now draws a `400`; the
-  join-and-leave case becomes the immediate-departure case; two new cases for
-  the shared cookie.
+  join-and-leave case becomes the immediate-departure case; the straggler-reload
+  case loses the duplicate it was written to observe; the straggler-close case
+  takes over the reason for its own budget; two new cases for the shared cookie.
 
 **Docs, modified:**
 
 - `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
-  Landed-state notes on step 6, the test inventory reconciled, the citation
-  sweep.
-- `docs/known-issues.md` Four entries close, one is narrowed.
-- `docs/roadmap.md` Phase 1's ask-pattern item is checked off.
+  Landed-state notes on step 6 and one in section 4, the test inventory
+  reconciled, the citation sweep.
+- `docs/known-issues.md` Three entries close, two are narrowed.
+- `docs/roadmap.md` Phase 1's ask-pattern item is checked off, and the
+  usage-metrics item stops pointing at a closed entry for its definition.
 - `docs/superpowers/plans/README.md` Step 6's entry.
 
 ### Why the tasks are ordered as they are
@@ -161,9 +169,11 @@ directive and once as an endpoint description, and it is worse than it sounds
 for `/events`: the connection id's `400` is what tapir's decode-failure handler
 gives for free and what a raw directive has to hand-roll, since pekko's default
 rejection handler answers `404` for a missing query parameter rather than `400`.
-Landing tapir first also makes the refactor falsifiable. `APISpec` passes
-untouched across task 1 except for the one case that asserts a new header, which
-is the check that the descriptions are faithful before any of them start moving.
+Landing tapir first also makes the refactor falsifiable. `APISpec` passes across
+task 1 with no change to what any case asserts, beyond step 1's new header case
+and step 9's mechanical substitution of its body marshalling, which is the check
+that the descriptions are faithful before any of them start moving. The file
+itself is edited; the assertions are what stay put.
 
 **The connection id comes second because three later tasks need it.** `/leave`
 names one, `publish` walks the keyed map, and the refused-`Join` completion is
@@ -211,9 +221,11 @@ entry at all, which is exactly the ordering the rule exists for, so
 
 **The beacon fires on a reload.** Every browser case that reloads is now a case
 where a member departs and returns. `e2e/room.spec.js`'s "a straggler reloading
-leaves the votes hidden" was written at step 2 against exactly this future and
-must stay green without being touched; if it goes red, the reveal latch or
-idempotent `/join` is wrong, not the case.
+leaves the votes hidden" was written at step 2 against exactly this future, and
+step 2 left the instruction inside the case: idempotent `/join` makes its
+`toHaveCount(2)` unreachable, so task 4 amends it rather than defending it. A red
+there before the amendment is this step working, not the reveal latch or `/join`
+failing.
 
 **`RoomData.of` gains no containment for connections.** A connection outliving
 its member is no longer produced by anything, and `of` still tolerates it: the
@@ -321,11 +333,14 @@ to `libraryDependencies`:
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % V.tapir,
 ```
 
-Run: `sbt update`
-Expected: resolution succeeds. `tapir-pekko-http-server` declares pekko-http
-1.3.0 and pekko-stream 1.6.0; this build pins 1.4.0 and 1.7.0, so sbt evicts
-upward to the pinned versions. Check the eviction warnings say exactly that and
-nothing else.
+Run: `sbt update`, then `sbt evicted`, which is the command that reports
+evictions; `update` alone may print nothing.
+Expected: resolution succeeds. `tapir-pekko-http-server`'s POM declares
+pekko-http 1.3.0, pekko-stream 1.6.0 and pekko-slf4j 1.6.0; this build pins
+1.4.0 and 1.7.0, so the first two evict upward. What to check is that no pekko
+module resolves *below* a pin, not that the report is empty: tapir also brings
+new transitives of its own, `sttp-shared`'s pekko integration and
+`pekko-http-backend` among them, and they are expected.
 
 - [ ] **Step 7: Give `VoteRequest` a tapir schema**
 
@@ -355,8 +370,8 @@ file gain:
 
 ```scala
 import sttp.capabilities.pekko.PekkoStreams
-import sttp.model.{CookieValueWithMeta, StatusCode}
-import sttp.model.headers.Cookie as SttpCookie
+import sttp.model.StatusCode
+import sttp.model.headers.{Cookie as SttpCookie, CookieValueWithMeta}
 import sttp.model.sse.ServerSentEvent as SttpSse
 import sttp.tapir.*
 import sttp.tapir.json.circe.*
@@ -422,20 +437,28 @@ Server logic, in the same file. Each `serverLogic` returns a
 exception handler answers `500` for, replacing the two hand-written failure
 branches.
 
+The `[Future]` on every `serverLogic` and `serverLogicSuccess` is load-bearing
+rather than decoration. Without it the compiler infers the list's element type as
+`ServerEndpoint[Any, ? >: Future[X0] <: Future]`, `toRoute` matches neither
+overload, and the twenty-line error names `PekkoStreams & WebSockets` with its
+caret on `toRoute` rather than on the logic block that caused it. Measured on
+Scala 3.8.4 against this build's pins. Every endpoint tasks 3, 4 and 5 add wants
+the same annotation for the same reason.
+
 ```scala
   private def resolveToken(raw: Option[String]): Option[Room.SessionToken] =
     raw.flatMap(Room.SessionToken.parse)
 
   private val endpoints = List(
-    createRoom.serverLogicSuccess(_ =>
+    createRoom.serverLogicSuccess[Future](_ =>
       (roomManager ? RoomManager.CreateRoom.apply).mapTo[RoomManager.RoomId].map(_.value)
     ),
-    join.serverLogicSuccess { (roomId, request) =>
+    join.serverLogicSuccess[Future] { (roomId, request) =>
       roomManager
         .ask[Room.SessionMinted](RoomManager.RequestSession(roomId, request.name, _))
         .map(minted => (JoinResponse(minted.userId), sessionCookie(roomId, minted.token)))
     },
-    events.serverLogic { (roomId, rawCookie) =>
+    events.serverLogic[Future] { (roomId, rawCookie) =>
       resolveToken(rawCookie) match
         case None        => Future.successful(Left(()))
         case Some(token) =>
@@ -448,23 +471,23 @@ branches.
               case Room.Unresolved => Left(())
             }
     },
-    vote.serverLogicSuccess { (roomId, rawCookie, request) =>
+    vote.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager ! RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation)
       Future.successful(())
     },
-    show.serverLogicSuccess { (roomId, rawCookie) =>
+    show.serverLogicSuccess[Future] { (roomId, rawCookie) =>
       roomManager ! RoomManager.Show(roomId, resolveToken(rawCookie))
       Future.successful(())
     },
-    clear.serverLogicSuccess { (roomId, rawCookie) =>
+    clear.serverLogicSuccess[Future] { (roomId, rawCookie) =>
       roomManager ! RoomManager.Clear(roomId, resolveToken(rawCookie))
       Future.successful(())
     },
-    revote.serverLogicSuccess { (roomId, rawCookie) =>
+    revote.serverLogicSuccess[Future] { (roomId, rawCookie) =>
       roomManager ! RoomManager.Revote(roomId, resolveToken(rawCookie))
       Future.successful(())
     },
-    editIssue.serverLogicSuccess { (roomId, rawCookie, request) =>
+    editIssue.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager ! RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue)
       Future.successful(())
     }
@@ -543,10 +566,12 @@ pass with no change to what it asserts beyond step 9's mechanical substitution
 and step 1's new case. If a status moved, the description is wrong: fix the
 description rather than the case.
 
-Two failures are expected here and are the descriptions being faithful, not
-faults. A request to a path no endpoint matches now falls through to pekko's
-rejection handling as before, so "not expose the proxy probe" still answers
-`404`. A `GET` to a `POST` endpoint answers `405` where it did before.
+Nothing is expected to fail here. Two behaviours are worth checking precisely
+because they do not change: a request to a path no endpoint matches still falls
+through to pekko's rejection handling, so "not expose the proxy probe" still
+answers `404`, and a `GET` to a `POST` endpoint still answers `405`. The second
+is unasserted, no case in `src/test` naming a `405`, so it is an eyeball check
+rather than a red.
 
 - [ ] **Step 11: Run the browser suite**
 
@@ -790,10 +815,29 @@ In `RoomDataFixtures`:
       )
 ```
 
-The default on `connectionId` is what keeps the eight positional `Attendee(...)`
-sites compiling untouched. Every `data.connections(user.id) mustBe Set(...)`
-assertion in `RoomSpec` becomes a `Map(id -> ref)`; there are four, at the
-replacement, the racing-reconnect and the two-tab cases.
+The default on `Attendee.connectionId` is what keeps the ten positional
+`Attendee(...)` sites compiling untouched: eight in `RoomSpec`, one in
+`RoomSnapshotSpec` and one in `RoomManagerSpec`. `withSecondConnection` takes its
+id explicitly rather than defaulting it, because task 5's departure cases have to
+name the connection they drop, and an id the caller cannot recover is one no case
+can assert about.
+
+Nothing else follows from the fixtures, so the rest of the tree has to be walked.
+Three `data.connections(user.id) mustBe Set(...)` assertions in `RoomSpec` become
+`Map(id -> ref)`, in "keep a reconnecting user's vote instead of resetting it",
+"hold both connections when a replacement arrives before the first drops" and
+"schedule no removal when the connection that drops is not the member's last".
+Then, none of which the rule above reaches:
+
+- Three four-argument `Room.Join(...)` calls in `RoomSpec`, in the reconnect-vote
+  case and the two replacement cases.
+- Two `expectMessage(Room.Join(...))` assertions in `RoomManagerSpec`. These are
+  the only ones with content rather than arity: the case has to send a known id
+  in through `ConnectToRoom` and assert that same id comes back out.
+- `connections = Map(stranger -> Set(user.ref))` in "refuse a RoomData whose
+  connection resolves to no session", which is a construction rather than an
+  assertion.
+- `withSecondConnection`'s two callers, which pass a ref and no id today.
 
 - [ ] **Step 6: Mint the id on the client and carry it on `/events`**
 
@@ -1189,7 +1233,7 @@ inside their owner: the manager relays, it does not hand a ref out.
 and the logic, one shape for all five:
 
 ```scala
-    vote.serverLogic { (roomId, rawCookie, request) =>
+    vote.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.CommandResult](
           RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation, _)
@@ -1265,7 +1309,7 @@ In `e2e/room.spec.js`, "an empty estimation posted directly is refused":
 ```js
   // Refused at the edge now: a tapir validator answers 400 before the room sees the request,
   // and the actor's own guard stays behind it as insurance.
-  const posted = await bob.page.request.post(`/rooms/${room}/vote?`, { data: { estimation: '' } })
+  const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
   expect(posted.status()).toBe(400)
 ```
 
@@ -1295,14 +1339,22 @@ re-confirming a kept estimate during a re-vote, which then behaves like every
 other vote in the app. No error surface is added: a `409` means a snapshot
 disabling the deck is already in flight, a `400` is unreachable from a page
 whose card values are hardcoded, and a `401` reaches a page whose stream has
-already drawn `EventSource`'s terminal message.
+already drawn `EventSource`'s terminal message. A `500` is the one code the ask
+newly makes reachable, and swallowing it is the choice rather than an oversight:
+it needs a local actor to miss a five second deadline, and reporting it here
+would be the only place in the app that surfaces a command failure. The cost is
+that a click during such a stall shows nothing at all, the optimistic flag
+having been what covered it.
 
 - [ ] **Step 12: Run both suites and commit**
 
 Run: `sbt test && npm run e2e`
-Expected: PASS. "a re-vote leaves the caster shown as selected but unconfirmed"
-is the case that proves deleting the optimistic flag cost nothing: it asserts
-the unconfirmed styling that the flag used to overwrite for a round trip.
+Expected: PASS. No browser case proves the deletion cost nothing, and "a re-vote
+leaves the caster shown as selected but unconfirmed" is not the one: the flag
+only shows in the window between the click and the snapshot, and every assertion
+in that case auto-waits past it, so it passes with the `ownVoteConfirmed`
+assignment present or deleted.
+The Verification section's manual step is the check, which is why it is there.
 
 ```bash
 sbt scalafmtAll
@@ -1431,7 +1483,9 @@ Expected: FAIL to compile, `RequestSession` taking two arguments.
 
 The publish on the resolved branch is unconditional and that is deliberate: a
 rename has to reach everyone, and a second tab joining under the same name pays
-one redundant snapshot, which this design has already priced as cheap.
+one redundant snapshot, which this design has already priced as cheap. Under a
+different name it is a rename and the last join wins, which is the same rule
+and worth saying out loud: the first tab's display name changes under it.
 
 `RoomManager.RequestSession` gains `existing` and passes it through both its
 branches, the find and the create.
@@ -1453,7 +1507,7 @@ Expected: PASS.
 ```
 
 ```scala
-    join.serverLogicSuccess { (roomId, rawCookie, request) =>
+    join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.SessionMinted](
           RoomManager.RequestSession(roomId, request.name, resolveToken(rawCookie), _)
@@ -1572,7 +1626,33 @@ test('a reload keeps its identity and its vote', async ({ join }) => {
 })
 ```
 
-- [ ] **Step 11: Run the browser suite**
+- [ ] **Step 11: Amend the straggler-reload case**
+
+`e2e/room.spec.js`'s "a straggler reloading leaves the votes hidden" observes a
+duplicate Carol that this task removes, and step 2 wrote the instruction into the
+case itself. The `depart` callback's `toHaveCount(2)` becomes `toHaveCount(1)`,
+and the roster assertion beside it is what keeps the case honest once the
+duplicate is gone: a reload must leave the count where it was.
+
+```js
+    async (carol, alice) => {
+      await carol.page.reload()
+      // One Carol, not two: the cookie resolves to the identity she already had.
+      await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
+      await expect(participantRows(alice.page)).toHaveCount(3)
+    },
+    // No prune is pending until task 5's beacon, so this is the roster holding rather
+    // than a removal completing, and the 25 second budget goes with the duplicate.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
+```
+
+The case keeps its subject either way: the shared
+`stragglerDepartsWithVotesHidden` still proves the latch leaves the votes hidden
+when a departure, not a vote, is what completes the roster. Task 5 is where the
+reload becomes a real departure and return, and the case sharpens there for the
+same reason the new reload case does.
+
+- [ ] **Step 12: Run the browser suite**
 
 Run: `npm run e2e`
 Expected: PASS, both engines. The reload case is the one that fails loudest if
@@ -1584,7 +1664,7 @@ member is never removed and the identity survives trivially. The case earns its
 keep either way and gets sharper at task 5, which is the argument for writing it
 here rather than beside the change that would otherwise break it unwatched.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 sbt scalafmtAll
@@ -1618,11 +1698,11 @@ git commit -m "feat(protocol): resume the session a join's cookie already names"
 
 ```scala
     "remove the member when a departure takes its last connection" in {
-      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
-      val (other, _)        = createUser(UUID.randomUUID(), "user2", false, "")
-      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
-      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user, other))
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (other, otherProbe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val replyProbe          = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)        = createRoom(UUID.randomUUID(), withUsers(user, other))
 
       roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
@@ -1631,7 +1711,12 @@ git commit -m "feat(protocol): resume the session a join's cookie already names"
       replyProbe.expectMessage(Room.Applied)
       data.members.keySet mustBe Set(other.id)
       data.connections.keySet mustBe Set(other.id)
-      // The leaver is out of connections before the publish, so no snapshot follows them out.
+      // The announcement is the other half of the task: asserting only that a snapshot
+      // arrived would pass on one that still listed the leaver.
+      expectSnapshot(otherProbe).users.map(_.id) mustBe List(other.id)
+      // The leaver's stream is ended rather than fed: it is out of connections before the
+      // publish, so StreamCompleted is the one thing it gets and no snapshot follows it out.
+      userProbe.expectMsg(Room.StreamCompleted)
       userProbe.expectNoMessage(300.millis)
     }
 
@@ -1653,6 +1738,10 @@ git commit -m "feat(protocol): resume the session a join's cookie already names"
       replyProbe.expectMessage(Room.Applied)
       data.members.keySet mustBe Set(user.id)
       data.connections(user.id) mustBe Map(user.connectionId -> userProbe.ref)
+      // The other branch of the same rule: the tab that left gets its stream ended even
+      // though the member stayed, which is what makes the send unconditional rather than
+      // a departure-only special case.
+      secondProbe.expectMsg(Room.StreamCompleted)
     }
 
     "answer a departure naming a connection that is already gone, and still remove the member" in {
@@ -1691,11 +1780,15 @@ and the timer case, on `BehaviorTestKit` beside the existing grace-period ones:
       )
 
       // The stream terminated first, so a timer is pending when the beacon arrives.
+      // Draining is what the other timer cases do: every non-tick message re-arms the
+      // idle tick, so the effect queue is never just the one the case is about.
       btk.run(Room.Leave(user.id, userProbe.ref))
-      btk.run(Room.Depart(user.token, user.connectionId, replyProbe.ref))
+      btk.retrieveAllEffects()
 
-      // Two paths to one departure must not both publish it.
-      btk.expectEffectType[Effect.TimerCancelled]
+      // Two paths to one departure must not both publish it. The key is the assertion:
+      // the grace timer is keyed by the member, the idle re-arm by IdleTickKey.
+      btk.run(Room.Depart(user.token, user.connectionId, replyProbe.ref))
+      btk.retrieveAllEffects() must contain(Effect.TimerCancelled(user.id))
     }
 ```
 
@@ -1726,6 +1819,12 @@ Expected: FAIL to compile, `Room.Depart` not found.
             data.acting(token) match
               case Right(userId) =>
                 replyTo ! Applied
+                // The server ends every stream it stops serving, the same rule a refused Join
+                // follows. Already gone is the normal case and dead-letters harmlessly.
+                data.connections
+                  .get(userId)
+                  .flatMap(_.get(connectionId))
+                  .foreach(_ ! StreamCompleted)
                 val next = data.dropConnection(userId, connectionId)
                 if next.holdsConnection(userId) then
                   receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
@@ -1754,6 +1853,19 @@ member alone.
 `holdsConnection` reads `connections.contains`, and the entry is gone once its
 map empties, so this reads the set through the `Option` rather than indexing it.
 
+**Ending the stream is unconditional on purpose.** The alternative was to send
+nothing, on the argument that a departing client has already closed its own
+stream, and that argument is true of both paths that produce a `Depart` and
+false of the one that matters: a beacon fired from a `pagehide` the `persisted`
+gate misread leaves a live page whose member the room has removed, receiving
+nothing and never told. Ending the stream makes `EventSource` reconnect and
+re-join, so the state heals itself. Sending it always rather than only when a
+ref is found is what keeps this a rule instead of a special case, and matches
+what a refused `Join` already does. The cost of the common case, where the ref
+is a stream that has already completed, was measured against this build's pekko
+rather than assumed: the message dead-letters, which is a no-op logged at INFO
+and bounded by `log-dead-letters = 10` with a five minute suspension.
+
 - [ ] **Step 4: Relay it and describe the endpoint**
 
 `RoomManager.Depart` takes the `Vote` shape exactly, answering `NoSession` for
@@ -1769,7 +1881,7 @@ an unknown room or a missing token. In `API.scala`:
 ```
 
 ```scala
-    leave.serverLogic { (roomId, connectionId, rawCookie) =>
+    leave.serverLogic[Future] { (roomId, connectionId, rawCookie) =>
       roomManager
         .ask[Room.CommandResult](
           RoomManager.Depart(roomId, resolveToken(rawCookie), connectionId, _)
@@ -1836,14 +1948,27 @@ In `index.html`, one helper and two callers:
     }
 ```
 
+Its `false` return, when the agent will not queue the request, is ignored on
+purpose: the grace period and `ConfirmLeave` both survive this task, so a beacon
+that never goes degrades to exactly the detection path this step replaces.
+
 ```js
         doLeave: function () {
+          // Closed before the request, not after: the server ends a departed connection's
+          // stream, and an EventSource reconnects unless it was closed from this side.
+          this.eventSource.close();
           postLeave(this.roomId);
           localStorage.clear();
           this.inRoom = false;
           ...
         },
 ```
+
+The order is the point. Today's `doLeave` closes the stream last and is safe
+only because the server's reply cannot be processed before the handler yields,
+which is a timing accident no test would catch if someone put an `await` in
+front of it. Closing first makes it independent of timing: no reconnect can come
+from an object already closed.
 
 and, after the Vue instance is created:
 
@@ -1929,6 +2054,12 @@ That is one amendment rather than a third addition, and the spec's test
 inventory says "adds three". Task 6 reconciles the count rather than leaving the
 two documents disagreeing.
 
+Deleting that comment orphans a pointer to it. "a straggler closing their tab
+leaves the votes hidden" justifies its own 25 second budget with "for the reason
+the leave case above records", and the reason is what this step removes. Give
+that case the reason directly instead, in a line of its own, or the next reader
+follows a pointer into a case that no longer explains anything.
+
 - [ ] **Step 10: Run the browser suite**
 
 Run: `npm run e2e`
@@ -1964,34 +2095,57 @@ This task waits on all five above, because a citation sweep is only true of the
 tree it runs against and because the known-issue entries are only false once the
 code that falsifies them has landed.
 
-- [ ] **Step 1: Annotate the design's step 6 section**
+- [ ] **Step 1: Annotate the design**
 
 Landed-state notes in the same voice the earlier steps use, annotating rather
-than re-tensing. The three that are not optional:
+than re-tensing. Mostly in the step 6 section, but not only: the notes below
+reach a sentence in section 4 and a row of the known-defect table. The four that
+are not optional:
 
 - The test inventory says step 6 adds three browser cases. Two were added and
   the third landed as an amendment to "the participant list follows a join and
   a leave", which already had the two contexts and the departure the third case
   describes. Say so beside the sentence, with the reason: leaving the old case
   alongside a new one would have kept a 25 second budget and a comment about a
-  heartbeat mechanism the endpoint replaces.
+  heartbeat mechanism the endpoint replaces. Record the straggler-reload case
+  beside it as an amendment rather than an addition: step 2 wrote it against
+  this step and flagged its own `toHaveCount(2)` for revision, which task 4 paid.
 - `RoomData.vote` returns `(RoomData, VoteOutcome)` rather than a bare outcome,
   and the ADT is split so the two refusals the resolution owns cannot be
   returned from the guard. The spec argues for "an ADT of applied, round
   revealed and blank estimation"; record that the implementation made that
   three-case set a sub-trait of the five-case reply rather than a separate type
   needing a join.
-- `CirceSupport` was deleted rather than left without a production caller, which
-  the spec does not mention and which follows the same rule as `JoinResponse`.
+- `CirceSupport` was deleted rather than left without a production caller,
+  following the same rule as `JoinResponse`. The spec names it twice as the live
+  mechanism and both sentences need it out: section 4's reason the beacon sends
+  no body ("`CirceSupport`'s unmarshaller refuses with a `415`"), and step 6's
+  uniform-failure rule ("`CirceSupport`'s unmarshaller accepting
+  `application/json` alone"). Re-attribute both to the body description tapir
+  generates. Leave the `415` itself alone rather than restating it as a
+  contract: nothing in `src/test` asserts one, in this world or the last, and
+  the status table carries none.
+- The known-defect table's row for the second tab says step 6 closes it, "so a
+  second tab joins the same participant instead of displacing it". That is true
+  of a tab holding the cookie and not of two that load before either has joined,
+  which step 2 below narrows the matching known-issue entry to. Bring the row to
+  the same wording rather than leaving the two documents disagreeing.
 
 - [ ] **Step 2: Close the known-issue entries**
 
-Four close outright and one narrows.
+Three close outright and two narrow.
 
 - "A deliberate tab close is as slow to announce as a transient reconnect"
   closes. Both halves landed: the beacon for the close, idempotent `/join` for
   the reload. Its heartbeat-reduction stopgap paragraph goes with it.
-- "A second tab on the same room displaces the first tab's identity" closes.
+- "A second tab on the same room displaces the first tab's identity" narrows
+  rather than closing. Idempotent `/join` resolves a cookie that exists, which
+  is the common path and the one the entry was written against. It cannot reach
+  two tabs that both load before either has joined: neither holds a cookie, so
+  both mint, and the second response's `setCookie` lands on the first's shared
+  slot, which is the overwrite the entry calls the defect. Not fixable here,
+  since a tab cannot see another tab and the server cannot tell two cookieless
+  joins from two people. Rewrite the entry to that residual and keep it open.
 - "A vote refused by a revealed round is silent, and can read as accepted"
   closes. The ask gives `/vote` a real result, the validator answers the blank
   half at the edge, and the optimistic assignment is gone.
@@ -2015,7 +2169,11 @@ and no silent drop.
 
 - [ ] **Step 3: Update the roadmap and the plans README**
 
-Check off Phase 1's ask-pattern command endpoints item. Add step 6's entry to
+Check off Phase 1's ask-pattern command endpoints item. The usage-metrics item
+needs a second look in the same pass: it asks to size "the ghost rate in
+`docs/known-issues.md`", and the entry that defines the ghost is the tab-close
+one step 2 closes, so the phrase has to carry its own definition or name the
+closed entry as history. Add step 6's entry to
 `docs/superpowers/plans/README.md`, in the large-surface-area case: six files of
 production code, five spec files and the browser suite, and the same
 no-tree-compiles-between-the-halves argument step 4's entry makes, which is why
@@ -2027,10 +2185,13 @@ Run last, after the final code commit, over every file this branch changed
 rather than over the citations in the diff. The known stale-makers this step
 creates:
 
-- `docs/known-issues.md` cites `API.scala:66`, `:72`, `:132`, `:158-165` and
-  `Requests.scala:8`, `:18`, `:23`. Every one of those moves, and most of the
-  code they name no longer exists in that form. Convert to symbol names rather
-  than renumbering, per the citation convention.
+- `docs/known-issues.md` cites `API.scala:18-19`, `:66`, `:72`, `:91`, `:132`,
+  `:158-165`, `:163` and `Requests.scala:8`, `:18`. Every one of those moves, and
+  most of the code they name no longer exists in that form. Convert to symbol
+  names rather than renumbering, per the citation convention. The list was wrong
+  in both directions before this step's review: it named a `Requests.scala:23`
+  that does not exist and missed `API.scala:91` and `:163`, which this step
+  deletes outright, and `:18-19`, which task 1 rewrites.
 - `index.html:447-460`, `:517-527`, `:365`, `:355`, `:318` and the four asset
   tags all shift. The design cites several of the same lines.
 - The design's `Room.scala` citations shift again for `ConnectionId`, the
@@ -2043,9 +2204,9 @@ creates:
 
 Before the final commit, diff this branch's changed files against the file list
 the tasks above declare, then diff the content of each declared file against
-what its task asked of it. The second half is what does the work: step 5a's four
-undeclared documentation changes landed inside declared files, where a file-list
-diff is blind.
+what its task asked of it. The second half is what does the work: of step 5a's
+four undeclared documentation changes, three landed inside declared files, where
+a file-list diff is blind.
 
 - [ ] **Step 6: Commit**
 
