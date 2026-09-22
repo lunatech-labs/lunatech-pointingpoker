@@ -71,6 +71,7 @@ class API(
   private val events = endpoint.get
     .in(roomPath / "events")
     .in(sessionIn)
+    .in(header[Option[String]]("X-Forwarded-Proto"))
     .out(sseBody)
     .out(header("Cache-Control", "no-cache"))
     .out(header("X-Accel-Buffering", "no"))
@@ -99,9 +100,20 @@ class API(
         .ask[Room.SessionMinted](RoomManager.RequestSession(roomId, request.name, _))
         .map(minted => (JoinResponse(minted.userId), sessionCookie(roomId, minted.token)))
     },
-    events.serverLogic[Future] { (roomId, rawCookie) =>
+    events.serverLogic[Future] { (roomId, rawCookie, forwardedProto) =>
       resolveToken(rawCookie) match
-        case None        => Future.successful(Left(()))
+        case None =>
+          // Pekko's own listener is always plain HTTP here (see Main's startup log) - TLS,
+          // if any, is terminated by a reverse proxy in front, so X-Forwarded-Proto is the
+          // only signal for whether the client's connection was actually secure.
+          val arrivedOverHttps = forwardedProto.exists(_.equalsIgnoreCase("https"))
+          if apiConfig.secureCookies && !arrivedOverHttps then
+            log.warn(
+              "Rejecting session for room {}: SECURE_COOKIES is enabled but the request did not arrive over HTTPS (no X-Forwarded-Proto: https), so the browser will not return the Secure session cookie. Set SECURE_COOKIES=false for non-HTTPS deployments, or confirm your reverse proxy sets X-Forwarded-Proto.",
+              roomId
+            )
+          else log.debug("No session cookie provided for room {}", roomId)
+          Future.successful(Left(()))
         case Some(token) =>
           roomManager
             .ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
