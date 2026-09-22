@@ -63,13 +63,18 @@ class API(
       pathEndOrSingleSlash {
         get {
           log.debug("Index call [{}]", apiConfig.indexPath)
-          getFromFile(apiConfig.indexPath)
+          // Always revalidate: no-store would re-send the whole page where a 304 costs nothing.
+          respondWithHeader(`Cache-Control`(`no-cache`)) {
+            getFromFile(apiConfig.indexPath)
+          }
         }
       },
       path(JavaUUID) { roomId =>
         get {
           log.debug("Index call with room id: {}", roomId)
-          getFromFile(apiConfig.indexPath)
+          respondWithHeader(`Cache-Control`(`no-cache`)) {
+            getFromFile(apiConfig.indexPath)
+          }
         }
       },
       path("create-room") {

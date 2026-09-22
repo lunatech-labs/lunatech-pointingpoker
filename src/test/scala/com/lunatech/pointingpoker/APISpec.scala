@@ -83,6 +83,16 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe index
       }
     }
+    // A page cached without this can outlive the server that served it, so a deploy pairs a
+    // stale page with a new protocol. One conditional request per load is the whole cost.
+    "revalidate the index page on every load" in {
+      Get() ~> apiRoute ~> check {
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
+      }
+      Get(s"/$roomId") ~> apiRoute ~> check {
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
+      }
+    }
     "create a room" in
       // Deliberately no CirceSupport import here: create-room must stay a plain
       // text/plain body containing the bare roomId, not a JSON-quoted string.
