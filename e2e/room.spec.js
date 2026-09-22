@@ -84,16 +84,10 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await expect(participantRows(alice.page)).toHaveCount(2)
   await expect(participantRows(bob.page)).toHaveCount(2)
 
+  // No grace period and no traffic to force detection: the leave endpoint removes the member
+  // on the request, so the default timeout is the whole budget.
   await bob.page.getByRole('link', { name: 'Leave' }).click()
-  // The app notices a dead stream only when a write to it fails, and the first write after a
-  // close only draws the reset, so two broadcasts stand in for the heartbeat 15s away.
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.click()
-  await clear.click()
-
-  // 25s, not 20s: if detection ever falls back to the 15s heartbeat the removal lands at about
-  // 20.1s, just outside the tighter cap, and this case has no cut whose budget a wait spends.
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 25_000 })
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0)
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
 
@@ -285,15 +279,15 @@ test('a straggler closing their tab leaves the votes hidden', async ({ join }) =
   await stragglerDepartsWithVotesHidden(
     join,
     carol => carol.close(),
-    // 25s for the reason the leave case above records: if detection ever falls back to the
-    // 15s heartbeat the removal lands at about 20.1s, just outside a tighter cap.
+    // 25s: if detection ever fell back to a 15s heartbeat the removal would land at about
+    // 20.1s, just outside a tighter cap, and the beacon leaves no cut whose budget a wait spends.
     alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 25_000 })
   )
 })
 
 test('a straggler reloading leaves the votes hidden', async ({ join }) => {
-  // Vacuous for the latch today: a non-voting Carol remains, so no re-derived predicate would
-  // fire. Kept for step 6, where a beacon removes her instead of replacing her.
+  // Hostile now: the beacon removes Carol on the reload, so the latch is the only thing
+  // keeping the round shut until she returns.
   await stragglerDepartsWithVotesHidden(
     join,
     // created() rejoins from localStorage, and /join resolves the cookie rather than minting,
@@ -306,8 +300,7 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
       await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
       await expect(participantRows(alice.page)).toHaveCount(3)
     },
-    // No prune is pending until task 5's beacon, so this is the roster holding rather
-    // than a removal completing, and the 25 second budget goes with the duplicate.
+    // Carol already rejoined above, so this only confirms the departure left no stale entry.
     alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
   )
 })

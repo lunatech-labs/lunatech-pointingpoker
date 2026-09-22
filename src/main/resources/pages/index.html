@@ -357,7 +357,6 @@
         if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
       });
       return {
-        inRoom: true,
         users: s.users,
         votesRevealed: s.votesRevealed,
         // Do not clobber the issue input while the user is typing in it.
@@ -370,6 +369,11 @@
     // One per page instance, never persisted: a reload must mint a new one, or its own late
     // beacon would name the id the replacement page is now using.
     var connectionId = crypto.randomUUID();
+    // sendBeacon rather than a POST: an unload-adjacent fetch is not reliably delivered, and
+    // a body would arrive as text/plain and be refused where nothing could report it.
+    function postLeave(roomId) {
+      navigator.sendBeacon('/rooms/' + roomId + '/leave?connectionId=' + connectionId);
+    }
     var app = new Vue({
       el: '#app',
       data: {
@@ -423,6 +427,9 @@
           localStorage.setItem("name", this.user.name);
           axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
           .then(function (response) {
+            // Entering a room is a navigation decision, not room state: no later frame can put
+            // the page back into a room the user has left.
+            var entering = true;
             ref.eventSource = new EventSource(
               '/rooms/' + ref.roomId + '/events?connectionId=' + connectionId
             );
@@ -442,7 +449,10 @@
                 { issueFocused: ref.issueFocused, currentIssue: ref.currentIssue },
                 JSON.parse(event.data)
               );
-              ref.inRoom = next.inRoom;
+              if (entering) {
+                ref.inRoom = true;
+                entering = false;
+              }
               ref.users = next.users;
               ref.votesRevealed = next.votesRevealed;
               ref.currentIssue = next.currentIssue;
@@ -491,13 +501,16 @@
           });
         },
         doLeave: function () {
+          // Closed before the request, not after: the server ends a departed connection's
+          // stream, and an EventSource reconnects unless it was closed from this side.
+          this.eventSource.close();
+          postLeave(this.roomId);
           localStorage.clear();
           this.inRoom = false;
           this.issueFocused = false;
           this.votesSummary = [],
           this.user.estimation = "";
-          this.users = [],
-          this.eventSource.close();
+          this.users = [];
         },
         doEdit: function () {
           this.editing = false;
@@ -551,6 +564,13 @@
         }
       }
     })
+
+    window.addEventListener('pagehide', function (event) {
+      // Only a page being discarded: a back/forward cache entry can be restored with no page
+      // load, so removing its member would leave a live page as a non-member.
+      if (event.persisted || !app.inRoom) return;
+      postLeave(app.roomId);
+    });
   </script>
 
 </html>
