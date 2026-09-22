@@ -34,6 +34,11 @@ object Room:
   ) extends Command
   final case class Leave(userId: UUID, ref: UntypedRef)       extends Command
   final private[actors] case class ConfirmLeave(userId: UUID) extends Command
+  final case class Depart(
+      token: SessionToken,
+      connectionId: ConnectionId,
+      replyTo: ActorRef[CommandResult]
+  ) extends Command
   final case class Vote(token: SessionToken, estimation: String, replyTo: ActorRef[CommandResult])
       extends Command
   final case class ClearVotes(token: SessionToken, replyTo: ActorRef[CommandResult]) extends Command
@@ -116,6 +121,11 @@ object Room:
       // By value, never by id: removing by id would evict a live replacement.
       this.copy(connections =
         this.connections.updatedWith(userId)(_.map(_.filterNot(_._2 == ref)).filter(_.nonEmpty))
+      )
+
+    private[Room] def dropConnection(userId: UUID, connectionId: ConnectionId): RoomData =
+      this.copy(connections =
+        this.connections.updatedWith(userId)(_.map(_ - connectionId).filter(_.nonEmpty))
       )
 
     private[Room] def removeMember(userId: UUID): RoomData =
@@ -331,6 +341,33 @@ object Room:
           case ConfirmLeave(userId) =>
             val newData = publish(data.removeMember(userId), context)
             receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+          case Depart(token, connectionId, replyTo) =>
+            data.acting(token) match
+              case Right(userId) =>
+                replyTo ! Applied
+                // The server ends every stream it stops serving, the same rule a refused Join
+                // follows. A ref whose stream already ended dead-letters harmlessly.
+                data.connections
+                  .get(userId)
+                  .flatMap(_.get(connectionId))
+                  .foreach(_ ! StreamCompleted)
+                val next = data.dropConnection(userId, connectionId)
+                if next.holdsConnection(userId) then
+                  receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
+                else
+                  // Removing the member cancels the grace timer, so only one path publishes.
+                  timers.cancel(userId)
+                  receiveBehaviour(
+                    roomId,
+                    publish(next.removeMember(userId), context),
+                    gracePeriod,
+                    stopAfterIdle,
+                    timers
+                  )
+                end if
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
           case EditIssue(token, issue, replyTo) =>
             data.acting(token) match
               case Right(_) =>

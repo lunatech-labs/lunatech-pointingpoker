@@ -67,6 +67,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
           case RoomManager.Clear(_, _, replyTo)        => replyTo ! commandReply.get()
           case RoomManager.Revote(_, _, replyTo)       => replyTo ! commandReply.get()
           case RoomManager.EditIssue(_, _, _, replyTo) => replyTo ! commandReply.get()
+          case RoomManager.Depart(_, _, _, replyTo)    => replyTo ! commandReply.get()
           case _                                       => ()
         Behaviors.same
     })
@@ -307,6 +308,34 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
       // The validator is at the edge, so nothing reaches the room to be refused there.
       commandProbe.expectNoMessage(300.millis)
+    }
+
+    "answer 204 for a leave naming a connection" in {
+      val token = Room.SessionToken.mint()
+      val id    = UUID.randomUUID()
+      Post(s"/rooms/$roomId/leave?connectionId=$id") ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
+      }
+      commandProbe.expectMessageType[RoomManager.Depart]
+    }
+
+    "reject a leave with no connection id" in
+      Post(s"/rooms/$roomId/leave") ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+
+    "answer 401 for a leave with no session cookie" in {
+      commandReply.set(Room.NoSession)
+      try
+        Post(s"/rooms/$roomId/leave?connectionId=${UUID.randomUUID()}") ~> apiRoute ~> check {
+          status mustBe StatusCodes.Unauthorized
+        }
+      finally commandReply.set(Room.Applied)
+      commandProbe.expectMessageType[RoomManager.Depart]
     }
   }
 end APISpec

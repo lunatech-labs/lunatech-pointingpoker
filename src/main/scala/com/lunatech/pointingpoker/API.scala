@@ -113,6 +113,13 @@ class API(
   private val revote    = command("revote")
   private val editIssue = command("edit-issue").in(jsonBody[EditIssueRequest])
 
+  private val leave = endpoint.post
+    .in(roomPath / "leave")
+    .in(query[Room.ConnectionId]("connectionId"))
+    .in(sessionIn)
+    .out(statusCode(StatusCode.NoContent))
+    .errorOut(commandErrors)
+
   // Applied is the only outcome that is not a refusal, so it is the only Right.
   private def answer(result: Room.CommandResult): Either[Room.CommandResult, Unit] =
     if result == Room.Applied then Right(()) else Left(result)
@@ -189,6 +196,13 @@ class API(
       roomManager
         .ask[Room.CommandResult](
           RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue, _)
+        )
+        .map(answer)
+    },
+    leave.serverLogic[Future] { (roomId, connectionId, rawCookie) =>
+      roomManager
+        .ask[Room.CommandResult](
+          RoomManager.Depart(roomId, resolveToken(rawCookie), connectionId, _)
         )
         .map(answer)
     }

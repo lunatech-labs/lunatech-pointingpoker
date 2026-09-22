@@ -268,6 +268,76 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data mustBe withUsers(user2).withMemberlessSession(user).withEstimate(user)
     }
 
+    "remove the member when a departure takes its last connection" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (other, otherProbe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val replyProbe          = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)        = createRoom(UUID.randomUUID(), withUsers(user, other))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      replyProbe.expectMessage(Room.Applied)
+      data.members.keySet mustBe Set(other.id)
+      data.connections.keySet mustBe Set(other.id)
+      // The announcement is the other half of the task: asserting only that a snapshot
+      // arrived would pass on one that still listed the leaver.
+      expectSnapshot(otherProbe).users.map(_.id) mustBe List(other.id)
+      // The leaver's stream is ended rather than fed: it is out of connections before the
+      // publish, so StreamCompleted is the one thing it gets and no snapshot follows it out.
+      userProbe.expectMsg(Room.StreamCompleted)
+      userProbe.expectNoMessage(300.millis)
+    }
+
+    "keep the member when a departure leaves another connection open" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val secondProbe       = TestProbe()(testKit.system.classicSystem)
+      val secondId          = newConnectionId()
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(
+        UUID.randomUUID(),
+        withUsers(user).withSecondConnection(user, secondId, secondProbe.ref)
+      )
+
+      roomRef ! Room.Depart(user.token, secondId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      replyProbe.expectMessage(Room.Applied)
+      data.members.keySet mustBe Set(user.id)
+      data.connections(user.id) mustBe Map(user.connectionId -> userProbe.ref)
+      // The other branch of the same rule: the tab that left gets its stream ended even
+      // though the member stayed, which is why the send is not a removal-only case.
+      secondProbe.expectMsg(Room.StreamCompleted)
+    }
+
+    "answer a departure naming a connection that is already gone, and still remove the member" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      // The beacon lost the race with its own stream's teardown: no entry at all is left.
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withNoConnection(user))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      replyProbe.expectMessage(Room.Applied)
+      dataProbe.expectMessageType[Room.DataStatus].data.members mustBe empty
+    }
+
+    "answer 403-worthy NotAMember for a departure after grace expiry" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withDeparted(user))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NotAMember)
+    }
+
     "stay alive when its last member is removed" in {
       val probe = TestProbe()(testKit.system.classicSystem)
       val user  =
@@ -291,6 +361,24 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // An empty room is idle, not dead: task 3's tick is what ends it, hours later.
       behaviorTestKit.isAlive mustBe true
+    }
+
+    "cancel a pending ConfirmLeave when a departure removes the member first" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val btk               = BehaviorTestKit(
+        Room(UUID.randomUUID(), withUsers(user), testGracePeriod, testStopAfterIdle)
+      )
+
+      // A timer is pending: the stream terminated first. Every non-tick message re-arms the
+      // idle tick, so drain the queue as the other timer cases do.
+      btk.run(Room.Leave(user.id, userProbe.ref))
+      btk.retrieveAllEffects()
+
+      // Two paths to one departure must not both publish it. The key is the assertion:
+      // the grace timer is keyed by the member, the idle re-arm by IdleTickKey.
+      btk.run(Room.Depart(user.token, user.connectionId, replyProbe.ref))
+      btk.retrieveAllEffects() must contain(Effect.TimerCancelled(user.id))
     }
 
     "ignore a Join whose token is in no session" in {

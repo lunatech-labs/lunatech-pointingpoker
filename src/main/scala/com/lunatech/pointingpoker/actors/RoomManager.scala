@@ -30,6 +30,12 @@ object RoomManager:
       estimation: String,
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
+  case class Depart(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      connectionId: Room.ConnectionId,
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
   case class Show(
       roomId: UUID,
       token: Option[Room.SessionToken],
@@ -143,6 +149,11 @@ object RoomManager:
           case EditIssue(roomId, token, issue, replyTo) =>
             (data.rooms.get(roomId), token) match
               case (Some(room), Some(t)) => room ! Room.EditIssue(t, issue, replyTo)
+              case _                     => replyTo ! Room.NoSession
+            Behaviors.same
+          case Depart(roomId, token, connectionId, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.Depart(t, connectionId, replyTo)
               case _                     => replyTo ! Room.NoSession
             Behaviors.same
           case ConnectionCompleted(roomId, userId, ref) =>
