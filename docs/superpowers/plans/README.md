@@ -96,3 +96,13 @@ factory and a guard, but it rewrites all 48 fixture sites across three specs and
 adds a fourth file. That is the large-surface-area case above, and the handover
 matters more than usual here: a missed site is invisible until the last commit of
 the first task, when the constructor closes and the compiler finally objects.
+
+Step 6 has one. Six files of production code, five spec files and the browser
+suite is the large-surface-area case on its own terms, and it carries the same
+no-tree-compiles-between-the-halves argument step 4's entry makes: tapir has to
+land before the ask pattern can describe an endpoint's outcome, the ask pattern
+before `/join` and `/leave` can be asks themselves, and `/join` before `/leave`
+so the reload case is proven before the leave endpoint's own browser case has to
+carry it. That ordering is why it decomposed into five production tasks rather
+than one, with the record, this file's own entry among them, as a sixth task
+that only makes sense once the other five have landed.

@@ -34,87 +34,6 @@ roadmap item instead of leaving it here as stale history.
   someone they mistyped a slug rather than leaving them alone in a phantom
   room.
 
-### A deliberate tab close is as slow to announce as a transient reconnect
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace period).
-- **Issue:** The grace period introduced in
-  `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md` to swallow a
-  reconnect-driven leave-then-rejoin flicker treats every disconnect alike, not
-  just the transient ones, and it is not even where most of the delay comes from.
-  The server has no signal that distinguishes "this connection will retry" from
-  "this participant closed the tab and is gone for good" - both arrive as the SSE
-  stream simply ending. But the room does not notice either one until a write to
-  that dead stream fails, and absent other traffic the only writes are the
-  15-second heartbeats, with the first one after a close only drawing the peer's
-  reset. So detection lands one to two heartbeats after the close, depending on
-  where in the cycle it fell: 16 to 31 seconds with no other room activity, or
-  about a second if two broadcasts happen to follow the close. The 6-second grace
-  period runs after that, which in production means a closed tab is announced 22
-  to 37 seconds later, or about 7 with that traffic. The step 0 browser suite
-  measured the worst case at 31.7 seconds to announce, against the 600ms grace
-  period its test profile carried then. A participant closing their tab
-  mid-meeting can show as present for far longer than 6 seconds afterward, not up
-  to 6. Quote the range rather than a midpoint: a single figure gets remembered as
-  a ceiling, and 16.7 seconds from that suite's table has been, though it is the
-  nudged case at the old test grace period and nearer 22 in production. A silent
-  cut shares this mechanism and is measured below, under "The grace period does
-  not start until a heartbeat write to the dead connection fails"; the figures
-  there agree with these once detection is separated from the grace period.
-
-  The form users actually report is a reload rather than a tab close.
-  `POST /rooms/:roomId/join` mints a fresh `userId` and token on every call, so
-  a reload is a new participant to the room and the previous one lingers for
-  the grace period: the user watches their own name sit in the participant list
-  twice.
-
-  **The ghost is not merely visible, its vote is counted, and that is the half
-  worth acting on.** Observed manually and reproduced on 2026-09-05: a
-  participant who votes, loses their tab, and rejoins inside the detection
-  window leaves an entry that still carries `voted = true` and its estimation.
-  With one live voter on 5 plus that ghost also on 5, the summary reports 5
-  with a count of 2, so "Most voted estimation" is computed partly from a
-  session nobody is sitting at. A team can commit to the wrong number on it.
-  The replacement entry, having not voted, also blocks server-side auto-reveal
-  until it votes or the ghost is pruned. **Step 3's tally does not help here**,
-  which is worth stating because it looks like it should: the ghost carries a
-  confirmed estimation, so it survives the filter on either field. Only an
-  identity that does not duplicate fixes it.
-
-  One thing that does hold, and only because of step 1: pruning the ghost
-  cannot disclose the round. A ghost that never voted, alongside members who
-  all have, satisfies a re-derived everyone-has-voted predicate the instant it
-  is removed. The reveal latch means a membership change reveals nothing, so
-  the pruning is safe. `e2e/room.spec.js`'s straggler-close case now covers
-  this invariant directly. Its reload sibling only covers it vacuously, for
-  the reason recorded on that case: the replacement participant a reload
-  creates has never voted either.
-- **Resolution:** Scheduled as step 6 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which closes both forms by different means. A deliberate close fires
-  `navigator.sendBeacon` on `pagehide` to an explicit leave endpoint that
-  bypasses the grace period, so the grace period covers only what it should,
-  transient drops. The beacon fires only where the page is being discarded, so a
-  back/forward cache entry (a mobile app switch, a navigation away) leaves
-  membership alone rather than removing a member that no page load will come back
-  to re-create. The reload is closed structurally rather than by beacon
-  timing: `/join` becomes idempotent against the room cookie, so a reload resumes
-  the same identity and the same vote instead of adding a second participant.
-  What remains on a reload is a sub-second gap where the member is absent, since
-  `pagehide` fires there too and nothing distinguishes it from a close, accepted
-  deliberately in that design. Remove this entry when that lands.
-
-  **A heartbeat reduction was weighed as a stopgap and rejected on 2026-09-05.**
-  At 5 seconds the announce window falls from 22 to 37 seconds down to about 12
-  to 17, so it shrinks the ghost rather than closing it, at three times the
-  heartbeat traffic, and step 6 is expected within one to two weeks, which is not
-  long enough for enough ceremonies to run into it. The trigger for reconsidering
-  is step 6 slipping well past that window, or a team committing to a number a
-  ghost's vote skewed. Note the dependency the estimate carries: step 6 sits
-  behind steps 2 to 5 in the recorded order, so the stopgap becomes worth
-  revisiting if that order holds but the schedule does not.
-
 ### HTTP command ordering is not guaranteed between a client and the server
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all mutating
@@ -142,10 +61,11 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, all
   mutating `POST` endpoints (`vote`, `show`, `clear`, `revote`,
-  `edit-issue`), and the leave endpoint once step 6 lands.
+  `edit-issue`, `leave`).
 - **Issue:** Every mutating endpoint is unthrottled beyond session-token
   resolution, so a client can call any of them in a tight loop at no cost.
-  Today this wastes CPU and bandwidth.
+  Today this wastes CPU and bandwidth. Step 6's `leave` endpoint is unthrottled
+  the same way, at the same cost as any other command.
 
   Two earlier designs made this worse in ways that no longer apply, recorded so
   nobody reasons from them. The superseded 2026-08-26 delta resync design would
@@ -175,10 +95,10 @@ roadmap item instead of leaving it here as stale history.
 
 ### No request payload is validated on any endpoint that takes one
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala:8`, `:18`
-  and `:23`, and the three routes that consume them in
-  `src/main/scala/com/lunatech/pointingpoker/API.scala:91` (`/join`), `:163`
-  (`/vote`) and `:198` (`/edit-issue`). `create-room` takes no body.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala`
+  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), and the `join`, `vote` and
+  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/API.scala`
+  that consume them. `create-room` takes no body.
 - **Issue:** Every request body is a bare `String` with no constraint on it.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
@@ -198,32 +118,28 @@ roadmap item instead of leaving it here as stale history.
   the client reads that field twice, in `showUserEstimation` for the
   withheld-value icon and in `applySnapshot` to gate the vote tally. Presence
   alone would therefore have admitted a `""` bucket to the distribution, which is
-  the defect step 3 exists to remove. So `RoomData.vote` refuses a blank
-  estimation rather than the row being re-rendered, which is a refusal of the
-  absence of a value and not the validation this entry's resolution defers. The
-  endpoint is unchanged: it still takes any body and still answers `204`, and the
-  refusal happens in the actor, which is why the entry stays open. What is left of
-  the estimation half is the non-blank nonsense estimation behind the `scale`
+  the defect step 3 exists to remove. So `RoomData.vote` refused a blank
+  estimation rather than the row being re-rendered, which was a refusal of the
+  absence of a value rather than the validation this entry is about. What is left
+  of the estimation half is the non-blank nonsense estimation behind the `scale`
   item. The target design records the reasoning beside `hasEstimation`.
-- **Resolution:** Unscheduled apart from the blank estimation, which step 6
-  refuses at the edge. The rest of the estimation half cannot close before the
-  `scale` item at the end of `docs/roadmap.md`'s backlog: the server has no
-  notion of a valid estimation, the card values being hardcoded in the client
-  (`estimationValues`). Step 6 describes the endpoints with tapir, which buys
-  types and shape rather than values, so an empty string would satisfy the schema
-  there too unless a validator is declared. That step declares one, on the
-  estimation alone: a blank is refused at the edge with `400` instead of reaching
-  the actor, which moves the refusal recorded above from `RoomData.vote` to the
-  request and leaves that guard as insurance, still able to report the same `400`
-  if a blank ever reaches it. Nothing else gains a validator, so
-  the name on `/join` and the text on `/edit-issue` are untouched. As with the
-  rate-limiting entry above, the underlying gap is broader than any one symptom
-  and wants its own piece of work rather than a patch per endpoint.
+- **Resolution:** Narrowed rather than closed. Step 6 gave `VoteRequest` a tapir
+  `Validator` that refuses a blank estimation at the edge with `400` before the
+  ask reaches the room, which moves the refusal recorded above from
+  `RoomData.vote` to the request and leaves that guard as insurance, still able
+  to report the same `400` if a blank ever reaches it. Nothing else gained a
+  validator: the name on `/join` and the text on `/edit-issue` are untouched, and
+  the rest of the estimation half, the non-blank nonsense estimation, cannot
+  close before the `scale` item at the end of `docs/roadmap.md`'s backlog, the
+  server having no notion of a valid estimation while the card values stay
+  hardcoded in the client (`estimationValues`). As with the rate-limiting entry
+  above, the underlying gap is broader than any one symptom and wants its own
+  piece of work rather than a patch per endpoint.
 
 ### The grace period does not start until a heartbeat write to the dead connection fails
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`
-  (`heartbeatInterval` at `:28`, `keepAlive` at `:62`);
+  (`heartbeatInterval`, and the `keepAlive` stage `SSE.source` builds with it);
   `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
   (`ConnectionCompleted`/`ConnectionFailure`, both routed to `Room.Leave`);
   `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (`Leave`'s grace
@@ -242,10 +158,7 @@ roadmap item instead of leaving it here as stale history.
   `e2e/room.spec.js`'s case forces a vote and a Clear rather than waiting it
   out, and the older `departureWhileCut` helper does the same. A participant
   who crashes, sleeps their laptop, or drops off the network in an otherwise
-  quiet room lingers in everyone's list for up to about half a minute. The
-  deliberate-close entry above records the same mechanism; the 35.5 seconds here
-  is time to disappear under a 4-second grace period, so its detection half sits
-  at the top of the 16 to 31 seconds quoted there rather than contradicting it.
+  quiet room lingers in everyone's list for up to about half a minute.
 - **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
   leave endpoint does not close this: its beacon fires only on `pagehide` for a
   page being discarded deliberately, and a crash, a sleeping laptop, or a
@@ -318,26 +231,25 @@ roadmap item instead of leaving it here as stale history.
 
 ### A second tab on the same room displaces the first tab's identity
 
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`
-  (the `/join` route's unconditional `RequestSession` and `setCookie`, with
-  `sessionCookie`'s `Path=/rooms/$roomId` being why the slot is shared at all).
-- **Issue:** The session cookie is scoped to the room, so every tab on that room
-  shares one slot and each `POST /join` overwrites it. The sharing is not the
-  problem; the overwrite is. A second tab does not join the first tab's identity,
-  it mints a new one and replaces it, so the first tab's votes and edits are
-  silently credited to the second participant while the first sits there
-  connected. The 2026-08-20 session identity design examined two tabs on
-  *different* rooms, where path scoping works correctly, and the same-room case
-  fell in the gap beside it.
-- **Resolution:** Scheduled as step 6 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  which makes `POST /join` idempotent: a request whose cookie already resolves
-  resolves to that `userId` instead of minting over it, so both tabs are one
-  participant with one vote and either can be closed without evicting the other.
-  Two tabs as two participants was considered and rejected there, not because a
-  per-tab id is unobtainable (the Web Locks API would give one) but because it is
-  not the requirement and because an extra non-voting member would block
-  server-side auto-reveal for the whole room. Remove this entry when that lands.
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RequestSession`'s no-existing-token branch, which mints); `src/main/scala/com/lunatech/pointingpoker/API.scala`
+  (the `join` endpoint's `sessionCookie`, shared by every tab on the room since
+  its path is `/rooms/$roomId`).
+- **Issue:** Narrowed by step 6's idempotent `/join`, which resolves a cookie
+  that already exists rather than minting over it and so closes the common path:
+  one tab already holding the cookie before a second one opens. What is left is
+  two tabs that both load before either has joined. Neither holds a cookie yet,
+  so both mint a fresh session and a fresh `userId`, and the second response's
+  `setCookie` lands on the room's one shared slot, overwriting the first tab's
+  cookie with the second's token. The room ends up with two members, one voting
+  and visible and one the browser's cookie has orphaned along with its votes and
+  edits, which is the overwrite this entry originally named. The 2026-08-20
+  session identity design examined two tabs on *different* rooms, where path
+  scoping works correctly, and the same-room case fell in the gap beside it.
+- **Resolution:** Not fixable at this layer, and stays open. A tab cannot see
+  another tab loading at the same moment, and the server cannot tell two
+  cookieless joins apart from two different people arriving together, so neither
+  side has a signal to act on.
 
 ### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
 
@@ -376,8 +288,9 @@ roadmap item instead of leaving it here as stale history.
 
 ### The page and the browser suite depend on three public CDNs at runtime
 
-- **Where:** `src/main/resources/pages/index.html` (the four asset tags at
-  `:5`, `:90`, `:344` and `:345`); `e2e/fixtures.js` (the `assets` fixture).
+- **Where:** `src/main/resources/pages/index.html` (the four asset tags: the
+  Bootstrap stylesheet `<link>`, and the feather-icons, axios and Vue `<script>`
+  tags); `e2e/fixtures.js` (the `assets` fixture).
 - **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
   `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
   load, so an outage at any of the three takes the app down and nothing is
@@ -416,46 +329,6 @@ roadmap item instead of leaving it here as stale history.
   on 2026-09-08, for `@playwright/test`, which nothing had updated before;
   vendoring the CDN assets is what this follow-up still carries.
 
-### A cached page can outlive the server that served it
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala:66` and `:72`
-  (`getFromFile(apiConfig.indexPath)`); `src/main/resources/pages/index.html`.
-- **Issue:** Measured against the staged build, the page is served with
-  `Last-Modified` and `ETag` and no `Cache-Control`, so a browser may apply
-  heuristic freshness and reuse the stored page without revalidating. A deploy
-  can therefore pair the previous page with the new server. Sessions do die with
-  the process, but the page is a separate artifact, which is the gap in the
-  README's restart paragraph. The `Cache-Control: no-cache` at `API.scala:132`
-  covers the SSE response only. The step 1 page against a step 2 server is
-  cosmetic: `showUserEstimation` reads `u.estimation`, which is `""` for another
-  participant before the reveal, so the withheld-value marker is missing from
-  other rows until the page revalidates, while the recipient's own row and the
-  post-reveal table are unaffected. Step 3a is already worse than that. A page
-  cached before it has no `disabled` binding on the cards and no early return in
-  `vote()`, so it presents a live deck over a closed round and discards every
-  click in silence. Nothing detects either mismatch, and a version field on the
-  wire would not have caught this one: step 3a changed which votes the server
-  accepts without changing the snapshot's shape at all.
-- **Resolution:** Open, and folded into step 6 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  whose step 6 paragraph now carries it.
-  `Cache-Control: no-cache` on the two `getFromFile` routes closes it: the page
-  is then always revalidated, costing one conditional request that answers 304
-  with no body, where `no-store` would re-send all 19.7KB per load. The header
-  and its directive are already imported at `API.scala:18-19` for the SSE
-  response, so it is one line, and step 6 already touches these routes to add
-  the leave endpoint and make `/join` idempotent. Doing it on its own branch
-  instead would add an `API.scala` conflict to the stack's ordered rebase, and
-  reaching the symptom at all needs a deploy to land between a page load and the
-  next vote, so step 6 is soon enough. Step 8's frontend rewrite would
-  close it structurally with fingerprinted assets if step 6 does not. The step 6
-  deploy is the one exposure the header cannot cover, since it protects only the
-  pages it serves: a page cached before it opens `/events` without the required
-  connection id, takes the `400`, and reports it as an ended session until the
-  user reloads. That is louder than the two mismatches above and recovers in one
-  action, which is why the design accepts it rather than making the parameter
-  optional.
-
 ### Tests that pass with the mechanism they name deleted, as a recurring pattern
 
 - **Where:** the suite generally. The instances found so far are in `RoomSpec`
@@ -463,8 +336,9 @@ roadmap item instead of leaving it here as stale history.
   `expectNoMessage` line in the equally retired "stay alive while a connection is
   attached", and "survive a tick while a connection is attached, and re-arm"),
   `RoomManagerSpec` ("drop a stopped room from its map so a later request creates
-  a fresh one"), and the straggler-reload case recorded in the ghost-participant
-  entry above.
+  a fresh one"), and `e2e/room.spec.js`'s straggler-reload case, whose
+  `toHaveCount(2)` assertion step 2 wrote against step 6 and flagged for
+  revision, which step 6 has now paid.
 - **Issue:** Individual instances are recorded across this file; the pattern is
   not, and it keeps recurring. On the 2026-09-16 branch four separate cases were
   found to pass with the mechanism they name removed outright. The deferral case
@@ -486,8 +360,8 @@ roadmap item instead of leaving it here as stale history.
   the branch's mechanism covered only the other one. The common shapes are
   assertions of absence, assertions satisfied by either outcome, waits shorter than
   the detection path they depend on, and assertions that stop one field short of
-  the value in question, which is the same failure the ghost-participant and
-  artifact-upload entries describe in their own terms.
+  the value in question, which is the same failure the artifact-upload entry
+  below describes in its own terms.
 - **Resolution:** No audit has been done and no tooling is in place. What works is
   cheap and should be the habit: mutate the mechanism the test names, expect red,
   revert. That found every instance above and cost one targeted run each. The
@@ -499,6 +373,36 @@ roadmap item instead of leaving it here as stale history.
   gate, since the cost is mutants times covering-test runtime, and expect triage
   of equivalent mutants to be the real work. Browser cases stay manual regardless,
   since mutating the server and re-running the suite costs minutes per mutant.
+
+### `departureWhileCut`'s comments describe a detection mechanism its own case no longer exercises
+
+- **Where:** `e2e/room.spec.js` (the `departureWhileCut` helper, and "a
+  participant who departed during the gap is pruned on reconnect", the case
+  that calls it).
+- **Issue:** The helper's own comment says Alice "learns it from a live
+  broadcast once the grace period expires," and the vote-then-Clear exchange it
+  runs before cutting Bob ("Two broadcasts are what make the app notice
+  Carol...") exists to force Carol's removal through a failed heartbeat write,
+  since `carol.close()` alone used to leave her stream merely closed rather than
+  detected. This branch's beacon changes what `close()` does: `pagehide` now
+  fires on it too, posting an explicit `/leave` that removes Carol at once
+  rather than waiting on a heartbeat write to fail. "A straggler closing their
+  tab leaves the votes hidden," which drives the same `close()` trigger through
+  `stragglerDepartsWithVotesHidden`, had its own comments corrected for exactly
+  this reason when the beacon landed; `departureWhileCut` was not, since task
+  5's brief named only three tests to touch and left the rest "no edit, only
+  attention." So the vote/Clear exchange this case still runs is likely
+  vestigial for the reason its own comment gives, and the case is probably now
+  proving what the beacon proves elsewhere rather than what its comments
+  describe: the same "tests that pass with the mechanism they name deleted"
+  pattern recorded above, here for a mechanism the test still names but a
+  beacon now pre-empts rather than one deleted outright.
+- **Resolution:** Unscheduled. Rewrite the helper's comments to describe what
+  the case now actually proves, and confirm whether the vote/Clear exchange is
+  still load-bearing, perhaps for the reconnect half the case's own name
+  asserts, Bob learning of Carol's departure only from his reconnect snapshot,
+  or whether it can be simplified away. That confirmation is a task for a
+  future pass, not this one.
 
 ### Two SSE tests settle on a wall clock, not a synchronization primitive
 
@@ -583,7 +487,9 @@ roadmap item instead of leaving it here as stale history.
   by the note step 5 inserted into the design.
   They sit in four entries further down, from "A tied vote is broken by
   JavaScript key order" to "A reload during a revealed round locks the
-  participant out of it", and none in this one.
+  participant out of it" (two of the four, the vote-refusal and reload entries,
+  closed outright at step 6 and left with this branch's diff), and none in this
+  one.
 
   Step 5a swept the same file's `Room.scala` citations again, for its own
   `RoomData.of` insertion and `Join` guard: the two-check argument's five case
@@ -756,6 +662,22 @@ roadmap item instead of leaving it here as stale history.
   marked them as the design-time measurement and noted that the file has grown
   since. Prefer that to either where a figure carries an argument rather than
   locating code.
+
+  Step 6 swept both files and converted rather than renumbered, four
+  known-issue entries closing outright and leaving with their citations rather
+  than needing them fixed. In this file the `Requests.scala` and `API.scala`
+  citations behind the payload-validation entry became type and endpoint names,
+  `SSE.scala`'s `heartbeatInterval` and `keepAlive` lost their line numbers, the
+  CDN entry's four asset tags became a description rather than a list of
+  lines, and the tie-break and partial-re-vote entries' `index.html` and
+  `e2e/room.spec.js` pointers became symbol and case-name citations. The
+  second-tab entry was rewritten rather than swept, narrowed to the residual
+  case idempotent `/join` cannot reach. In the design the same `index.html`
+  citations were converted where they named live code this step's diff moved,
+  the `eventSource.onerror` handler chief among them, and the known-defect
+  table's second-tab row was brought to this file's narrowed wording. Citations
+  naming pre-step-1 code on purpose were left alone, per the rule two
+  paragraphs up.
 - **Resolution:** Unscheduled. Steps 3 to 9 are built from this document, so
   whoever opens the next step is best placed to sweep the files that step
   touches, verifying the claim and not only the line. Remove this entry once the
@@ -819,8 +741,8 @@ roadmap item instead of leaving it here as stale history.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
-- **Where:** `src/main/resources/pages/index.html:365`, the `votesSummary` sort,
-  read at `:282` under the "Most voted estimation" heading at `:276`.
+- **Where:** `src/main/resources/pages/index.html`, the `votesSummary` sort in
+  `applySnapshot`, read under the "Most voted estimation" heading.
 - **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
@@ -832,9 +754,8 @@ roadmap item instead of leaving it here as stale history.
   determined by the values alone. A 2-2 split is an ordinary planning poker
   outcome, not an edge case. It is the same failure class as the non-voter tally
   step 3 fixed, the headline decided by something other than the votes, but a
-  good deal milder: the table at `:297-300` renders every row and count beside
-  the headline at `:276-282`, so the tie is visible to anyone who looks down
-  rather than hidden.
+  good deal milder: the summary table renders every row and count beside the
+  headline, so the tie is visible to anyone who looks down rather than hidden.
 - **Resolution:** Unscheduled, and deliberately not decided here, because the
   rule is a product question rather than a bug with one right answer.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
@@ -852,8 +773,8 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
   (`RoomData.reVote` keeping every estimation and `RoomData.vote` overwriting
-  one), with the tally at `src/main/resources/pages/index.html:355` read at
-  `:276-282` under the "Most voted estimation" heading.
+  one), with the tally built in `index.html`'s `applySnapshot` and read under
+  the "Most voted estimation" heading.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
   round that some participants have re-voted and others have not holds answers to
   two different rounds at once. A Show there counts both. Alice, Bob and Carol
@@ -870,12 +791,13 @@ roadmap item instead of leaving it here as stale history.
   non-blank estimation cells the table beside it displays, which section 5 of
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
   argues for under "The tally counts whoever has an estimation" and
-  `e2e/room.spec.js:338-340` asserts. It is the same failure class as the
-  tie-break above, a headline decided by something other than this round's
-  votes, and it is mitigated the same way but only halfway: the table renders a
-  stale row with no check-circle (`index.html:318`), so anyone looking down from
-  the headline can see who has not confirmed. The distribution itself carries no
-  such mark, and it is the distribution that names the winner.
+  `e2e/room.spec.js`'s "the tally counts only the votes that were cast" case
+  asserts. It is the same failure class as the tie-break above, a headline
+  decided by something other than this round's votes, and it is mitigated the
+  same way but only halfway: the table renders a stale row with no check-circle
+  (the icon gated on `u.voted`), so anyone looking down from the headline can see
+  who has not confirmed. The distribution itself carries no such mark, and it is
+  the distribution that names the winner.
 - **Resolution:** The durable fix is the roadmap's unchecked entry for showing the
   previous estimate beside the current one, which comes out of step 3a for this
   reason: once a revealed round refuses votes, a changed mind is a room-level act
@@ -888,85 +810,6 @@ roadmap item instead of leaving it here as stale history.
   express. Remove this entry once the previous estimate is
   rendered beside the current one, or once a rule is chosen that clears an
   estimation on `reVote`.
-
-### A vote refused by a revealed round is silent, and can read as accepted
-
-- **Where:** `RoomData.vote` in
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` (the refusal),
-  `src/main/scala/com/lunatech/pointingpoker/API.scala:158-165`
-  (`/vote` answering `NoContent` whatever happens) and
-  `src/main/resources/pages/index.html:517-527` (`vote()`'s early return and its
-  optimistic flag).
-- **Issue:** Step 3a made a revealed round refuse every vote, and nothing tells
-  the participant. The two things that should stop the click before it happens,
-  the `disabled` binding on the cards and `vote()`'s early return, both read
-  `votesRevealed`, which only refreshes over SSE. A client whose stream is dead
-  therefore still has a live deck over a closed round, and `POST /vote` returns
-  `204` either way.
-
-  Step 4 added a second refusal to the same branch, of a blank estimation, and it
-  is silent in exactly the same way. That one is unreachable from the page, whose
-  card values are hardcoded, so it costs nobody a vote today; what it costs is a
-  hand-written request that gets a `204` for a write that never happened. Both
-  sit here as one entry rather than two, because the gap is the unconditional
-  `204` rather than either refusal: `RoomData.vote` returns the data unchanged
-  through the same `publish` in both cases, and the route cannot tell that from a
-  vote that landed.
-
-  What makes it worse than a no-op is the optimistic assignment, and what step 3a
-  changed there is not the display but what stands behind it. Take a
-  participant with a re-vote pending, so `voted` is false, `estimation` is still
-  `5`, and card 5 shows in the pale unconfirmed style. Their stream is cut and the
-  "Connection to the room was lost" banner is up. Somebody else presses Show.
-  They click 8: `vote()` sets `ownVoteConfirmed = true`, and because the
-  selected-card branch keys on `e === user.estimation` it is **card 5** that turns
-  the confirmed dark red, for a vote of 8 that never landed. No snapshot arrives
-  to correct it, because the stream that would carry it is the one that is down.
-  The false card is not new: before step 3a the same click painted the same card
-  5, since the stale `user.estimation` was all the branch ever had to key on. What
-  is new is that the vote of 8 no longer lands behind it, so what was a display
-  error on a dead stream is now a lost vote as well.
-- **Resolution:** Scheduled as step 6 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  whose ask pattern gives `/vote` a real result and makes the revealed-round
-  refusal reportable when it happens, which is what section 5 already says the
-  reply is for. The blank half closes by a different mechanism in the same step,
-  a tapir validator refusing it at the edge with `400` before the ask, which
-  leaves the actor's guard as insurance rather than as the reporter. The POST
-  travels over HTTP and works when the SSE stream does not, so the
-  answer reaches precisely the client that cannot see the state. The same step
-  deletes the optimistic assignment described above, so the false card has no
-  path to appear rather than being corrected after the fact. The page shows no
-  message for the refusal itself and needs none: a `409` means the round was
-  revealed without this click, by someone pressing Show or by the last
-  outstanding member's vote auto-revealing it, so the snapshot that disables the
-  deck is already in flight. What is left
-  after that is general: a client with a dead stream is stale in every respect,
-  which is the backlog's connection-liveness watchdog and not this entry. Remove
-  this entry when step 6 lands.
-
-### A reload during a revealed round locks the participant out of it
-
-- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
-  (`RequestSession`'s fresh `userId` per call) and `RoomData.vote` in
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`.
-- **Issue:** `POST /join` mints a new `userId` on every call, so a reload arrives
-  as a new member with no estimation. Since step 3a a revealed round refuses every
-  vote, including a first one, so that member cannot vote at all until somebody
-  presses Re-vote or Clear. The rule intends exactly this for someone who joins
-  after the reveal, and a reloader is not that person: they were in the round a
-  second earlier.
-
-  It is reachable by following the app's own advice. A session that outlives its
-  room, or a stream that fails terminally, produces "Your session has ended.
-  Please reload the page to rejoin." (`index.html:447-460`), and the reload drops
-  them into a round they can only watch.
-- **Resolution:** Scheduled as step 6, whose idempotent `/join` resolves the
-  existing cookie rather than minting over it, so a reload returns as the same
-  member holding the same estimation instead of as a stranger with none. That
-  leaves only the rule working as designed: somebody who genuinely had not voted
-  when the round was revealed stays out of it until Re-vote. Remove this entry
-  when step 6 lands.
 
 ### A reveal with votes still pushes the participants list down
 

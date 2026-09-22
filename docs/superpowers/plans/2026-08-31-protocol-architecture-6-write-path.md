@@ -2331,5 +2331,28 @@ Then, by hand, against a locally staged app (`npm run stage` and
 
 ## Deviations from the plan, and why
 
-Listed so a reviewer can reject one without re-deriving it. Nothing here yet;
-fill it as the branch lands, and re-read it before the final commit.
+Listed so a reviewer can reject one without re-deriving it.
+
+**Task 1's `X-Forwarded-Proto` diagnostic needed two follow-up commits rather
+than landing inside the declared one.** Task 1's step 8 says the diagnostic
+"moves into the `events` logic ahead of the `Left(())`, unchanged in what it
+logs," as part of the single `refactor(api): describe the endpoints with
+tapir` commit. It did not: that commit's rewrite of the `events` endpoint
+dropped the diagnostic outright, and `git commit -m "fix(api): restore the
+X-Forwarded-Proto diagnostic in the events no-cookie branch"` had to restore it
+afterward, adding the `X-Forwarded-Proto` header input and the warn/debug
+branch back. That restoration's comment ran to three lines, over this branch's
+own two-line limit, so a second commit, `git commit -m "fix(api): compress the
+X-Forwarded-Proto comment to two lines"`, shortened it. Both commits land
+between "refactor(api): describe the endpoints with tapir" and "feat(protocol):
+key a member's connections by a client-minted id" in the branch's history.
+Recorded rather than corrected retroactively, since the diagnostic's current
+form and comment are what task 2 and every task after it were written against,
+and the two-commit trail costs nothing now that the tree it left behind is
+correct.
+
+Re-read before the final commit, per the entry in `docs/known-issues.md` this
+practice comes from: this branch's changed files were diffed against the file
+list each task declared (clean, nothing undeclared), and each declared file's
+content was diffed against what its task asked of it, which is where the
+finding above surfaced. No other deviation was found.

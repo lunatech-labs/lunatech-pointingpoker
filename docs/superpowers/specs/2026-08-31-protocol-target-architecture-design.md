@@ -425,11 +425,14 @@ flag; the two coincide except in the re-vote state, which is the whole reason
 both fields are here.
 
 Step 2's `estimation.nonEmpty` stand-in has one divergence the target model does
-not: an empty estimation, which nothing validates (`Requests.scala:18`) and only
-a hand-written `POST /vote` produces, reads as voted with no estimation, where
+not: an empty estimation, which nothing validated at the wire and only a
+hand-written `POST /vote` produces, reads as voted with no estimation, where
 an entry would exist. Step 4 closes that row rather than re-rendering it: section
 3 refuses a blank vote outright, because presence-based `hasEstimation` would
 otherwise admit a `""` bucket to the tally the client gates on the same field.
+Step 6 later closes the wire half too, giving `VoteRequest` the tapir
+`Validator` section 4 describes, so the guard here becomes insurance behind an
+edge that now refuses the same blank before the ask.
 
 **A tagged union would express these three fields better than they express
 themselves, and it is deferred to step 8.** `voted`, `hasEstimation` and
@@ -1124,10 +1127,11 @@ has already stopped. Neither is covered by the re-arm, since each can be the
 first message after a long idle and so arrives at an actor whose tick has fired.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:462-466`), and the retry lands on a freshly created room.
+(`index.html`, `doJoin`'s failure handler), and the retry lands on a freshly
+created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:447-460`) and waits for a reload. That is worse than a
+rejoin." (`index.html`, the `eventSource.onerror` handler) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -1168,7 +1172,7 @@ has no way to evict anybody. What the client does next is the existing terminal 
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:447-460`). Rejoining automatically under the remembered name belongs
+(`index.html`, the `eventSource.onerror` handler). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -1329,7 +1333,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:447-460`). The retry interval
+  Please reload the page to rejoin." (`index.html`, the `eventSource.onerror` handler). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1401,10 +1405,12 @@ Three additions, each closing something documented:
   the forger does not own. `EventSource` cannot set headers, which is why it
   rides the query string rather than one, and `sendBeacon` cannot either, so the
   leave request carries it the same way and sends no body at all. A body would
-  not survive the trip: `sendBeacon` sends a string as `text/plain`, which
-  `CirceSupport`'s unmarshaller refuses with a `415` the beacon cannot read,
-  leaving the departure to fall back on the grace period with nothing anywhere
-  to show that it failed. Carrying it identically on both requests is the other
+  not survive the trip: `sendBeacon` sends a string as `text/plain`, which the
+  JSON body description tapir generates for an endpoint that declares one would
+  refuse with a `415` the beacon cannot read, leaving the departure to fall back
+  on the grace period with nothing anywhere to show that it failed. `leave`
+  itself declares no body at all, so the point is moot in practice; it is why
+  one was never added. Carrying it identically on both requests is the other
   half of the reason. It is the same per-connection
   slot the command-cursor row under "Deferred, with triggers" says a cursor would
   have to live in, so that row's blocker is gone ahead of it.
@@ -1435,7 +1441,7 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:447-460`). What clearing would buy
+  "Your session has ended" state (`index.html`, the `eventSource.onerror` handler). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
@@ -1524,10 +1530,10 @@ reactivity but needs rework under an immutable model. Being pure also removes
 the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
-Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:370-391`), so the step 1 call site assigns it wholesale and adapts
-the one that does not: `userEstimation` onto `user.estimation`, which the template
-binds (`index.html:228`, `237-239`). Step 8 flattens that and the adapter goes.
+Six of its seven keys already match a top-level entry in the Vue 2 `data` block,
+so the step 1 call site assigns it wholesale and adapts the one that does not:
+`userEstimation` onto `user.estimation`, which the estimation buttons' template
+binds. Step 8 flattens that and the adapter goes.
 
 **`inRoom` leaves this object at step 6**, and the reason is a bug class rather
 than tidiness. While the snapshot carries it, any frame can put the page back
@@ -1562,8 +1568,8 @@ Three details are load-bearing rather than polish:
 
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
-  commit button (`index.html:197-213`), and its only writers are `showEdit`
-  (`:401-403`) and `doEdit` (`:495-503`), so as a guard it lasts until the user
+  commit button, and its only writers are `showEdit` and `doEdit`, so as a guard
+  it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1596,9 +1602,8 @@ Three details are load-bearing rather than polish:
   non-voter's empty string became a summary row, and in a revealed room with
   stragglers it could win the count and render as the "Most voted estimation".
   Fixing it makes the tally able to be empty, so the summary block's condition became
-  `v-if="votesRevealed && votesSummary.length"`
-  (`index.html:271`). That guard is reachable by two clicks (Show in a room where
-  nobody voted), not defensive.
+  `v-if="votesRevealed && votesSummary.length"`. That guard is reachable by two
+  clicks (Show in a room where nobody voted), not defensive.
 
   **Written first as `u.voted`, which was wrong**, and found by using the app
   rather than by review. `voted` is the confirmation flag, and it parts company
@@ -1618,8 +1623,8 @@ Three details are load-bearing rather than polish:
   screen.
 
   **The two had to land in the same step, and the reason is stronger than
-  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:282`), so
-  under `v-if="votesRevealed"` alone an empty tally is a render error rather than
+  tidiness.** The block renders `{{ votesSummary[0][0] }}`, so under
+  `v-if="votesRevealed"` alone an empty tally is a render error rather than
   an empty box. That was unreachable only because the buggy all-user tally was
   never empty while anyone was in the room, and the one path that empties
   `votesSummary` (`clear`) also clears `votesRevealed`. So the filter without the
@@ -1640,8 +1645,8 @@ Three details are load-bearing rather than polish:
   beats another vote. Step 3a sharpens it, since revealing to find out now costs a
   Re-vote, so the reading wants to be available before the reveal. It can be:
   redaction covers `estimation` only, so `voted` and `hasEstimation` are on the
-  wire for everyone throughout, and the table already marks each voter
-  (`index.html:318`). What is missing is the aggregate, and it belongs beside the
+  wire for everyone throughout, and the table already marks each voter with the
+  `check-circle` icon gated on `u.voted`. What is missing is the aggregate, and it belongs beside the
   distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
   carries it, next to the roles item that settles the denominator.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears the
@@ -1741,7 +1746,7 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:421`) and only `doLeave` closes. Step 8's
+closing the previous one and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
 without a reload, so the exposure is nil and stays nil through step 6: the rejoin
@@ -1926,6 +1931,18 @@ Added, each with the step it lands at so nothing here is unassigned:
   one clicks Leave, and the other sees that participant go without waiting out
   the grace period. Between them the three cover both branches of the leave rule,
   the ref dropping with others still open and the member going with the last one.
+
+  Landed as two added cases and one amendment rather than three additions. "Two
+  tabs on one room are one participant" and "a reload keeps its identity and its
+  vote" are new, covering the pair above. The departure case folded into "the
+  participant list follows a join and a leave" instead of sitting beside it as a
+  fourth case: that case already had the two contexts and the departure this
+  step needed, so a new case beside it would have kept a 25 second budget and a
+  comment about the heartbeat mechanism this step's beacon replaces, describing
+  detection this step no longer relies on. The straggler-reload case is an
+  amendment for a related reason rather than a case of its own: step 2 wrote its
+  `toHaveCount(2)` assertion against this step and flagged it for revision,
+  which this step has now paid.
 
   An earlier draft had a different third case, forcing a client rejoin on a
   snapshot that does not name its recipient as a member by posting `/leave`
@@ -2305,7 +2322,7 @@ client then walks paths it already has: `onerror` fires with `readyState`
 `CONNECTING`, which raises the existing banner while `EventSource` retries, and
 the retry's `ValidateToken` finds no session in the recreated room, answers
 `401`, and closes the stream for good, which is the terminal "Your session has
-ended. Please reload the page to rejoin." (`index.html:447-460`). The cost is one
+ended. Please reload the page to rejoin." (`index.html`, the `eventSource.onerror` handler). The cost is one
 retry interval of banner before the message, against a race armed by a two-hourly
 tick. What this replaces is an earlier plan to send that connection a snapshot
 naming it a non-member and have the client rejoin on it, which needed a client
@@ -2622,9 +2639,9 @@ has `context`, and checks the same containment-and-identity test `of` runs on
 every member. It warns and leaves the data alone rather than raising, because
 an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
-unreachable. The resolution at `API.scala:126-128` and the `Join` that
-`RoomManager.ConnectToRoom` forwards are two steps of one request, and they can
-address two different room actors: the room can stop in between, at the idle
+unreachable. The resolution in the `join` endpoint's server logic and the `Join`
+that `RoomManager.ConnectToRoom` forwards are two steps of one request, and they
+can address two different room actors: the room can stop in between, at the idle
 tick that replaced `ConfirmLeave`'s stop-when-empty at step 4a, and
 `RequestSession` can then recreate it through `createRoom` under the same id
 with no sessions, which is the one path that does so. The guard then refuses a
@@ -2725,7 +2742,8 @@ longer a member. And an ask that fails or times out answers `500`, which is what
 **The rows enumerate what each handler decides**, which is what differs between
 them and what tapir needs per endpoint. The uniform failures are not repeated in
 them: the `500` above wherever an ask is made, and `400` or `415` on any endpoint
-taking a body, `CirceSupport`'s unmarshaller accepting `application/json` alone.
+taking a body, the `jsonBody` codec tapir generates for it accepting
+`application/json` alone.
 
 **The `401`s carry no `WWW-Authenticate`, deliberately**, which RFC 7235 makes a
 MUST and which today's `/events` already omits. Authentication here is a session
@@ -2746,6 +2764,15 @@ caller, not a licence to suppress a broadcast this design has already priced as
 cheap. This goes the other way from `RoomData.of`, whose `require`s stayed
 because an `Either` would have pushed an unwrap through the test sites section 3
 counts: `vote` has one call site and none in the tests.
+
+Landed as a sub-trait of the five-case reply rather than a separate type. `Room`
+declares `sealed trait CommandResult` with `sealed trait VoteOutcome extends
+CommandResult` under it, and `Applied`, `RoundRevealed` and `BlankEstimation`
+extend `VoteOutcome` while `NoSession` and `NotAMember` extend `CommandResult`
+directly. `RoomData.vote` returns `(RoomData, VoteOutcome)`, so its return type
+alone rules out `NoSession` or `NotAMember` coming back from the guard, which a
+separate three-case type would have needed a join to express once `acting`
+answers with the five-case `CommandResult` it shares with every other handler.
 
 **The `400` is refused at the edge** by a tapir validator, and the blank guard
 behind it becomes insurance that can report rather than a silent accept: a blank
@@ -2864,8 +2891,9 @@ slug where a UUID was, which orphans any cookie minted before the cutover, at no
 cost since they are session cookies.
 
 A second one is a route hazard rather than a cookie one. **The page route stops
-being self-limiting.** `path(JavaUUID)` (`API.scala:66`) matches only a UUID, so
-it can sit anywhere in the `concat`; `path(Segment)` matches every single-segment
+being self-limiting.** `path(JavaUUID)`, in `PageRoutes.scala` since step 6 lifted
+the static routes there, matches only a UUID, so it can sit anywhere in the
+`concat`; `path(Segment)` matches every single-segment
 path there will ever be, so from this step on it must come last, after
 `create-room` and after whatever static route step 8's bundled assets need. Today
 there is nothing to shadow, since every asset comes from a CDN, which is exactly
@@ -2991,7 +3019,7 @@ than execution.
 | **new** A participant who departs during a reconnect gap is never pruned | Step 1. Under a snapshot an absent participant is absent. |
 | **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
 | **new** A disconnection outlasting the grace period forces a page reload | Step 5, then step 4a. Step 5 retains the token past its member's removal, which closes it for everyone but the room's last member: their removal empties `users`, `ConfirmLeave` stops the room, and the retained token has nothing left to resolve against. Step 4a keeps the room alive far longer than any outage the retry has to cross, closing the remainder. |
-| **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, by making `/join` resolve the existing cookie rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
+| **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, for a tab holding the cookie, by making `/join` resolve it rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. Not for two tabs that both load before either has joined: neither holds a cookie, so both mint and the second `setCookie` overwrites the first's shared slot, which `docs/known-issues.md` narrows the entry to rather than closes. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
 | The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. |
 
 The rate-limiting entry was rewritten rather than left alone: its bounded-mode
