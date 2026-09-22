@@ -2355,4 +2355,23 @@ Re-read before the final commit, per the entry in `docs/known-issues.md` this
 practice comes from: this branch's changed files were diffed against the file
 list each task declared (clean, nothing undeclared), and each declared file's
 content was diffed against what its task asked of it, which is where the
-finding above surfaced. No other deviation was found.
+finding above surfaced. Two more deviations surfaced only later, at the final
+whole-branch review, since neither fell inside any single task's declared
+scope.
+
+**Task 1's `build.sbt` edit left the dependency block unaligned.** Adding the
+`"com.softwaremill.sttp.tapir"` lines made that groupId the block's longest,
+which `scalafmt`'s `defaultWithAlign` preset requires realigning the whole
+block for, and the added lines were pasted unaligned. `sbt scalafmtAll`, which
+every task's commit ritual ran, does not cover `.sbt` files; that is
+`scalafmtSbt`, which no task ran. It went undetected until the final review
+ran `sbt styleCheck`, and was fixed there by running `sbt scalafmtSbt`.
+
+**Task 1's tapir rewrite silently dropped five log statements.** The
+pre-tapir `API.scala` logged a debug line on entry to `createRoom`, an error
+line on each of `createRoom`, `/join`, and the `ValidateToken` ask's failure
+branches, and a debug line on `/events`' token-resolved-to-nothing branch.
+Task 1's rewrite carried none of them forward. A task-scoped review checking
+Task 1's stated behavioral scope, unchanged in every status it answers, had
+no reason to diff every log line, so this was caught and restored in the
+final review's fix wave rather than at Task 1.
