@@ -4,7 +4,7 @@ import java.util.UUID
 
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import sttp.tapir.Schema
+import sttp.tapir.{Schema, ValidationResult, Validator}
 
 case class JoinRequest(name: String)
 object JoinRequest:
@@ -22,7 +22,18 @@ case class VoteRequest(estimation: String)
 object VoteRequest:
   given Decoder[VoteRequest] = deriveDecoder[VoteRequest]
   given Encoder[VoteRequest] = deriveEncoder[VoteRequest]
-  given Schema[VoteRequest]  = Schema.derived[VoteRequest]
+  // Refusing the absence of a value, not judging one: the scale item still owns validation.
+  given Schema[VoteRequest] = Schema
+    .derived[VoteRequest]
+    .modify(_.estimation)(
+      _.validate(
+        Validator.custom(v =>
+          if v.isBlank then ValidationResult.Invalid("an estimation needs a value")
+          else ValidationResult.Valid
+        )
+      )
+    )
+end VoteRequest
 
 case class EditIssueRequest(issue: String)
 object EditIssueRequest:

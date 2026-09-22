@@ -26,6 +26,7 @@ import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
 
+import scala.concurrent.duration.*
 import scala.io.Source
 
 class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
@@ -43,6 +44,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val validToken: Room.SessionToken = Room.SessionToken.mint()
   val connectionId: String          = UUID.randomUUID().toString
 
+  // The probe is still the assertion target; the reply is what stops every command case
+  // failing on the ask's timeout instead of on what it asserts.
+  val commandReply: java.util.concurrent.atomic.AtomicReference[Room.CommandResult] =
+    new java.util.concurrent.atomic.AtomicReference(Room.Applied)
+
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
@@ -57,6 +63,13 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         Behaviors.same
       case other =>
         commandProbe.ref ! other
+        other match
+          case RoomManager.Vote(_, _, _, replyTo)      => replyTo ! commandReply.get()
+          case RoomManager.Show(_, _, replyTo)         => replyTo ! commandReply.get()
+          case RoomManager.Clear(_, _, replyTo)        => replyTo ! commandReply.get()
+          case RoomManager.Revote(_, _, replyTo)       => replyTo ! commandReply.get()
+          case RoomManager.EditIssue(_, _, _, replyTo) => replyTo ! commandReply.get()
+          case _                                       => ()
         Behaviors.same
     })
   given typedSystem: ActorSystem[SpawnProtocol.Command] =
@@ -150,7 +163,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), Some(token), "5"))
+      commandProbe.expectMessageType[RoomManager.Vote] match
+        case RoomManager.Vote(id, tok, estimation, _) =>
+          (id, tok, estimation) mustBe (UUID.fromString(roomId), Some(token), "5")
     }
 
     "dispatch a show command" in {
@@ -158,7 +173,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/show") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Show] match
+        case RoomManager.Show(id, tok, _) => (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch a clear command" in {
@@ -166,7 +182,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/clear") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Clear] match
+        case RoomManager.Clear(id, tok, _) =>
+          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch a revote command" in {
@@ -176,7 +194,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Revote] match
+        case RoomManager.Revote(id, tok, _) =>
+          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch an edit-issue command" in {
@@ -187,9 +207,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.EditIssue(UUID.fromString(roomId), Some(token), "new issue")
-      )
+      commandProbe.expectMessageType[RoomManager.EditIssue] match
+        case RoomManager.EditIssue(id, tok, issue, _) =>
+          (id, tok, issue) mustBe (UUID.fromString(roomId), Some(token), "new issue")
     }
 
     "reject an events connection with no session cookie" in
@@ -237,15 +257,52 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
     }
 
-    "still return 204 for a vote with no session cookie (silently no-ops downstream)" in {
-      Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> apiRoute ~> check {
-        status mustBe StatusCodes.NoContent
+    "answer 401 for a vote with no session cookie" in {
+      commandReply.set(Room.NoSession)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Unauthorized
+        }
+      finally commandReply.set(Room.Applied)
+      // The endpoint still hands the manager the absent token; refusing it is the manager's rule.
+      commandProbe.expectMessageType[RoomManager.Vote] match
+        case RoomManager.Vote(_, token, _, _) => token mustBe None
+    }
+
+    "answer 403 for a vote from a resolved session that is no longer a member" in {
+      commandReply.set(Room.NotAMember)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Forbidden
+        }
+      finally commandReply.set(Room.Applied)
+      // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
+
+    "answer 409 for a vote into a revealed round" in {
+      commandReply.set(Room.RoundRevealed)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Conflict
+        }
+      finally commandReply.set(Room.Applied)
+      // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
+
+    "answer 400 for a blank estimation without asking the room" in {
+      Post(s"/rooms/$roomId/vote", json(VoteRequest("   "))) ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
       }
-      // The API layer never rejects a missing/invalid credential for command endpoints.
-      // A missing cookie resolves to None here; RoomManager never asks Room in that case
-      // (see RoomManagerSpec). A cookie that parses but doesn't resolve to a member is
-      // Room's own no-op case instead (see RoomSpec).
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), None, "5"))
+      // The validator is at the edge, so nothing reaches the room to be refused there.
+      commandProbe.expectNoMessage(300.millis)
     }
   }
 end APISpec

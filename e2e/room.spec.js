@@ -348,10 +348,10 @@ test('an empty estimation posted directly is refused, not stored as an empty vot
   const bob = await join('Bob')
 
   await vote(alice.page, '5')
-  // Nothing validates the estimation at the HTTP layer, but vote refuses a blank one outright,
-  // as silently as a revealed round refuses one: the request still returns 204 and changes nothing.
+  // Refused at the edge now: a tapir validator answers 400 before the room sees the request,
+  // and the actor's own guard stays behind it as insurance.
   const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
-  expect(posted.status()).toBe(204)
+  expect(posted.status()).toBe(400)
 
   // Bob never voted, so the round stays hidden until Show is pressed.
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(0)

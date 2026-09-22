@@ -32,13 +32,15 @@ object Room:
       connectionId: ConnectionId,
       ref: UntypedRef
   ) extends Command
-  final case class Leave(userId: UUID, ref: UntypedRef)                           extends Command
-  final private[actors] case class ConfirmLeave(userId: UUID)                     extends Command
-  final case class Vote(token: SessionToken, estimation: String)                  extends Command
-  final case class ClearVotes(token: SessionToken)                                extends Command
-  final case class ReVote(token: SessionToken)                                    extends Command
-  final case class ShowVotes(token: SessionToken)                                 extends Command
-  final case class EditIssue(token: SessionToken, issue: String)                  extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef)       extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID) extends Command
+  final case class Vote(token: SessionToken, estimation: String, replyTo: ActorRef[CommandResult])
+      extends Command
+  final case class ClearVotes(token: SessionToken, replyTo: ActorRef[CommandResult]) extends Command
+  final case class ReVote(token: SessionToken, replyTo: ActorRef[CommandResult])     extends Command
+  final case class ShowVotes(token: SessionToken, replyTo: ActorRef[CommandResult])  extends Command
+  final case class EditIssue(token: SessionToken, issue: String, replyTo: ActorRef[CommandResult])
+      extends Command
   final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted]) extends Command
   final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
       extends Command
@@ -50,6 +52,14 @@ object Room:
   sealed trait TokenResolution
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
   case object Unresolved                                extends TokenResolution
+
+  sealed trait CommandResult
+  sealed trait VoteOutcome    extends CommandResult
+  case object Applied         extends VoteOutcome
+  case object RoundRevealed   extends VoteOutcome
+  case object BlankEstimation extends VoteOutcome
+  case object NoSession       extends CommandResult
+  case object NotAMember      extends CommandResult
 
   // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
   case object StreamCompleted
@@ -112,19 +122,22 @@ object Room:
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
     // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
-    def actingMember(token: SessionToken): Option[UUID] =
-      this.sessions.get(token).map(_.userId).filter(this.members.contains)
+    def acting(token: SessionToken): Either[CommandResult, UUID] =
+      this.sessions.get(token) match
+        case None                                       => Left(NoSession)
+        case Some(session) if !isMember(session.userId) => Left(NotAMember)
+        case Some(session)                              => Right(session.userId)
 
     def isMember(userId: UUID): Boolean = this.members.contains(userId)
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
-    def vote(userId: UUID, estimation: String): RoomData = // unchanged from task 1
-      if this.state.round.revealed || estimation.isBlank then this
+    def vote(userId: UUID, estimation: String): (RoomData, VoteOutcome) =
+      if this.state.round.revealed then (this, RoundRevealed)
+      else if estimation.isBlank then (this, BlankEstimation)
       else
         val estimates = this.state.round.estimates + (userId -> Estimate.of(estimation))
-        withRound(Round(estimates, everyMemberHasVoted(estimates)))
-    end vote
+        (withRound(Round(estimates, everyMemberHasVoted(estimates))), Applied)
 
     def show(): RoomData   = withRound(this.state.round.copy(revealed = true))
     def clear(): RoomData  = withRound(Round.fresh)
@@ -239,20 +252,19 @@ object Room:
             val newData = data.registerSession(token, userId, name)
             replyTo ! SessionMinted(userId, token)
             receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
-          case Vote(token, estimation) =>
-            data.actingMember(token) match
-              case Some(userId) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.vote(userId, estimation), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
-          case ClearVotes(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
+          case Vote(token, estimation, replyTo) =>
+            data.acting(token) match
+              case Right(userId) =>
+                val (next, outcome) = data.vote(userId, estimation)
+                replyTo ! outcome
+                receiveBehaviour(roomId, publish(next, context), gracePeriod, stopAfterIdle, timers)
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case ClearVotes(token, replyTo) =>
+            data.acting(token) match
+              case Right(_) =>
+                replyTo ! Applied
                 receiveBehaviour(
                   roomId,
                   publish(data.clear(), context),
@@ -260,10 +272,13 @@ object Room:
                   stopAfterIdle,
                   timers
                 )
-              case None => Behaviors.same
-          case ReVote(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case ReVote(token, replyTo) =>
+            data.acting(token) match
+              case Right(_) =>
+                replyTo ! Applied
                 receiveBehaviour(
                   roomId,
                   publish(data.reVote(), context),
@@ -271,10 +286,13 @@ object Room:
                   stopAfterIdle,
                   timers
                 )
-              case None => Behaviors.same
-          case ShowVotes(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case ShowVotes(token, replyTo) =>
+            data.acting(token) match
+              case Right(_) =>
+                replyTo ! Applied
                 receiveBehaviour(
                   roomId,
                   publish(data.show(), context),
@@ -282,7 +300,9 @@ object Room:
                   stopAfterIdle,
                   timers
                 )
-              case None => Behaviors.same
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
           case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
@@ -293,9 +313,10 @@ object Room:
           case ConfirmLeave(userId) =>
             val newData = publish(data.removeMember(userId), context)
             receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
-          case EditIssue(token, issue) =>
-            data.actingMember(token) match
-              case Some(_) =>
+          case EditIssue(token, issue, replyTo) =>
+            data.acting(token) match
+              case Right(_) =>
+                replyTo ! Applied
                 receiveBehaviour(
                   roomId,
                   publish(data.editIssue(issue), context),
@@ -303,7 +324,9 @@ object Room:
                   stopAfterIdle,
                   timers
                 )
-              case None => Behaviors.same
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
           case ValidateToken(token, replyTo) =>
             // The map is the single authority now that it is retained: a member removed at
             // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.

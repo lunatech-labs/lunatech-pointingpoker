@@ -46,7 +46,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.EditIssue(user.token, issue)
+      roomRef ! Room.EditIssue(user.token, issue, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       expectSnapshot(userProbe).currentIssue mustBe issue
@@ -65,7 +65,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.ClearVotes(user.token)
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
@@ -93,7 +93,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
 
       // The other half of publish's pairing guard; the vote case above carries the note.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
@@ -117,7 +117,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.ShowVotes(user.token)
+      roomRef ! Room.ShowVotes(user.token, TestInbox[Room.CommandResult]().ref)
 
       expectSnapshot(userProbe).votesRevealed mustBe true
       expectSnapshot(user2Probe).votesRevealed mustBe true
@@ -133,7 +133,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user.token, estimation)
+      roomRef ! Room.Vote(user.token, estimation, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // Two probes, not one: this is the guard on publish pairing each snapshot with its own
@@ -161,7 +161,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(Room.SessionToken.mint(), "5")
+      roomRef ! Room.Vote(Room.SessionToken.mint(), "5", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectNoMessage()
@@ -521,11 +521,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         roomRef ! Room.GetData(dataProbe.ref)
         dataProbe.expectMessage(Room.DataStatus(data = before))
 
-      assertUnaffected(Room.Vote(minted.token, "8"))
-      assertUnaffected(Room.ClearVotes(minted.token))
-      assertUnaffected(Room.ReVote(minted.token))
-      assertUnaffected(Room.ShowVotes(minted.token))
-      assertUnaffected(Room.EditIssue(minted.token, "a different issue"))
+      assertUnaffected(Room.Vote(minted.token, "8", TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(Room.ClearVotes(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(Room.ReVote(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(Room.ShowVotes(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(
+        Room.EditIssue(minted.token, "a different issue", TestInbox[Room.CommandResult]().ref)
+      )
     }
 
     "reveal the round when the last outstanding vote lands" in {
@@ -537,7 +539,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.Vote(user2.token, "5", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe true
@@ -552,7 +554,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user.token, "5")
+      roomRef ! Room.Vote(user.token, "5", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
@@ -567,7 +569,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.ShowVotes(user.token)
+      roomRef ! Room.ShowVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe true
@@ -607,12 +609,16 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user).withRevealed()
       )
 
-      roomRef ! Room.ClearVotes(user.token)
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
 
-      roomRef ! Room.Vote(user.token, "5") // re-reveals: the only member has voted
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.Vote(
+        user.token,
+        "5",
+        TestInbox[Room.CommandResult]().ref
+      ) // re-reveals: the only member has voted
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
     }
@@ -626,7 +632,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
@@ -644,7 +650,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.Vote(user2.token, "5", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
@@ -660,11 +666,53 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user).withRevealed()
       )
 
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.CommandResult]().ref)
 
       val snapshot = expectSnapshot(userProbe)
       snapshot.votesRevealed mustBe true
       snapshot.users.map(_.estimation) mustBe List("3")
+    }
+
+    "answer a vote into a revealed round with RoundRevealed, and still publish" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "5")
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user).withRevealed())
+
+      roomRef ! Room.Vote(user.token, "8", replyProbe.ref)
+
+      replyProbe.expectMessage(Room.RoundRevealed)
+      // The refusal publishes: the outcome answers the caller, it does not suppress a broadcast.
+      expectSnapshot(userProbe)
+    }
+
+    "answer a blank estimation with BlankEstimation" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.Vote(user.token, "  ", replyProbe.ref)
+
+      replyProbe.expectMessage(Room.BlankEstimation)
+    }
+
+    "answer NoSession for a token the room does not hold" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.ShowVotes(Room.SessionToken.mint(), replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NoSession)
+    }
+
+    "answer NotAMember for a session whose member has been removed" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withDeparted(user))
+
+      roomRef ! Room.ShowVotes(user.token, replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NotAMember)
     }
 
     "keep a reconnecting user's vote instead of resetting it" in {
@@ -762,8 +810,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user, user2))
 
-      roomRef ! Room.Vote(user.token, "")
-      roomRef ! Room.Vote(user2.token, "   ")
+      roomRef ! Room.Vote(user.token, "", TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.Vote(user2.token, "   ", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // Absence is structural now, so a blank value would enter the tally as its own bucket.
@@ -776,7 +824,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
       val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
 
-      roomRef ! Room.Vote(user.token, "")
+      roomRef ! Room.Vote(user.token, "", TestInbox[Room.CommandResult]().ref)
 
       // The absence of a special case: vote returns unchanged data through the same publish.
       expectSnapshot(userProbe).users.map(_.hasEstimation) mustBe List(false)
@@ -793,7 +841,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withRevealed())
 
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // The state Estimate exists to express: an estimation with no confirmation.
@@ -806,8 +854,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user, user2).withRevealed())
 
-      roomRef ! Room.ReVote(user.token)
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // A re-vote keeps both values, so only the confirmation can hold the reveal back.
@@ -850,7 +898,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref)
       )
 
-      roomRef ! Room.EditIssue(user.token, "an issue")
+      roomRef ! Room.EditIssue(user.token, "an issue", TestInbox[Room.CommandResult]().ref)
 
       // One participant, two connections, one identity: both tabs are redacted for user.
       for probe <- List(userProbe, secondTab) do
@@ -962,7 +1010,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withNoConnection(user)
       )
 
-      roomRef ! Room.EditIssue(user2.token, "an issue")
+      roomRef ! Room.EditIssue(user2.token, "an issue", TestInbox[Room.CommandResult]().ref)
 
       // The grace period doing its job: the row survives, the sends do not.
       expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user.id, user2.id)

@@ -522,11 +522,10 @@
           }, 2000);
         },
         vote: function (voteValue) {
-          // The server refuses it anyway; this only spares the doomed POST and the optimistic flag.
+          // The server refuses it anyway; this only spares the doomed POST.
           if (this.votesRevealed) {
             return;
           }
-          this.ownVoteConfirmed = true;
           axios.post('/rooms/' + this.roomId + '/vote', { estimation: voteValue })
           .catch(function (error) {
             console.log(error);

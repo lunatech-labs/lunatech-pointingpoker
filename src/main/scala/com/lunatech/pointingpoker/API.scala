@@ -86,16 +86,35 @@ class API(
     .out(header("X-Accel-Buffering", "no"))
     .errorOut(statusCode(StatusCode.Unauthorized))
 
+  private val noSession  = oneOfVariantSingletonMatcher(StatusCode.Unauthorized)(Room.NoSession)
+  private val notAMember = oneOfVariantSingletonMatcher(StatusCode.Forbidden)(Room.NotAMember)
+  private val revealed   = oneOfVariantSingletonMatcher(StatusCode.Conflict)(Room.RoundRevealed)
+  private val blank      = oneOfVariantSingletonMatcher(StatusCode.BadRequest)(Room.BlankEstimation)
+
+  private val commandErrors = oneOf[Room.CommandResult](noSession, notAMember)
+  private val voteErrors    = oneOf[Room.CommandResult](noSession, notAMember, revealed, blank)
+
   private def command(segment: String) = endpoint.post
     .in(roomPath / segment)
     .in(sessionIn)
     .out(statusCode(StatusCode.NoContent))
+    .errorOut(commandErrors)
 
-  private val vote      = command("vote").in(jsonBody[VoteRequest])
+  private val vote = endpoint.post
+    .in(roomPath / "vote")
+    .in(sessionIn)
+    .in(jsonBody[VoteRequest])
+    .out(statusCode(StatusCode.NoContent))
+    .errorOut(voteErrors)
+
   private val show      = command("show")
   private val clear     = command("clear")
   private val revote    = command("revote")
   private val editIssue = command("edit-issue").in(jsonBody[EditIssueRequest])
+
+  // Applied is the only outcome that is not a refusal, so it is the only Right.
+  private def answer(result: Room.CommandResult): Either[Room.CommandResult, Unit] =
+    if result == Room.Applied then Right(()) else Left(result)
 
   private def resolveToken(raw: Option[String]): Option[Room.SessionToken] =
     raw.flatMap(Room.SessionToken.parse)
@@ -141,25 +160,34 @@ class API(
               case Room.Unresolved => Left(())
             }
     },
-    vote.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
-      roomManager ! RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation)
-      Future.successful(())
+    vote.serverLogic[Future] { (roomId, rawCookie, request) =>
+      roomManager
+        .ask[Room.CommandResult](
+          RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation, _)
+        )
+        .map(answer)
     },
-    show.serverLogicSuccess[Future] { (roomId, rawCookie) =>
-      roomManager ! RoomManager.Show(roomId, resolveToken(rawCookie))
-      Future.successful(())
+    show.serverLogic[Future] { (roomId, rawCookie) =>
+      roomManager
+        .ask[Room.CommandResult](RoomManager.Show(roomId, resolveToken(rawCookie), _))
+        .map(answer)
     },
-    clear.serverLogicSuccess[Future] { (roomId, rawCookie) =>
-      roomManager ! RoomManager.Clear(roomId, resolveToken(rawCookie))
-      Future.successful(())
+    clear.serverLogic[Future] { (roomId, rawCookie) =>
+      roomManager
+        .ask[Room.CommandResult](RoomManager.Clear(roomId, resolveToken(rawCookie), _))
+        .map(answer)
     },
-    revote.serverLogicSuccess[Future] { (roomId, rawCookie) =>
-      roomManager ! RoomManager.Revote(roomId, resolveToken(rawCookie))
-      Future.successful(())
+    revote.serverLogic[Future] { (roomId, rawCookie) =>
+      roomManager
+        .ask[Room.CommandResult](RoomManager.Revote(roomId, resolveToken(rawCookie), _))
+        .map(answer)
     },
-    editIssue.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
-      roomManager ! RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue)
-      Future.successful(())
+    editIssue.serverLogic[Future] { (roomId, rawCookie, request) =>
+      roomManager
+        .ask[Room.CommandResult](
+          RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue, _)
+        )
+        .map(answer)
     }
   )
 

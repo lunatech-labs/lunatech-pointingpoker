@@ -264,25 +264,27 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
             testStopAfterIdle
           )
         )
-      val token = Room.SessionToken.mint()
+      val token      = Room.SessionToken.mint()
+      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
 
-      managerRef ! RoomManager.Vote(roomId, Some(token), "5")
-      managerRef ! RoomManager.Show(roomId, Some(token))
-      managerRef ! RoomManager.Clear(roomId, Some(token))
-      managerRef ! RoomManager.Revote(roomId, Some(token))
-      managerRef ! RoomManager.EditIssue(roomId, Some(token), "issue name")
+      managerRef ! RoomManager.Vote(roomId, Some(token), "5", replyProbe.ref)
+      managerRef ! RoomManager.Show(roomId, Some(token), replyProbe.ref)
+      managerRef ! RoomManager.Clear(roomId, Some(token), replyProbe.ref)
+      managerRef ! RoomManager.Revote(roomId, Some(token), replyProbe.ref)
+      managerRef ! RoomManager.EditIssue(roomId, Some(token), "issue name", replyProbe.ref)
 
-      roomProbe.expectMessage(Room.Vote(token, "5"))
-      roomProbe.expectMessage(Room.ShowVotes(token))
-      roomProbe.expectMessage(Room.ClearVotes(token))
-      roomProbe.expectMessage(Room.ReVote(token))
-      roomProbe.expectMessage(Room.EditIssue(token, "issue name"))
+      roomProbe.expectMessage(Room.Vote(token, "5", replyProbe.ref))
+      roomProbe.expectMessage(Room.ShowVotes(token, replyProbe.ref))
+      roomProbe.expectMessage(Room.ClearVotes(token, replyProbe.ref))
+      roomProbe.expectMessage(Room.ReVote(token, replyProbe.ref))
+      roomProbe.expectMessage(Room.EditIssue(token, "issue name", replyProbe.ref))
     }
 
     "no-op typed per-command messages for an unknown room" in {
       val knownRoomId   = UUID.randomUUID()
       val unknownRoomId = UUID.randomUUID()
       val roomProbe     = testKit.createTestProbe[Room.Command]()
+      val replyProbe    = testKit.createTestProbe[Room.CommandResult]()
       val managerRef    =
         testKit.spawn(
           RoomManager.receiveBehaviour(
@@ -292,14 +294,21 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
 
-      managerRef ! RoomManager.Vote(unknownRoomId, Some(Room.SessionToken.mint()), "5")
+      managerRef ! RoomManager.Vote(
+        unknownRoomId,
+        Some(Room.SessionToken.mint()),
+        "5",
+        replyProbe.ref
+      )
 
       roomProbe.expectNoMessage()
+      replyProbe.expectMessage(Room.NoSession)
     }
 
     "no-op a command with no session token, without asking the room" in {
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
+      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
       val managerRef =
         testKit.spawn(
           RoomManager.receiveBehaviour(
@@ -309,9 +318,32 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
 
-      managerRef ! RoomManager.Vote(roomId, None, "5")
+      managerRef ! RoomManager.Vote(roomId, None, "5", replyProbe.ref)
 
       roomProbe.expectNoMessage()
+      replyProbe.expectMessage(Room.NoSession)
+    }
+
+    "answer NoSession itself for a command on a room it does not hold" in {
+      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
+      val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
+
+      managerRef ! RoomManager.Show(
+        UUID.randomUUID(),
+        Some(Room.SessionToken.mint()),
+        replyProbe.ref
+      )
+
+      replyProbe.expectMessage(Room.NoSession)
+    }
+
+    "answer NoSession itself for a command with no token" in {
+      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
+      val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
+
+      managerRef ! RoomManager.Show(UUID.randomUUID(), None, replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NoSession)
     }
 
     "keep a member's vote when ConnectToRoom re-registers them after a reconnect" in {
@@ -347,7 +379,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
       // managerRef is guaranteed applied before Vote is sent directly to roomRef below.
       firstProbe.expectMsgType[RoomSnapshot]
-      roomRef ! Room.Vote(token, "5")
+      roomRef ! Room.Vote(token, "5", testKit.createTestProbe[Room.CommandResult]().ref)
       managerRef ! RoomManager.ConnectToRoom(
         roomId,
         userId,

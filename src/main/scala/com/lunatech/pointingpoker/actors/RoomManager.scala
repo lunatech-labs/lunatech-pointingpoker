@@ -24,13 +24,33 @@ object RoomManager:
       connectionId: Room.ConnectionId,
       ref: UntypedRef
   ) extends Command
-  case class Vote(roomId: UUID, token: Option[Room.SessionToken], estimation: String)
-      extends Command
-  case class Show(roomId: UUID, token: Option[Room.SessionToken])   extends Command
-  case class Clear(roomId: UUID, token: Option[Room.SessionToken])  extends Command
-  case class Revote(roomId: UUID, token: Option[Room.SessionToken]) extends Command
-  case class EditIssue(roomId: UUID, token: Option[Room.SessionToken], issue: String)
-      extends Command
+  case class Vote(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      estimation: String,
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Show(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Clear(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Revote(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class EditIssue(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      issue: String,
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
   case class RequestSession(roomId: UUID, name: String, replyTo: ActorRef[Room.SessionMinted])
       extends Command
   case class ValidateToken(
@@ -95,35 +115,31 @@ object RoomManager:
               case Some(room) => room ! Room.ValidateToken(token, replyTo)
               case None       => replyTo ! Room.Unresolved
             Behaviors.same
-          case Vote(roomId, token, estimation) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.Vote(t, estimation)
+          case Vote(roomId, token, estimation, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.Vote(t, estimation, replyTo)
+              // A stopped room is answered from the map's absence rather than by a timing-out ask.
+              case _ => replyTo ! Room.NoSession
             Behaviors.same
-          case Show(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ShowVotes(t)
+          case Show(roomId, token, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.ShowVotes(t, replyTo)
+              case _                     => replyTo ! Room.NoSession
             Behaviors.same
-          case Clear(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ClearVotes(t)
+          case Clear(roomId, token, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.ClearVotes(t, replyTo)
+              case _                     => replyTo ! Room.NoSession
             Behaviors.same
-          case Revote(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ReVote(t)
+          case Revote(roomId, token, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.ReVote(t, replyTo)
+              case _                     => replyTo ! Room.NoSession
             Behaviors.same
-          case EditIssue(roomId, token, issue) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.EditIssue(t, issue)
+          case EditIssue(roomId, token, issue, replyTo) =>
+            (data.rooms.get(roomId), token) match
+              case (Some(room), Some(t)) => room ! Room.EditIssue(t, issue, replyTo)
+              case _                     => replyTo ! Room.NoSession
             Behaviors.same
           case ConnectionCompleted(roomId, userId, ref) =>
             data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref))
