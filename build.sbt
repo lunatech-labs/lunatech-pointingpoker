@@ -17,14 +17,14 @@ lazy val V = new {
 lazy val root = project
   .in(file("."))
   .settings(
-    name                                      := "pointingpoker",
-    libraryDependencies += "org.apache.pekko" %% "pekko-actor-typed"         % V.pekko,
-    libraryDependencies += "org.apache.pekko" %% "pekko-stream"              % V.pekko,
-    libraryDependencies += "ch.qos.logback"    % "logback-classic"           % V.logback,
-    libraryDependencies += "org.apache.pekko" %% "pekko-http"                % V.pekkoHttp,
-    libraryDependencies += "io.circe"         %% "circe-core"                % V.circe,
-    libraryDependencies += "io.circe"         %% "circe-parser"              % V.circe,
-    libraryDependencies += "io.circe"         %% "circe-generic"             % V.circe,
+    name                                                 := "pointingpoker",
+    libraryDependencies += "org.apache.pekko"            %% "pekko-actor-typed"       % V.pekko,
+    libraryDependencies += "org.apache.pekko"            %% "pekko-stream"            % V.pekko,
+    libraryDependencies += "ch.qos.logback"               % "logback-classic"         % V.logback,
+    libraryDependencies += "org.apache.pekko"            %% "pekko-http"              % V.pekkoHttp,
+    libraryDependencies += "io.circe"                    %% "circe-core"              % V.circe,
+    libraryDependencies += "io.circe"                    %% "circe-parser"            % V.circe,
+    libraryDependencies += "io.circe"                    %% "circe-generic"           % V.circe,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-core"              % V.tapir,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-json-circe"        % V.tapir,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % V.tapir,
