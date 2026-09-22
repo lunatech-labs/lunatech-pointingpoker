@@ -41,7 +41,11 @@ object Room:
   final case class ShowVotes(token: SessionToken, replyTo: ActorRef[CommandResult])  extends Command
   final case class EditIssue(token: SessionToken, issue: String, replyTo: ActorRef[CommandResult])
       extends Command
-  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted]) extends Command
+  final case class RequestSession(
+      name: String,
+      existing: Option[SessionToken],
+      replyTo: ActorRef[SessionMinted]
+  ) extends Command
   final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
       extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
@@ -120,6 +124,13 @@ object Room:
 
     private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
+
+    private[Room] def rename(token: SessionToken, userId: UUID, name: String): RoomData =
+      // Both sides or neither: of requires a member's name to equal its session's.
+      this.copy(
+        sessions = this.sessions + (token -> Session(userId, name)),
+        members = this.members.updatedWith(userId)(_.map(_ => Member(name)))
+      )
 
     // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
     def acting(token: SessionToken): Either[CommandResult, UUID] =
@@ -246,12 +257,19 @@ object Room:
               // The stream is ended rather than left open: a refused page has nothing coming.
               ref ! StreamCompleted
               Behaviors.same
-          case RequestSession(name, replyTo) =>
-            val userId  = UUID.randomUUID()
-            val token   = SessionToken.mint()
-            val newData = data.registerSession(token, userId, name)
-            replyTo ! SessionMinted(userId, token)
-            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+          case RequestSession(name, existing, replyTo) =>
+            existing.flatMap(t => data.sessions.get(t).map(t -> _)) match
+              case Some((token, session)) =>
+                // Taking the name rather than ignoring it is the nearest this app has to a rename.
+                val newData = publish(data.rename(token, session.userId, name), context)
+                replyTo ! SessionMinted(session.userId, token)
+                receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+              case None =>
+                val userId  = UUID.randomUUID()
+                val token   = SessionToken.mint()
+                val newData = data.registerSession(token, userId, name)
+                replyTo ! SessionMinted(userId, token)
+                receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
           case Vote(token, estimation, replyTo) =>
             data.acting(token) match
               case Right(userId) =>

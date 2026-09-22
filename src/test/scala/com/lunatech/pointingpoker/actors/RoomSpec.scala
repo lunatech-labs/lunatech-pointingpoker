@@ -383,12 +383,63 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
+    "resolve an existing session on a second join rather than minting over it" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      val first = replyProbe.expectMessageType[Room.SessionMinted]
+
+      roomRef ! Room.RequestSession("Alice", Some(first.token), replyProbe.ref)
+      val second = replyProbe.expectMessageType[Room.SessionMinted]
+
+      second.userId mustBe first.userId
+      second.token mustBe first.token
+    }
+
+    "mint a fresh identity when the offered token resolves to nothing" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", Some(Room.SessionToken.mint()), replyProbe.ref)
+
+      replyProbe.expectMessageType[Room.SessionMinted]
+    }
+
+    "rename the session and the member together on a join under a new name" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.RequestSession("renamed", Some(user.token), replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      // Both sides move or RoomData.of refuses the next construction outright.
+      data.sessions(user.token) mustBe Room.Session(user.id, "renamed")
+      data.members(user.id) mustBe Room.Member("renamed")
+      expectSnapshot(userProbe).users.map(_.name) mustBe List("renamed")
+    }
+
+    "not create a member on a join, whatever the name" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // Invariant 5: a member who holds no connection would block auto-reveal for the meeting.
+      dataProbe.expectMessageType[Room.DataStatus].data.members mustBe empty
+    }
+
     "mint a session and store it on RequestSession" in {
       val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
 
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
@@ -407,7 +458,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
@@ -443,7 +494,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val userProbe    = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
@@ -470,7 +521,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Through RequestSession and Join, since promotion is what used to consume the entry:
       // seeding the map directly leaves the case green with the old code.
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.
@@ -500,7 +551,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Same setup as the resolve case above: Alice's token is retained in `sessions`
       // after her member entry is removed at grace expiry.
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.

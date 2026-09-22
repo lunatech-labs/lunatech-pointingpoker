@@ -98,7 +98,7 @@ export const test = base.extend({
   },
 
   // One browser context per participant: two pages in one context share the room cookie and
-  // resolve to a single session, which is a step 6 case rather than any of these.
+  // resolve to a single session, which is what newTab is for.
   join: async ({ browser, origin, room, stub, assets }, use) => {
     const closers = []
     const join = async name => {
@@ -112,12 +112,21 @@ export const test = base.extend({
         if (!cookie) throw new Error(`${name} has no session cookie`)
         return cookie.value
       }
+      // A second page in the same context shares the room cookie, which is what makes two tabs
+      // one participant. localStorage already holds the name and room, so created() rejoins.
+      const newTab = async () => {
+        const tab = await context.newPage()
+        await tab.goto(`/${room}`)
+        await expect(tab.getByRole('button', { name: 'Show votes' })).toBeVisible()
+        return tab
+      }
       const participant = {
         name,
         page,
         close: () => context.close(),
         cut: async () => stub.cut(await token()),
-        restore: async () => stub.restore(await token())
+        restore: async () => stub.restore(await token()),
+        newTab
       }
       await page.goto(`/${room}`)
       // The input renders under v-if, so this is the mount; navigationTimeout owns the transport.
@@ -203,5 +212,7 @@ export const vote = (page, value) => card(page, value).click()
 // The line under the deck that says why the cards are frozen, keyed on its text rather than its
 // lock: it has text to key on, which is what votedMark and hiddenMark lack rather than share.
 export const frozenNotice = page => page.getByText('The round is revealed')
+// The recipient's own estimation, which is on the wire for them before any reveal.
+export const ownEstimation = page => page.locator('.estimation-card .estimation-text')
 
 export { expect }

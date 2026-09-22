@@ -64,8 +64,9 @@ class API(
 
   private val join = endpoint.post
     .in(roomPath / "join")
+    .in(sessionIn)
     .in(jsonBody[JoinRequest])
-    .out(jsonBody[JoinResponse])
+    .out(statusCode(StatusCode.NoContent))
     .out(setCookie(SessionCookieName))
 
   private given Codec[String, Room.ConnectionId, CodecFormat.TextPlain] =
@@ -123,10 +124,12 @@ class API(
     createRoom.serverLogicSuccess[Future](_ =>
       (roomManager ? RoomManager.CreateRoom.apply).mapTo[RoomManager.RoomId].map(_.value)
     ),
-    join.serverLogicSuccess[Future] { (roomId, request) =>
+    join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
-        .ask[Room.SessionMinted](RoomManager.RequestSession(roomId, request.name, _))
-        .map(minted => (JoinResponse(minted.userId), sessionCookie(roomId, minted.token)))
+        .ask[Room.SessionMinted](
+          RoomManager.RequestSession(roomId, request.name, resolveToken(rawCookie), _)
+        )
+        .map(minted => sessionCookie(roomId, minted.token))
     },
     events.serverLogic[Future] { (roomId, connectionId, rawCookie, forwardedProto) =>
       resolveToken(rawCookie) match

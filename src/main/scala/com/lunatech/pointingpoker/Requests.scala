@@ -1,7 +1,5 @@
 package com.lunatech.pointingpoker
 
-import java.util.UUID
-
 import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import sttp.tapir.{Schema, ValidationResult, Validator}
@@ -11,12 +9,6 @@ object JoinRequest:
   given Decoder[JoinRequest] = deriveDecoder[JoinRequest]
   given Encoder[JoinRequest] = deriveEncoder[JoinRequest]
   given Schema[JoinRequest]  = Schema.derived[JoinRequest]
-
-case class JoinResponse(userId: UUID)
-object JoinResponse:
-  given Encoder[JoinResponse] = deriveEncoder[JoinResponse]
-  given Decoder[JoinResponse] = deriveDecoder[JoinResponse]
-  given Schema[JoinResponse]  = Schema.derived[JoinResponse]
 
 case class VoteRequest(estimation: String)
 object VoteRequest:

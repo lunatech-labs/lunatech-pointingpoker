@@ -19,9 +19,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
-import com.lunatech.pointingpoker.JoinResponse
 import com.lunatech.pointingpoker.{EditIssueRequest, VoteRequest}
-import io.circe.parser.decode
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
@@ -54,8 +52,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! RoomManager.RoomId(roomId)
         Behaviors.same
-      case RoomManager.RequestSession(_, _, replyTo) =>
-        replyTo ! Room.SessionMinted(UUID.randomUUID(), validToken)
+      case RoomManager.RequestSession(_, _, existing, replyTo) =>
+        replyTo ! Room.SessionMinted(UUID.randomUUID(), existing.getOrElse(validToken))
         Behaviors.same
       case RoomManager.ValidateToken(_, token, replyTo) =>
         if token == validToken then replyTo ! Room.Resolved(UUID.randomUUID(), "Alice")
@@ -117,11 +115,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
         responseAs[String] mustBe roomId
       }
-    "join a room, return a minted userId, and set a session cookie" in
+    "join a room and set a session cookie" in
       Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
-        status.isSuccess() mustBe true
-        val response = decode[JoinResponse](responseAs[String]).getOrElse(fail("bad JoinResponse"))
-        response.userId.toString.length > 0 mustBe true
+        status mustBe StatusCodes.NoContent
 
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
         cookieHeader.cookie.name mustBe "session"
@@ -130,6 +126,14 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         cookieHeader.cookie.path mustBe Some(s"/rooms/$roomId")
         cookieHeader.cookie.sameSite mustBe Some(SameSite.Strict)
         cookieHeader.cookie.maxAge mustBe None
+      }
+    "resume the session its cookie already names rather than minting over it" in
+      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
+        val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+        cookieHeader.cookie.value mustBe validToken.raw
       }
     "set the same session token on /join that /events later accepts" in {
       val cookieValue =
