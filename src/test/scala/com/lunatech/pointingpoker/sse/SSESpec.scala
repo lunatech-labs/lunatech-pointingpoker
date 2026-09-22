@@ -27,9 +27,10 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     val roomId           = UUID.randomUUID()
     val userId           = UUID.randomUUID()
     val token            = Room.SessionToken.mint()
+    val connectionId     = Room.ConnectionId.parse(UUID.randomUUID().toString).get
     val (user, probe)    =
       SSE
-        .source(roomManagerProbe.ref, roomId, userId, "Alice", token)
+        .source(roomManagerProbe.ref, roomId, userId, "Alice", token, connectionId)
         .toMat(TestSink())(Keep.both)
         .run()
     (roomId, userId, user, probe)

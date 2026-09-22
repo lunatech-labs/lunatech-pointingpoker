@@ -672,15 +672,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
 
-      // A reconnect Joins the same identity under a new ref; the estimate is keyed by
-      // id in the round, so the rejoin never touches it.
+      // A reconnect Joins the same identity and connection id under a new ref; the estimate
+      // is keyed by id in the round, so the rejoin never touches it.
       val newRefProbe = TestProbe()(testKit.system.classicSystem)
-      roomRef ! Room.Join(user.id, user.name, user.token, newRefProbe.ref)
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, newRefProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.estimateFor(user) mustBe Some(("5", true))
-      data.connections(user.id) mustBe Set(user.ref, newRefProbe.ref)
+      data.connections(user.id) mustBe Map(user.connectionId -> newRefProbe.ref)
     }
 
     "build a RoomData when every member has a matching session" in {
@@ -847,7 +847,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val secondTab           = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
-        withUsers(user, user2).withSecondConnection(user, secondTab.ref)
+        withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref)
       )
 
       roomRef ! Room.EditIssue(user.token, "an issue")
@@ -865,14 +865,47 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
 
-      val replacement = TestProbe()(testKit.system.classicSystem)
-      roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
+      val replacement   = TestProbe()(testKit.system.classicSystem)
+      val replacementId = newConnectionId()
+      roomRef ! Room.Join(user.id, user.name, user.token, replacementId, replacement.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // A map keyed by id cannot duplicate the member; the second tab is a second ref.
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.members.keySet mustBe Set(user.id)
-      data.connections(user.id) mustBe Set(user.ref, replacement.ref)
+      data.connections(user.id) mustBe
+        Map(user.connectionId -> user.ref, replacementId -> replacement.ref)
+    }
+
+    "replace a connection's ref when the same id reconnects, and feed only the new one" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      // Same id, new ref: an EventSource retry reuses the id its page was given.
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, replacementProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      data.connections(user.id) mustBe Map(user.connectionId -> replacementProbe.ref)
+      expectSnapshot(replacementProbe)
+      userProbe.expectNoMessage(300.millis)
+    }
+
+    "remove a superseded ref by value, not by id, when its stream finally terminates" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, replacementProbe.ref)
+      // The old stream's termination arrives after the new one is established.
+      roomRef ! Room.Leave(user.id, userProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.connections(user.id) mustBe
+        Map(user.connectionId -> replacementProbe.ref)
     }
 
     "schedule no removal when the connection that drops is not the member's last" in {
@@ -887,8 +920,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
 
       // The race itself, driven rather than seeded: the replacement stream is established
-      // before the old one's termination arrives, so the set briefly holds two refs.
-      roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
+      // before the old one's termination arrives, so the map briefly holds two refs.
+      val replacementId = newConnectionId()
+      roomRef ! Room.Join(user.id, user.name, user.token, replacementId, replacement.ref)
       roomRef ! Room.Leave(user.id, user.ref)
 
       // Problem C made unrepresentable: the question is answered at Leave time, so the
@@ -897,7 +931,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.members.keySet mustBe Set(user.id, user2.id)
-      data.connections(user.id) mustBe Set(replacement.ref)
+      data.connections(user.id) mustBe Map(replacementId -> replacement.ref)
     }
 
     "schedule no removal when the connection that drops belongs to no member" in {
@@ -941,7 +975,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val secondTab           = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
-        withUsers(user, user2).withSecondConnection(user, secondTab.ref),
+        withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref),
         gracePeriod = 200.millis
       )
 
@@ -958,7 +992,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val thrown = intercept[IllegalArgumentException] {
         RoomData.of(
           sessions = Map(user.token -> Room.Session(user.id, user.name)),
-          connections = Map(stranger -> Set(user.ref))
+          connections = Map(stranger -> Map(newConnectionId() -> user.ref))
         )
       }
 

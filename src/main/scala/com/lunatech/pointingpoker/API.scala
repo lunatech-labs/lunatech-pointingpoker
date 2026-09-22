@@ -68,8 +68,17 @@ class API(
     .out(jsonBody[JoinResponse])
     .out(setCookie(SessionCookieName))
 
+  private given Codec[String, Room.ConnectionId, CodecFormat.TextPlain] =
+    Codec.string.mapDecode(raw =>
+      Room.ConnectionId
+        .parse(raw)
+        .map(DecodeResult.Value(_))
+        .getOrElse(DecodeResult.Mismatch("a UUID", raw))
+    )(_.raw)
+
   private val events = endpoint.get
     .in(roomPath / "events")
+    .in(query[Room.ConnectionId]("connectionId"))
     .in(sessionIn)
     .in(header[Option[String]]("X-Forwarded-Proto"))
     .out(sseBody)
@@ -100,7 +109,7 @@ class API(
         .ask[Room.SessionMinted](RoomManager.RequestSession(roomId, request.name, _))
         .map(minted => (JoinResponse(minted.userId), sessionCookie(roomId, minted.token)))
     },
-    events.serverLogic[Future] { (roomId, rawCookie, forwardedProto) =>
+    events.serverLogic[Future] { (roomId, connectionId, rawCookie, forwardedProto) =>
       resolveToken(rawCookie) match
         case None =>
           // Pekko's listener is always plain HTTP; a reverse proxy terminates TLS, so this
@@ -125,6 +134,7 @@ class API(
                     userId,
                     name,
                     token,
+                    connectionId,
                     lifecycleConfig.retryMillis
                   )
                 )

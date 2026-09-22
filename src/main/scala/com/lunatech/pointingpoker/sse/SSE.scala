@@ -38,6 +38,7 @@ object SSE:
       userId: UUID,
       name: String,
       token: Room.SessionToken,
+      connectionId: Room.ConnectionId,
       retryMillis: Int = defaultRetryMillis
   )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
@@ -48,7 +49,7 @@ object SSE:
         OverflowStrategy.dropHead
       )
       .mapMaterializedValue { user =>
-        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, user)
+        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, connectionId, user)
         user
       }
       .watchTermination() { (user, done) =>

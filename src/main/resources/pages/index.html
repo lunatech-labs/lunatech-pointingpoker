@@ -367,6 +367,9 @@
         votesSummary: Object.entries(tally).sort(function (a, b) { return b[1] - a[1]; })
       };
     }
+    // One per page instance, never persisted: a reload must mint a new one, or its own late
+    // beacon would name the id the replacement page is now using.
+    var connectionId = crypto.randomUUID();
     var app = new Vue({
       el: '#app',
       data: {
@@ -420,7 +423,9 @@
           localStorage.setItem("name", this.user.name);
           axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
           .then(function (response) {
-            ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events');
+            ref.eventSource = new EventSource(
+              '/rooms/' + ref.roomId + '/events?connectionId=' + connectionId
+            );
             ref.eventSource.onopen = function() {
               // EventSource retries automatically on transient network blips; a
               // successful (re)connection means any earlier "connection lost"

@@ -44,18 +44,34 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
             testStopAfterIdle
           )
         )
-      val user1Probe = TestProbe()(testKit.system.classicSystem)
-      val user2Probe = TestProbe()(testKit.system.classicSystem)
-      val token1     = Room.SessionToken.mint()
-      val token2     = Room.SessionToken.mint()
-      val userId1    = UUID.randomUUID()
-      val userId2    = UUID.randomUUID()
+      val user1Probe    = TestProbe()(testKit.system.classicSystem)
+      val user2Probe    = TestProbe()(testKit.system.classicSystem)
+      val token1        = Room.SessionToken.mint()
+      val token2        = Room.SessionToken.mint()
+      val userId1       = UUID.randomUUID()
+      val userId2       = UUID.randomUUID()
+      val connectionId1 = newConnectionId()
+      val connectionId2 = newConnectionId()
 
-      managerRef ! RoomManager.ConnectToRoom(roomId, userId1, user1Name, token1, user1Probe.ref)
-      managerRef ! RoomManager.ConnectToRoom(roomId, userId2, user2Name, token2, user2Probe.ref)
+      managerRef ! RoomManager.ConnectToRoom(
+        roomId,
+        userId1,
+        user1Name,
+        token1,
+        connectionId1,
+        user1Probe.ref
+      )
+      managerRef ! RoomManager.ConnectToRoom(
+        roomId,
+        userId2,
+        user2Name,
+        token2,
+        connectionId2,
+        user2Probe.ref
+      )
 
-      roomProbe.expectMessage(Room.Join(userId1, user1Name, token1, user1Probe.ref))
-      roomProbe.expectMessage(Room.Join(userId2, user2Name, token2, user2Probe.ref))
+      roomProbe.expectMessage(Room.Join(userId1, user1Name, token1, connectionId1, user1Probe.ref))
+      roomProbe.expectMessage(Room.Join(userId2, user2Name, token2, connectionId2, user2Probe.ref))
     }
 
     "no-op ConnectToRoom for an unknown room" in {
@@ -72,6 +88,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           UUID.randomUUID(),
           "Alice",
           Room.SessionToken.mint(),
+          newConnectionId(),
           probe.ref
         )
       )
@@ -152,20 +169,22 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
+      val connectionId = newConnectionId()
       val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
 
       // ConnectToRoom is sent to a classic ActorRef in production (roomManager.toClassic),
       // so drive SSE.source with a classic probe standing in for it.
       SSE
-        .source(classicProbe.ref, roomId, userId, "user 1", token)
+        .source(classicProbe.ref, roomId, userId, "user 1", token, connectionId)
         .to(org.apache.pekko.stream.scaladsl.Sink.ignore)
         .run()
 
-      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(rId, uId, name, tok, _) =>
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(rId, uId, name, tok, cId, _) =>
         rId mustBe roomId
         uId mustBe userId
         name mustBe "user 1"
         tok mustBe token
+        cId mustBe connectionId
       }
     }
 
@@ -178,15 +197,16 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
+      val connectionId = newConnectionId()
       val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
 
       // Sink.cancelled cancels downstream demand immediately, terminating the source.
       SSE
-        .source(classicProbe.ref, roomId, userId, "user 1", token)
+        .source(classicProbe.ref, roomId, userId, "user 1", token, connectionId)
         .to(org.apache.pekko.stream.scaladsl.Sink.cancelled)
         .run()
 
-      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(_, uId, _, _, _) =>
+      classicProbe.expectMsgPF() { case RoomManager.ConnectToRoom(_, uId, _, _, _, _) =>
         uId mustBe userId
       }
       classicProbe.expectMsgPF() { case RoomManager.ConnectionCompleted(rId, uId, _) =>
@@ -316,12 +336,26 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
 
-      managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, firstProbe.ref)
+      managerRef ! RoomManager.ConnectToRoom(
+        roomId,
+        userId,
+        "Alice",
+        token,
+        alice.connectionId,
+        firstProbe.ref
+      )
       // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
       // managerRef is guaranteed applied before Vote is sent directly to roomRef below.
       firstProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.Vote(token, "5")
-      managerRef ! RoomManager.ConnectToRoom(roomId, userId, "Alice", token, secondProbe.ref)
+      managerRef ! RoomManager.ConnectToRoom(
+        roomId,
+        userId,
+        "Alice",
+        token,
+        alice.connectionId,
+        secondProbe.ref
+      )
       // Same barrier as above, so GetData below cannot race the reconnect's Join.
       secondProbe.expectMsgType[RoomSnapshot]
       roomRef ! Room.GetData(dataProbe.ref)

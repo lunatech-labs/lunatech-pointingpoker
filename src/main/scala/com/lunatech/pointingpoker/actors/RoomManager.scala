@@ -21,6 +21,7 @@ object RoomManager:
       userId: UUID,
       name: String,
       token: Room.SessionToken,
+      connectionId: Room.ConnectionId,
       ref: UntypedRef
   ) extends Command
   case class Vote(roomId: UUID, token: Option[Room.SessionToken], estimation: String)
@@ -71,8 +72,10 @@ object RoomManager:
             context.watch(roomActor)
             replyTo ! RoomId(roomId.toString)
             receiveBehaviour(newData, gracePeriod, stopAfterIdle)
-          case ConnectToRoom(roomId, userId, name, token, ref) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Join(userId, name, token, ref))
+          case ConnectToRoom(roomId, userId, name, token, connectionId, ref) =>
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Join(userId, name, token, connectionId, ref))
             Behaviors.same
           case RequestSession(roomId, name, replyTo) =>
             data.rooms

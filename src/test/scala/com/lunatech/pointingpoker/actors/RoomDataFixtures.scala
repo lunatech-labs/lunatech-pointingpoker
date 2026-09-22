@@ -15,6 +15,10 @@ object RoomDataFixtures:
   val testGracePeriod: FiniteDuration   = 6.seconds
   val testStopAfterIdle: FiniteDuration = 2.hours
 
+  // The page mints one per instance; nothing in production mints one here.
+  def newConnectionId(): Room.ConnectionId =
+    Room.ConnectionId.parse(UUID.randomUUID().toString).get
+
   // One person's state groups as a single test record, so a fixture site reads as a
   // participant rather than as an entry in each of three maps.
   final case class Attendee(
@@ -23,16 +27,18 @@ object RoomDataFixtures:
       voted: Boolean,
       estimation: String,
       ref: UntypedRef,
-      token: Room.SessionToken
+      token: Room.SessionToken,
+      connectionId: Room.ConnectionId = newConnectionId()
   ):
-    def joinMessage: Room.Join = Room.Join(id, name, token, ref)
+    def joinMessage: Room.Join = Room.Join(id, name, token, connectionId, ref)
+  end Attendee
 
   def withUsers(users: Attendee*): RoomData =
     RoomData.of(
       state = Room.RoomState("", Room.Round(estimatesFor(users*), revealed = false)),
       members = users.map(u => u.id -> Room.Member(u.name)).toMap,
       sessions = sessionsFor(users*),
-      connections = users.map(u => u.id -> Set(u.ref)).toMap
+      connections = users.map(u => u.id -> Map(u.connectionId -> u.ref)).toMap
     )
 
   extension (data: RoomData)
@@ -65,12 +71,18 @@ object RoomDataFixtures:
       )
 
     // The replacement tab arriving before the frozen one drops, and the two-tab case.
-    def withSecondConnection(user: Attendee, ref: UntypedRef): RoomData =
+    def withSecondConnection(
+        user: Attendee,
+        connectionId: Room.ConnectionId,
+        ref: UntypedRef
+    ): RoomData =
       RoomData.of(
         data.state,
         data.members,
         data.sessions,
-        data.connections.updatedWith(user.id)(refs => Some(refs.getOrElse(Set.empty) + ref))
+        data.connections.updatedWith(user.id)(refs =>
+          Some(refs.getOrElse(Map.empty) + (connectionId -> ref))
+        )
       )
 
     // Inside the grace period: the row survives, the sends do not.

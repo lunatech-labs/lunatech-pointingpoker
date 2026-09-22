@@ -17,9 +17,21 @@ object Room:
     def parse(raw: String): Option[SessionToken]    = scala.util.Try(UUID.fromString(raw)).toOption
     extension (token: SessionToken) def raw: String = token.toString
 
+  opaque type ConnectionId = UUID
+
+  object ConnectionId:
+    def parse(raw: String): Option[ConnectionId] =
+      scala.util.Try(UUID.fromString(raw)).toOption
+    extension (id: ConnectionId) def raw: String = id.toString
+
   sealed trait Command
-  final case class Join(userId: UUID, name: String, token: SessionToken, ref: UntypedRef)
-      extends Command
+  final case class Join(
+      userId: UUID,
+      name: String,
+      token: SessionToken,
+      connectionId: ConnectionId,
+      ref: UntypedRef
+  ) extends Command
   final case class Leave(userId: UUID, ref: UntypedRef)                           extends Command
   final private[actors] case class ConfirmLeave(userId: UUID)                     extends Command
   final case class Vote(token: SessionToken, estimation: String)                  extends Command
@@ -70,19 +82,26 @@ object Room:
       state: RoomState,
       members: Map[UUID, Member],
       sessions: Map[SessionToken, Session],
-      connections: Map[UUID, Set[UntypedRef]]
+      connections: Map[UUID, Map[ConnectionId, UntypedRef]]
   ):
-    private[Room] def connect(userId: UUID, name: String, ref: UntypedRef): RoomData =
+    private[Room] def connect(
+        userId: UUID,
+        name: String,
+        connectionId: ConnectionId,
+        ref: UntypedRef
+    ): RoomData =
+      // Replacing by id is what stops a page that reconnects being fed through two streams.
       this.copy(
         members = this.members + (userId -> Member(name)),
-        connections =
-          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref))
+        connections = this.connections.updatedWith(userId)(refs =>
+          Some(refs.getOrElse(Map.empty) + (connectionId -> ref))
+        )
       )
 
     private[Room] def disconnect(userId: UUID, ref: UntypedRef): RoomData =
-      // The entry goes when its set empties, so "holds no connection" means what it says.
+      // By value, never by id: removing by id would evict a live replacement.
       this.copy(connections =
-        this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
+        this.connections.updatedWith(userId)(_.map(_.filterNot(_._2 == ref)).filter(_.nonEmpty))
       )
 
     private[Room] def removeMember(userId: UUID): RoomData =
@@ -132,7 +151,7 @@ object Room:
         state: RoomState = RoomState.empty,
         members: Map[UUID, Member] = Map.empty,
         sessions: Map[SessionToken, Session] = Map.empty,
-        connections: Map[UUID, Set[UntypedRef]] = Map.empty
+        connections: Map[UUID, Map[ConnectionId, UntypedRef]] = Map.empty
     ): RoomData =
       // Every id resolves to a session, which is conspicuously not "every id is a member":
       // a connection or an estimate outliving its member is a state this design requires.
@@ -196,14 +215,14 @@ object Room:
             else
               armIdleTick(timers, stopAfterIdle)
               Behaviors.same
-          case Join(userId, name, token, ref) =>
+          case Join(userId, name, token, connectionId, ref) =>
             // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
             // the room; a refused joiner gets no snapshot and, deliberately, no connection.
             if data.sessions.get(token).contains(Session(userId, name)) then
               // The arriving connection cancels any pending removal, so ConfirmLeave needs no
               // staleness check of its own.
               timers.cancel(userId)
-              val newData = publish(data.connect(userId, name, ref), context)
+              val newData = publish(data.connect(userId, name, connectionId, ref), context)
               receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
             else
               val reason =
@@ -299,7 +318,7 @@ object Room:
       }
       .receiveSignal { case (_, PostStop) =>
         // A room that stops owes its attached streams an answer; the alternative is silence.
-        data.connections.values.flatten.foreach(_ ! StreamCompleted)
+        data.connections.values.flatMap(_.values).foreach(_ ! StreamCompleted)
         Behaviors.same
       }
 
@@ -310,7 +329,7 @@ object Room:
     // One snapshot per member, shared by that member's connections: redaction is per identity.
     data.connections.foreach { (id, refs) =>
       val snapshot = RoomSnapshot.of(data, id)
-      refs.foreach(_ ! snapshot)
+      refs.values.foreach(_ ! snapshot)
     }
     data
   end publish

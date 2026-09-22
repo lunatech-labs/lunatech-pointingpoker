@@ -41,6 +41,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     testKit.createTestProbe[RoomManager.Command]()
 
   val validToken: Room.SessionToken = Room.SessionToken.mint()
+  val connectionId: String          = UUID.randomUUID().toString
 
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
@@ -126,7 +127,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         }
       cookieValue mustBe validToken.raw
 
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", cookieValue)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
@@ -192,26 +193,33 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "reject an events connection with no session cookie" in
-      Get(s"/rooms/$roomId/events") ~> apiRoute ~> check {
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
     "reject an events connection with a malformed session cookie" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", "not-a-uuid")
       ) ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
     "reject an events connection with an unresolvable session cookie" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", Room.SessionToken.mint().raw)
       ) ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
-    "open an SSE events stream for a resolved session" in
+    "reject an events connection with no connection id" in
       Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+
+    "open an SSE events stream for a resolved session" in
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", validToken.raw)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
