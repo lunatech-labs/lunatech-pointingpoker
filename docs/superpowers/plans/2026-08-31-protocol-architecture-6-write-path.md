@@ -28,9 +28,8 @@ the section beginning "**Step 6. The write path becomes real.**" Section 4
 ("Identity and the write path") owns the leave rules, the connection id and
 idempotent `/join`; section 3 owns the keyed `connections` map and its three
 replacement rules; section 5 owns the client's two changes, `inRoom` and the
-optimistic assignment, the connection id and the beacon being section 4's;
-section 6's step 6
-paragraph owns the browser cases.
+optimistic assignment, the connection id and the beacon being section 4's; and
+section 6's step 6 paragraph owns the browser cases.
 
 **Branch:** `20260831.protocol_architecture_6_write_path`, based on `main` after
 step 4 merged. Step 6 waits on step 4 and on nothing else. Step 4a could have
@@ -94,8 +93,9 @@ already has it.
 
 - `build.sbt` Three tapir dependencies and a `V.tapir` entry.
 - `src/main/scala/com/lunatech/pointingpoker/API.scala` Rewritten. The endpoint
-  descriptions, their server logic, the cookie helper and the interpreted route.
-  The two `getFromFile` routes and the probe route stay raw pekko directives.
+  descriptions, their server logic, the cookie helper and the interpreted route,
+  which composes the probe and page routes alongside it. Nothing raw is left in
+  the file, so its directive wildcard narrows to `concat`.
 - `src/main/scala/com/lunatech/pointingpoker/Requests.scala` `JoinResponse`
   goes; `VoteRequest` gains the tapir `Schema` carrying the blank validator.
 - `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala` `ConnectionId`,
@@ -108,6 +108,14 @@ already has it.
   dropping silently.
 - `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala` `source` takes a
   connection id and threads it into `ConnectToRoom`.
+
+**Server, created:**
+
+- `src/main/scala/com/lunatech/pointingpoker/PageRoutes.scala` The two
+  `getFromFile` routes, lifted out of `API.scala` unchanged and given the
+  `ProbeRoutes` shape. It exists so the two routing vocabularies stop sharing a
+  file: tapir and pekko both export `path`, `cookie` and `setCookie`, and a
+  wildcard on each side makes all three ambiguous.
 
 **Server, deleted:**
 
@@ -156,7 +164,7 @@ already has it.
 - `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
   Landed-state notes on step 6 and one in section 4, the test inventory
   reconciled, the citation sweep.
-- `docs/known-issues.md` Three entries close, two are narrowed.
+- `docs/known-issues.md` Four entries close, two are narrowed.
 - `docs/roadmap.md` Phase 1's ask-pattern item is checked off, and the
   usage-metrics item stops pointing at a closed entry for its definition.
 - `docs/superpowers/plans/README.md` Step 6's entry.
@@ -247,6 +255,7 @@ that cannot mint an id draws the `400` loudly.
 - Modify: `build.sbt`
 - Modify: `src/main/scala/com/lunatech/pointingpoker/API.scala` (the whole
   `route` value)
+- Create: `src/main/scala/com/lunatech/pointingpoker/PageRoutes.scala`
 - Modify: `src/main/scala/com/lunatech/pointingpoker/Requests.scala`
 - Delete: `src/main/scala/com/lunatech/pointingpoker/CirceSupport.scala`
 - Test: `src/test/scala/com/lunatech/pointingpoker/APISpec.scala`
@@ -337,10 +346,14 @@ Run: `sbt update`, then `sbt evicted`, which is the command that reports
 evictions; `update` alone may print nothing.
 Expected: resolution succeeds. `tapir-pekko-http-server`'s POM declares
 pekko-http 1.3.0, pekko-stream 1.6.0 and pekko-slf4j 1.6.0; this build pins
-1.4.0 and 1.7.0, so the first two evict upward. What to check is that no pekko
-module resolves *below* a pin, not that the report is empty: tapir also brings
-new transitives of its own, `sttp-shared`'s pekko integration and
-`pekko-http-backend` among them, and they are expected.
+1.4.0 and 1.7.0, so all three evict upward. Measured: the pekko family resolves
+to `pekko-http` 1.4.0 and `pekko-actor`, `pekko-stream` and `pekko-slf4j` at
+1.7.0, the last of those pulled up with the family even though `build.sbt` never
+names it. What to check is that no pekko module resolves *below* a pin, not that
+the report is empty: tapir brings one new transitive of its own,
+`sttp-shared`'s pekko integration, and it is expected. `pekko-http-backend` is
+declared `test` in tapir's POM, so despite appearing there it does not resolve
+into this build.
 
 - [ ] **Step 7: Give `VoteRequest` a tapir schema**
 
@@ -366,9 +379,16 @@ serves the body; task 4 deletes the type outright.
 - [ ] **Step 8: Rewrite `API.scala` as endpoint descriptions**
 
 The whole of the new file's endpoint section. The imports at the top of the
-file gain:
+file change rather than only growing: `Directives.*` goes, since the static half
+moves to its own file below and `concat` is then the only directive left. That
+is not tidying. Tapir and pekko both define `path`, `cookie` and `setCookie`, so
+two wildcards make all three ambiguous rather than shadowing one another, and
+the paste fails with three `Reference to ... is ambiguous` errors. Importing
+`concat` by name is what keeps them unambiguous. Also gone with the static half:
+`ContentTypeResolver.Default`, `Cache-Control` and `no-cache`.
 
 ```scala
+import org.apache.pekko.http.scaladsl.server.Directives.concat
 import sttp.capabilities.pekko.PekkoStreams
 import sttp.model.StatusCode
 import sttp.model.headers.{Cookie as SttpCookie, CookieValueWithMeta}
@@ -439,7 +459,7 @@ branches.
 
 The `[Future]` on every `serverLogic` and `serverLogicSuccess` is load-bearing
 rather than decoration. Without it the compiler infers the list's element type as
-`ServerEndpoint[Any, ? >: Future[X0] <: Future]`, `toRoute` matches neither
+`ServerEndpoint[PekkoStreams, ? >: Future[X0] <: Future]`, `toRoute` matches neither
 overload, and the twenty-line error names `PekkoStreams & WebSockets` with its
 caret on `toRoute` rather than on the logic block that caused it. Measured on
 Scala 3.8.4 against this build's pins. Every endpoint tasks 3, 4 and 5 add wants
@@ -493,13 +513,43 @@ the same annotation for the same reason.
     }
   )
 
-  // The static half stays raw directives: tapir describes what the client calls, not what the
-  // server hands back off disk.
-  private val pageRoutes: Route =
+  val route: Route =
+    concat(
+      ProbeRoutes(probeConfig).route,
+      PageRoutes(apiConfig).route,
+      PekkoHttpServerInterpreter().toRoute(endpoints)
+    )
+```
+
+`pageRoutes` does not stay in the file. It becomes
+`src/main/scala/com/lunatech/pointingpoker/PageRoutes.scala`, the shape
+`ProbeRoutes` already has and the reason `API.scala` can drop its directive
+wildcard. The body is today's block unchanged, with the config it reads passed
+in rather than inherited:
+
+```scala
+package com.lunatech.pointingpoker
+
+import org.apache.pekko.http.scaladsl.model.headers.`Cache-Control`
+import org.apache.pekko.http.scaladsl.model.headers.CacheDirectives.`no-cache`
+import org.apache.pekko.http.scaladsl.server.Directives.*
+import org.apache.pekko.http.scaladsl.server.Route
+import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Default
+import com.lunatech.pointingpoker.config.ApiConfig
+import org.slf4j.{Logger, LoggerFactory}
+
+// The static half stays raw directives: tapir describes what the client calls, not what the
+// server hands back off disk.
+class PageRoutes(apiConfig: ApiConfig):
+
+  private val log: Logger = LoggerFactory.getLogger(this.getClass)
+
+  val route: Route =
     concat(
       pathEndOrSingleSlash {
         get {
           log.debug("Index call [{}]", apiConfig.indexPath)
+          // Always revalidate: no-store would re-send the whole page where a 304 costs nothing.
           respondWithHeader(`Cache-Control`(`no-cache`)) {
             getFromFile(apiConfig.indexPath)
           }
@@ -514,13 +564,10 @@ the same annotation for the same reason.
         }
       }
     )
+end PageRoutes
 
-  val route: Route =
-    concat(
-      ProbeRoutes(probeConfig).route,
-      pageRoutes,
-      PekkoHttpServerInterpreter().toRoute(endpoints)
-    )
+object PageRoutes:
+  def apply(apiConfig: ApiConfig): PageRoutes = new PageRoutes(apiConfig)
 ```
 
 Three details that are not optional. `SSE.source` returns
@@ -566,12 +613,16 @@ pass with no change to what it asserts beyond step 9's mechanical substitution
 and step 1's new case. If a status moved, the description is wrong: fix the
 description rather than the case.
 
-Nothing is expected to fail here. Two behaviours are worth checking precisely
-because they do not change: a request to a path no endpoint matches still falls
-through to pekko's rejection handling, so "not expose the proxy probe" still
-answers `404`, and a `GET` to a `POST` endpoint still answers `405`. The second
-is unasserted, no case in `src/test` naming a `405`, so it is an eyeball check
-rather than a red.
+Nothing is expected to fail here, but of the two behaviours worth checking by
+hand, one changes. A request to a path no endpoint matches still falls through
+to pekko's rejection handling, so "not expose the proxy probe" still answers
+`404`. A `GET` to a `POST` endpoint no longer answers `405` with an
+`Allow: POST` header: tapir rejects it outright, and pekko's default handling
+turns that into a plain `404`. Measured on this build's pins. Nothing observes
+the difference, since no case in `src/test` or `e2e` names a `405` and no client
+path issues a wrong-method request, so it is recorded here rather than asserted
+or restored. Configuring tapir's reject handler back to `405` was tried and is
+not a one-line change.
 
 - [ ] **Step 11: Run the browser suite**
 
@@ -678,8 +729,9 @@ In `Room.scala`, beside `SessionToken`:
   opaque type ConnectionId = UUID
 
   object ConnectionId:
-    def parse(raw: String): Option[ConnectionId]         = scala.util.Try(UUID.fromString(raw)).toOption
-    extension (id: ConnectionId) def raw: String         = id.toString
+    def parse(raw: String): Option[ConnectionId] =
+      scala.util.Try(UUID.fromString(raw)).toOption
+    extension (id: ConnectionId) def raw: String = id.toString
 ```
 
 Then the state and its three methods:
@@ -1287,7 +1339,11 @@ two cases arrive:
       val replyProbe = testKit.createTestProbe[Room.CommandResult]()
       val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
 
-      managerRef ! RoomManager.Show(UUID.randomUUID(), Some(Room.SessionToken.mint()), replyProbe.ref)
+      managerRef ! RoomManager.Show(
+        UUID.randomUUID(),
+        Some(Room.SessionToken.mint()),
+        replyProbe.ref
+      )
 
       replyProbe.expectMessage(Room.NoSession)
     }
@@ -1353,8 +1409,8 @@ Expected: PASS. No browser case proves the deletion cost nothing, and "a re-vote
 leaves the caster shown as selected but unconfirmed" is not the one: the flag
 only shows in the window between the click and the snapshot, and every assertion
 in that case auto-waits past it, so it passes with the `ownVoteConfirmed`
-assignment present or deleted.
-The Verification section's manual step is the check, which is why it is there.
+assignment present or deleted. The Verification section's manual step is the
+check, which is why it is there.
 
 ```bash
 sbt scalafmtAll
@@ -1629,15 +1685,25 @@ test('a reload keeps its identity and its vote', async ({ join }) => {
 - [ ] **Step 11: Amend the straggler-reload case**
 
 `e2e/room.spec.js`'s "a straggler reloading leaves the votes hidden" observes a
-duplicate Carol that this task removes, and step 2 wrote the instruction into the
-case itself. The `depart` callback's `toHaveCount(2)` becomes `toHaveCount(1)`,
-and the roster assertion beside it is what keeps the case honest once the
-duplicate is gone: a reload must leave the count where it was.
+duplicate Carol that this task removes, and step 2 wrote the instruction into
+the case itself. The `depart` callback's `toHaveCount(2)` becomes
+`toHaveCount(1)`, and a wait on Carol's own page goes in front of both counts.
+Without it they run while her reloaded page is still connecting, match the
+roster she has not yet rejoined, and pass before a duplicate could appear. Her
+table filling to three is what proves the rejoin landed, and is where a minted
+second id shows first. Replace the two comment lines above the callback as
+well: they say `/join` mints a second id and that Carol is listed twice, which
+is the mechanism this task deletes, so left in place they would sit directly
+above an assertion that contradicts them.
 
 ```js
+    // created() rejoins from localStorage, and /join resolves the cookie rather than minting,
+    // so the reload returns the same Carol instead of a second one.
     async (carol, alice) => {
       await carol.page.reload()
-      // One Carol, not two: the cookie resolves to the identity she already had.
+      // Her own table is empty until the snapshot lands, so this is what proves the rejoin
+      // finished. A minted second id would render four rows here.
+      await expect(participantRows(carol.page)).toHaveCount(3)
       await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
       await expect(participantRows(alice.page)).toHaveCount(3)
     },
@@ -1739,8 +1805,7 @@ git commit -m "feat(protocol): resume the session a join's cookie already names"
       data.members.keySet mustBe Set(user.id)
       data.connections(user.id) mustBe Map(user.connectionId -> userProbe.ref)
       // The other branch of the same rule: the tab that left gets its stream ended even
-      // though the member stayed, which is what makes the send unconditional rather than
-      // a departure-only special case.
+      // though the member stayed, which is why the send is not a removal-only case.
       secondProbe.expectMsg(Room.StreamCompleted)
     }
 
@@ -1779,9 +1844,8 @@ and the timer case, on `BehaviorTestKit` beside the existing grace-period ones:
         Room(UUID.randomUUID(), withUsers(user), testGracePeriod, testStopAfterIdle)
       )
 
-      // The stream terminated first, so a timer is pending when the beacon arrives.
-      // Draining is what the other timer cases do: every non-tick message re-arms the
-      // idle tick, so the effect queue is never just the one the case is about.
+      // A timer is pending: the stream terminated first. Every non-tick message re-arms the
+      // idle tick, so drain the queue as the other timer cases do.
       btk.run(Room.Leave(user.id, userProbe.ref))
       btk.retrieveAllEffects()
 
@@ -1820,7 +1884,7 @@ Expected: FAIL to compile, `Room.Depart` not found.
               case Right(userId) =>
                 replyTo ! Applied
                 // The server ends every stream it stops serving, the same rule a refused Join
-                // follows. Already gone is the normal case and dead-letters harmlessly.
+                // follows. A ref whose stream already ended dead-letters harmlessly.
                 data.connections
                   .get(userId)
                   .flatMap(_.get(connectionId))
@@ -1859,12 +1923,14 @@ stream, and that argument is true of both paths that produce a `Depart` and
 false of the one that matters: a beacon fired from a `pagehide` the `persisted`
 gate misread leaves a live page whose member the room has removed, receiving
 nothing and never told. Ending the stream makes `EventSource` reconnect and
-re-join, so the state heals itself. Sending it always rather than only when a
-ref is found is what keeps this a rule instead of a special case, and matches
-what a refused `Join` already does. The cost of the common case, where the ref
-is a stream that has already completed, was measured against this build's pekko
-rather than assumed: the message dead-letters, which is a no-op logged at INFO
-and bounded by `log-dead-letters = 10` with a five minute suspension.
+re-join, so the state heals itself. Sending it on both branches, rather than
+only on the one that removes the member, is what keeps this a rule instead of a
+special case, and matches what a refused `Join` already does. Where the client
+closed first the ref is already out of the map and nothing is sent at all. Where
+it is still mapped but its stream has completed, the cost was measured against
+this build's pekko rather than assumed: the message dead-letters, which is a
+no-op logged at INFO and bounded by `log-dead-letters = 10` with a five minute
+suspension.
 
 - [ ] **Step 4: Relay it and describe the endpoint**
 
@@ -1964,11 +2030,13 @@ that never goes degrades to exactly the detection path this step replaces.
         },
 ```
 
-The order is the point. Today's `doLeave` closes the stream last and is safe
-only because the server's reply cannot be processed before the handler yields,
-which is a timing accident no test would catch if someone put an `await` in
-front of it. Closing first makes it independent of timing: no reconnect can come
-from an object already closed.
+The order is the point. Today's `doLeave` closes the stream last and gets away
+with it because it issues no request at all, so there is no reply to race. Add
+the `postLeave` call and keep the close last, and the safety becomes a timing
+accident: the server ends a departed connection's stream, and an `EventSource`
+reconnects unless it was closed from this side. Closing first makes it
+independent of timing, since no reconnect can come from an object already
+closed.
 
 and, after the Vue instance is created:
 
@@ -2068,10 +2136,21 @@ and the reload cases stop waiting on a heartbeat.
 
 Three cases are the ones to read carefully if anything goes red. "a straggler
 reloading leaves the votes hidden" is now genuinely hostile, since the reload
-removes the straggler and the latch is the only thing keeping the round shut. "a
-reload keeps its identity and its vote" from task 4 now exercises the departure
-and the return rather than a member who never left. And "a straggler closing
-their tab leaves the votes hidden" should get much faster for the same reason.
+removes the straggler and the latch is the only thing keeping the round shut.
+Its opening comment has to go with that: it calls the case vacuous and says it
+is "kept for step 6, where a beacon removes her instead of replacing her", which
+this step is. Replace it with what the case now proves, that the latch holds the
+round shut across a real departure and return:
+
+```js
+  // Hostile now: the beacon removes Carol on the reload, so the latch is the only thing
+  // keeping the round shut until she returns.
+```
+
+The other two need no edit, only attention. "a reload keeps its identity and its
+vote" from task 4 now exercises the departure and the return rather than a
+member who never left, and "a straggler closing their tab leaves the votes
+hidden" should get much faster for the same reason.
 
 - [ ] **Step 11: Commit**
 
@@ -2133,7 +2212,7 @@ are not optional:
 
 - [ ] **Step 2: Close the known-issue entries**
 
-Three close outright and two narrow.
+Four close outright and two narrow.
 
 - "A deliberate tab close is as slow to announce as a transient reconnect"
   closes. Both halves landed: the beacon for the close, idempotent `/join` for
@@ -2192,7 +2271,7 @@ creates:
   in both directions before this step's review: it named a `Requests.scala:23`
   that does not exist and missed `API.scala:91` and `:163`, which this step
   deletes outright, and `:18-19`, which task 1 rewrites.
-- `index.html:447-460`, `:517-527`, `:365`, `:355`, `:318` and the four asset
+- `index.html:447-460`, `:517-527`, `:365`, `:355`, `:318`, `:273` and the four asset
   tags all shift. The design cites several of the same lines.
 - The design's `Room.scala` citations shift again for `ConnectionId`, the
   `CommandResult` ADT and the `Depart` handler.
