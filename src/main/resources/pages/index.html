@@ -426,7 +426,7 @@
           localStorage.setItem("roomId", this.roomId);
           localStorage.setItem("name", this.user.name);
           axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
-          .then(function (response) {
+          .then(function () {
             // Entering a room is a navigation decision, not room state: no later frame can put
             // the page back into a room the user has left.
             var entering = true;

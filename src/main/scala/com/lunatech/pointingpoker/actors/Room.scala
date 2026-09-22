@@ -345,8 +345,8 @@ object Room:
             data.acting(token) match
               case Right(userId) =>
                 replyTo ! Applied
-                // The server ends every stream it stops serving, the same rule a refused Join
-                // follows. A ref whose stream already ended dead-letters harmlessly.
+                // The server ends the stream it removes deliberately, the same rule a refused
+                // Join follows. A ref whose stream already ended dead-letters harmlessly.
                 data.connections
                   .get(userId)
                   .flatMap(_.get(connectionId))

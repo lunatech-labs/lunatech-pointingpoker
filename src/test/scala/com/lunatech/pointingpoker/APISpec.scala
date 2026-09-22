@@ -44,6 +44,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
   // The probe is still the assertion target; the reply is what stops every command case
   // failing on the ask's timeout instead of on what it asserts.
+  // Shared mutable state across test cases: correct only under ScalaTest's default sequential run.
   val commandReply: java.util.concurrent.atomic.AtomicReference[Room.CommandResult] =
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
 
@@ -157,7 +158,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         s"/rooms/$roomId/join",
         HttpEntity(ContentTypes.`application/json`, "{\"not-name\": 5}")
       ) ~> apiRoute ~> check {
-        // MalformedRequestContentRejection should result in 400
+        // tapir's own decode-failure handling produces this 400, not a pekko rejection.
         response.status mustBe StatusCodes.BadRequest
       }
 
