@@ -26,6 +26,7 @@ import sttp.tapir.server.pekkohttp.{PekkoHttpServerInterpreter, PekkoServerSentE
 import java.nio.charset.StandardCharsets
 
 import scala.concurrent.Future
+import scala.util.Failure
 
 class API(
     roomManager: ActorRef[RoomManager.Command],
@@ -84,6 +85,8 @@ class API(
     .in(header[Option[String]]("X-Forwarded-Proto"))
     .out(sseBody)
     .out(header("Cache-Control", "no-cache"))
+    // Proxies that buffer a response body turn SSE into batches or silence;
+    // X-Accel-Buffering is nginx's opt-out and README records the rest.
     .out(header("X-Accel-Buffering", "no"))
     .errorOut(statusCode(StatusCode.Unauthorized))
 
@@ -128,14 +131,21 @@ class API(
     raw.flatMap(Room.SessionToken.parse)
 
   private val endpoints = List(
-    createRoom.serverLogicSuccess[Future](_ =>
-      (roomManager ? RoomManager.CreateRoom.apply).mapTo[RoomManager.RoomId].map(_.value)
-    ),
+    createRoom.serverLogicSuccess[Future] { _ =>
+      log.debug("Create room call")
+      (roomManager ? RoomManager.CreateRoom.apply)
+        .mapTo[RoomManager.RoomId]
+        .andThen { case Failure(reason) => log.error("Error while creating room: {}", reason) }
+        .map(_.value)
+    },
     join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.SessionMinted](
           RoomManager.RequestSession(roomId, request.name, resolveToken(rawCookie), _)
         )
+        .andThen { case Failure(reason) =>
+          log.error("Error while joining room {}: {}", roomId, reason)
+        }
         .map(minted => sessionCookie(roomId, minted.token))
     },
     events.serverLogic[Future] { (roomId, connectionId, rawCookie, forwardedProto) =>
@@ -154,6 +164,9 @@ class API(
         case Some(token) =>
           roomManager
             .ask[Room.TokenResolution](RoomManager.ValidateToken(roomId, token, _))
+            .andThen { case Failure(reason) =>
+              log.error("Error while validating session for room {}: {}", roomId, reason)
+            }
             .map {
               case Room.Resolved(userId, name) =>
                 Right(
@@ -167,7 +180,9 @@ class API(
                     lifecycleConfig.retryMillis
                   )
                 )
-              case Room.Unresolved => Left(())
+              case Room.Unresolved =>
+                log.debug("Session token did not resolve for room {}", roomId)
+                Left(())
             }
     },
     vote.serverLogic[Future] { (roomId, rawCookie, request) =>
