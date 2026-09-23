@@ -159,13 +159,30 @@ roadmap item instead of leaving it here as stale history.
   out, and the older `departureWhileCut` helper does the same. A participant
   who crashes, sleeps their laptop, or drops off the network in an otherwise
   quiet room lingers in everyone's list for up to about half a minute.
+
+  Firefox lands here even on a deliberate close, not only a crash or a sleeping
+  laptop. `pagehide` fires as designed, but Firefox has a long-standing, still-open
+  bug where the `sendBeacon` it queues can be dropped when the tab closes
+  ([Mozilla 1609653](https://bugzilla.mozilla.org/show_bug.cgi?id=1609653)), worse
+  when it is the last tab in its window
+  ([1629773](https://bugzilla.mozilla.org/show_bug.cgi?id=1629773)) but not limited
+  to that case. Trials of a faithful single-tab close (Playwright's `page.close()`)
+  delivered the beacon on Chromium every time, under 200ms; on Firefox it landed
+  about one time in five when the closing tab was the only one in its window, and
+  about half the time with an unrelated tab left open. Either way a dropped beacon
+  falls back to this same heartbeat path, landing at the same ~35 seconds measured
+  above.
 - **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
   leave endpoint does not close this: its beacon fires only on `pagehide` for a
-  page being discarded deliberately, and a crash, a sleeping laptop, or a
-  silent network drop reaches no such event, so detection still waits on a
-  heartbeat write failing. Shortening the heartbeat would speed detection at the
-  cost of traffic on every open connection, and no step in the target design
-  schedules that trade.
+  page being discarded deliberately, and a crash, a sleeping laptop, a silent
+  network drop, or Firefox's own beacon bug all reach the same heartbeat wait.
+  Shortening the heartbeat would speed detection at the cost of traffic on every
+  open connection, and no step in the target design schedules that trade; the
+  Firefox case does not change that answer; it only widens who hits it. The
+  roadmap's idle indicator (`docs/roadmap.md`, Phase 5) would narrow the practical
+  impact of all of these at once, since it flags inactivity from the client's own
+  input rather than from connection state, so a departed participant reads as idle
+  well before any of these paths confirms them gone.
 
 ### A room outliving its last member is not covered end to end
 
