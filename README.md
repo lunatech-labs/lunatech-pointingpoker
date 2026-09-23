@@ -55,17 +55,20 @@ Available endpoints:
 |---------------------------------|--------|-----------------------|----------------------------------------------------------------------|
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
-|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Mints a userId and a session, returns `{"userId": "..."}`, and sets a room-scoped session cookie |
-|`/rooms/{roomId}/events`         | GET    | none                  | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. Requires a valid session cookie from a prior `/join`; `401` otherwise |
+|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Resumes the session the cookie already names, renaming it, or mints one and sets a room-scoped session cookie. Answers `204` with no body, and creates the room when its id is absent |
+|`/rooms/{roomId}/events?connectionId={uuid}` | GET | none      | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. The page mints the id once per page instance. Requires a valid session cookie from a prior `/join`; `401` otherwise, `400` without a connection id |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
 |`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
 |`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires the session cookie               |
 |`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires the session cookie        |
+|`/rooms/{roomId}/leave?connectionId={uuid}` | POST | none       | Ends the named connection's membership at once instead of after the grace period. Sent by `navigator.sendBeacon` on `pagehide` and by the Leave link |
 
-Command endpoints return `204 No Content`. An unknown `roomId`, a missing/invalid
-session cookie, and a vote arriving while the round is revealed are all silent
-no-ops.
+Command endpoints answer what the room decided, with no body: `204` when applied,
+`401` without a session (including an unknown `roomId`), and `403` when the session
+is no longer a member. `/vote` adds `409` for a revealed round and `400` for a
+blank estimation. `/leave` answers `204` on every branch it reaches past those two,
+and `400` without a connection id.
 
 There is also a `GET /{roomId}` route that serves the same frontend index page,
 so a room link can be shared directly.
