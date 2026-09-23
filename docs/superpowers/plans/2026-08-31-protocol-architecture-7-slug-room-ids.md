@@ -4,7 +4,7 @@
 
 **Goal:** Replace raw UUID room ids with three-word slugs (`brave-golden-otter`) drawn from a reviewed vocabulary, refuse names outside it with a suggestion, and redirect existing UUID links to a derived slug with a banner.
 
-**Architecture:** A new `com.lunatech.pointingpoker.slug` package owns everything about names: the three pools, an opaque `Slug` type whose only constructors are the parser and the generator, the typo suggestion, and the removable UUID derivation. The backend then carries `Slug` where it carried `UUID` for rooms, so an invalid name can never reach `RoomManager`. `PageRoutes` gains the UUID redirect, the lowercase redirect and the rejection page, and moves to the end of the assembled route because its slug matcher takes every single-segment `GET`. The page gains the banner and sends a refused `/join` back through the page route.
+**Architecture:** A new `com.lunatech.pointingpoker.slug` package owns everything about names: the three pools, an opaque `Slug` type whose only public constructors are the parser, the generator and the removable UUID derivation, the typo suggestion, and the removable UUID derivation. The backend then carries `Slug` where it carried `UUID` for rooms, so an invalid name can never reach `RoomManager`. `PageRoutes` gains the UUID redirect, the lowercase redirect and the rejection page, and moves to the end of the assembled route because its slug matcher takes every single-segment `GET`. The page gains the banner and sends a refused `/join` back through the page route.
 
 **Tech Stack:** Scala 3.9.0 with `-Werror`, Pekko 1.7.0 typed actors, Pekko HTTP 1.4.0, tapir 1.13.31, ScalaTest 3.2.20, logback 1.6.3, Vue 2.6 in `index.html`, Playwright 1.63.
 
@@ -17,12 +17,13 @@ Each one is my recommendation. The plan implements it as written unless the revi
 - **D1. `RoomState` still gets no `slug` field.** Step 4's note says step 7 adds it "when slug generation gives it a meaning". The reason step 4 gave for leaving it out still holds: `roomId` is already a parameter of `Room.receiveBehaviour`, so a copy in the state would have no reader and could only disagree with the parameter. Task 6 changes the parameter's type to `Slug` and adds no field. Task 8 corrects the step 4 annotation and records this in step 7's "Landed." note.
 - **D2. The page can send an invalid name to the API, and the spec says it never does.** The spec says "the page never produces one in normal use". Two paths contradict that. One is the Join form's typed room id. The other is a UUID in `localStorage` from before the cutover, which `created()` rejoins when someone opens `/`. Both would end on "Could not join the room". Task 7 makes a `404` from `/join` navigate to `/<name>`, so the page route's refusal, lowercase redirect or UUID redirect handles it. Task 8 corrects the spec's sentence.
 - **D3. "Within one edit" includes a swap of two adjacent letters.** Technically that is optimal string alignment distance 1, so `otetr` suggests `otter`. The near-twin test uses the same function, so the uniqueness the suggestion relies on still holds by construction. With plain Levenshtein, the commonest typing slip would get no suggestion. Task 8 adds the definition to the spec.
-- **Factual correction, no decision: tapir answers `400`, not `404`.** A measurement on the current tree showed that `POST /rooms/not-a-uuid/join` answers `400 Invalid value for: path parameter roomId`. The spec's "tapir's own `404`" is wrong as written. Task 6 marks the room path input `.onDecodeFailureNextEndpoint`. A second measurement confirmed that this makes all three endpoint shapes fall through to Pekko's `404`. Task 8 corrects the spec's wording.
+- **D4. `create-room` gives up rather than retrying forever, and answers `503`.** The spec's open question 4 asks for the fallback when no free triple is found, and says it should log loudly. An unused room lives two hours, so an unthrottled `create-room` script at about 37 calls a second fills the namespace. An unbounded retry would then spin inside `RoomManager`, which handles one message at a time, and freeze every room until a restart. `Slug.generate` therefore returns `None` after 100 draws that all hit a live room (at 90% of names live, a wrong refusal happens about 3 times in 100,000). `RoomManager` logs one ERROR line with the live room count and replies `NoFreeRoomName`, the endpoint answers `503`, and the page, whose `doCreate` only logged to the console, shows "Could not create a room. Please try again." Throwing instead was rejected: an exception stops a typed actor by default, which would take every room down with the manager.
+- **Factual correction, no decision: tapir answers `400`, not `404`.** A measurement on the current tree showed that `POST /rooms/not-a-uuid/join` answers `400 Invalid value for: path parameter roomId`. The spec's "tapir's own `404`" is wrong as written. That `400` comes from `Codec.uuid` returning `DecodeResult.Error`, because `UUID.fromString` throws. tapir's default handler answers `400` for a decode error but tries the next endpoint on a `DecodeResult.Mismatch`. Task 6's slug codec returns `Mismatch`, so an invalid name falls through every endpoint to Pekko's `404`; a second measurement confirmed that returning `Error` instead brings back the `400`. Task 8 corrects the spec's wording.
 
 Smaller calls, noted so a reviewer can object:
 
 - The mixed-case redirect uses `302`, the same reasoning as the UUID redirect. The query string is dropped, since nothing the server issues carries one on a mixed-case name.
-- The banner is fixed to the bottom of the viewport with `role="status"`. In-flow alerts above the room, like today's error and clipboard ones, would push the deck down. `role="status"` also keeps it out of the e2e `connectionAlert` fixture, which matches any `alert`.
+- The banner sits in the flow, in the alerts column above the room, with `role="status"`. A banner fixed to the viewport covered the `55` and `89` cards at 390x844. In the flow it covers nothing, and since the page shows it from its first render, before the deck exists, only the reader's own dismissal moves the deck. The spec's "must not hide or displace the deck" is reworded to match in Task 8. `role="status"` also keeps it out of the e2e `connectionAlert` fixture, which matches any `alert`.
 - Slugs are drawn with `SecureRandom`, since a predictable next slug would narrow what a prober has to try.
 - The Join form's room id input gets `v-model.trim`, so a pasted name with a trailing space is not refused.
 
@@ -45,7 +46,7 @@ Smaller calls, noted so a reviewer can object:
 
 - **A name typed into the Join form, or a UUID remembered in `localStorage` from before the cutover.** Both go straight to `/join` without passing the page route. A person expects to land on the refusal or on their old room, not on "Could not join the room". Task 7 has an e2e case for each.
 - **Markup in the address bar.** The rejection page echoes whatever segment was typed. A person expects the page to show the text, never run it. Task 5 has a case that sends an `<img onerror>` segment and asserts it comes back escaped.
-- **The moved banner over the deck.** A fixed banner could cover the cards on a short viewport, and an in-flow one would shift them. A person expects to vote with the banner still up. Task 7 votes with the banner shown and asserts the card's position is unchanged after dismissal.
+- **The moved banner over the deck on a phone.** A banner laid over the page covers the last cards on a narrow viewport. A person expects to vote with the banner still up. Task 7 opens the room at 390x844, asserts no card's centre lands on the banner, and votes on the last card.
 - **`create-room` drawing a slug that a live room holds.** One collision means two teams share one room. A person expects a fresh room every time. Task 6 has a case that scripts the first draw onto a live room and asserts the manager draws again.
 - **A UUID link that a mail client or wiki rewrote in upper case.** A person expects it to open the same room as the lowercase link. Task 5 has a case asserting that both give the same derived slug.
 
@@ -60,7 +61,7 @@ Smaller calls, noted so a reviewer can object:
 | Create `src/main/scala/com/lunatech/pointingpoker/slug/Slug.scala` | Opaque `Slug`, `parse`, `generate`, `raw` |
 | Create `src/main/scala/com/lunatech/pointingpoker/slug/Suggestion.scala` | The unambiguous correction for a refused name |
 | Create `src/main/scala/com/lunatech/pointingpoker/slug/LegacySlug.scala` | UUID to slug derivation. Deleted, together with its route and banner, when the roadmap trigger fires |
-| Create `src/test/scala/com/lunatech/pointingpoker/slug/SlugFixtures.scala` | `aSlug()` and `ScriptedRandom` for every spec |
+| Create `src/test/scala/com/lunatech/pointingpoker/slug/SlugFixtures.scala` | `aSlug()`, `ScriptedRandom` and `StuckRandom` for every spec |
 | Create `src/test/scala/com/lunatech/pointingpoker/slug/{Vocabulary,EditDistance,Slug,Suggestion,LegacySlug}Spec.scala` | Unit tests |
 | Modify `PageRoutes.scala` | UUID redirect, slug matcher, lowercase redirect, rejection page |
 | Modify `API.scala` | `Slug` path codec, fall-through on a decode failure, cookie path, pages last |
@@ -118,6 +119,7 @@ class EditDistanceSpec extends AnyWordSpec with must.Matchers:
     "count two edits as two" in (EditDistance("cool", "good") mustBe 2)
     "count every letter against the empty string" in (EditDistance("", "owl") mustBe 3)
   }
+end EditDistanceSpec
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -134,13 +136,17 @@ package com.lunatech.pointingpoker.slug
 object EditDistance:
 
   def apply(a: String, b: String): Int =
-    val d = Array.tabulate(a.length + 1, b.length + 1)((i, j) => if i == 0 then j else if j == 0 then i else 0)
+    val d = Array.tabulate(a.length + 1, b.length + 1)((i, j) =>
+      if i == 0 then j else if j == 0 then i else 0
+    )
     for i <- 1 to a.length; j <- 1 to b.length do
       val cost = if a(i - 1) == b(j - 1) then 0 else 1
       d(i)(j) = math.min(math.min(d(i - 1)(j) + 1, d(i)(j - 1) + 1), d(i - 1)(j - 1) + cost)
       if i > 1 && j > 1 && a(i - 1) == b(j - 2) && a(i - 2) == b(j - 1) then
         d(i)(j) = math.min(d(i)(j), d(i - 2)(j - 2) + 1)
     d(a.length)(b.length)
+  end apply
+end EditDistance
 ```
 
 - [ ] **Step 4: Run it to verify it passes**
@@ -165,24 +171,27 @@ class VocabularySpec extends AnyWordSpec with must.Matchers:
   )
 
   "The slug vocabulary" should {
-    "hold only lowercase ASCII words of 3 to 8 letters" in
+    "hold only lowercase ASCII words of 3 to 8 letters" in {
       for (name, pool) <- pools; word <- pool do
-        withClue(s"$name: ")(word must fullyMatch regex "[a-z]{3,8}")
+        withClue(s"$name: ")((word must fullyMatch).regex("[a-z]{3,8}"))
+    }
     "hold each word once across all three pools" in {
       val all = pools.flatMap(_._2)
       all.diff(all.distinct) mustBe empty
     }
     // Load-bearing: the refusal only catches a typo that lands outside the vocabulary.
-    "hold no two words in one pool within one edit of each other" in
+    "hold no two words in one pool within one edit of each other" in {
       for (name, pool) <- pools do
         val twins = pool.combinations(2).collect {
           case Seq(a, b) if EditDistance(a, b) <= 1 => s"$a/$b"
         }
         withClue(s"$name: ")(twins.toList mustBe empty)
+    }
     "keep the namespace at or above its floor of 200,000" in
       (Vocabulary.character.size.toLong * Vocabulary.appearance.size * Vocabulary.animal.size
         must be >= 200_000L)
   }
+end VocabularySpec
 ```
 
 - [ ] **Step 6: Run it to verify it fails**
@@ -199,35 +208,211 @@ package com.lunatech.pointingpoker.slug
 object Vocabulary:
 
   val character: Vector[String] = Vector(
-    "active", "agile", "alert", "bold", "brave", "breezy", "bubbly", "careful", "caring",
-    "charming", "chatty", "cheerful", "clever", "cool", "curious", "devoted", "dreamy",
-    "eager", "fearless", "festive", "fine", "friendly", "generous", "gentle", "gifted",
-    "glad", "good", "graceful", "grand", "handy", "happy", "hearty", "helpful", "heroic",
-    "hopeful", "humble", "jolly", "joyful", "keen", "kind", "lively", "loving", "loyal",
-    "lucky", "merry", "modest", "neat", "nice", "noble", "patient", "peaceful", "playful",
-    "polite", "proud", "quick", "quiet", "ready", "relaxed", "sharp", "smart", "smiley",
-    "social", "sporty", "steady", "strong", "sturdy", "sunny", "super", "swift", "tidy",
-    "true", "trusty", "upbeat", "warm", "witty"
+    "active",
+    "agile",
+    "alert",
+    "bold",
+    "brave",
+    "breezy",
+    "bubbly",
+    "careful",
+    "caring",
+    "charming",
+    "chatty",
+    "cheerful",
+    "clever",
+    "cool",
+    "curious",
+    "devoted",
+    "dreamy",
+    "eager",
+    "fearless",
+    "festive",
+    "fine",
+    "friendly",
+    "generous",
+    "gentle",
+    "gifted",
+    "glad",
+    "good",
+    "graceful",
+    "grand",
+    "handy",
+    "happy",
+    "hearty",
+    "helpful",
+    "heroic",
+    "hopeful",
+    "humble",
+    "jolly",
+    "joyful",
+    "keen",
+    "kind",
+    "lively",
+    "loving",
+    "loyal",
+    "lucky",
+    "merry",
+    "modest",
+    "neat",
+    "nice",
+    "noble",
+    "patient",
+    "peaceful",
+    "playful",
+    "polite",
+    "proud",
+    "quick",
+    "quiet",
+    "ready",
+    "relaxed",
+    "sharp",
+    "smart",
+    "smiley",
+    "social",
+    "sporty",
+    "steady",
+    "strong",
+    "sturdy",
+    "sunny",
+    "super",
+    "swift",
+    "tidy",
+    "true",
+    "trusty",
+    "upbeat",
+    "warm",
+    "witty"
   )
 
   val appearance: Vector[String] = Vector(
-    "amber", "big", "black", "bronze", "brown", "copper", "coral", "dotted", "emerald",
-    "giant", "golden", "green", "huge", "jumbo", "large", "lemon", "lime", "little", "long",
-    "massive", "mint", "navy", "olive", "orange", "pearl", "pink", "purple", "rosy", "ruby",
-    "rusty", "sandy", "short", "silver", "small", "snowy", "speckled", "spotted", "starry",
-    "striped", "tall", "tiny", "violet", "white", "yellow", "zigzag"
+    "amber",
+    "big",
+    "black",
+    "bronze",
+    "brown",
+    "copper",
+    "coral",
+    "dotted",
+    "emerald",
+    "giant",
+    "golden",
+    "green",
+    "huge",
+    "jumbo",
+    "large",
+    "lemon",
+    "lime",
+    "little",
+    "long",
+    "massive",
+    "mint",
+    "navy",
+    "olive",
+    "orange",
+    "pearl",
+    "pink",
+    "purple",
+    "rosy",
+    "ruby",
+    "rusty",
+    "sandy",
+    "short",
+    "silver",
+    "small",
+    "snowy",
+    "speckled",
+    "spotted",
+    "starry",
+    "striped",
+    "tall",
+    "tiny",
+    "violet",
+    "white",
+    "yellow",
+    "zigzag"
   )
 
   val animal: Vector[String] = Vector(
-    "anteater", "badger", "beetle", "bison", "buffalo", "canary", "cat", "clam", "crane",
-    "cricket", "crow", "dolphin", "dove", "duck", "eagle", "eel", "elephant", "falcon",
-    "ferret", "finch", "firefly", "flamingo", "gecko", "giraffe", "goldfish", "gull",
-    "hamster", "hawk", "hedgehog", "heron", "herring", "iguana", "jaguar", "kangaroo", "kiwi",
-    "koala", "lark", "lion", "lobster", "magpie", "meerkat", "mole", "moth", "mouse",
-    "octopus", "orca", "ostrich", "otter", "owl", "oyster", "panda", "panther", "parrot",
-    "pelican", "penguin", "pony", "puffin", "puma", "puppy", "rabbit", "reindeer", "robin",
-    "rooster", "seahorse", "seal", "snail", "sparrow", "spider", "squid", "starfish", "stork",
-    "swan", "tiger", "toucan", "turtle", "walrus", "wombat", "yak", "zebra"
+    "anteater",
+    "badger",
+    "beetle",
+    "bison",
+    "buffalo",
+    "canary",
+    "cat",
+    "clam",
+    "crane",
+    "cricket",
+    "crow",
+    "dolphin",
+    "dove",
+    "duck",
+    "eagle",
+    "eel",
+    "elephant",
+    "falcon",
+    "ferret",
+    "finch",
+    "firefly",
+    "flamingo",
+    "gecko",
+    "giraffe",
+    "goldfish",
+    "gull",
+    "hamster",
+    "hawk",
+    "hedgehog",
+    "heron",
+    "herring",
+    "iguana",
+    "jaguar",
+    "kangaroo",
+    "kiwi",
+    "koala",
+    "lark",
+    "lion",
+    "lobster",
+    "magpie",
+    "meerkat",
+    "mole",
+    "moth",
+    "mouse",
+    "octopus",
+    "orca",
+    "ostrich",
+    "otter",
+    "owl",
+    "oyster",
+    "panda",
+    "panther",
+    "parrot",
+    "pelican",
+    "penguin",
+    "pony",
+    "puffin",
+    "puma",
+    "puppy",
+    "rabbit",
+    "reindeer",
+    "robin",
+    "rooster",
+    "seahorse",
+    "seal",
+    "snail",
+    "sparrow",
+    "spider",
+    "squid",
+    "starfish",
+    "stork",
+    "swan",
+    "tiger",
+    "toucan",
+    "turtle",
+    "walrus",
+    "wombat",
+    "yak",
+    "zebra"
   )
 end Vocabulary
 ```
@@ -271,11 +456,11 @@ git commit -m "feat(slug): add the three word pools and the edit distance they a
 - Produces:
   - `opaque type Slug = String` in package `com.lunatech.pointingpoker.slug`.
   - `Slug.parse(raw: String): Option[Slug]`.
-  - `Slug.generate(isLive: Slug => Boolean, random: java.util.Random): Slug`.
+  - `Slug.generate(isLive: Slug => Boolean, random: java.util.Random): Option[Slug]`, `None` after `private[slug] Slug.MaxDraws` (100) draws that all hit a live room.
   - `Slug.secureRandom: java.util.Random`.
   - `extension (slug: Slug) def raw: String`.
   - `private[slug] Slug.of(character: String, appearance: String, animal: String): Slug`.
-  - Test scope: `SlugFixtures.aSlug(): Slug` and `SlugFixtures.ScriptedRandom(indices: Int*)`.
+  - Test scope: `SlugFixtures.aSlug(): Slug`, `SlugFixtures.ScriptedRandom(indices: Int*)` and `SlugFixtures.StuckRandom`.
 
 - [ ] **Step 1: Write the fixtures**
 
@@ -284,12 +469,17 @@ package com.lunatech.pointingpoker.slug
 
 object SlugFixtures:
 
-  def aSlug(): Slug = Slug.generate(_ => false, Slug.secureRandom)
+  def aSlug(): Slug = Slug.generate(_ => false, Slug.secureRandom).get
+
+  // Always draws the first word of each pool, so every draw names the same room.
+  object StuckRandom extends java.util.Random:
+    override def nextInt(bound: Int): Int = 0
 
   // Answers nextInt with the given indices in order, so a test chooses every draw.
   final class ScriptedRandom(indices: Int*) extends java.util.Random:
-    private val remaining                  = indices.iterator
+    private val remaining                 = indices.iterator
     override def nextInt(bound: Int): Int = remaining.next()
+end SlugFixtures
 ```
 
 - [ ] **Step 2: Write the failing test**
@@ -327,12 +517,21 @@ class SlugSpec extends AnyWordSpec with must.Matchers:
   "Slug.generate" should {
     "draw only slugs the parser accepts" in
       (1 to 200).foreach { _ =>
-        val slug = Slug.generate(_ => false, Slug.secureRandom)
+        val slug = Slug.generate(_ => false, Slug.secureRandom).get
         Slug.parse(slug.raw) mustBe Some(slug)
       }
     "draw again until no live room holds the slug" in
-      (Slug.generate(_ == nth(0), ScriptedRandom(0, 0, 0, 1, 1, 1)) mustBe nth(1))
+      (Slug.generate(_ == nth(0), ScriptedRandom(0, 0, 0, 1, 1, 1)) mustBe Some(nth(1)))
+    "give up after MaxDraws draws that all hit a live room" in {
+      var draws                              = 0
+      def everyNameLive(slug: Slug): Boolean =
+        draws += 1
+        true
+      Slug.generate(everyNameLive, Slug.secureRandom) mustBe None
+      draws mustBe Slug.MaxDraws
+    }
   }
+end SlugSpec
 ```
 
 - [ ] **Step 3: Run it to verify it fails**
@@ -347,7 +546,8 @@ package com.lunatech.pointingpoker.slug
 
 import java.security.SecureRandom
 
-// Three pool words in order, lowercase. Only parse and generate make one outside this package.
+// Three pool words in order, lowercase. Outside this package only parse, generate and
+// LegacySlug.derive make one.
 opaque type Slug = String
 
 object Slug:
@@ -364,9 +564,12 @@ object Slug:
       case Array(c, a, n) if characters(c) && appearances(a) && animals(n) => Some(raw)
       case _                                                               => None
 
-  // Live rooms are a few dozen in a namespace of hundreds of thousands, so this rarely loops.
-  def generate(isLive: Slug => Boolean, random: java.util.Random): Slug =
-    Iterator.continually(draw(random)).find(slug => !isLive(slug)).get
+  // At 90% of names live, 100 draws all hit one about 3 times in 100,000.
+  private[slug] val MaxDraws = 100
+
+  // None when every draw hit a live room: exhaustion is scale or an abused create-room.
+  def generate(isLive: Slug => Boolean, random: java.util.Random): Option[Slug] =
+    Iterator.continually(draw(random)).take(MaxDraws).find(slug => !isLive(slug))
 
   private def draw(random: java.util.Random): Slug =
     of(
@@ -388,13 +591,17 @@ end Slug
 - [ ] **Step 5: Run it to verify it passes**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.slug.SlugSpec"`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
-- [ ] **Step 6: Prove the retry test can fail**
+- [ ] **Step 6: Prove the retry and the limit can fail**
 
-Temporarily change `generate`'s body to `draw(random)`.
+Temporarily change `generate`'s body to `Some(draw(random))`.
 Run: `sbt "testOnly com.lunatech.pointingpoker.slug.SlugSpec"`
 Expected: "draw again until no live room holds the slug" FAILS.
+
+Revert that, then temporarily change `take(MaxDraws)` to `take(MaxDraws + 1)`.
+Run the same command.
+Expected: "give up after MaxDraws draws that all hit a live room" FAILS with `101 was not equal to 100`.
 
 Revert the change.
 
@@ -404,7 +611,7 @@ Revert the change.
 git add src/main/scala/com/lunatech/pointingpoker/slug src/test/scala/com/lunatech/pointingpoker/slug
 sbt scalafmtAll
 git add -u
-git commit -m "feat(slug): add the Slug type, its parser and its collision-avoiding generator"
+git commit -m "feat(slug): add the Slug type, its parser and its bounded collision-avoiding generator"
 ```
 
 ---
@@ -439,7 +646,8 @@ class SuggestionSpec extends AnyWordSpec with must.Matchers:
     "correct an adjacent swap" in (suggest("brave-golden-otetr") mustBe Some("brave-golden-otter"))
     "correct a typo in more than one word" in
       (suggest("bravo-goldn-otter") mustBe Some("brave-golden-otter"))
-    "read the name in lower case" in (suggest("Brave-Golden-Oter") mustBe Some("brave-golden-otter"))
+    "read the name in lower case" in
+      (suggest("Brave-Golden-Oter") mustBe Some("brave-golden-otter"))
     "put back two words given in each other's pools" in {
       suggest("golden-brave-otter") mustBe Some("brave-golden-otter")
       suggest("brave-otter-golden") mustBe Some("brave-golden-otter")
@@ -452,6 +660,7 @@ class SuggestionSpec extends AnyWordSpec with must.Matchers:
       suggest("probe") mustBe None
     }
   }
+end SuggestionSpec
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -563,6 +772,7 @@ class LegacySlugSpec extends AnyWordSpec with must.Matchers:
       )
     }
   }
+end LegacySlugSpec
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -590,7 +800,7 @@ object LegacySlug:
       Vocabulary.animal(Math.floorMod(n, Vocabulary.animal.size))
     )
 
-  // SHA-256 rather than hashCode, so the result depends on nothing but the UUID's bits.
+  // SHA-256 for three independent, well-spread ints taken from the UUID's bits alone.
   private[slug] def hashes(uuid: UUID): (Int, Int, Int) =
     val bits = ByteBuffer
       .allocate(16)
@@ -605,7 +815,7 @@ end LegacySlug
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.slug.*"`
-Expected: PASS, 29 tests across the five slug specs.
+Expected: PASS, 30 tests across the five slug specs.
 
 - [ ] **Step 5: Prove the process-independence test can fail**
 
@@ -713,6 +923,7 @@ Add these cases inside `"API" should { ... }`, after "revalidate the index page 
     "refuse a name near no room name without a suggestion" in
       Get("/nothing-like-this") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
+        responseAs[String] must include("is not a room name")
         responseAs[String] must not include "Did you mean"
       }
     "escape the refused name before echoing it" in
@@ -746,7 +957,7 @@ Add these cases inside `"API" should { ... }`, after "revalidate the index page 
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec"`
 Expected: FAIL.
 - The room-name, mixed-case, refusal and escaping cases get `404` with Pekko's plain-text body, because `path(JavaUUID)` does not match.
-- The two UUID cases get `200` serving the index where they expect `302`.
+- The lowercase UUID case gets `200` serving the index where it expects `302`. The upper-case one asserts only the `Location` header, so it fails with `None was not equal to Some(...)`.
 - The revalidation case gets `404` without `Cache-Control`.
 
 - [ ] **Step 4: Rewrite `PageRoutes`**
@@ -775,7 +986,8 @@ class PageRoutes(apiConfig: ApiConfig):
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
 
   // Always revalidate: no-store would re-send the whole page where a 304 costs nothing.
-  private def revalidated(route: Route): Route = respondWithHeader(`Cache-Control`(`no-cache`))(route)
+  private def revalidated(route: Route): Route =
+    respondWithHeader(`Cache-Control`(`no-cache`))(route)
 
   private val index: Route = revalidated(getFromFile(apiConfig.indexPath))
 
@@ -826,6 +1038,7 @@ class PageRoutes(apiConfig: ApiConfig):
          |</html>
          |""".stripMargin
     HttpResponse(StatusCodes.NotFound, entity = HttpEntity(ContentTypes.`text/html(UTF-8)`, page))
+  end notARoom
 
   // The name is whatever was typed into the address bar.
   private def escape(text: String): String =
@@ -857,6 +1070,8 @@ In `API.scala`, replace `val route`'s `concat` with:
     )
 ```
 
+No test pins this order, and today nothing observable depends on it: no tapir endpoint is a single-segment `GET`, so with pages first `APISpec` stays green and `GET /create-room` still answers `405`. It is insurance for the first single-segment `GET` endpoint or static asset, step 8's among them. Step 7 below proves only the order inside `PageRoutes`.
+
 - [ ] **Step 6: Run the suite to verify it passes**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec"`
@@ -866,7 +1081,7 @@ Expected: PASS, every case including the seven new ones. "not expose the proxy p
 
 First, temporarily move the `path(JavaUUID)` block after `path(Segment)` in `PageRoutes`.
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec"`
-Expected: both UUID cases FAIL with `404`.
+Expected: both UUID cases FAIL: the lowercase one with `404`, the upper-case one with `None was not equal to Some(...)`.
 
 Then revert that and temporarily replace `escape(raw)` with `raw`. Run the same command.
 Expected: the escaping case FAILS.
@@ -889,18 +1104,18 @@ git commit -m "feat(pages): serve slugs, refuse other names with a suggestion, r
 - Modify: `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`: every `roomId: UUID`, `RoomId`, `RoomManagerData`, `receiveBehaviour`, `CreateRoom`, `createRoom`
 - Modify: `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`: `apply` and `receiveBehaviour` parameters
 - Modify: `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`: `source`'s `roomId`
-- Modify: `src/main/scala/com/lunatech/pointingpoker/API.scala`: codec, `roomPath`, `sessionCookie`, `createRoom` logic
+- Modify: `src/main/scala/com/lunatech/pointingpoker/API.scala`: codec, `roomPath`, `sessionCookie`, the `createRoom` endpoint and its logic
 - Test: `RoomManagerSpec.scala`, `RoomSpec.scala`, `SSESpec.scala`, `APISpec.scala`
 
 **Interfaces:**
-- Consumes: `Slug`, `Slug.generate`, `Slug.secureRandom`, `Slug.parse`, `raw`, `Vocabulary`, `SlugFixtures.aSlug`, `SlugFixtures.ScriptedRandom`.
+- Consumes: `Slug`, `Slug.generate`, `Slug.secureRandom`, `Slug.parse`, `raw`, `Vocabulary`, `SlugFixtures.aSlug`, `SlugFixtures.ScriptedRandom`, `SlugFixtures.StuckRandom`.
 - Produces:
-  - Every `RoomManager` command carries `roomId: Slug`, and `RoomManager.RoomId(value: Slug)`.
+  - Every `RoomManager` command carries `roomId: Slug`, and `RoomManager.Response` is `RoomId(value: Slug)` or `NoFreeRoomName` (D4).
   - `RoomManager.receiveBehaviour(data, gracePeriod, stopAfterIdle, random: java.util.Random = Slug.secureRandom)`.
   - `Room(roomId: Slug, ...)` and `SSE.source(roomManager, roomId: Slug, ...)`.
-  - The API answers `404` for a room path outside the vocabulary, before `RoomManager` is asked.
+  - The API answers `404` for a room path outside the vocabulary, before `RoomManager` is asked, and `503` from `create-room` on `NoFreeRoomName`.
 
-Per D1, `RoomData` gains no field.
+Per D1, `RoomState` gains no field.
 
 - [ ] **Step 1: Write the failing manager cases**
 
@@ -910,7 +1125,7 @@ In `RoomManagerSpec`, add these imports:
 import org.apache.pekko.actor.testkit.typed.Effect
 import org.apache.pekko.actor.testkit.typed.scaladsl.TestInbox
 import com.lunatech.pointingpoker.slug.{Slug, Vocabulary}
-import com.lunatech.pointingpoker.slug.SlugFixtures.{aSlug, ScriptedRandom}
+import com.lunatech.pointingpoker.slug.SlugFixtures.{aSlug, ScriptedRandom, StuckRandom}
 ```
 
 Add these cases after "create room":
@@ -923,7 +1138,8 @@ Add these cases after "create room":
       behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
 
       val slug = inbox.receiveMessage() match
-        case RoomManager.RoomId(value) => value
+        case RoomManager.RoomId(value)  => value
+        case RoomManager.NoFreeRoomName => fail("expected a room")
       Slug.parse(slug.raw) mustBe Some(slug)
       behaviorTestKit.retrieveAllEffects().collect { case s: Effect.Spawned[?] => s.childName } mustBe
         Seq(slug.raw)
@@ -948,11 +1164,54 @@ Add these cases after "create room":
 
       inbox.receiveMessage() mustBe RoomManager.RoomId(nth(1))
     }
+
+    "refuse a room when every draw hits a live one, and keep serving" in {
+      val behaviorTestKit =
+        BehaviorTestKit(
+          RoomManager.receiveBehaviour(
+            RoomManagerData.empty,
+            testGracePeriod,
+            testStopAfterIdle,
+            StuckRandom
+          )
+        )
+      val inbox = TestInbox[RoomManager.Response]()
+
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+      val first = inbox.receiveMessage()
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+
+      inbox.receiveMessage() mustBe RoomManager.NoFreeRoomName
+      behaviorTestKit.logEntries().map(e => (e.level, e.message)) mustBe
+        Seq((org.slf4j.event.Level.ERROR, "No free room name found with 1 rooms live"))
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+      inbox.receiveMessage() mustBe RoomManager.NoFreeRoomName
+      first mustBe a[RoomManager.RoomId]
+    }
 ```
+
+The `fail` case is there because `-Werror` makes the match's non-exhaustiveness an error once `NoFreeRoomName` exists.
 
 - [ ] **Step 2: Write the failing API cases**
 
-In `APISpec`, add `import com.lunatech.pointingpoker.slug.Slug`, then add after "answer 401 for a leave with no session cookie":
+In `APISpec`, add `import com.lunatech.pointingpoker.slug.Slug`. After the `voteReply` field, add:
+
+```scala
+  val createReply: java.util.concurrent.atomic.AtomicReference[RoomManager.Response] =
+    new java.util.concurrent.atomic.AtomicReference(RoomManager.RoomId(roomId))
+```
+
+In the manager stub, replace `replyTo ! RoomManager.RoomId(roomId)` with `replyTo ! createReply.get()`. After "create a room", add:
+
+```scala
+    "answer 503 when the manager finds no free room name" in {
+      createReply.set(RoomManager.NoFreeRoomName)
+      try Post("/create-room") ~> apiRoute ~> check(status mustBe StatusCodes.ServiceUnavailable)
+      finally createReply.set(RoomManager.RoomId(roomId))
+    }
+```
+
+Then add after "answer 401 for a leave with no session cookie":
 
 ```scala
     "answer 404 for a command on a name outside the vocabulary, without asking the manager" in {
@@ -980,7 +1239,7 @@ In `APISpec`, add `import com.lunatech.pointingpoker.slug.Slug`, then add after 
 - [ ] **Step 3: Run them to verify they fail**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomManagerSpec com.lunatech.pointingpoker.APISpec"`
-Expected: compilation FAILS, since `RoomManager.RoomId` takes a `String` and `receiveBehaviour` has no fourth parameter.
+Expected: compilation FAILS, since `RoomManager.RoomId` takes a `String`, `NoFreeRoomName` does not exist and `receiveBehaviour` has no fourth parameter.
 
 - [ ] **Step 4: Change `RoomManager`**
 
@@ -991,6 +1250,7 @@ In `RoomManager.scala`:
 
 ```scala
   case class RoomId(value: Slug) extends Response
+  case object NoFreeRoomName     extends Response
 
   final case class RoomManagerData(rooms: Map[Slug, ActorRef[Room.Command]]):
     def addRoom(roomId: Slug, roomActor: ActorRef[Room.Command]): RoomManagerData =
@@ -1010,13 +1270,19 @@ In `RoomManager.scala`:
 
 ```scala
           case CreateRoom(replyTo) =>
-            val roomId    = Slug.generate(data.rooms.contains, random)
-            val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
-            val newData   = data.addRoom(roomId, roomActor)
+            Slug.generate(data.rooms.contains, random) match
+              case Some(roomId) =>
+                val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
+                val newData   = data.addRoom(roomId, roomActor)
 
-            context.watch(roomActor)
-            replyTo ! RoomId(roomId)
-            receiveBehaviour(newData, gracePeriod, stopAfterIdle, random)
+                context.watch(roomActor)
+                replyTo ! RoomId(roomId)
+                receiveBehaviour(newData, gracePeriod, stopAfterIdle, random)
+              case None =>
+                // The spec asks for this to be loud: it means scale or an abused create-room.
+                context.log.error("No free room name found with {} rooms live", data.rooms.size)
+                replyTo ! NoFreeRoomName
+                Behaviors.same
 ```
 
 - Pass `random` as the fourth argument in the other two recursive calls: the `RequestSession` fold and the `Terminated` signal handler.
@@ -1031,27 +1297,39 @@ In `RoomManager.scala`:
 
 In `API.scala`:
 - Remove `import java.util.UUID`.
-- Add these two imports:
+- Add this import:
 
 ```scala
 import com.lunatech.pointingpoker.slug.Slug
-import sttp.tapir.server.interceptor.decodefailure.DefaultDecodeFailureHandler.OnDecodeFailure.*
 ```
 
 - Change `sessionCookie(roomId: UUID, ...)` to `sessionCookie(roomId: Slug, ...)`. Its `s"/rooms/$roomId"` needs no change.
-- Replace the `roomPath` line with the codec followed by the path. The given must come first, since a class-body given used before its definition is still `null` at initialization:
+- Replace the `roomPath` line with the codec followed by the path:
 
 ```scala
+  // Mismatch, not Error: tapir answers an error with 400 but tries the next endpoint on a mismatch.
   private given Codec[String, Slug, CodecFormat.TextPlain] =
     Codec.string.mapDecode(raw =>
       Slug.parse(raw).map(DecodeResult.Value(_)).getOrElse(DecodeResult.Mismatch("a room name", raw))
     )(_.raw)
 
-  // A name outside the vocabulary names no room, so fall through to 404 rather than tapir's 400.
-  private val roomPath = "rooms" / path[Slug]("roomId").onDecodeFailureNextEndpoint
+  private val roomPath = "rooms" / path[Slug]("roomId")
 ```
 
-- In the `createRoom` server logic, change `.map(_.value)` to `.map(_.value.raw)`.
+- Add `.errorOut(statusCode(StatusCode.ServiceUnavailable))` to the `createRoom` endpoint, after `.out(stringBody)`.
+- Replace the `createRoom.serverLogicSuccess[Future]` entry with:
+
+```scala
+    createRoom.serverLogic[Future] { _ =>
+      log.debug("Create room call")
+      (roomManager ? RoomManager.CreateRoom.apply)
+        .andThen { case Failure(reason) => log.error("Error while creating room: {}", reason) }
+        .map {
+          case RoomManager.RoomId(slug)   => Right(slug.raw)
+          case RoomManager.NoFreeRoomName => Left(())
+        }
+    },
+```
 
 - [ ] **Step 7: Move the specs onto slugs**
 
@@ -1059,7 +1337,7 @@ Run from the repo root. The regex keeps the whitespace between `createRoom(` and
 
 ```bash
 t=src/test/scala/com/lunatech/pointingpoker
-perl -0pi -e 's/createRoom\((\s*)UUID\.randomUUID\(\)/createRoom($1aSlug()/g; s/Room\(UUID\.randomUUID\(\), /Room(aSlug(), /g; s/val (roomId|unknownRoomId)(\s*)= UUID\.randomUUID\(\)/val $1$2= aSlug()/g; s/roomId\.toString/roomId.raw/g' \
+perl -0pi -e 's/createRoom\((\s*)UUID\.randomUUID\(\)/createRoom($1aSlug()/g; s/Room\(UUID\.randomUUID\(\), /Room(aSlug(), /g; s/Show\((\s*)UUID\.randomUUID\(\)/Show($1aSlug()/g; s/val (roomId|unknownRoomId|knownRoomId)(\s*)= UUID\.randomUUID\(\)/val $1$2= aSlug()/g; s/roomId\.toString/roomId.raw/g' \
   $t/actors/RoomSpec.scala $t/actors/RoomManagerSpec.scala $t/sse/SSESpec.scala
 ```
 
@@ -1079,7 +1357,7 @@ Expected: success. If an error names a `UUID` where a `Slug` is expected, it is 
 - [ ] **Step 8: Run the whole JVM suite**
 
 Run: `sbt test`
-Expected: PASS, every existing case plus the five new ones.
+Expected: PASS, every existing case plus the seven new ones: 206 in all.
 
 - [ ] **Step 9: Prove the wiring and the fall-through can fail**
 
@@ -1087,11 +1365,15 @@ First, temporarily change `CreateRoom`'s draw to `Slug.generate(_ => false, rand
 Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomManagerSpec"`
 Expected: "create a room under a slug no live room holds" FAILS.
 
-Then revert that and temporarily remove `.onDecodeFailureNextEndpoint`.
+Then revert that and temporarily change the codec's `DecodeResult.Mismatch("a room name", raw)` to `DecodeResult.Error(raw, new IllegalArgumentException("a room name"))`.
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec"`
 Expected: the three new `404` cases FAIL with `400 Bad Request`.
 
-Revert both changes.
+Revert that too. Then, one at a time, temporarily delete the `context.log.error(...)` line in `CreateRoom`'s `None` branch, and change that branch's `Behaviors.same` to `Behaviors.stopped`.
+Run: `sbt "testOnly com.lunatech.pointingpoker.actors.RoomManagerSpec"` after each.
+Expected: "refuse a room when every draw hits a live one, and keep serving" FAILS both times: first with `List() was not equal to List((ERROR, ...))`, then with `polling on an empty inbox`.
+
+Revert every change.
 
 - [ ] **Step 10: Format and commit**
 
@@ -1106,7 +1388,7 @@ git commit -m "feat(rooms): carry slugs instead of UUIDs from the API to the roo
 ### Task 7: The page: banner and refused joins
 
 **Files:**
-- Modify: `src/main/resources/pages/index.html`: `<style>`, the Join form's room id input, the end of `#app`, `data`, `doJoin`'s `catch`, and `created()`
+- Modify: `src/main/resources/pages/index.html`: the alerts column at the top of `#app`, the Join form's room id input, `data`, `doCreate`'s and `doJoin`'s `catch`, and `created()`
 - Modify: `e2e/fixtures.js`: add `movedBanner`
 - Create: `e2e/slug.spec.js`
 
@@ -1128,7 +1410,7 @@ export const movedBanner = page => page.getByRole('status').filter({ hasText: 'o
 Create `e2e/slug.spec.js`:
 
 ```js
-import { test, expect, card, movedBanner, nameInput, ownEstimation, vote } from './fixtures.js'
+import { test, expect, movedBanner, nameInput, ownEstimation, vote } from './fixtures.js'
 
 // No query string: the page removes moved=1 before anyone can copy the address.
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
@@ -1139,22 +1421,31 @@ const joinAs = async (page, name) => {
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
 }
 
-test('an old UUID link opens its derived room under a banner that leaves the deck alone', async ({
+test('an old UUID link opens its derived room under a banner that covers no card', async ({
   page,
   origin
 }) => {
+  // Phone-sized, where a banner laid over the page would sit on the last cards of the deck.
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`${origin}/${crypto.randomUUID()}`)
   await expect(page).toHaveURL(ROOM_URL)
   await expect(movedBanner(page)).toBeVisible()
   await joinAs(page, 'Alice')
 
-  const shown = await card(page, '5').boundingBox()
-  await vote(page, '5')
-  await expect(ownEstimation(page)).toHaveText('5')
+  const covered = await page.$$eval('.estimation-button', buttons =>
+    buttons
+      .filter(b => {
+        const r = b.getBoundingClientRect()
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+        return hit && hit.closest('[role="status"]')
+      })
+      .map(b => b.textContent.trim())
+  )
+  expect(covered).toEqual([])
+  await vote(page, '89')
+  await expect(ownEstimation(page)).toHaveText('89')
   await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
   await expect(movedBanner(page)).toBeHidden()
-  // Fixed to the viewport, so dismissing it moves nothing.
-  expect((await card(page, '5').boundingBox()).y).toBe(shown.y)
 })
 
 test('a mistyped room name is refused with a suggestion that reaches the room', async ({
@@ -1194,6 +1485,15 @@ test('a room remembered from before the cutover reopens under its derived name',
   await expect(page).toHaveURL(ROOM_URL)
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
 })
+
+test('a refused room creation says so', async ({ page, origin }) => {
+  // The server answers 503 only once every name it draws is live, too many rooms to open here.
+  await page.route('**/create-room', route => route.fulfill({ status: 503 }))
+  await page.goto(`${origin}/`)
+  await nameInput(page).fill('Alice')
+  await page.getByRole('button', { name: 'Create' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Could not create a room. Please try again.')
+})
 ```
 
 - [ ] **Step 3: Run them to verify they fail**
@@ -1202,44 +1502,28 @@ Run: `npm run e2e -- e2e/slug.spec.js`
 Expected: FAIL.
 - The UUID case fails with the URL still ending `?moved=1` and no banner.
 - The Join-form and remembered-room cases time out on the URL, stuck on "Could not join the room".
+- The refused-creation case fails on `toHaveText`, since `doCreate` only logs to the console.
 - The suggestion case passes already, since it exercises only Task 5.
 
-- [ ] **Step 4: Add the banner style**
+- [ ] **Step 4: Add the banner markup**
 
-In `index.html`'s `<style>`, after `.feather { ... }`:
-
-```css
-      /* Fixed so that neither showing nor dismissing it moves the deck. */
-      .moved-banner {
-        position: fixed;
-        bottom: 1rem;
-        left: 50%;
-        transform: translateX(-50%);
-        width: calc(100% - 2rem);
-        max-width: 36rem;
-        z-index: 1030;
-      }
-```
-
-- [ ] **Step 5: Add the banner markup**
-
-In `index.html`, directly after `<!-- Room Content End -->`:
+In `index.html`, in the alerts column at the top of `#app`, directly after the `showClipboardHint` alert's closing `</div>`. It is in the flow, so it never covers the deck, and it renders before the deck exists, so showing it moves nothing:
 
 ```html
-      <div class="alert alert-warning moved-banner" role="status" v-if="moved">
-        The old link you followed now opens this address. Please update your invitation or
-        bookmark to use it.
-        <button type="button" class="close" aria-label="Dismiss" v-on:click="moved = false">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
+          <div class="alert alert-warning m-1" role="status" v-if="moved">
+            The old link you followed now opens this address. Please update your invitation or
+            bookmark to use it.
+            <button type="button" class="close" aria-label="Dismiss" v-on:click="moved = false">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
 ```
 
-- [ ] **Step 6: Trim the typed room id**
+- [ ] **Step 5: Trim the typed room id**
 
 Change the Join form's input from `v-model="roomId"` to `v-model.trim="roomId"`.
 
-- [ ] **Step 7: Add the `moved` flag and read it in `created()`**
+- [ ] **Step 6: Add the `moved` flag and read it in `created()`**
 
 In `data`, after `showClipboardHint: false,`, add `moved: false,`.
 
@@ -1262,7 +1546,7 @@ with:
         var possibleRoomId = window.location.pathname.split('/')[1]
 ```
 
-- [ ] **Step 8: Send a refused join through the page route**
+- [ ] **Step 7: Send a refused join through the page route**
 
 In `doJoin`, make this the first thing in the `.catch(function (error) {` block:
 
@@ -1277,30 +1561,38 @@ In `doJoin`, make this the first thing in the `.catch(function (error) {` block:
 
 Without `removeItem`, a refused name would bounce every later visit to `/` onto the rejection page.
 
-- [ ] **Step 9: Run the browser cases to verify they pass**
+In `doCreate`'s `.catch`, after `console.log(error);`, add:
+
+```js
+            ref.errorMessage = "Could not create a room. Please try again.";
+```
+
+- [ ] **Step 8: Run the browser cases to verify they pass**
 
 Run: `npm run e2e -- e2e/slug.spec.js`
-Expected: PASS, 4 tests on each configured browser.
+Expected: PASS, 5 tests on each configured browser.
 
-- [ ] **Step 10: Prove the displacement check can fail**
+- [ ] **Step 9: Prove the covering check can fail**
 
-Temporarily delete `position: fixed;` from `.moved-banner`.
+Temporarily add `style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 1030"` to the banner's `<div>`. Without the `z-index` the banner paints under Bootstrap's positioned columns and covers nothing.
 Run: `npm run e2e -- e2e/slug.spec.js -g "old UUID link"`
-Expected: FAIL on the final `y` comparison.
+Expected: FAIL on `expect(covered).toEqual([])`, receiving `["89", "?"]` on each browser.
 
-Restore the line.
+Remove the attribute. Then temporarily delete the `doCreate` line that sets `errorMessage`.
+Run: `npm run e2e -- e2e/slug.spec.js -g "refused room creation"`
+Expected: FAIL on `toHaveText` on each browser. Restore the line.
 
-- [ ] **Step 11: Run every suite**
+- [ ] **Step 10: Run every suite**
 
 Run: `sbt test && npm test && npm run e2e`
 Expected: all PASS. The existing e2e cases use the `room` fixture, which now yields a slug.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add e2e/slug.spec.js
 git add -u
-git commit -m "feat(page): show the moved-link banner and route a refused join through the page"
+git commit -m "feat(page): show the moved-link banner, report a refused creation and route a refused join through the page"
 ```
 
 ---
@@ -1314,7 +1606,7 @@ git commit -m "feat(page): show the moved-link banner and route a refused join t
 - Modify: `docs/known-issues.md`
 
 **Interfaces:**
-- Consumes: the landed behaviour from Tasks 1 to 7, and decisions D1 to D3.
+- Consumes: the landed behaviour from Tasks 1 to 7, and decisions D1 to D4.
 - Produces: nothing code depends on.
 
 Prose wraps at about 80 columns in these files, so search for a phrase with whitespace normalised across line breaks, not with a single-line `grep`.
@@ -1322,36 +1614,43 @@ Prose wraps at about 80 columns in these files, so search for a phrase with whit
 - [ ] **Step 1: Correct "Slug allocation"**
 
 - In "**Tests enforce what is mechanical:**", after "...and the namespace floor below.", add: "One edit is an insertion, a deletion, a substitution or a swap of two adjacent letters, the measure the suggestion below uses too, so a swap typo gets a suggestion and the uniqueness the suggestion relies on still holds."
+- After "...which keeps the namespace bounded by concurrent usage rather than by total history.", add: "Retrying stops after 100 draws that all hit a live room. `RoomManager` then logs one ERROR line with the live room count, `create-room` answers `503` and the page says the room could not be created. An unused room lives two hours, so an unthrottled `create-room` script can fill the namespace, and an endless retry inside the manager, which handles one message at a time, would freeze every room until a restart."
+- In "Open questions", item 4, replace "Answer at step 7. The fallback should log loudly, since exhaustion means either genuine scale or an unthrottled `create-room` being abused." with "Settled at step 7: "Slug allocation" gives the pools, the namespace floor and the fallback, which stops after 100 draws, logs at ERROR, since exhaustion means either genuine scale or an unthrottled `create-room` being abused, and answers `503`."
 - Replace the bullet "The API endpoints answer an invalid slug with tapir's own `404`. The page never produces one in normal use, so it needs no message." with:
 
-  "- The API endpoints answer an invalid slug with `404`. tapir's default for a path segment that fails to decode is `400`, so the room path input is marked `onDecodeFailureNextEndpoint` and, with no endpoint left, Pekko answers `404`. The page reaches one only through a name typed into the Join form or a room remembered in `localStorage` from before the cutover, and answers it by navigating to that name, where the page route's refusal, lowercase redirect or UUID redirect applies."
+  "- The API endpoints answer an invalid slug with `404`. tapir answers `400` for a path segment whose codec reports a decode error but tries the next endpoint on a mismatch, so the slug codec reports a mismatch and, with no endpoint left, Pekko answers `404`. The page reaches one only through a name typed into the Join form or a room remembered in `localStorage` from before the cutover, and answers it by navigating to that name, where the page route's refusal, lowercase redirect or UUID redirect applies."
+
+- In the UUID redirect's banner bullet, replace "It must not hide or displace the deck." with "It must never cover the deck, and only the reader's own dismissal may move it."
 
 - [ ] **Step 2: Correct the `RoomState` annotation (D1)**
 
-In section 3's state block, replace `// slug arrives at step 7, not with the split: step 4 says why` with `// slug stays Room's parameter rather than a field: steps 4 and 7 say why`.
+In section 3's state block, remove `slug, ` from the line `RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]`, and replace `// slug arrives at step 7, not with the split: step 4 says why` with `// slug stays Room's parameter rather than a field: steps 4 and 7 say why`.
 
 - [ ] **Step 3: Add step 7's "Landed." note**
 
 After the step 7 paragraph ending "...which is exactly why the trap is invisible until step 8 adds the first local one.", add:
 
-"Landed. The `slug` package holds the three pools, the opaque `Slug` whose only public constructors are `Slug.parse` and `Slug.generate`, the suggestion and `LegacySlug`. Deleting `LegacySlug`, the `path(JavaUUID)` block in `PageRoutes` and the page's `moved` banner is the whole removal the roadmap schedules. `PageRoutes` now comes last in `API.route`, after the tapir endpoints. A room path outside the vocabulary answered `400` from tapir until the input was marked to fall through, which is how the API reaches its `404`. **`RoomState` still carries no `slug`**: step 4's reason held, since `roomId` stays a parameter of `Room.receiveBehaviour` and a copy would have no reader. The page sends a `404` from `/join` back to `/<name>`, since the Join form and a remembered pre-cutover room are the two ways a name reaches the API unchecked. The banner is fixed to the viewport so that it neither covers nor shifts the deck, and it uses `role="status"` so the connection-alert assertions never see it."
+"Landed. The `slug` package holds the three pools, the opaque `Slug` whose only public constructors are `Slug.parse`, `Slug.generate` and `LegacySlug.derive`, the suggestion and `LegacySlug`. Deleting `LegacySlug`, the `path(JavaUUID)` block in `PageRoutes` and the page's `moved` banner is the whole removal the roadmap schedules. `PageRoutes` now comes last in `API.route`, after the tapir endpoints. The slug codec answers a name outside the vocabulary with a decode mismatch rather than an error, since tapir answers an error with `400` and a mismatch by trying the next endpoint, which is how the API reaches its `404`. **`RoomState` still carries no `slug`**, which supersedes step 4's "Step 7 adds the field": step 4's reason held, since `roomId` stays a parameter of `Room.receiveBehaviour` and a copy would have no reader. `create-room` answers `503` rather than retrying forever once 100 draws all hit a live room, and logs at ERROR, which closes open question 4. The page sends a `404` from `/join` back to `/<name>`, since the Join form and a remembered pre-cutover room are the two ways a name reaches the API unchecked. The banner sits in the flow above the room rather than over it, since a banner fixed to the viewport covered the last cards on a phone. It covers nothing, and only the reader's dismissal moves the deck. It uses `role="status"` so the connection-alert assertions never see it."
 
 - [ ] **Step 4: Extend the test inventory**
 
-In section 6's step 7 paragraph, replace "In the browser it adds two cases: the banner shown, dismissed and its parameter removed with the deck still usable, and the rejection page's suggestion link reaching the room." with:
+In section 6's step 7 paragraph, replace "the suggestion (a unique match within one edit, and a swapped pair) and the UUID derivation." with "the suggestion (a unique match within one edit, and a swapped pair), the UUID derivation and the generator's limit of 100 draws. The manager refuses a room once every draw hits a live one, logs at ERROR and keeps serving." Replace "the UUID `302` and the order in `PageRoutes`." with "the UUID `302`, the order in `PageRoutes`, the API's `404` for a name outside the vocabulary and `create-room`'s `503`."
 
-"In the browser it adds four cases: the banner shown, dismissed and its parameter removed with the deck still usable and unmoved; the rejection page's suggestion link reaching the room; a mistyped name in the Join form reaching the rejection page; and a UUID remembered in `localStorage` reopening under its derived slug."
+In the same paragraph, replace "In the browser it adds two cases: the banner shown, dismissed and its parameter removed with the deck still usable, and the rejection page's suggestion link reaching the room." with:
+
+"In the browser it adds five cases: a refused creation reported on the page; the banner shown at phone width over no card, dismissed and its parameter removed with the deck still usable; the rejection page's suggestion link reaching the room; a mistyped name in the Join form reaching the rejection page; and a UUID remembered in `localStorage` reopening under its derived slug."
 
 - [ ] **Step 5: Update `README.md`**
 
-- In the endpoint table, change the `/create-room` description to "Creates a room and returns its name, for example `brave-golden-otter`, as plain text".
-- After the paragraph that begins "Command endpoints answer what the room decided", add: "A `{roomId}` that is not three vocabulary words in order answers `404` on every endpoint, before any room is consulted."
+- In the endpoint table, change the `/create-room` description to "Creates a room and returns its name, for example `brave-golden-otter`, as plain text. Answers `503` when no free name is found".
+- In the paragraph that begins "Command endpoints answer what the room decided", change "(including an unknown `roomId`)" to "(including a valid name with no live room)". After that paragraph, add: "A `{roomId}` that is not three vocabulary words in order answers `404` on every endpoint, before any room is consulted."
 - Replace the paragraph "There is also a `GET /{roomId}` route that serves the same frontend index page, so a room link can be shared directly." with: "`GET /{roomId}` serves the same frontend index page, so a room link can be shared directly. A room name in mixed case redirects to its lowercase form, and any other name answers `404` with a page that suggests the intended name when only one is close. `GET /{uuid}`, the pre-slug link form, answers `302` to a room name derived from the UUID with `?moved=1`, which the page turns into a banner asking for the link to be updated. `docs/roadmap.md` schedules its removal."
 
 - [ ] **Step 6: Update the roadmap and the known issue**
 
 - In `docs/roadmap.md`, change the Phase 2 item "- [ ] Slug-based room ids replacing raw UUIDs" to "- [x]". Leave the removal item unchecked.
 - In `docs/known-issues.md`'s entry "An unrecognized `roomId` silently creates an empty room":
+  - Change "auto-creates a room for any `roomId` it doesn't recognize" to "auto-creates a room for any valid slug it doesn't recognize".
   - Change "brand-new, empty room under the same UUID" to "brand-new, empty room under the same name".
   - Change "this UUID was never used" and "this UUID was a real room" to "this slug was never used" and "this slug was a real room".
   - Change "Step 7 recovers most of that residual without the record: a name outside the slug vocabulary is refused" to "Step 7 recovered most of that residual without the record: a name outside the slug vocabulary is refused".
@@ -1364,7 +1663,7 @@ python3 - <<'EOF'
 import re
 for f in ["README.md", "docs/known-issues.md", "docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md"]:
     text = re.sub(r"\s+", " ", open(f).read())
-    for stale in ["tapir's own `404`", "never produces one in normal use", "slug arrives at step 7", "same UUID: no prior"]:
+    for stale in ["tapir's own `404`", "never produces one in normal use", "slug arrives at step 7", "same UUID: no prior", "must not hide or displace the deck", "Answer at step 7", "including an unknown `roomId`", "any `roomId` it doesn't recognize"]:
         if stale in text:
             print(f, "still says:", stale)
 EOF
