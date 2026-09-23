@@ -236,11 +236,12 @@ class API(
     }
   )
 
+  // Pages last: their slug matcher answers every single-segment GET, so nothing after it is reached.
   val route: Route =
     concat(
       ProbeRoutes(probeConfig).route,
-      PageRoutes(apiConfig).route,
-      PekkoHttpServerInterpreter().toRoute(endpoints)
+      PekkoHttpServerInterpreter().toRoute(endpoints),
+      PageRoutes(apiConfig).route
     )
 
   def run(): Future[Http.ServerBinding] =

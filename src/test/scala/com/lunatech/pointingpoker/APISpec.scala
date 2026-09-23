@@ -1,12 +1,17 @@
 package com.lunatech.pointingpoker
 
-import java.util.UUID
+import java.util.{Locale, UUID}
 
 import org.apache.pekko.actor.testkit.typed.scaladsl.ActorTestKit
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.testkit.ScalatestRouteTest
+import ch.qos.logback.classic.Logger as LogbackLogger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.lunatech.pointingpoker.config.{ApiConfig, LifecycleConfig, ProbeConfig}
+import com.lunatech.pointingpoker.slug.LegacySlug
+import com.lunatech.pointingpoker.slug.SlugFixtures.aSlug
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.Directives.handleRejections
@@ -14,6 +19,7 @@ import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import org.apache.pekko.http.scaladsl.model.headers.`Set-Cookie`
 import org.apache.pekko.http.scaladsl.model.headers.Cookie
+import org.apache.pekko.http.scaladsl.model.headers.Location
 import org.apache.pekko.http.scaladsl.model.headers.SameSite
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
@@ -23,9 +29,11 @@ import com.lunatech.pointingpoker.{EditIssueRequest, VoteRequest}
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.*
 import scala.io.Source
+import scala.jdk.CollectionConverters.*
 
 class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
 
@@ -83,6 +91,17 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   private def json[A: io.circe.Encoder](a: A): HttpEntity.Strict =
     HttpEntity(ContentTypes.`application/json`, a.asJson.noSpaces)
 
+  // PageRoutes logs through slf4j rather than an actor, so its lines are captured off logback.
+  private def pageLog[A](body: => A): List[(String, String)] =
+    val appender = ListAppender[ILoggingEvent]()
+    val logger   = LoggerFactory.getLogger(classOf[PageRoutes]).asInstanceOf[LogbackLogger]
+    appender.start()
+    logger.addAppender(appender)
+    try
+      body
+      appender.list.asScala.toList.map(e => (e.getLevel.toString, e.getFormattedMessage))
+    finally logger.detachAppender(appender)
+
   override def afterAll(): Unit =
     super.afterAll()
     testKit.shutdownTestKit()
@@ -107,8 +126,60 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Get() ~> apiRoute ~> check {
         header("Cache-Control").map(_.value) mustBe Some("no-cache")
       }
-      Get(s"/$roomId") ~> apiRoute ~> check {
+      Get(s"/${aSlug().raw}") ~> apiRoute ~> check {
         header("Cache-Control").map(_.value) mustBe Some("no-cache")
+      }
+    }
+    "serve the index under a room name" in {
+      val index = Source.fromFile("src/main/resources/pages/index.html").mkString
+      Get(s"/${aSlug().raw}") ~> apiRoute ~> check {
+        status mustBe StatusCodes.OK
+        responseAs[String] mustBe index
+      }
+    }
+    // The case is deliberate rather than the typo, so it is corrected rather than refused.
+    "redirect a room name in mixed case to its lowercase form" in
+      Get("/Brave-Golden-Otter") ~> apiRoute ~> check {
+        status mustBe StatusCodes.Found
+        header[Location].map(_.uri.toString) mustBe Some("/brave-golden-otter")
+      }
+    "refuse a name outside the vocabulary with a page suggesting the correction" in
+      Get("/brave-golden-oter") ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+        contentType mustBe ContentTypes.`text/html(UTF-8)`
+        val page = responseAs[String]
+        page must include("<code>brave-golden-oter</code> is not a room name.")
+        page must include("""Did you mean <a href="/brave-golden-otter">brave-golden-otter</a>?""")
+        page must include("""<a href="/">Create a room</a>""")
+      }
+    "refuse a name near no room name without a suggestion" in
+      Get("/nothing-like-this") ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+        responseAs[String] must include("is not a room name")
+        (responseAs[String] must not).include("Did you mean")
+      }
+    "escape the refused name before echoing it" in
+      Get("/%3Cimg%20src=x%20onerror=alert(1)%3E") ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+        val page = responseAs[String]
+        page must include("&lt;img src=x onerror=alert(1)&gt;")
+        (page must not).include("<img")
+      }
+    "redirect a legacy UUID link to its derived room, flagged as moved, and log it once" in {
+      val uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+      val slug = LegacySlug.derive(uuid)
+      pageLog {
+        Get(s"/$uuid") ~> apiRoute ~> check {
+          status mustBe StatusCodes.Found
+          header[Location].map(_.uri.toString) mustBe Some(s"/${slug.raw}?moved=1")
+        }
+      } mustBe List(("INFO", s"Redirecting a legacy room link to ${slug.raw}"))
+    }
+    // Mail clients and wikis have been seen to upper-case a pasted link.
+    "derive the same room for a legacy link in upper case" in {
+      val uuid = UUID.fromString("123e4567-e89b-12d3-a456-426614174000")
+      Get(s"/${uuid.toString.toUpperCase(Locale.ROOT)}") ~> apiRoute ~> check {
+        header[Location].map(_.uri.toString) mustBe Some(s"/${LegacySlug.derive(uuid).raw}?moved=1")
       }
     }
     "create a room" in
