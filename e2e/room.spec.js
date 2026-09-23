@@ -91,6 +91,16 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await expect(participantRows(alice.page)).toHaveCount(1)
 })
 
+// Plain HTTP off localhost is not a secure context, and randomUUID is undefined there.
+test('a page without crypto.randomUUID still joins and leaves', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob', { initScript: () => delete Crypto.prototype.randomUUID })
+  await expect(participantRows(alice.page)).toHaveCount(2)
+  // The leave names the fallback's id, so a malformed one would draw a 400 and leave Bob listed.
+  await bob.page.getByRole('link', { name: 'Leave' }).click()
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0)
+})
+
 test('the issue box is readonly until the pencil is pressed', async ({ join }) => {
   const alice = await join('Alice')
 

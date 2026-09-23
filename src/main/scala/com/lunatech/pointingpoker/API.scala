@@ -156,7 +156,7 @@ class API(
           val arrivedOverHttps = forwardedProto.exists(_.equalsIgnoreCase("https"))
           if apiConfig.secureCookies && !arrivedOverHttps then
             log.warn(
-              "Rejecting session for room {}: SECURE_COOKIES is enabled but the request did not arrive over HTTPS (no X-Forwarded-Proto: https), so the browser will not return the Secure session cookie. Set SECURE_COOKIES=false for non-HTTPS deployments, or confirm your reverse proxy sets X-Forwarded-Proto.",
+              "Rejecting session for room {}: SECURE_COOKIES is enabled but the request did not arrive over HTTPS (no X-Forwarded-Proto: https), so the browser will not return the Secure session cookie. Set SECURE_COOKIES=false for local plain-HTTP development, or confirm your reverse proxy sets X-Forwarded-Proto.",
               roomId
             )
           else log.debug("No session cookie provided for room {}", roomId)

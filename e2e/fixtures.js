@@ -101,11 +101,12 @@ export const test = base.extend({
   // resolve to a single session, which is what newTab is for.
   join: async ({ browser, origin, room, stub, assets }, use) => {
     const closers = []
-    const join = async name => {
+    const join = async (name, { initScript } = {}) => {
       const context = await browser.newContext({ baseURL: origin })
       // Tracked before anything else can throw, so a half-built participant is still torn down.
       closers.push(() => context.close())
       await context.route(CDN, assets)
+      if (initScript) await context.addInitScript(initScript)
       const page = await context.newPage()
       const token = async () => {
         const cookie = (await context.cookies()).find(c => c.name === 'session')

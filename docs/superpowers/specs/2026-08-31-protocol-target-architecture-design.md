@@ -863,9 +863,16 @@ opens. `EventSource` retries the URL it was given, so a retry arrives holding it
 predecessor's id either way; minting per page instance rather than per stream
 extends that to the second `doJoin` as well. `ConnectionId` is an opaque type
 over `UUID` in the shape `SessionToken` already has, minted with
-`crypto.randomUUID()`, so tapir refuses a malformed one with the same `400` as a
-missing one. The secure context that call needs is already required of every
-page, the session cookie being `Secure`.
+`crypto.randomUUID()` where the page has it, so tapir refuses a malformed one
+with the same `400` as a missing one. That call exists only in a secure
+context, which `SECURE_COOKIES=false` gives up. The setting is for
+development, a LAN address during development being the case it exists for, so
+people on several machines can join one dev server. In that case the page
+builds a version 4 id from `crypto.getRandomValues`, which has no such
+requirement. Without the fallback the script throws before Vue mounts, leaving
+a page that is dead with nothing on it to say why. Production keeps the
+default, where a plain-HTTP visitor never gets its `Secure` cookie back and
+stops at the `401` from `/events`.
 
 **A page instance must not persist its id.** This is the half of "per page
 instance" most likely to be read backwards, the instinct being that the server
