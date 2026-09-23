@@ -44,8 +44,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
             testStopAfterIdle
           )
         )
-      val user1Probe    = TestProbe()(testKit.system.classicSystem)
-      val user2Probe    = TestProbe()(testKit.system.classicSystem)
+      val user1Probe    = TestProbe()(using testKit.system.classicSystem)
+      val user2Probe    = TestProbe()(using testKit.system.classicSystem)
       val token1        = Room.SessionToken.mint()
       val token2        = Room.SessionToken.mint()
       val userId1       = UUID.randomUUID()
@@ -77,7 +77,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     "no-op ConnectToRoom for an unknown room" in {
       val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
       val unknownRoomId   = UUID.randomUUID()
-      val probe           = TestProbe()(testKit.system.classicSystem)
+      val probe           = TestProbe()(using testKit.system.classicSystem)
 
       // No startup effects to drain: setup no longer spawns a MessageAdapter on this branch.
       behaviorTestKit.retrieveAllEffects()
@@ -164,13 +164,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       import com.lunatech.pointingpoker.sse.SSE
       given ExecutionContext                     = testKit.system.executionContext
       given org.apache.pekko.stream.Materializer =
-        org.apache.pekko.stream.Materializer.matFromSystem(testKit.system.classicSystem)
+        org.apache.pekko.stream.Materializer.matFromSystem(using testKit.system.classicSystem)
 
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
       val connectionId = newConnectionId()
-      val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
+      val classicProbe = org.apache.pekko.testkit.TestProbe()(using testKit.system.classicSystem)
 
       // ConnectToRoom is sent to a classic ActorRef in production (roomManager.toClassic),
       // so drive SSE.source with a classic probe standing in for it.
@@ -192,13 +192,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       import com.lunatech.pointingpoker.sse.SSE
       given ExecutionContext                     = testKit.system.executionContext
       given org.apache.pekko.stream.Materializer =
-        org.apache.pekko.stream.Materializer.matFromSystem(testKit.system.classicSystem)
+        org.apache.pekko.stream.Materializer.matFromSystem(using testKit.system.classicSystem)
 
       val roomId       = UUID.randomUUID()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
       val connectionId = newConnectionId()
-      val classicProbe = org.apache.pekko.testkit.TestProbe()(testKit.system.classicSystem)
+      val classicProbe = org.apache.pekko.testkit.TestProbe()(using testKit.system.classicSystem)
 
       // Sink.cancelled cancels downstream demand immediately, terminating the source.
       SSE
@@ -227,7 +227,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
       val userId = UUID.randomUUID()
-      val ref    = TestProbe()(testKit.system.classicSystem).ref
+      val ref    = TestProbe()(using testKit.system.classicSystem).ref
 
       managerRef ! RoomManager.ConnectionCompleted(roomId, userId, ref)
 
@@ -246,7 +246,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
       val userId = UUID.randomUUID()
-      val ref    = TestProbe()(testKit.system.classicSystem).ref
+      val ref    = TestProbe()(using testKit.system.classicSystem).ref
 
       managerRef ! RoomManager.ConnectionFailure(roomId, userId, ref, new RuntimeException("boom"))
 
@@ -354,8 +354,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId      = UUID.randomUUID()
       val userId      = UUID.randomUUID()
       val token       = Room.SessionToken.mint()
-      val firstProbe  = TestProbe()(testKit.system.classicSystem)
-      val secondProbe = TestProbe()(testKit.system.classicSystem)
+      val firstProbe  = TestProbe()(using testKit.system.classicSystem)
+      val secondProbe = TestProbe()(using testKit.system.classicSystem)
       val alice       = Attendee(userId, "Alice", false, "", firstProbe.ref, token)
       // Alice's session exists before her member does, which is the state ConnectToRoom
       // always arrives in; without it the room's Join guard drops the connection.

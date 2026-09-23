@@ -32,8 +32,7 @@ lazy val root = project
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream-testkit"      % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test,
-    // An incomplete match is otherwise a warning; API's status table depends on it being fatal.
-    scalacOptions += "-Wconf:name=PatternMatchExhaustivity:e"
+    scalacOptions += "-Werror"
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)

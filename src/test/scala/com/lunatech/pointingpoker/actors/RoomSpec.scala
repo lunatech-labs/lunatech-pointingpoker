@@ -199,7 +199,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.Leave(user.id, user.ref)
 
       // Reconnect well within the grace period, under a new ref but the same user id/token.
-      val reconnectedUserProbe = TestProbe()(testKit.system.classicSystem)
+      val reconnectedUserProbe = TestProbe()(using testKit.system.classicSystem)
       val reconnectedUser      = user.copy(ref = reconnectedUserProbe.ref)
       roomRef ! reconnectedUser.joinMessage
 
@@ -293,7 +293,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "keep the member when a departure leaves another connection open" in {
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
-      val secondProbe       = TestProbe()(testKit.system.classicSystem)
+      val secondProbe       = TestProbe()(using testKit.system.classicSystem)
       val secondId          = newConnectionId()
       val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
@@ -339,7 +339,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "stay alive when its last member is removed" in {
-      val probe = TestProbe()(testKit.system.classicSystem)
+      val probe = TestProbe()(using testKit.system.classicSystem)
       val user  =
         Attendee(UUID.randomUUID(), "user1", false, "", probe.ref, Room.SessionToken.mint())
       val user2 =
@@ -435,7 +435,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "5")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val newUserProbe        = TestProbe()(testKit.system.classicSystem)
+      val newUserProbe        = TestProbe()(using testKit.system.classicSystem)
       val newUser             = Attendee(
         UUID.randomUUID(),
         "new user",
@@ -579,7 +579,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "keep the session once Join promotes it to a member" in {
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val userProbe    = TestProbe()(testKit.system.classicSystem)
+      val userProbe    = TestProbe()(using testKit.system.classicSystem)
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
       roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
@@ -599,7 +599,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "resolve a token whose member was removed at grace expiry" in {
       val sessionProbe        = testKit.createTestProbe[Room.SessionMinted]()
       val resultProbe         = testKit.createTestProbe[Room.TokenResolution]()
-      val userProbe           = TestProbe()(testKit.system.classicSystem)
+      val userProbe           = TestProbe()(using testKit.system.classicSystem)
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
@@ -628,7 +628,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "refuse every command from a token whose member was removed at grace expiry" in {
       val sessionProbe        = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
-      val userProbe           = TestProbe()(testKit.system.classicSystem)
+      val userProbe           = TestProbe()(using testKit.system.classicSystem)
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "3")
       val (user3, _)          = createUser(UUID.randomUUID(), "user3", true, "5")
       val (_, roomRef)        = createRoom(
@@ -717,7 +717,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "keep the round revealed when a straggler joins" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val newUserProbe = TestProbe()(testKit.system.classicSystem)
+      val newUserProbe = TestProbe()(using testKit.system.classicSystem)
       val newUser      = Attendee(
         UUID.randomUUID(),
         "new user",
@@ -861,7 +861,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // A reconnect Joins the same identity and connection id under a new ref; the estimate
       // is keyed by id in the round, so the rejoin never touches it.
-      val newRefProbe = TestProbe()(testKit.system.classicSystem)
+      val newRefProbe = TestProbe()(using testKit.system.classicSystem)
       roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, newRefProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -1031,7 +1031,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "send one snapshot to each of a member's connections" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
-      val secondTab           = TestProbe()(testKit.system.classicSystem)
+      val secondTab           = TestProbe()(using testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref)
@@ -1052,7 +1052,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
 
-      val replacement   = TestProbe()(testKit.system.classicSystem)
+      val replacement   = TestProbe()(using testKit.system.classicSystem)
       val replacementId = newConnectionId()
       roomRef ! Room.Join(user.id, user.name, user.token, replacementId, replacement.ref)
       roomRef ! Room.GetData(dataProbe.ref)
@@ -1066,7 +1066,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "replace a connection's ref when the same id reconnects, and feed only the new one" in {
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
-      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val replacementProbe  = TestProbe()(using testKit.system.classicSystem)
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
 
@@ -1082,7 +1082,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
     "remove a superseded ref by value, not by id, when its stream finally terminates" in {
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
-      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val replacementProbe  = TestProbe()(using testKit.system.classicSystem)
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
 
@@ -1098,7 +1098,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "schedule no removal when the connection that drops is not the member's last" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
-      val replacement  = TestProbe()(testKit.system.classicSystem)
+      val replacement  = TestProbe()(using testKit.system.classicSystem)
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(
         UUID.randomUUID(),
@@ -1159,7 +1159,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     "publish nothing when a connection drops" in {
       val (user, _)           = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", false, "")
-      val secondTab           = TestProbe()(testKit.system.classicSystem)
+      val secondTab           = TestProbe()(using testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
         withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref),
@@ -1246,7 +1246,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     }
 
     "stop itself once it has held no connection for the idle timeout" in {
-      val watcher      = TestProbe()(testKit.system.classicSystem)
+      val watcher      = TestProbe()(using testKit.system.classicSystem)
       val (_, roomRef) = createRoom(
         UUID.randomUUID(),
         RoomData.empty,
@@ -1349,7 +1349,7 @@ object RoomSpec:
   def createUser(uuid: UUID, name: String, voted: Boolean, estimation: String)(using
       testKit: ActorTestKit
   ): (Attendee, TestProbe) =
-    val probe = TestProbe()(testKit.system.classicSystem)
+    val probe = TestProbe()(using testKit.system.classicSystem)
     (Attendee(uuid, name, voted, estimation, probe.ref, Room.SessionToken.mint()), probe)
 
   def createRoom(
