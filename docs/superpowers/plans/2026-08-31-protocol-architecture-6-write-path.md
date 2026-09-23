@@ -2379,3 +2379,9 @@ final review's fix wave rather than at Task 1.
 A second review round ran after the fix wave above, over the whole branch with a
 correctness and a security pass. Its decisions, and the fixes it scheduled, are
 in `2026-09-23-protocol-architecture-6-review-fixes.md`.
+
+**The Verification section above omits `npm test`, and CI went red on it.** The
+node suite's buffering-proxy reproduction in `test/reproduction.test.js` still
+expected `/join` to answer `200` and opened `/events` without a connection id,
+both of which this step changed. No task ran that suite, so the failure first
+showed in CI on the PR and was fixed after the second review round.

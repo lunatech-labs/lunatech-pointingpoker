@@ -546,5 +546,6 @@ git commit -m "docs(protocol): record what the second review round decided"
 - [ ] `sbt styleCheck test`: 162 succeeded, 0 failed.
 - [ ] `npm run e2e`: 60 passed, the 58 before this plan plus the new case in both
       browsers.
+- [ ] `npm test`: 14 passed, the node suite this plan's first draft left out.
 - [ ] Task 2 step 8's three mutations, each red, each reverted.
 - [ ] `git diff f78e4db --stat` names only the files this plan declares.
