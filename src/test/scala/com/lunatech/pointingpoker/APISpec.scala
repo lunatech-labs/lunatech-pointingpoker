@@ -42,10 +42,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val validToken: Room.SessionToken = Room.SessionToken.mint()
   val connectionId: String          = UUID.randomUUID().toString
 
-  // The probe is still the assertion target; the reply is what stops every command case
-  // failing on the ask's timeout instead of on what it asserts.
-  // Shared mutable state across test cases: correct only under ScalaTest's default sequential run.
+  // Replies so a command case fails on its assertion, not the ask's timeout.
+  // Shared across cases: sound only under ScalaTest's default sequential run.
   val commandReply: java.util.concurrent.atomic.AtomicReference[Room.CommandResult] =
+    new java.util.concurrent.atomic.AtomicReference(Room.Applied)
+  val voteReply: java.util.concurrent.atomic.AtomicReference[Room.VoteResult] =
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
 
   val roomManager: ActorRef[RoomManager.Command] =
@@ -63,7 +64,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case other =>
         commandProbe.ref ! other
         other match
-          case RoomManager.Vote(_, _, _, replyTo)      => replyTo ! commandReply.get()
+          case RoomManager.Vote(_, _, _, replyTo)      => replyTo ! voteReply.get()
           case RoomManager.Show(_, _, replyTo)         => replyTo ! commandReply.get()
           case RoomManager.Clear(_, _, replyTo)        => replyTo ! commandReply.get()
           case RoomManager.Revote(_, _, replyTo)       => replyTo ! commandReply.get()
@@ -264,39 +265,39 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "answer 401 for a vote with no session cookie" in {
-      commandReply.set(Room.NoSession)
+      voteReply.set(Room.NoSession)
       try
         Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> apiRoute ~> check {
           status mustBe StatusCodes.Unauthorized
         }
-      finally commandReply.set(Room.Applied)
+      finally voteReply.set(Room.Applied)
       // The endpoint still hands the manager the absent token; refusing it is the manager's rule.
       commandProbe.expectMessageType[RoomManager.Vote] match
         case RoomManager.Vote(_, token, _, _) => token mustBe None
     }
 
     "answer 403 for a vote from a resolved session that is no longer a member" in {
-      commandReply.set(Room.NotAMember)
+      voteReply.set(Room.NotAMember)
       try
         Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
           Cookie("session", Room.SessionToken.mint().raw)
         ) ~> apiRoute ~> check {
           status mustBe StatusCodes.Forbidden
         }
-      finally commandReply.set(Room.Applied)
+      finally voteReply.set(Room.Applied)
       // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
       commandProbe.expectMessageType[RoomManager.Vote]
     }
 
     "answer 409 for a vote into a revealed round" in {
-      commandReply.set(Room.RoundRevealed)
+      voteReply.set(Room.RoundRevealed)
       try
         Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
           Cookie("session", Room.SessionToken.mint().raw)
         ) ~> apiRoute ~> check {
           status mustBe StatusCodes.Conflict
         }
-      finally commandReply.set(Room.Applied)
+      finally voteReply.set(Room.Applied)
       // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
       commandProbe.expectMessageType[RoomManager.Vote]
     }

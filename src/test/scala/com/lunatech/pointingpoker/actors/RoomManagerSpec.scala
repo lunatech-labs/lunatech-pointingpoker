@@ -265,7 +265,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
           )
         )
       val token      = Room.SessionToken.mint()
-      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
+      val replyProbe = testKit.createTestProbe[Room.VoteResult]()
 
       val connectionId = newConnectionId()
 
@@ -288,7 +288,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val knownRoomId   = UUID.randomUUID()
       val unknownRoomId = UUID.randomUUID()
       val roomProbe     = testKit.createTestProbe[Room.Command]()
-      val replyProbe    = testKit.createTestProbe[Room.CommandResult]()
+      val replyProbe    = testKit.createTestProbe[Room.VoteResult]()
       val managerRef    =
         testKit.spawn(
           RoomManager.receiveBehaviour(
@@ -312,7 +312,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     "no-op a command with no session token, without asking the room" in {
       val roomId     = UUID.randomUUID()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
-      val replyProbe = testKit.createTestProbe[Room.CommandResult]()
+      val replyProbe = testKit.createTestProbe[Room.VoteResult]()
       val managerRef =
         testKit.spawn(
           RoomManager.receiveBehaviour(
@@ -383,7 +383,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       // Waits for the room's own catch-up send, so the Join it forwards asynchronously via
       // managerRef is guaranteed applied before Vote is sent directly to roomRef below.
       firstProbe.expectMsgType[RoomSnapshot]
-      roomRef ! Room.Vote(token, "5", testKit.createTestProbe[Room.CommandResult]().ref)
+      roomRef ! Room.Vote(token, "5", testKit.createTestProbe[Room.VoteResult]().ref)
       managerRef ! RoomManager.ConnectToRoom(
         roomId,
         userId,

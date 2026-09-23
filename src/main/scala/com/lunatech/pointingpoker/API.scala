@@ -90,13 +90,20 @@ class API(
     .out(header("X-Accel-Buffering", "no"))
     .errorOut(statusCode(StatusCode.Unauthorized))
 
-  private val noSession  = oneOfVariantSingletonMatcher(StatusCode.Unauthorized)(Room.NoSession)
-  private val notAMember = oneOfVariantSingletonMatcher(StatusCode.Forbidden)(Room.NotAMember)
-  private val revealed   = oneOfVariantSingletonMatcher(StatusCode.Conflict)(Room.RoundRevealed)
-  private val blank      = oneOfVariantSingletonMatcher(StatusCode.BadRequest)(Room.BlankEstimation)
+  // Exhaustive, and the build makes a missed case fatal: every refusal has exactly one status.
+  private def status(refusal: Room.Refusal | Room.VoteRefusal): StatusCode = refusal match
+    case Room.NoSession       => StatusCode.Unauthorized
+    case Room.NotAMember      => StatusCode.Forbidden
+    case Room.RoundRevealed   => StatusCode.Conflict
+    case Room.BlankEstimation => StatusCode.BadRequest
 
-  private val commandErrors = oneOf[Room.CommandResult](noSession, notAMember)
-  private val voteErrors    = oneOf[Room.CommandResult](noSession, notAMember, revealed, blank)
+  // Built from the enums' values, so a new refusal cannot be left without a variant.
+  private def errors[R <: Room.Refusal | Room.VoteRefusal](refusals: Seq[R]) =
+    val variants = refusals.map(r => oneOfVariantSingletonMatcher(status(r))(r))
+    oneOf[R](variants.head, variants.tail*)
+
+  private val commandErrors = errors(Room.Refusal.values.toSeq)
+  private val voteErrors    = errors(Room.Refusal.values.toSeq ++ Room.VoteRefusal.values)
 
   private def command(segment: String) = endpoint.post
     .in(roomPath / segment)
@@ -124,8 +131,14 @@ class API(
     .errorOut(commandErrors)
 
   // Applied is the only outcome that is not a refusal, so it is the only Right.
-  private def answer(result: Room.CommandResult): Either[Room.CommandResult, Unit] =
-    if result == Room.Applied then Right(()) else Left(result)
+  private def answer(result: Room.CommandResult): Either[Room.Refusal, Unit] = result match
+    case Room.Applied          => Right(())
+    case refusal: Room.Refusal => Left(refusal)
+
+  private def answerVote(result: Room.VoteResult): Either[Room.Refusal | Room.VoteRefusal, Unit] =
+    result match
+      case Room.Applied                               => Right(())
+      case refusal: (Room.Refusal | Room.VoteRefusal) => Left(refusal)
 
   private def resolveToken(raw: Option[String]): Option[Room.SessionToken] =
     raw.flatMap(Room.SessionToken.parse)
@@ -187,10 +200,10 @@ class API(
     },
     vote.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager
-        .ask[Room.CommandResult](
+        .ask[Room.VoteResult](
           RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation, _)
         )
-        .map(answer)
+        .map(answerVote)
     },
     show.serverLogic[Future] { (roomId, rawCookie) =>
       roomManager

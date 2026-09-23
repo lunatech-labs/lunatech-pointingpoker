@@ -39,7 +39,7 @@ object Room:
       connectionId: ConnectionId,
       replyTo: ActorRef[CommandResult]
   ) extends Command
-  final case class Vote(token: SessionToken, estimation: String, replyTo: ActorRef[CommandResult])
+  final case class Vote(token: SessionToken, estimation: String, replyTo: ActorRef[VoteResult])
       extends Command
   final case class ClearVotes(token: SessionToken, replyTo: ActorRef[CommandResult]) extends Command
   final case class ReVote(token: SessionToken, replyTo: ActorRef[CommandResult])     extends Command
@@ -62,13 +62,16 @@ object Room:
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
   case object Unresolved                                extends TokenResolution
 
-  sealed trait CommandResult
-  sealed trait VoteOutcome    extends CommandResult
-  case object Applied         extends VoteOutcome
-  case object RoundRevealed   extends VoteOutcome
-  case object BlankEstimation extends VoteOutcome
-  case object NoSession       extends CommandResult
-  case object NotAMember      extends CommandResult
+  case object Applied
+  enum Refusal:
+    case NoSession, NotAMember
+  enum VoteRefusal:
+    case RoundRevealed, BlankEstimation
+  export Refusal.{NoSession, NotAMember}
+  export VoteRefusal.{BlankEstimation, RoundRevealed}
+  // Per endpoint, so the compiler refuses a result the endpoint's status table does not list.
+  type CommandResult = Applied.type | Refusal
+  type VoteResult    = CommandResult | VoteRefusal
 
   // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
   case object StreamCompleted
@@ -143,7 +146,7 @@ object Room:
       )
 
     // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
-    def acting(token: SessionToken): Either[CommandResult, UUID] =
+    def acting(token: SessionToken): Either[Refusal, UUID] =
       this.sessions.get(token) match
         case None                                       => Left(NoSession)
         case Some(session) if !isMember(session.userId) => Left(NotAMember)
@@ -153,7 +156,7 @@ object Room:
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
-    def vote(userId: UUID, estimation: String): (RoomData, VoteOutcome) =
+    def vote(userId: UUID, estimation: String): (RoomData, Applied.type | VoteRefusal) =
       if this.state.round.revealed then (this, RoundRevealed)
       else if estimation.isBlank then (this, BlankEstimation)
       else
@@ -236,6 +239,24 @@ object Room:
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
+        // The commands whose only outcome past the membership check is an update and a publish.
+        def act(token: SessionToken, replyTo: ActorRef[CommandResult])(
+            update: RoomData => RoomData
+        ): Behavior[Command] =
+          data.acting(token) match
+            case Right(_) =>
+              replyTo ! Applied
+              receiveBehaviour(
+                roomId,
+                publish(update(data), context),
+                gracePeriod,
+                stopAfterIdle,
+                timers
+              )
+            case Left(refusal) =>
+              replyTo ! refusal
+              Behaviors.same
+
         // Any message re-arms the tick a full delay out, so none lands between ValidateToken and
         // ConnectToRoom. Invariant: connections change only on this path, so the timer is exact.
         if message != IdleTick then armIdleTick(timers, stopAfterIdle)
@@ -290,47 +311,11 @@ object Room:
                 replyTo ! refusal
                 Behaviors.same
           case ClearVotes(token, replyTo) =>
-            data.acting(token) match
-              case Right(_) =>
-                replyTo ! Applied
-                receiveBehaviour(
-                  roomId,
-                  publish(data.clear(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case Left(refusal) =>
-                replyTo ! refusal
-                Behaviors.same
+            act(token, replyTo)(_.clear())
           case ReVote(token, replyTo) =>
-            data.acting(token) match
-              case Right(_) =>
-                replyTo ! Applied
-                receiveBehaviour(
-                  roomId,
-                  publish(data.reVote(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case Left(refusal) =>
-                replyTo ! refusal
-                Behaviors.same
+            act(token, replyTo)(_.reVote())
           case ShowVotes(token, replyTo) =>
-            data.acting(token) match
-              case Right(_) =>
-                replyTo ! Applied
-                receiveBehaviour(
-                  roomId,
-                  publish(data.show(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case Left(refusal) =>
-                replyTo ! refusal
-                Behaviors.same
+            act(token, replyTo)(_.show())
           case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
@@ -369,19 +354,7 @@ object Room:
                 replyTo ! refusal
                 Behaviors.same
           case EditIssue(token, issue, replyTo) =>
-            data.acting(token) match
-              case Right(_) =>
-                replyTo ! Applied
-                receiveBehaviour(
-                  roomId,
-                  publish(data.editIssue(issue), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case Left(refusal) =>
-                replyTo ! refusal
-                Behaviors.same
+            act(token, replyTo)(_.editIssue(issue))
           case ValidateToken(token, replyTo) =>
             // The map is the single authority now that it is retained: a member removed at
             // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.

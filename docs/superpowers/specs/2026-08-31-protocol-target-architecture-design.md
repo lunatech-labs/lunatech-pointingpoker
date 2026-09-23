@@ -2772,14 +2772,20 @@ cheap. This goes the other way from `RoomData.of`, whose `require`s stayed
 because an `Either` would have pushed an unwrap through the test sites section 3
 counts: `vote` has one call site and none in the tests.
 
-Landed as a sub-trait of the five-case reply rather than a separate type. `Room`
-declares `sealed trait CommandResult` with `sealed trait VoteOutcome extends
-CommandResult` under it, and `Applied`, `RoundRevealed` and `BlankEstimation`
-extend `VoteOutcome` while `NoSession` and `NotAMember` extend `CommandResult`
-directly. `RoomData.vote` returns `(RoomData, VoteOutcome)`, so its return type
-alone rules out `NoSession` or `NotAMember` coming back from the guard, which a
-separate three-case type would have needed a join to express once `acting`
-answers with the five-case `CommandResult` it shares with every other handler.
+Landed as two enums behind per-endpoint aliases. `Room` declares
+`enum Refusal { NoSession, NotAMember }` and `enum VoteRefusal { RoundRevealed,
+BlankEstimation }` beside a lone `Applied`, with `CommandResult = Applied.type |
+Refusal` answering the four other commands and `/leave`, and `VoteResult =
+CommandResult | VoteRefusal` answering `/vote`. Each message's `replyTo` carries
+its endpoint's alias, so a handler answering `ShowVotes` with `RoundRevealed` is
+a type error rather than the `500` tapir raises on finding no variant. `API`
+builds each `oneOf` from the enums' `values` through one exhaustive `status`
+match, and `build.sbt` makes an incomplete match fatal with
+`-Wconf:name=PatternMatchExhaustivity:e`, so a refusal added later fails the
+build until it has a status. The first cut was a sub-trait, `VoteOutcome extends
+CommandResult`, which narrowed `vote`'s return but let every `replyTo` accept all
+five results and left each `oneOf` a list kept by hand. The branch's second
+review round replaced it.
 
 **The `400` is refused at the edge** by a tapir validator, and the blank guard
 behind it becomes insurance that can report rather than a silent accept: a blank
