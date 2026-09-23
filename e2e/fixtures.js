@@ -216,4 +216,7 @@ export const frozenNotice = page => page.getByText('The round is revealed')
 // The recipient's own estimation, which is on the wire for them before any reveal.
 export const ownEstimation = page => page.locator('.estimation-card .estimation-text')
 
+// The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
+export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
+
 export { expect }

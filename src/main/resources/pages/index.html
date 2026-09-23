@@ -100,6 +100,13 @@
           <div class="alert alert-info m-1" role="alert" v-if="showClipboardHint">
             Link copied to clipboard
           </div>
+          <div class="alert alert-warning m-1" role="status" v-if="moved">
+            The old link you followed now opens this address. Please update your invitation or
+            bookmark to use it.
+            <button type="button" class="close" aria-label="Dismiss" v-on:click="moved = false">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -140,7 +147,7 @@
               <div class="form-group row">
                 <label for="join-roomId" class="col-sm-3 col-form-label">Room id</label>
                 <div class="col-sm-9">
-                  <input type="text" class="form-control" id="join-roomId" v-model="roomId">
+                  <input type="text" class="form-control" id="join-roomId" v-model.trim="roomId">
                 </div>
               </div>
               <div class="form-group row">
@@ -399,6 +406,7 @@
         currentIssue: "",
         votesSummary: [],
         showClipboardHint: false,
+        moved: false,
         showError: false,
         errorMessage: "",
         users:[],
@@ -428,6 +436,7 @@
           })
           .catch(function (error) {
             console.log(error);
+            ref.errorMessage = "Could not create a room. Please try again.";
           });
         },
         doJoin: function () {
@@ -486,6 +495,12 @@
             };
           })
           .catch(function (error) {
+            // Only a typed or remembered name reaches /join unchecked; the page route answers it.
+            if (error.response && error.response.status === 404) {
+              localStorage.removeItem("roomId");
+              window.location.assign('/' + encodeURIComponent(ref.roomId));
+              return;
+            }
             ref.showError = true;
             ref.errorMessage = "Could not join the room. Please try again.";
             console.error("Failed to join room:", error);
@@ -558,7 +573,12 @@
         }
       },
       created() {
-        // TODO handle possible failure from not valid roomId (not UUID)
+        // Set by the legacy-link redirect; cleared from the address so a copied link is clean.
+        if (new URLSearchParams(window.location.search).get('moved') === '1') {
+          this.moved = true;
+          history.replaceState(null, '', window.location.pathname);
+        }
+        // The server serves this page only under a valid room name, so the path needs no check.
         var possibleRoomId = window.location.pathname.split('/')[1]
         if(possibleRoomId !== "") {
           this.roomId = possibleRoomId;
