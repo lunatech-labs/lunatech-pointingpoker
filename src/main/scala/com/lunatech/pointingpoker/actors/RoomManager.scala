@@ -21,17 +21,48 @@ object RoomManager:
       userId: UUID,
       name: String,
       token: Room.SessionToken,
+      connectionId: Room.ConnectionId,
       ref: UntypedRef
   ) extends Command
-  case class Vote(roomId: UUID, token: Option[Room.SessionToken], estimation: String)
-      extends Command
-  case class Show(roomId: UUID, token: Option[Room.SessionToken])   extends Command
-  case class Clear(roomId: UUID, token: Option[Room.SessionToken])  extends Command
-  case class Revote(roomId: UUID, token: Option[Room.SessionToken]) extends Command
-  case class EditIssue(roomId: UUID, token: Option[Room.SessionToken], issue: String)
-      extends Command
-  case class RequestSession(roomId: UUID, name: String, replyTo: ActorRef[Room.SessionMinted])
-      extends Command
+  case class Vote(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      estimation: String,
+      replyTo: ActorRef[Room.VoteResult]
+  ) extends Command
+  case class Depart(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      connectionId: Room.ConnectionId,
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Show(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Clear(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class Revote(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class EditIssue(
+      roomId: UUID,
+      token: Option[Room.SessionToken],
+      issue: String,
+      replyTo: ActorRef[Room.CommandResult]
+  ) extends Command
+  case class RequestSession(
+      roomId: UUID,
+      name: String,
+      existing: Option[Room.SessionToken],
+      replyTo: ActorRef[Room.SessionMinted]
+  ) extends Command
   case class ValidateToken(
       roomId: UUID,
       token: Room.SessionToken,
@@ -62,6 +93,15 @@ object RoomManager:
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
+        // A stopped room is answered from the map's absence rather than by a timing-out ask.
+        def relay(roomId: UUID, token: Option[Room.SessionToken], replyTo: ActorRef[Room.Refusal])(
+            command: Room.SessionToken => Room.Command
+        ): Behavior[Command] =
+          (data.rooms.get(roomId), token) match
+            case (Some(room), Some(t)) => room ! command(t)
+            case _                     => replyTo ! Room.NoSession
+          Behaviors.same
+
         message match
           case CreateRoom(replyTo) =>
             val roomId    = UUID.randomUUID()
@@ -71,20 +111,22 @@ object RoomManager:
             context.watch(roomActor)
             replyTo ! RoomId(roomId.toString)
             receiveBehaviour(newData, gracePeriod, stopAfterIdle)
-          case ConnectToRoom(roomId, userId, name, token, ref) =>
-            data.rooms.get(roomId).foreach(room => room ! Room.Join(userId, name, token, ref))
+          case ConnectToRoom(roomId, userId, name, token, connectionId, ref) =>
+            data.rooms
+              .get(roomId)
+              .foreach(room => room ! Room.Join(userId, name, token, connectionId, ref))
             Behaviors.same
-          case RequestSession(roomId, name, replyTo) =>
+          case RequestSession(roomId, name, existing, replyTo) =>
             data.rooms
               .get(roomId)
               .fold {
                 val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
                 context.watch(roomActor)
                 val newData = data.addRoom(roomId, roomActor)
-                roomActor ! Room.RequestSession(name, replyTo)
+                roomActor ! Room.RequestSession(name, existing, replyTo)
                 receiveBehaviour(newData, gracePeriod, stopAfterIdle)
               } { room =>
-                room ! Room.RequestSession(name, replyTo)
+                room ! Room.RequestSession(name, existing, replyTo)
                 Behaviors.same
               }
           case ValidateToken(roomId, token, replyTo) =>
@@ -92,36 +134,18 @@ object RoomManager:
               case Some(room) => room ! Room.ValidateToken(token, replyTo)
               case None       => replyTo ! Room.Unresolved
             Behaviors.same
-          case Vote(roomId, token, estimation) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.Vote(t, estimation)
-            Behaviors.same
-          case Show(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ShowVotes(t)
-            Behaviors.same
-          case Clear(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ClearVotes(t)
-            Behaviors.same
-          case Revote(roomId, token) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.ReVote(t)
-            Behaviors.same
-          case EditIssue(roomId, token, issue) =>
-            for
-              room <- data.rooms.get(roomId)
-              t    <- token
-            do room ! Room.EditIssue(t, issue)
-            Behaviors.same
+          case Vote(roomId, token, estimation, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.Vote(t, estimation, replyTo))
+          case Show(roomId, token, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.ShowVotes(t, replyTo))
+          case Clear(roomId, token, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.ClearVotes(t, replyTo))
+          case Revote(roomId, token, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.ReVote(t, replyTo))
+          case EditIssue(roomId, token, issue, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.EditIssue(t, issue, replyTo))
+          case Depart(roomId, token, connectionId, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.Depart(t, connectionId, replyTo))
           case ConnectionCompleted(roomId, userId, ref) =>
             data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref))
             Behaviors.same
@@ -129,6 +153,7 @@ object RoomManager:
             context.log.error("ConnectionFailure for room {} user {}", roomId, userId, t)
             data.rooms.get(roomId).foreach(room => room ! Room.Leave(userId, ref))
             Behaviors.same
+        end match
       }
       .receiveSignal { case (_, Terminated(ref)) =>
         val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }

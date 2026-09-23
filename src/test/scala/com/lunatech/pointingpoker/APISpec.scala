@@ -19,13 +19,12 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
-import com.lunatech.pointingpoker.JoinResponse
-import com.lunatech.pointingpoker.{CirceSupport, EditIssueRequest, VoteRequest}
-import io.circe.parser.decode
+import com.lunatech.pointingpoker.{EditIssueRequest, VoteRequest}
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
 
+import scala.concurrent.duration.*
 import scala.io.Source
 
 class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
@@ -41,14 +40,22 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     testKit.createTestProbe[RoomManager.Command]()
 
   val validToken: Room.SessionToken = Room.SessionToken.mint()
+  val connectionId: String          = UUID.randomUUID().toString
+
+  // Replies so a command case fails on its assertion, not the ask's timeout.
+  // Shared across cases: sound only under ScalaTest's default sequential run.
+  val commandReply: java.util.concurrent.atomic.AtomicReference[Room.CommandResult] =
+    new java.util.concurrent.atomic.AtomicReference(Room.Applied)
+  val voteReply: java.util.concurrent.atomic.AtomicReference[Room.VoteResult] =
+    new java.util.concurrent.atomic.AtomicReference(Room.Applied)
 
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! RoomManager.RoomId(roomId)
         Behaviors.same
-      case RoomManager.RequestSession(_, _, replyTo) =>
-        replyTo ! Room.SessionMinted(UUID.randomUUID(), validToken)
+      case RoomManager.RequestSession(_, _, existing, replyTo) =>
+        replyTo ! Room.SessionMinted(UUID.randomUUID(), existing.getOrElse(validToken))
         Behaviors.same
       case RoomManager.ValidateToken(_, token, replyTo) =>
         if token == validToken then replyTo ! Room.Resolved(UUID.randomUUID(), "Alice")
@@ -56,6 +63,14 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         Behaviors.same
       case other =>
         commandProbe.ref ! other
+        other match
+          case RoomManager.Vote(_, _, _, replyTo)      => replyTo ! voteReply.get()
+          case RoomManager.Show(_, _, replyTo)         => replyTo ! commandReply.get()
+          case RoomManager.Clear(_, _, replyTo)        => replyTo ! commandReply.get()
+          case RoomManager.Revote(_, _, replyTo)       => replyTo ! commandReply.get()
+          case RoomManager.EditIssue(_, _, _, replyTo) => replyTo ! commandReply.get()
+          case RoomManager.Depart(_, _, _, replyTo)    => replyTo ! commandReply.get()
+          case _                                       => ()
         Behaviors.same
     })
   given typedSystem: ActorSystem[SpawnProtocol.Command] =
@@ -64,6 +79,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val apiRoute: Route = handleRejections(RejectionHandler.default) {
     API(roomManager, apiConfig, lifecycleConfig, probeConfig).route
   }
+
+  private def json[A: io.circe.Encoder](a: A): HttpEntity.Strict =
+    HttpEntity(ContentTypes.`application/json`, a.asJson.noSpaces)
 
   override def afterAll(): Unit =
     super.afterAll()
@@ -83,19 +101,26 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe index
       }
     }
+    // A page cached without this can outlive the server that served it, so a deploy pairs a
+    // stale page with a new protocol. One conditional request per load is the whole cost.
+    "revalidate the index page on every load" in {
+      Get() ~> apiRoute ~> check {
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
+      }
+      Get(s"/$roomId") ~> apiRoute ~> check {
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
+      }
+    }
     "create a room" in
-      // Deliberately no CirceSupport import here: create-room must stay a plain
-      // text/plain body containing the bare roomId, not a JSON-quoted string.
+      // The hazard was the generic circe marshaller hijacking a String completion; what keeps
+      // create-room plain now is stringBody on the endpoint, not the absence of an import.
       Post("/create-room") ~> apiRoute ~> check {
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
         responseAs[String] mustBe roomId
       }
-    "join a room, return a minted userId, and set a session cookie" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
-        status.isSuccess() mustBe true
-        val response = responseAs[JoinResponse]
-        response.userId.toString.length > 0 mustBe true
+    "join a room and set a session cookie" in
+      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
 
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
         cookieHeader.cookie.name mustBe "session"
@@ -105,17 +130,24 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         cookieHeader.cookie.sameSite mustBe Some(SameSite.Strict)
         cookieHeader.cookie.maxAge mustBe None
       }
-    }
-    "set the same session token on /join that /events later accepts" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      val cookieValue = Post(s"/rooms/$roomId/join", JoinRequest("Alice")) ~> apiRoute ~> check {
-        status.isSuccess() mustBe true
+    "resume the session its cookie already names rather than minting over it" in
+      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
-        cookieHeader.cookie.value
+        cookieHeader.cookie.value mustBe validToken.raw
       }
+    "set the same session token on /join that /events later accepts" in {
+      val cookieValue =
+        Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+          status.isSuccess() mustBe true
+          val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
+          cookieHeader.cookie.value
+        }
       cookieValue mustBe validToken.raw
 
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", cookieValue)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
@@ -127,19 +159,20 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         s"/rooms/$roomId/join",
         HttpEntity(ContentTypes.`application/json`, "{\"not-name\": 5}")
       ) ~> apiRoute ~> check {
-        // MalformedRequestContentRejection should result in 400
+        // tapir's own decode-failure handling produces this 400, not a pekko rejection.
         response.status mustBe StatusCodes.BadRequest
       }
 
     "dispatch a vote command" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
       val token = Room.SessionToken.mint()
-      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> addHeader(
+      Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
         Cookie("session", token.raw)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), Some(token), "5"))
+      commandProbe.expectMessageType[RoomManager.Vote] match
+        case RoomManager.Vote(id, tok, estimation, _) =>
+          (id, tok, estimation) mustBe (UUID.fromString(roomId), Some(token), "5")
     }
 
     "dispatch a show command" in {
@@ -147,7 +180,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/show") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Show(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Show] match
+        case RoomManager.Show(id, tok, _) => (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch a clear command" in {
@@ -155,7 +189,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Post(s"/rooms/$roomId/clear") ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Clear(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Clear] match
+        case RoomManager.Clear(id, tok, _) =>
+          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch a revote command" in {
@@ -165,44 +201,52 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(RoomManager.Revote(UUID.fromString(roomId), Some(token)))
+      commandProbe.expectMessageType[RoomManager.Revote] match
+        case RoomManager.Revote(id, tok, _) =>
+          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
     }
 
     "dispatch an edit-issue command" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
       val token = Room.SessionToken.mint()
       Post(
         s"/rooms/$roomId/edit-issue",
-        EditIssueRequest("new issue")
+        json(EditIssueRequest("new issue"))
       ) ~> addHeader(Cookie("session", token.raw)) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
       }
-      commandProbe.expectMessage(
-        RoomManager.EditIssue(UUID.fromString(roomId), Some(token), "new issue")
-      )
+      commandProbe.expectMessageType[RoomManager.EditIssue] match
+        case RoomManager.EditIssue(id, tok, issue, _) =>
+          (id, tok, issue) mustBe (UUID.fromString(roomId), Some(token), "new issue")
     }
 
     "reject an events connection with no session cookie" in
-      Get(s"/rooms/$roomId/events") ~> apiRoute ~> check {
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
     "reject an events connection with a malformed session cookie" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", "not-a-uuid")
       ) ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
     "reject an events connection with an unresolvable session cookie" in
-      Get(s"/rooms/$roomId/events") ~> addHeader(
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", Room.SessionToken.mint().raw)
       ) ~> apiRoute ~> check {
         status mustBe StatusCodes.Unauthorized
       }
 
-    "open an SSE events stream for a resolved session" in
+    "reject an events connection with no connection id" in
       Get(s"/rooms/$roomId/events") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+
+    "open an SSE events stream for a resolved session" in
+      Get(s"/rooms/$roomId/events?connectionId=$connectionId") ~> addHeader(
         Cookie("session", validToken.raw)
       ) ~> apiRoute ~> check {
         status.isSuccess() mustBe true
@@ -220,16 +264,80 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
     }
 
-    "still return 204 for a vote with no session cookie (silently no-ops downstream)" in {
-      import com.lunatech.pointingpoker.CirceSupport.given
-      Post(s"/rooms/$roomId/vote", VoteRequest("5")) ~> apiRoute ~> check {
+    "answer 401 for a vote with no session cookie" in {
+      voteReply.set(Room.NoSession)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Unauthorized
+        }
+      finally voteReply.set(Room.Applied)
+      // The endpoint still hands the manager the absent token; refusing it is the manager's rule.
+      commandProbe.expectMessageType[RoomManager.Vote] match
+        case RoomManager.Vote(_, token, _, _) => token mustBe None
+    }
+
+    "answer 403 for a vote from a resolved session that is no longer a member" in {
+      voteReply.set(Room.NotAMember)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Forbidden
+        }
+      finally voteReply.set(Room.Applied)
+      // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
+
+    "answer 409 for a vote into a revealed round" in {
+      voteReply.set(Room.RoundRevealed)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Conflict
+        }
+      finally voteReply.set(Room.Applied)
+      // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
+
+    "answer 400 for a blank estimation without asking the room" in {
+      Post(s"/rooms/$roomId/vote", json(VoteRequest("   "))) ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+      // The validator is at the edge, so nothing reaches the room to be refused there.
+      commandProbe.expectNoMessage(300.millis)
+    }
+
+    "answer 204 for a leave naming a connection" in {
+      val token = Room.SessionToken.mint()
+      val id    = UUID.randomUUID()
+      Post(s"/rooms/$roomId/leave?connectionId=$id") ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
       }
-      // The API layer never rejects a missing/invalid credential for command endpoints.
-      // A missing cookie resolves to None here; RoomManager never asks Room in that case
-      // (see RoomManagerSpec). A cookie that parses but doesn't resolve to a member is
-      // Room's own no-op case instead (see RoomSpec).
-      commandProbe.expectMessage(RoomManager.Vote(UUID.fromString(roomId), None, "5"))
+      commandProbe.expectMessageType[RoomManager.Depart]
+    }
+
+    "reject a leave with no connection id" in
+      Post(s"/rooms/$roomId/leave") ~> addHeader(
+        Cookie("session", Room.SessionToken.mint().raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.BadRequest
+      }
+
+    "answer 401 for a leave with no session cookie" in {
+      commandReply.set(Room.NoSession)
+      try
+        Post(s"/rooms/$roomId/leave?connectionId=${UUID.randomUUID()}") ~> apiRoute ~> check {
+          status mustBe StatusCodes.Unauthorized
+        }
+      finally commandReply.set(Room.Applied)
+      commandProbe.expectMessageType[RoomManager.Depart]
     }
   }
 end APISpec

@@ -11,23 +11,29 @@ lazy val V = new {
   val pekko     = "1.7.0"
   val pekkoHttp = "1.4.0"
   val scalatest = "3.2.20"
+  val tapir     = "1.13.31"
 }
 
 lazy val root = project
   .in(file("."))
   .settings(
-    name                                      := "pointingpoker",
-    libraryDependencies += "org.apache.pekko" %% "pekko-actor-typed"         % V.pekko,
-    libraryDependencies += "org.apache.pekko" %% "pekko-stream"              % V.pekko,
-    libraryDependencies += "ch.qos.logback"    % "logback-classic"           % V.logback,
-    libraryDependencies += "org.apache.pekko" %% "pekko-http"                % V.pekkoHttp,
-    libraryDependencies += "io.circe"         %% "circe-core"                % V.circe,
-    libraryDependencies += "io.circe"         %% "circe-parser"              % V.circe,
-    libraryDependencies += "io.circe"         %% "circe-generic"             % V.circe,
+    name                                                 := "pointingpoker",
+    libraryDependencies += "org.apache.pekko"            %% "pekko-actor-typed"       % V.pekko,
+    libraryDependencies += "org.apache.pekko"            %% "pekko-stream"            % V.pekko,
+    libraryDependencies += "ch.qos.logback"               % "logback-classic"         % V.logback,
+    libraryDependencies += "org.apache.pekko"            %% "pekko-http"              % V.pekkoHttp,
+    libraryDependencies += "io.circe"                    %% "circe-core"              % V.circe,
+    libraryDependencies += "io.circe"                    %% "circe-parser"            % V.circe,
+    libraryDependencies += "io.circe"                    %% "circe-generic"           % V.circe,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-core"              % V.tapir,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-json-circe"        % V.tapir,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % V.tapir,
     libraryDependencies += "org.scalatest"    %% "scalatest"                 % V.scalatest % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream-testkit"      % V.pekko     % Test,
-    libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test
+    libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test,
+    // An incomplete match is otherwise a warning; API's status table depends on it being fatal.
+    scalacOptions += "-Wconf:name=PatternMatchExhaustivity:e"
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)

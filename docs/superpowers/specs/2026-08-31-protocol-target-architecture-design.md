@@ -248,10 +248,14 @@ artifact of the transport rather than a behaviour worth keeping.
 WebSocket would return one thing this design buys back by hand: instant leave
 detection, paid for in section 4's explicit leave endpoint at roughly 25 lines.
 It would also carry command ordering, which this design declines to guarantee at
-all and defers instead, and a per-connection identity for free. That last one has
-stopped being a benefit forgone: section 4 makes a person one participant however
-many connections they hold, so a per-connection identity is the thing being
-avoided.
+all and defers instead, and a per-connection identity for free. That last one
+splits in two, and only half of it is a benefit forgone. A per-connection
+*participant* identity is what this design avoids: section 4 makes a person one
+participant however many connections they hold, which is the outcome WebSocket's
+socket-minted `userId` produced and the one section 4 argues was an artifact of
+the transport. A per-connection *handle* is a different thing, and step 6 mints
+one by hand as the `/events` connection id, so that half stays on the list of
+what the transport would have supplied free.
 
 Twenty-five lines is cheaper than reversing the transport, and the read side is
 one-way fan-out while the write side wants ordinary HTTP semantics, which is what
@@ -310,6 +314,13 @@ unconditional `204`, under `/rooms/:slug/` as `join`, `leave`, `vote`, `show`,
 `:tabId` segment so the cookie's path could be scoped per tab; section 4 records
 why that was dropped. The consequence here is that every route keeps the shape it
 has today, with the slug replacing the UUID at step 7 and nothing else moving.
+
+**`/events` and the leave request carry a client-minted connection id, as a
+query parameter.** Section 4's leave endpoint needs to name the connection that
+is going away, and section 4 says why both carry it the same way. A query
+parameter is not a path segment and scopes no cookie, so the `:tabId` reasoning
+is untouched: what was rejected was identifying a tab in the route, not the
+server knowing which stream a request means.
 
 The SSE response carries `Cache-Control: no-cache` and `X-Accel-Buffering: no`,
 and `README.md` gains a deployment note on proxy buffering. This closes the
@@ -374,11 +385,13 @@ having been `index.html:412` and `:431`, both inside the block step 1 deleted.
 So `JoinResponse.userId` became a field with no consumer, which is the same rule
 that dropped `version`. The **response body** goes at step 6, where tapir
 describes the endpoint, because a response contract belongs to the step that
-rewrites endpoints rather than to the one that changes the wire. Between step 1
-and step 6 it is dead but harmless: nothing reads it, and what confirms the call
-is the status, not the body. Note that `/join` is not waiting on the ask pattern
-for a real result, having had one since 08-20; it is the five command endpoints
-that are still unconditionally `204`.
+rewrites endpoints rather than to the one that changes the wire, where the
+endpoint becomes a `204` carrying the session cookie and nothing else. Between
+step 1 and step 6 the body is dead but harmless: nothing reads it, `doJoin` using
+its `.then` only to sequence `/events` after the cookie (`index.html:421-423`),
+and what confirms the call is the status, not the body. Note that `/join` is not
+waiting on the ask pattern for a real result, having had one since 08-20; it is
+the five command endpoints that are still unconditionally `204`.
 
 **`history` is the one field that grows within a session**, so it is worth
 sizing rather than waving through. A `RoundRecord` is about 165 bytes of JSON at a
@@ -412,11 +425,14 @@ flag; the two coincide except in the re-vote state, which is the whole reason
 both fields are here.
 
 Step 2's `estimation.nonEmpty` stand-in has one divergence the target model does
-not: an empty estimation, which nothing validates (`Requests.scala:18`) and only
-a hand-written `POST /vote` produces, reads as voted with no estimation, where
+not: an empty estimation, which nothing validated at the wire and only a
+hand-written `POST /vote` produces, reads as voted with no estimation, where
 an entry would exist. Step 4 closes that row rather than re-rendering it: section
 3 refuses a blank vote outright, because presence-based `hasEstimation` would
 otherwise admit a `""` bucket to the tally the client gates on the same field.
+Step 6 later closes the wire half too, giving `VoteRequest` the tapir
+`Validator` section 4 describes, so the guard here becomes insurance behind an
+edge that now refuses the same blank before the ask.
 
 **A tagged union would express these three fields better than they express
 themselves, and it is deferred to step 8.** `voted`, `hasEstimation` and
@@ -531,6 +547,7 @@ Estimate    value: String, confirmed: Boolean
 sessions    Map[SessionToken, Session]  // Session(userId, name); lives as long as the actor
 members     Map[UUID, Member]          // Member(name)
 connections Map[UUID, Set[ActorRef]]   // the only place a connection handle lives
+                                       // the set becomes Map[ConnectionId, ActorRef] at step 6
 ```
 
 **`connections` maps a member to a set because one person can hold several
@@ -612,8 +629,11 @@ through the same `publish`. That is not the estimation validation
 that the server has no notion of a *valid* estimation, the card values living in
 the client; refusing a blank one needs no such notion, because it refuses the
 absence of a value rather than judging one. Blank rather than empty, since
-whitespace tallies as its own bucket by the identical path. What stays open is a
-non-blank nonsense estimation, which remains the `scale` item's.
+whitespace tallies as its own bucket by the identical path. Step 6 moves the
+refusal itself to the edge, where a tapir validator answers `400` before the
+actor sees the request, and leaves this guard as insurance reporting the same
+code if a blank ever reaches it. What stays open is a non-blank nonsense
+estimation, which remains the `scale` item's.
 
 **Whether `Estimate` is a product or a two-case ADT is left open on purpose.**
 `Confirmed(value)` and `Unconfirmed(value)` would read better than a boolean, and
@@ -653,33 +673,47 @@ life. So `RoomData.of` requires that `members`, `connections` and
 agreement for members. Stating it that way is deliberate: the guard says every id
 resolves to a session, which is conspicuously not "every id is a member", and
 that distinction is the load-bearing idea of this section. Expect an implementer
-to reach for the other two containments; both are states this design *requires*
-to be legal, and the paragraphs above say so. The check is fixture-only, since
-`of` has no production caller, every actor transition going through the private
-methods 5a shut from outside.
+to reach for the other two containments. An estimate outliving its member is a
+state this design *requires* to be legal, and the paragraphs above say so. A
+connection outliving its member is no longer one, section 4's leave rules having
+removed the last path to it, and `of` still does not require that containment:
+the tolerance under `publish` below is kept on purpose, and since 5a shut `apply`
+and `copy`, a guard here would leave that state unconstructible and so
+untestable. The check is fixture-only, since `of` has no production caller, every
+actor transition going through the private methods 5a shut from outside.
 
 **Nesting the member inside its session was considered and declined.** It would
 make that one relation unrepresentable rather than validated, and it is sound,
 since `RequestSession` mints a fresh `userId` with every token, making the two
-1:1. It loses on coverage rather than on cost. Of the three relations, exactly
-one can nest: a connection whose member is gone is a required state, per the
-leave endpoint above, and an estimate outliving its member is Problem A's
-guarantee, so nesting either is forbidden by this design rather than merely
-awkward. Nesting therefore converts one relation of three into structure and
-leaves a factory for the other two, trading one uniform rule for two mechanisms
-a reader has to tell apart. The cost argument carries no weight and should not
-be revived: `sessions` reaches tens of entries in a meeting and a few hundred
-under heavy tab churn, so a scan would be microseconds across an entire session,
-and a derived `Map[UUID, SessionToken]` index removes even that at the price of
-putting a second id-keyed map back.
+1:1. It loses on coverage rather than on cost. Of the three relations, one cannot
+nest at all: an estimate outliving its member is Problem A's guarantee, so
+nesting that is forbidden by this design rather than merely awkward. A connection
+outliving its member stopped being a required state once section 4's leave rules
+removed the last path to one, so nesting `connections` inside `Member` is
+available, and is declined on what it buys rather than forbidden. It does not
+collapse two maps into one: a member outlives its connections across the grace
+period, so the nested set would sit empty under a present key where today there
+is no key at all, and `disconnect` dropping the entry as its set empties is what
+lets the idle-stop predicate read the map directly. Set against that, it removes
+one `require` in `RoomData.of` and costs `Member` its value-ness, every fixture
+comparing `members` then carrying a live handle, which is invariant 1's reason
+stated concretely. Nesting the member inside its session would convert one
+relation of three into structure and leave a factory for the other two, trading
+one uniform rule for two mechanisms a reader has to tell apart. The cost argument
+carries no weight and should not be revived: `sessions` reaches tens of entries
+in a meeting and a few hundred under heavy tab churn, so a scan would be
+microseconds across an entire session, and a derived `Map[UUID, SessionToken]`
+index removes even that at the price of putting a second id-keyed map back.
 
 The general rule that decided it, since this is the third time the question has
 come up in this design: a **choice between shapes** is sum-shaped and earns an
 ADT, which is why section 2 records one as a step 8 option; a **relation between
 two collections** is not, and its tools are a validating factory or nesting; and
 nesting is available only where the contained thing genuinely cannot exist alone.
-There is no revisit scheduled, because what decides it are requirements rather
-than taste and neither requirement is going anywhere.
+No revisit is scheduled for the estimate relation, because what decides it is a
+requirement rather than taste and that requirement is not going anywhere. The
+connection relation is now decided on cost, and what would reopen it is the grace
+period going away, since that is what would make the two maps coextensive.
 
 A snapshot is a join: a participant appears because they are a member, and their
 estimate comes from the round. **Every aggregate over estimates is that same
@@ -727,14 +761,33 @@ fixed: there is no stale timer left to accumulate. The racing reconnect that
 forced today's staleness check needs no special handling either. The new stream
 is established before the old one's termination arrives, so the set briefly holds
 two refs and removing the old one leaves a non-empty set, which is the ordinary
-no-timer case rather than a distinguishable one.
+no-timer case rather than a distinguishable one. **Step 6's keying does not
+disturb this**, since a retry reuses its id and the replacement rules above make
+the entry hold the new ref while the old one's termination matches nothing: a
+non-empty entry either way, and no timer.
 
-**One ordering the conjunct does not cover** is a beacon arriving after its own
-stream has already terminated, where the timer is pending before the member goes.
-`ConfirmLeave` then fires, removes nobody, and publishes a snapshot identical to
-the last. That is the redundant publish this design has already decided is cheap,
-under "The no-op publish guard goes with it" above, and it is still nothing
-accumulating: at most one timer per departure, and the tab that caused it is gone.
+**Two orderings the conjunct does not cover.** The first is a beacon arriving
+after its own stream has already terminated, where the timer is pending before
+the member goes. Section 4's leave cancels it on removing the member, the same
+`timers.cancel` the `Join` branch already does, so nothing fires and the two
+paths to a departure cannot both publish one. Nothing accumulates either: at
+most one timer per departure, and the tab that caused it is gone.
+
+The second is a sibling tab between retries. One person holding two tabs loses
+one stream, its entry goes by matching ref, the set still holds the other tab,
+and nothing is scheduled. If the surviving tab posts section 4's leave inside the
+retry window, the set empties and the member goes at once, with no grace period,
+while the dropped tab is a live page. The retry recreates the member under the
+same id and the estimate was never removed, so the list flickers rather than
+loses. What does not heal is the denominator: `vote` computes
+`everyMemberHasVoted` over the members present at that moment, so another
+participant voting inside the window reveals the round over a set that wrongly
+excludes a live one, and the latch then refuses that person's vote for the rest
+of the round. This is not a violation of invariant 4, which is about re-deriving
+at publish time, but it is invariant 4's failure displaced by one event. The
+window is the advertised `retry`, 2 seconds. Closing it means keeping a ref-less
+id in the map and evicting it on its own timer, which is the per-connection
+timing whose deletion makes Problem C unrepresentable above.
 
 **What replaces the deleted check is `TimerScheduler`**, and the reliance is worth
 naming since nothing else now holds the invariant. Pekko guarantees that a
@@ -798,16 +851,72 @@ private def publish(next: RoomData, context: ActorContext[Command]): RoomData =
 One snapshot is built per member and shared by that member's connections, since
 redaction is per recipient identity rather than per connection.
 
-**`publish` iterates `connections`, not `members`, so `RoomSnapshot.of` has to
-tolerate a recipient who is not a member.** The two maps are momentarily out of
-step in one direction: section 4's leave endpoint removes the member while that
-tab's stream is still open, or while its replacement's is in the late-beacon
-case section 4 records, since a ref only ever leaves where the ref is in hand.
-The closing tab therefore receives one last snapshot whose `you` is absent from
-`users`, and a replacement tab receives them until its rejoin lands, which is
-correct rather than a case to special-case and is why the client's `me` lookup
-has to cope with `undefined` at all. Section 5 makes that absence a signal
-rather than only a state to survive. The opposite skew, a
+**Step 6 keys the inner collection**, turning a member's set of refs into a map
+from the connection id section 4's leave endpoint names, so that a request can
+select one ref out of the set without holding it. The outer map is still per
+member and redaction is still per recipient identity, but three rules have to be
+stated, because a page reuses its id and the obvious implementation of two of
+them is wrong.
+
+**The page mints one id per page instance** and carries it on every `/events` it
+opens. `EventSource` retries the URL it was given, so a retry arrives holding its
+predecessor's id either way; minting per page instance rather than per stream
+extends that to the second `doJoin` as well. `ConnectionId` is an opaque type
+over `UUID` in the shape `SessionToken` already has, minted with
+`crypto.randomUUID()` where the page has it, so tapir refuses a malformed one
+with the same `400` as a missing one. That call exists only in a secure
+context, which a plain-HTTP LAN address lacks and which `SECURE_COOKIES=false`
+is what makes usable. The setting is for development, a LAN address during
+development being the case it exists for, so people on several machines can
+join one dev server. In that case the page builds a version 4 id from
+`crypto.getRandomValues`, which has no such requirement. Without the fallback
+the script throws before Vue mounts, leaving a page that is dead with nothing
+on it to say why. Production keeps the default, where a plain-HTTP visitor
+never gets its `Secure` cookie back and stops at the `401` from `/events`.
+
+**A page instance must not persist its id.** This is the half of "per page
+instance" most likely to be read backwards, the instinct being that the server
+should recognise a returning page. Reuse an id across instances and section 4's
+late-beacon guarantee fails: a reload gets the same id, the old instance's
+beacon then names an id now holding the new page's ref, and the leave endpoint
+removes by id because the id is all it has. That evicts a live ref, which is
+what the rule below forbids for terminations. Within one instance the id does
+outlive a Leave: rejoining from the landing view reuses it, so a beacon
+delivered after the rejoin's `Join` would drop the new ref. That needs the
+beacon to lose to a person typing a name, a `/join` round trip and the
+`/events` handshake, and the member it removes comes back on the stream's own
+retry, so it is accepted rather than closed by minting in `doLeave`.
+
+**`connect` on an id already present replaces the ref**, and
+`ConnectionCompleted` and `ConnectionFailure` remove by matching ref value, never
+by id. That is what keeps both orderings of the racing reconnect landing where
+they land today, and removal by value is already the shape `RoomData.disconnect`
+has, so this is a change of container rather than of mechanism. Removing by id
+would evict a live ref whenever the new stream won the race.
+
+**Replacement hands back a guarantee section 5 records as lost.** With the ref
+replaced, the superseded stream leaves `connections` and stops receiving, which
+is the server-side one-stream-per-page-instance property that keying by user used
+to supply. It covers the page that opens a second stream without closing the
+first; two genuine tabs mint two ids and both are fed, which is the point of the
+set.
+
+What this costs is not only `publish` walking `refs.values`. `connect` needs the
+id, so `Join` carries one, so `ConnectToRoom` does, so `SSE.source` takes it and
+the `/events` route parses it; `disconnect` filters the inner map by value and
+`PostStop` flattens it one level deeper. In the tests it reaches every
+construction of those three messages and the assertions written against a set.
+
+**`publish` iterates `connections`, not `members`, so `RoomSnapshot.of` tolerates
+a recipient who is not a member, and no path now produces one.** An earlier draft
+of section 4 removed the member while a tab's stream was still open, because the
+leave request could not name the connection it meant; that tab, or its
+replacement in the late-beacon case, then received a snapshot whose `you` was
+absent from `users`. Naming the connection removes both: the ref leaves with the
+member it belonged to, and a beacon naming a ref that is already gone finds a set
+that is not empty and does nothing. The tolerance stays because it is free and
+because `of` must not throw on a race nobody has thought of, not because a case
+reaches it. The opposite skew, a
 member with no connections, is not a transient at all but the grace period doing
 its job: they keep their row in everyone else's list and receive nothing until
 they reconnect or expire. Neither map is derivable from the other, which is the
@@ -842,6 +951,13 @@ is the absence of a special case rather than a mechanism, and it is cheap
 insurance under the redundant-publish decision above: a client whose stream is
 stale enough to have missed the reveal corrects itself from the next snapshot
 either way, since the `ShowVotes` that closed the round published one too.
+
+**Step 6 does not change this**, though returning an outcome from `vote` makes it
+newly possible to. The handler will be able to tell a refusal from a write that
+changed nothing and could skip the publish, and it should not: a redundant
+publish is the cost this design has already accepted under "The no-op publish
+guard goes with it", and `RoomSpec` pins the absence of the special case twice
+over. The outcome is for answering the caller, not for suppressing a broadcast.
 
 **A standing `round.revealed || everyMemberHasVoted` would let a departure reveal
 the round, which is the one thing step 2 buys.** The predicate ranges over a
@@ -1023,10 +1139,11 @@ has already stopped. Neither is covered by the re-arm, since each can be the
 first message after a long idle and so arrives at an actor whose tick has fired.
 They are left alone because they fail loudly. `RequestSession` times out, the route
 answers 500, the client says "Could not join the room. Please try again."
-(`index.html:462-466`), and the retry lands on a freshly created room.
+(`index.html`, `doJoin`'s failure handler), and the retry lands on a freshly
+created room.
 `ValidateToken` times out into a 500 on `/events`, which `EventSource` treats as
 fatal, so the client shows "Your session has ended. Please reload the page to
-rejoin." (`index.html:447-460`) and waits for a reload. That is worse than a
+rejoin." (`index.html`, the `eventSource.onerror` handler) and waits for a reload. That is worse than a
 retry, but it is the same thing the client is told when the room legitimately
 stopped and the token resolves to nothing, so the race adds no outcome the user
 does not already meet. That is the same rule that decides the stack above, that
@@ -1067,7 +1184,7 @@ has no way to evict anybody. What the client does next is the existing terminal 
 improvement on silence: a completed stream is a transient close to `EventSource`,
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
-(`index.html:447-460`). Rejoining automatically under the remembered name belongs
+(`index.html`, the `eventSource.onerror` handler). Rejoining automatically under the remembered name belongs
 to step 8's connection module.
 
 #### Slug allocation
@@ -1228,7 +1345,7 @@ Three additions, each closing something documented:
   today forces a manual reload. The member is removed at grace expiry, and because `joinUser`
   consumes the session on promotion the token's only record went with it, so
   `EventSource`'s retry gets a 401 and the client shows "Your session has ended.
-  Please reload the page to rejoin." (`index.html:447-460`). The retry interval
+  Please reload the page to rejoin." (`index.html`, the `eventSource.onerror` handler). The retry interval
   is 2 seconds, so a blip inside the grace period recovers silently and a slept
   laptop does not. With retention the token still resolves, the retry succeeds,
   and the same identity comes back. It is also what keeps a tab's token
@@ -1249,8 +1366,9 @@ Three additions, each closing something documented:
   This is Phase 1's outstanding item and it is what makes real error handling
   possible in the rewritten frontend.
 - **An explicit leave endpoint** hit by `navigator.sendBeacon` on `pagehide`. It
-  removes the member at once, rather than waiting out the grace period, if that
-  member holds at most one connection; if they hold two or more it does nothing.
+  drops the connection the request names and removes the member at once, rather
+  than waiting out the grace period, when that was the member's last connection;
+  where others remain, only the ref goes and the member stays.
   That is the other reason, and it reduces the grace period to what it should be:
   cover for transient drops only. `sendBeacon` is the right primitive because a
   normal POST is not reliably delivered from an unload-adjacent handler.
@@ -1260,36 +1378,74 @@ Three additions, each closing something documented:
   which is what a mobile app switch and a same-tab navigation away produce, can
   be restored without a page load, so nothing would call `/join` again and the
   member would stay removed under a live page. If the freeze did not kill its
-  stream, that page keeps receiving snapshots whose `you` is absent from `users`
-  and renders a healthy room in which its own commands are silent no-ops, since
-  a resolved non-member is section 3's no-op case. Gating on `persisted` removes
+  stream, that page would come back holding one the room no longer publishes to,
+  since the leave takes its ref out of `connections` along with the member, so it
+  would render whatever it last saw, never update again, and send commands that
+  draw the `403` this step gives a resolved non-member, with no stream left to
+  deliver the snapshot that would explain it. Gating
+  on `persisted` removes
   that case instead of recovering from it, and it leaves the two triggers this
   endpoint is for untouched, a close and a reload both being discarded pages.
   It does not distinguish a reload from a close, which is the separate question
   the cookie paragraph below answers.
 
-  **The test is cardinality rather than identity, because the request cannot name
-  a connection.** All it carries is the room-scoped cookie, which resolves to a
-  `userId`, and section 1 keeps tabs and connections out of every path, so nothing
-  selects one ref out of that member's set. A ref is only ever removed where the
-  ref is in hand, on `ConnectionCompleted` or `ConnectionFailure`. So the endpoint
-  answers the one question it can: is this member down to their last connection,
-  in which case removing the member is what the beacon is for, or do they hold
-  another, in which case the closing tab's own ref drops through stream
-  termination a moment later and membership was never in question. Zero refs and
-  one ref take the same branch, which absorbs a beacon arriving after its own
-  stream has already torn down.
+  **The request names the connection it is leaving, and the rule is exact.** The
+  page mints an id when it opens its stream, carries it on `/events`, and echoes
+  it in the leave request. The endpoint drops that ref if it is still there, then
+  removes the member if the set is now empty. That order is what makes it
+  insensitive to the races between a request and its own stream: a beacon losing
+  to its own stream teardown names a ref already gone and still finds the empty
+  set behind it, and one arriving after a replacement page has connected finds a
+  set that is not empty and leaves the member alone. It is not insensitive to a
+  *sibling* tab's teardown, which section 3 records as the second ordering the
+  conjunct does not cover. Refs are otherwise removed where the ref is in hand,
+  on `ConnectionCompleted` or `ConnectionFailure`.
 
-  A client-minted connection id carried on `/events` would make the test exact,
-  and it is the same per-connection slot the command-cursor row under "Deferred,
-  with triggers" says a cursor would have to live in. It is not worth a wire field
-  for a case this section argues does not occur, and the late beacon below, which
-  does occur, is answered by section 5's rejoin more cheaply than a wire field
-  would answer it. Reach for it on the day the cursor does.
+  **Cardinality was the alternative, and it fails in four places at once.**
+  Counting the set the cookie resolves to, without knowing which ref the request
+  meant, forces zero refs and one ref onto the same branch to absorb a late
+  beacon; removes a live member when that late beacon meets the replacement
+  page's single connection; does nothing at all when two tabs close together and
+  both beacons see a set of two, dropping that departure back onto the grace
+  period; and makes the statement order inside `doLeave` load-bearing, since the
+  Leave link would have to post while its own connection was still counted. One
+  field answers all four, and an earlier draft of this section deferred it by
+  weighing it against the late beacon alone.
 
-  **The case cardinality does not cover** is two tabs closed near-simultaneously:
-  both beacons see a set of two, both do nothing, and that departure falls back to
-  the grace period. Rare, and the outcome is today's behaviour.
+  **The id is client-minted and carries no authority.** It selects a ref inside
+  the set the cookie already resolved to, so a forged one reaches no connection
+  the forger does not own. `EventSource` cannot set headers, which is why it
+  rides the query string rather than one, and `sendBeacon` cannot either, so the
+  leave request carries it the same way and sends no body at all. A body would
+  not survive the trip: `sendBeacon` sends a string as `text/plain`, which the
+  JSON body description tapir generates for an endpoint that declares one would
+  refuse with a `415` the beacon cannot read, leaving the departure to fall back
+  on the grace period with nothing anywhere to show that it failed. `leave`
+  itself declares no body at all, so the point is moot in practice; it is why
+  one was never added. Carrying it identically on both requests is the other
+  half of the reason. It is the same per-connection
+  slot the command-cursor row under "Deferred, with triggers" says a cursor would
+  have to live in, so that row's blocker is gone ahead of it.
+
+  **It answers the same on every branch it reaches**, whether the member went
+  with the ref, the ref dropped with others still open, or the id named nothing.
+  A beacon arriving after grace expiry reaches none of them and draws the `403`
+  the table declares. `sendBeacon` reads no response and nothing a caller could
+  do differs between them, so separating them would buy nothing; a request
+  written by hand still meets the session and membership checks every write
+  gets. Step 6's table below declares the codes. Removing the member also
+  cancels any `ConfirmLeave` the grace period has pending for that id, so the
+  two paths to a departure cannot both publish one.
+
+  **The Leave link posts it too.** The beacon is what closes the tab-close entry
+  in `docs/known-issues.md`, but a deliberate click on Leave waits out the same
+  grace period today for no reason at all, and the endpoint it needs is the one
+  this step adds. Naming its own connection, it may post before or after closing
+  the stream: either way that ref is gone, and with it the member where it was
+  the last one. The leaver leaves `connections` before the next `publish` runs,
+  so no snapshot follows it out, and a snapshot already on the wire when the
+  leave lands cannot put the page back into the room either, since section 5
+  takes `inRoom` out of the snapshot at this same step.
 
   **It clears no cookie, and that is deliberate.** `pagehide` fires on reload as
   well as on close and nothing on the event tells the two apart, so a leave
@@ -1297,20 +1453,17 @@ Three additions, each closing something documented:
   that is about to come back. `sendBeacon` is fire-and-forget besides, so that
   response could land after the reloaded page had already called `/join`,
   deleting the cookie it just received and dropping the tab into the terminal
-  "Your session has ended" state (`index.html:447-460`). What clearing would buy
+  "Your session has ended" state (`index.html`, the `eventSource.onerror` handler). What clearing would buy
   is a session cookie of roughly fifty bytes per tab ever opened, discarded when
   the browser closes, which does not pay for the reload path.
 
-  **A late beacon can outlive the reload it belongs to**, and the consequence for
-  membership is worth following through as well as the one for the cookie.
-  Arriving after the new page's `/join` and `/events` have recreated the member
-  with a single connection, it meets exactly the cardinality this endpoint acts
-  on, so the removal lands on a page that is up and connected and left holding an
-  open stream as a non-member. The ordering is unlikely, the beacon leaving
-  before the new document starts loading, and it is not something to rely on:
-  section 5's rejoin on a snapshot that does not name the client as a member is
-  what recovers it, which is why that rule lands with this step rather than with
-  step 8's module.
+  **A late beacon can outlive the reload it belongs to**, and naming a connection
+  is what makes that harmless. Arriving after the new page's `/join` and `/events`
+  have recreated the member with a single connection, it names the old page's ref,
+  which is already gone, and finds a set that is not empty, so it changes nothing.
+  Under cardinality this was the case that removed a member who was up and
+  connected, leaving a live page holding an open stream as a non-member, and it is
+  why an earlier draft carried a client rejoin rule in section 5. Both are gone.
 
   **The cost is a brief flicker on reload**, since the beacon fires there too and
   a reload's tab is usually the member's last connection: the member is removed
@@ -1347,6 +1500,12 @@ that name to the `Session`, and to the `Member` only where one already exists;
 section 3 says why `/join` never creates a member. The consequence to know is that
 a second tab opened with a different name renames the person in both.
 
+**The rename has to move the session and the member together.** `RoomData.of`
+requires a member's name to equal the name on the session resolving its id, so
+writing one side alone makes the room unconstructible at the next `of`. That is
+step 5a's invariant doing the job it was added for rather than an obstacle to
+route around.
+
 That matters because the reload, not the tab close, is the form users actually
 report: today `/join` mints a fresh identity on every call, so someone reloading
 watches their own name sit in the participant list twice until the old entry's
@@ -1365,7 +1524,7 @@ export function applySnapshot(prev, s) {
   for (const u of s.users)
     if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
   return {
-    inRoom: true,
+    inRoom: true,          // leaves this object at step 6, see below
     users: s.users,
     votesRevealed: s.votesRevealed,
     // Do not clobber the issue input while the user is typing in it.
@@ -1383,10 +1542,32 @@ reactivity but needs rework under an immutable model. Being pure also removes
 the fake ref its tests would otherwise need.
 
 **The returned object is the shape the rewritten client will hold**, not today's.
-Six of its seven keys already match a top-level entry in the Vue 2 `data` block
-(`index.html:370-391`), so the step 1 call site assigns it wholesale and adapts
-the one that does not: `userEstimation` onto `user.estimation`, which the template
-binds (`index.html:228`, `237-239`). Step 8 flattens that and the adapter goes.
+Six of its seven keys already match a top-level entry in the Vue 2 `data` block,
+so the step 1 call site assigns it wholesale and adapts the one that does not:
+`userEstimation` onto `user.estimation`, which the estimation buttons' template
+binds. Step 8 flattens that and the adapter goes.
+
+**`inRoom` leaves this object at step 6**, and the reason is a bug class rather
+than tidiness. While the snapshot carries it, any frame can put the page back
+into the room, because `onmessage` copies it across on every frame. A frame that
+arrives after the user clicked Leave therefore re-renders the room behind them,
+and nothing corrects it once the stream is closed. Entering a room is a
+navigation decision rather than room state, so it moves to the join path:
+`doJoin` arms a one-shot that its first snapshot spends, and nothing else in the
+page can set the flag.
+
+What that buys is the deletion of a rule rather than the addition of one.
+`doLeave` no longer has to close its stream before the response lands, in the
+click handler, or at all for correctness, and the same protection covers a page
+restored from the back/forward cache and whatever step 8's module later applies
+outside the steady-state path. A late frame updates content behind a view that
+is not rendered, which is harmless and is replaced wholesale by the next join.
+
+**It keeps the refused-`Join` property exactly.** A refused joiner receives no
+snapshot, so the one-shot is never spent and the join card stays as though the
+button had done nothing. That is what section 4 relies on when it argues a
+refused `Join` must add no ref: a snapshot naming its recipient a non-member
+would still be that connection's first, and would still enter the room on a lie.
 
 Three details are load-bearing rather than polish:
 
@@ -1399,8 +1580,8 @@ Three details are load-bearing rather than polish:
 
   **What the guard keys on is focus, and that has to be a flag of its own.**
   `editing` cannot be it. It swaps the readonly input for the editable one and its
-  commit button (`index.html:197-213`), and its only writers are `showEdit`
-  (`:401-403`) and `doEdit` (`:495-503`), so as a guard it lasts until the user
+  commit button, and its only writers are `showEdit` and `doEdit`, so as a guard
+  it lasts until the user
   presses the check rather than until they stop typing. Someone who opens the
   editor and clicks away then stops applying `currentIssue` from every later
   snapshot for the rest of the session, estimating against a ticket the room has
@@ -1433,9 +1614,8 @@ Three details are load-bearing rather than polish:
   non-voter's empty string became a summary row, and in a revealed room with
   stragglers it could win the count and render as the "Most voted estimation".
   Fixing it makes the tally able to be empty, so the summary block's condition became
-  `v-if="votesRevealed && votesSummary.length"`
-  (`index.html:271`). That guard is reachable by two clicks (Show in a room where
-  nobody voted), not defensive.
+  `v-if="votesRevealed && votesSummary.length"`. That guard is reachable by two
+  clicks (Show in a room where nobody voted), not defensive.
 
   **Written first as `u.voted`, which was wrong**, and found by using the app
   rather than by review. `voted` is the confirmation flag, and it parts company
@@ -1455,8 +1635,8 @@ Three details are load-bearing rather than polish:
   screen.
 
   **The two had to land in the same step, and the reason is stronger than
-  tidiness.** The block renders `{{ votesSummary[0][0] }}` (`index.html:282`), so
-  under `v-if="votesRevealed"` alone an empty tally is a render error rather than
+  tidiness.** The block renders `{{ votesSummary[0][0] }}`, so under
+  `v-if="votesRevealed"` alone an empty tally is a render error rather than
   an empty box. That was unreachable only because the buggy all-user tally was
   never empty while anyone was in the room, and the one path that empties
   `votesSummary` (`clear`) also clears `votesRevealed`. So the filter without the
@@ -1477,19 +1657,35 @@ Three details are load-bearing rather than polish:
   beats another vote. Step 3a sharpens it, since revealing to find out now costs a
   Re-vote, so the reading wants to be available before the reveal. It can be:
   redaction covers `estimation` only, so `voted` and `hasEstimation` are on the
-  wire for everyone throughout, and the table already marks each voter
-  (`index.html:318`). What is missing is the aggregate, and it belongs beside the
+  wire for everyone throughout, and the table already marks each voter with the
+  `check-circle` icon gated on `u.voted`. What is missing is the aggregate, and it belongs beside the
   distribution as a count rather than inside it as a bucket. Phase 4 of the roadmap
   carries it, next to the roles item that settles the denominator.
 - **`ownVoteConfirmed` is derived, not carried.** `reVote()` clears the
   confirmation and keeps the value while `clear()` drops both, so "I have an
   estimation showing but the server does not consider me voted" is exactly the
-  revote state and nothing else. The optimistic assignment in
-  `vote()` stays, and corrects itself on the next publish rather than promptly:
-  a failed vote POST leaves the server holding the old estimation, so the
-  selection stays visibly confirmed until somebody else acts, which in an idle
-  room can be a while. Step 6's ask-pattern reply is what makes a failed vote
-  reportable at the time it fails; this derivation only stops it persisting.
+  revote state and nothing else.
+
+  **The optimistic assignment in `vote()` goes at step 6**, and the reason it
+  survived until then expires there. It was tolerated because a failed vote POST
+  was unreportable, so the flag corrected itself on the next publish rather than
+  promptly, leaving the selection visibly confirmed until somebody else acted.
+  With the ask reply the wrong state does not have to be created at all, and the
+  snapshot is then the only writer, which is what "derived, not carried" says.
+
+  Removing it costs less than it looks, because the flag never selects a card.
+  The selection is `user.estimation`, which only the `onmessage` handler writes
+  from a snapshot, and the flag chooses between the `estimation-button-selected`
+  and `estimation-button-uncomfirmed` styles of a card already selected, which
+  differ in the re-vote state alone. So the assignment was invisible on an
+  ordinary first vote, right when re-confirming a kept estimate, and wrong when
+  clicking a different card during a re-vote, where it styled the previous card
+  as confirmed for one round trip. What is given up is the instant feedback on
+  that re-confirm, which then behaves like every other vote in the app: the
+  publish and the `204` leave the actor on the same pass through `Room`'s `Vote`
+  handler, so the wait is one round trip and no timer. A third style for a vote
+  in flight is the escape hatch if that ever reads as unresponsive, and it
+  belongs to step 8's components, since it is state the snapshot does not own.
 
 `showUserEstimation` re-points at `hasEstimation`. That is the one client change
 the redaction forces, and it is why the confidentiality step is not server-side
@@ -1526,38 +1722,30 @@ time-sensitive messages, where a revealed round is a status change. That it is
 the one that survives injection is why toast libraries reach for it, and not a
 reason to.
 
-**A snapshot whose `you` is absent from `users` means the server no longer holds
-this identity as a member**, and the client treats it as a signal to rejoin
-rather than as a room to render. It lands at step 6, in today's client, because
-that is the step whose leave endpoint makes it reachable: a beacon outliving its
-own reload removes a member whose replacement page is already connected, which
-section 4 records. In the Vue page it is a few lines in the message handler
-calling the existing join path, and step 8's module inherits the rule rather
-than introducing it. **It has to close the current `EventSource` before
-reopening**, since `doJoin` does not, and a rejoin that left its old stream
-running would manufacture the interleaving hazard described below.
+**There is no client rejoin rule, because nothing produces the snapshot it would
+key on.** A snapshot whose `you` is absent from `users` would mean the server no
+longer holds this identity as a member, and an earlier draft had the client treat
+that as a signal to rejoin rather than as a room to render. Section 4's leave
+endpoint drops the leaver's ref before the next `publish` runs, so no snapshot
+follows a departure out; the late beacon that used to remove a live member is a
+no-op; and the refused `Join` in the ordered path ends its stream rather than
+feeding it one. That leaves the rule with no producer, and unexercised recovery
+code is the thing most likely to be wrong on the day it first runs. **Reinstate
+it** when something removes a member while a stream is open, which is what a kick
+or a moderator action would do. The trigger is recorded under "Deferred, with
+triggers", and it brings a guard question with it: a rule keyed on the snapshot
+alone cannot tell being removed from having left, so whatever reintroduces it
+owns that distinction.
 
-**The rule needs no "unless I am the one leaving" guard, and adding one would
-hurt.** A tab that asked to leave cannot reach the rejoin: `doLeave` closes its
-own stream as its last act (`index.html:486-494`), so no snapshot follows, and a
-beacon fires only on a page being discarded, which has no live document to rejoin
-from. The one path that does deliver a snapshot naming its recipient as a
-non-member is the replacement page in section 4's late-beacon race, and there
-rejoining is the point. A `leaving` flag would also have to be cleared on
-`pageshow`, since `pagehide` fires into the back/forward cache too, and getting
-that wrong leaves a restored page never rejoining, which is a quieter form of the
-failure section 4's `persisted` gate removes.
-
-`applySnapshot` still copes with `me` being `undefined`, since it stays pure and
-the teardown window can deliver one such snapshot to a page on its way out. This
-is the consumer the `you` field's own argument in section 2 implies: the field
-exists so that who a snapshot was redacted for and who the client thinks it is
-cannot silently disagree, and this is the one disagreement the design can still
-produce. Section 4's `persisted` gate closes the other route to it, a page
-restored from the back/forward cache, and the rejoin also covers whatever later
-feature removes a member while a stream is open. What neither covers is a
-restored page whose stream is dead but silent, which is the backlog's
-connection-liveness watchdog rather than this field.
+`applySnapshot` still copes with `me` being `undefined`, and that is insurance
+rather than a live case now: it stays pure, the tolerance is two conditionals,
+and the day the rejoin rule comes back is the day the case does. The `you` field
+keeps its day-one consumer either way, the `me` lookup itself, and section 2's
+argument for it stands: who a snapshot was redacted for and who the client thinks
+it is cannot silently disagree. Section 4's `persisted` gate closes the other
+route that used to reach it, a page restored from the back/forward cache. What
+nothing here covers is a restored page whose stream is dead but silent, which is
+the backlog's connection-liveness watchdog rather than this field.
 
 No client-side version comparison, because out-of-order snapshots are
 unreachable: SSE delivers in order within a connection, and a snapshot is one
@@ -1570,13 +1758,19 @@ when it is the same page instance holding a stream it forgot to close: two live
 streams can interleave, so a delayed frame from the older one may apply after a
 newer frame from the other and leave the view stale until the next publish.
 Today's client does forget, since `doJoin` assigns a new `EventSource` without
-closing the previous one (`index.html:421`) and only `doLeave` closes. Step 8's
+closing the previous one and only `doLeave` closes. Step 8's
 connection module closing the old stream before opening a new one is therefore
 load-bearing rather than tidy. Nothing in today's flow reaches `doJoin` twice
-without a reload, so the exposure is nil until step 6, whose rejoin is the first
-path that does and which closes the stream itself for that reason. This is the
-one guarantee the design moves from the server to the client and it should not be
-lost on the way.
+without a reload, so the exposure is nil and stays nil through step 6: the rejoin
+rule an earlier draft put there would have been the first path that did, and it
+is gone.
+
+**Step 6 gives half of it back to the server.** A page instance holds one
+connection id, so a second `doJoin` replaces the entry rather than adding to it,
+and the stream it forgot to close stops receiving. What stays with the client is
+the case that id cannot cover, since a page that mints a second id is asking to
+be fed twice, which is what a second tab is. This is the one guarantee the design
+moved from the server to the client, and it should not be lost on the way back.
 
 ### 6. Testing
 
@@ -1739,14 +1933,36 @@ Added, each with the step it lands at so nothing here is unassigned:
   record: the blank-estimation case changed with the vote refusal, and step 4's
   landed note carries what it became and why.
 
-  Step 6 adds two that need one browser context rather than two, since they are
-  about the shared
-  room cookie: two tabs on the same room resolving to one participant, with a vote
-  in either showing in both and closing one leaving the other connected and
-  present; and a reload keeping its identity and its vote instead of duplicating
-  its participant. The rejoin on a snapshot that does not name the client as a
-  member is not one of these, since the race that produces it cannot be forced in
-  a browser; it is a unit test over a snapshot fixture instead.
+  Step 6 adds three. Two need one browser context rather than two, since they
+  are about the shared room cookie: two tabs on the same room resolving to one
+  participant, with a vote in either showing in both and closing one leaving the
+  other connected and present; and a reload keeping its identity and its vote
+  instead of duplicating its participant.
+
+  The third needs two contexts and covers the departure the endpoint exists for:
+  one clicks Leave, and the other sees that participant go without waiting out
+  the grace period. Between them the three cover both branches of the leave rule,
+  the ref dropping with others still open and the member going with the last one.
+
+  Landed as two added cases and one amendment rather than three additions. "Two
+  tabs on one room are one participant" and "a reload keeps its identity and its
+  vote" are new, covering the pair above. The departure case folded into "the
+  participant list follows a join and a leave" instead of sitting beside it as a
+  fourth case: that case already had the two contexts and the departure this
+  step needed, so a new case beside it would have kept a 25 second budget and a
+  comment about the heartbeat mechanism this step's beacon replaces, describing
+  detection this step no longer relies on. The straggler-reload case is an
+  amendment for a related reason rather than a case of its own: step 2 wrote its
+  `toHaveCount(2)` assertion against this step and flagged it for revision,
+  which this step has now paid.
+
+  An earlier draft had a different third case, forcing a client rejoin on a
+  snapshot that does not name its recipient as a member by posting `/leave`
+  through the browser context's own request API. The connection id removed the
+  rule and the case with it. Worth keeping from that draft: `applySnapshot` is
+  inline in `index.html` with nothing importing it and `npm test` covers the
+  testkit alone, so any client rule that a browser cannot reach has nowhere to be
+  tested at all.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -1761,8 +1977,11 @@ Added, each with the step it lands at so nothing here is unassigned:
   while a newly added server field passes, which is the direction the additive
   field strategy depends on being safe and which a schema diff would flag as
   noise.
-- **`openapi-typescript` over tapir's OpenAPI document** (step 6 onward) with a
-  CI step that regenerates and fails on a diff, covering the command endpoints.
+- **`openapi-typescript` over tapir's OpenAPI document** (step 8, with the first
+  consumer of the generated types) with a CI step that regenerates and fails on a
+  diff, covering the command endpoints. Step 6 lands the tapir descriptions and
+  stops there, the document being derivable from them whenever it is wanted and
+  read by nothing before step 8.
 
 ## Accepted costs
 
@@ -1805,7 +2024,8 @@ arrives.
 | Durable auth sessions | Wanting identity to survive a browser close. `localStorage` already covers name pre-fill. |
 | Multi-instance operation | Out of scope by decision; single process throughout. |
 | Event-sourcing the room | Never, on the same grounds that pick snapshots for the wire. Round history is a product feature with its own shape, not a projection anyone needs to rebuild. |
-| Per-command sequence numbers | Someone actually observing a reordered command. Under snapshots a reordering is visible rather than silent, since the client converges on what the server holds: the wrong card stays highlighted, or a vote outlives a clear, in front of everyone. `lastSeq` is live state re-derived per session, so it is free to add then and would otherwise need `/join` to reset it, a coupling that bites silently. If it is ever added, note that a member can hold several connections, so a cursor kept per user is wrong: one connection would suppress sends the other still needed. It belongs on the connection. |
+| Per-command sequence numbers | Someone actually observing a reordered command. Under snapshots a reordering is visible rather than silent, since the client converges on what the server holds: the wrong card stays highlighted, or a vote outlives a clear, in front of everyone. `lastSeq` is live state re-derived per session, so it is free to add then and would otherwise need `/join` to reset it, a coupling that bites silently. If it is ever added, note that a member can hold several connections, so a cursor kept per user is wrong: one connection would suppress sends the other still needed. It belongs on the connection, and step 6's connection id is that slot, so the blocker this row used to carry is gone. |
+| A client rejoin on a snapshot that does not name its recipient | Something removing a member while that member's stream is open, which is what a kick or a moderator action would be. Step 6 closed every path that produced one: the leave request names its connection, so a departure takes its own ref with it and a late beacon finds a set that is not empty, and a refused `Join` ends its stream rather than sending it a snapshot. Whatever reintroduces it owns the guard question the rule cannot answer from the snapshot alone, which is telling being removed from having left. |
 | Rate limiting | Unscheduled and broader than any one symptom. |
 
 **Two caveats on the long-poll row**, since it is the only deferred item this
@@ -1860,9 +2080,9 @@ and the letter keeps it beside the reveal work it amends instead of taking a
 number that means something else.
 
 **Step 6 waits on 4 and not on 4a**, which is what keeps the carve-out from
-costing anything. Its leave endpoint reads the size of a member's connection set,
-which the split provides; nothing in it needs the idle timeout. So 4a can land
-either side of 6.
+costing anything. Its leave endpoint reads a member's connection set, to drop one
+ref from it and to see whether any remain, which the split provides; nothing in
+it needs the idle timeout. So 4a can land either side of 6.
 
 **Steps 0 to 6 close every documented defect this path closes at all.** Step 7 is
 a usability improvement, and 8 and 9 are product work whose case is the
@@ -2087,31 +2307,51 @@ every heartbeat's empty payload. With no snapshot, `inRoom` never leaves `false`
 so the join card stays rendered with its fields filled, as though the button had
 done nothing, and there is no banner and no retry behind it.
 
-The refusal needs the actor that answered `ValidateToken` to be a different actor
-from the one receiving `Join`. The mailbox is sequential and `ConnectToRoom` is
-only ever sent after the same actor resolved the token, so it takes a same-id
-stop and recreation inside the milliseconds between the resolution and
-`SSE.source`'s `mapMaterializedValue` send. Today the stop half of that
-coincidence is armed by every departure, since any `ConfirmLeave` emptying the
-room fires it; after step 4a it is armed only by a two-hourly tick. The
-recreation half is unchanged, so the whole becomes strictly less reachable.
+Before step 6's idempotent `/join`, the refusal needed the actor that answered
+`ValidateToken` to be a different actor from the one receiving `Join`. The
+mailbox is sequential and `ConnectToRoom` is only ever sent after the same
+actor resolved the token, so it takes a same-id stop and recreation inside the
+milliseconds between the resolution and `SSE.source`'s `mapMaterializedValue`
+send. Today the stop half of that coincidence is armed by every departure,
+since any `ConfirmLeave` emptying the room fires it; after step 4a it is armed
+only by a two-hourly tick. The recreation half is unchanged, so the whole
+becomes strictly less reachable.
+
+**Idempotent `/join` added a second way in, inside one actor.** `RequestSession`
+on a known token renames the session, so a `/join` carrying a new name that lands
+between a reconnect's `ValidateToken` and its `Join` leaves that `Join` naming
+the old one. It takes two tabs, one of which has cleared its stored name through
+Leave and rejoins under a different one, racing the other tab's reconnect by
+milliseconds. The stream that step 6's guard ends heals it: the retry resolves
+the new name and joins. One side effect is accepted rather than guarded. The
+refused stream's completion arrives as a `Leave` for a ref never added, and for
+a member already in grace that re-arms `ConfirmLeave`, delaying the removal by
+up to one grace period. The joining tab's own `Join` then cancels the timer, in
+every ordering except the one where that tab never connects.
 
 **A refused `Join` therefore adds nothing to `connections`, and that is a rule
 rather than an omission.** The split makes the wrong fix look free: `publish`
-iterates `connections` rather than members, and `RoomSnapshot.of` already has to
-tolerate a recipient who is not a member for the leave-endpoint case, so adding
-the ref anyway reads as a one-line cure for the silence. It is the opposite.
-`applySnapshot` hardcodes `inRoom` true, so the tab would render the room with
+iterates `connections` rather than members, and `RoomSnapshot.of` tolerates a
+recipient who is not a member, so adding the ref anyway reads as a one-line cure
+for the silence. It is the opposite.
+the join's first snapshot is what puts the page into the room, and this would be
+that connection's first, so the tab would render the room with
 itself absent from the participant list while every command it sends is dropped
 when its token resolves to no session, which reads as a successful join rather
 than a refused one. That is the same shape of lie told from the other side, and
 it is worse than silence because it is confident.
 
-The fix is a send to that one connection rather than a call to `publish`, and it
-belongs with step 6. The send and step 6's rejoin on a snapshot which does not
-name the client are each useless alone: without the send no snapshot is delivered
-to trigger the rejoin, and without the rejoin the send produces exactly the
-confident lie above.
+**The fix is to end that stream rather than to feed it**, and it belongs with
+step 6. The guard completes the one connection instead of adding it, and the
+client then walks paths it already has: `onerror` fires with `readyState`
+`CONNECTING`, which raises the existing banner while `EventSource` retries, and
+the retry's `ValidateToken` finds no session in the recreated room, answers
+`401`, and closes the stream for good, which is the terminal "Your session has
+ended. Please reload the page to rejoin." (`index.html`, the `eventSource.onerror` handler). The cost is one
+retry interval of banner before the message, against a race armed by a two-hourly
+tick. What this replaces is an earlier plan to send that connection a snapshot
+naming it a non-member and have the client rejoin on it, which needed a client
+rule whose only producer was this race.
 
 **It waits on step 1 for cost rather than correctness, and that is the one
 dependency here worth arguing with.** Landing the split first means porting
@@ -2140,6 +2380,8 @@ be handed both rather than left to find them.** Not one of them, though it reads
 like one: `connections` is a set per member from the start, but until step 6
 makes `/join` idempotent it holds a second ref only transiently, across the
 racing reconnect section 3 describes, so nothing observable turns on it here.
+Step 6 also keys that set by connection id, which section 3 records beside
+`publish`.
 What does change is `hasEstimation`, which stops meaning `estimation.nonEmpty`
 and becomes the entry existing in `round.estimates`, and the blank vote that the
 change would otherwise admit to the tally. Section 3 carries both, under
@@ -2260,9 +2502,8 @@ step ends where it started, at `data`, `gracePeriod` and `stopAfterIdle`. Most o
 churn is mechanical probe wiring, and step 4 has already rewritten those cases
 for the split, so 4a's half of it is deletion. **Step 6's leave endpoint does
 not revive this**: its reply is an ask answered to the HTTP route, carrying the
-applied / not-a-member results the ask pattern is for, so a `Response` ADT
-reappearing there is a new type under an old name rather than this one
-returning.
+statuses the table below declares for `/leave`, so a `Response` ADT reappearing
+there is a new type under an old name rather than this one returning.
 
 `receiveBehaviour`'s `receiveSignal` on `Terminated` becomes the single
 deregistration path, which it has to be anyway, since it is the only one that can
@@ -2395,9 +2636,10 @@ widening the factory would be a claim this step did not set out to make.
 
 Not in the original ten. Invariant 5 already implies it: a `members` entry,
 today's `User`, is created by `ConnectToRoom` and by nothing else, and
-`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and all
-but three of the 48 fixture sites seed members with no sessions at all, so the
-suite normalises a state production cannot reach. Step 5's review measured the
+`ConnectToRoom` runs only on a resolved session. Nothing enforces it, and before
+the `RoomDataFixtures` migration all but three fixture sites seeded members with
+no sessions at all, so the suite normalised a state production cannot reach.
+Step 5's review measured the
 cost: three cases go red under a `Vote` rerouted onto `sessions`, but only
 because their fixtures lack sessions, so an author fixing them the obvious way
 would seed sessions and remove the signal. Valid fixtures throughout leave the
@@ -2413,8 +2655,8 @@ state a room can reach; renaming on `/join` is step 6's target, not today's
 behaviour. `of` uses `require`, an invalid `RoomData` being a programming
 error rather than a runtime condition: production builds exactly one,
 `RoomData.empty`, holding no members, so the check is unreachable there, and an
-`Either` would push an unwrap through 48 test sites to encode a case that cannot
-happen.
+`Either` would push an unwrap through every site that calls `of` to encode a
+case that cannot happen.
 
 **The handler warns where `of` throws, on the same predicate.** `joinUser` is
 pure and holds no logger, so the guard sits in the `Join` case, which already
@@ -2422,9 +2664,9 @@ has `context`, and checks the same containment-and-identity test `of` runs on
 every member. It warns and leaves the data alone rather than raising, because
 an unhandled exception in a typed behaviour stops the actor, and a violation
 this rare would then end a live meeting rather than drop one join. Rare is not
-unreachable. The resolution at `API.scala:126-128` and the `Join` that
-`RoomManager.ConnectToRoom` forwards are two steps of one request, and they can
-address two different room actors: the room can stop in between, at the idle
+unreachable. The resolution in the `join` endpoint's server logic and the `Join`
+that `RoomManager.ConnectToRoom` forwards are two steps of one request, and they
+can address two different room actors: the room can stop in between, at the idle
 tick that replaced `ConfirmLeave`'s stop-when-empty at step 4a, and
 `RequestSession` can then recreate it through `createRoom` under the same id
 with no sessions, which is the one path that does so. The guard then refuses a
@@ -2465,21 +2707,173 @@ both collections and the fluent step is an extension in test scope, which also
 keeps a test-shaped method off the production type.
 
 **Step 6. The write path becomes real.** Endpoints described with tapir, the ask
-pattern replacing the unconditional `204`, idempotent `/join`, the explicit
-leave endpoint with its beacon gated on a discarded page, and the client rejoin
-on a snapshot that does not name it as a member. Wants step 4 first, both so
-handlers are not rewritten twice and because the leave endpoint's rule reads the
-size of a member's connection set. That set has to be read through an `Option`:
-step 4's `RoomData.disconnect` drops a member's `connections` entry once its refs
-are gone, and the late beacon, arriving after its own stream has already
-terminated, is exactly the ordering where the entry is already absent, so
-`connections(id).size` throws on the case the rule exists for. About 190 and 175.
+pattern replacing the unconditional `204`, idempotent `/join`, the explicit leave
+endpoint with its beacon gated on a discarded page, the client-minted connection
+id that endpoint names, the `Join` guard completing a refused connection's stream
+instead of leaving it silent, `inRoom` moving out of the snapshot and into the
+join path, and `JoinResponse` deleted with the body it carried. Wants step 4
+first, both so handlers are not rewritten twice and because the leave endpoint
+reads a member's connection set to decide whether the member goes with the ref.
+That set has to be read through an `Option`: step 4's `RoomData.disconnect` drops
+a member's `connections` entry once its refs are gone, and a beacon arriving
+after its own stream has already terminated is exactly the ordering where the
+entry is already absent, so `connections(id)` throws on the case the rule exists
+for. About 230 and 210,
+re-sized when the leave request gained its connection id. The client loses the
+rejoin rule and one browser case; the server gains the id threaded through
+`Join`, `ConnectToRoom` and `SSE.source`, a keyed `connections` with the
+replacement rules section 3 states, the `/events` parameter that keys it, and
+the outcome ADT `RoomData.vote` returns below. The
+test line goes up rather than down, since that threading reaches every
+construction of those three messages and every assertion written against a set.
 
-**Its result set gains a third case from step 3a**, refused because the round is
-revealed, beside applied and not-a-member. That refusal exists from 3a onward and
-is unreportable until here, which is the same gap the failed vote in section 5
-describes: the disabled deck prevents the ordinary click, and the ask reply is
+**Three landed cases assert what this step reverses, and a fourth item is
+invisible.** `APISpec`'s "join a room, return a minted userId, and set a session
+cookie" reads the body the table removes; keep its seven `Set-Cookie`
+assertions, the only coverage of the cookie's attributes, and drop only the
+`responseAs[JoinResponse]` half. `APISpec`'s "still return 204 for a vote with
+no session cookie" asserts the `204` this step turns into a `401`, and its
+trailing comment states the contract being replaced. `e2e/room.spec.js`'s
+directly posted blank asserts the `204` the validator turns into a `400`. None
+of the three belongs in the `test.fail()` ledger, which is for cases that arrive
+red describing intended behaviour; these describe current behaviour and are
+correct until the step lands. The invisible item is deletion: `JoinResponse` and
+its derived codecs lose their only caller with the body, and nothing reddens if
+they are left behind, since invariant 7 removes the field from the wire and says
+nothing about the type left over. A second reason the test line rises sits
+beside the threading: `APISpec` drives the command endpoints with a probe that
+receives and never replies, so the five dispatch cases and the no-cookie case
+fail on the ask's timeout rather than on an assertion until the probe answers.
+
+**The result set and its statuses are part of the contract, and this table
+declares them.** The paragraphs below argue the choices rather than restate them,
+and section 4 cites this table rather than carrying its own copy.
+
+| Endpoint | Answers |
+| --- | --- |
+| `/vote` | `204` applied, `401` no session, `403` not a member, `409` round revealed, `400` blank estimation |
+| `/show`, `/clear`, `/revote`, `/edit-issue` | `204` applied, `401` no session, `403` not a member |
+| `/leave` | `204` on every branch, `401` no session, `403` not a member, `400` with no connection id |
+| `/join` | `204` with the session cookie, no body. Creates the room when the id is absent, so never `401` for an unknown one |
+| `/events` | the stream, `401` when the token does not resolve, `400` with no connection id |
+| `/create-room` | the room id, or `500` |
+
+Three rules run across it. `NoSession` answers `401`, covering a missing,
+unparseable or unresolved token as well as a room id the manager does not hold.
+`NotAMember` answers `403`, for a token resolving to a session whose user is no
+longer a member. And an ask that fails or times out answers `500`, which is what
+`create-room`'s own failure branch already does.
+
+**The rows enumerate what each handler decides**, which is what differs between
+them and what tapir needs per endpoint. The uniform failures are not repeated in
+them: the `500` above wherever an ask is made, and `400` or `415` on any endpoint
+taking a body, the `jsonBody` codec tapir generates for it accepting
+`application/json` alone.
+
+**The `401`s carry no `WWW-Authenticate`, deliberately**, which RFC 7235 makes a
+MUST and which today's `/events` already omits. Authentication here is a session
+cookie rather than an HTTP auth scheme, so there is no challenge to offer:
+`Basic` would make the browser open a credential dialog over the app, which is
+worse than the omission, and `Cookie` is not a registered scheme, so it would be
+decoration. Recorded because the step describes these statuses with tapir, which
+turns the omission into part of a declared contract.
+
+**`RoomData.vote` returns its outcome, not just the data.** A revealed round and
+a blank estimation both return the room unchanged, so nothing downstream can tell
+either from a vote that changed nothing, and the handler would otherwise re-read
+`round.revealed` in front of a `vote` that checks it again. An ADT of applied,
+round revealed and blank estimation, decided where the guard already sits, keeps
+that predicate in one place. The publish stays unconditional, for the reason
+section 3 gives beside the refusal itself: the outcome is what answers the
+caller, not a licence to suppress a broadcast this design has already priced as
+cheap. This goes the other way from `RoomData.of`, whose `require`s stayed
+because an `Either` would have pushed an unwrap through the test sites section 3
+counts: `vote` has one call site and none in the tests.
+
+Landed as two enums behind per-endpoint aliases. `Room` declares
+`enum Refusal { NoSession, NotAMember }` and `enum VoteRefusal { RoundRevealed,
+BlankEstimation }` beside a lone `Applied`, with `CommandResult = Applied.type |
+Refusal` answering the four other commands and `/leave`, and `VoteResult =
+CommandResult | VoteRefusal` answering `/vote`. Each message's `replyTo` carries
+its endpoint's alias, so a handler answering `ShowVotes` with `RoundRevealed` is
+a type error rather than the `500` tapir raises on finding no variant. `API`
+builds each `oneOf` from the enums' `values` through one exhaustive `status`
+match, and `build.sbt` makes an incomplete match fatal with
+`-Wconf:name=PatternMatchExhaustivity:e`, so a refusal added later fails the
+build until it has a status. The first cut was a sub-trait, `VoteOutcome extends
+CommandResult`, which narrowed `vote`'s return but let every `replyTo` accept all
+five results and left each `oneOf` a list kept by hand. The branch's second
+review round replaced it.
+
+**The `400` is refused at the edge** by a tapir validator, and the blank guard
+behind it becomes insurance that can report rather than a silent accept: a blank
+reaching the actor answers the same `400` the validator would have.
+
+**The revealed case comes from step 3a**, and it exists from 3a onward while
+being unreportable until here, which is the same gap the failed vote in section
+5 describes: the disabled deck prevents the ordinary click, and the ask reply is
 what answers a click that raced the reveal or a request written by hand.
+
+**`401` and `403` are separated because the client acts differently on them**,
+and step 5 is what made the distinction real. A retained session resolves for
+the life of the actor, so `NoSession` now means the room is gone or the cookie
+is forged, where `NotAMember` means the member was removed at grace expiry or by
+the leave endpoint, in both cases with the session outliving them. The first is
+terminal and gets the "Your session has ended" message the page already shows
+for `/events`, from `EventSource`'s `onerror` on a closed stream. The second is
+transient and needs no message: a member is only removed once its last connection
+is gone, so a `403` reaches a page whose stream has already dropped and which is
+showing the banner while `EventSource` retries, and that retry's `/events`
+rebuilds the member from the retained session. Both halves of that rest on
+`onerror` having fired, so the exception is the dead stream the `409` paragraph
+below hands to the backlog's connection-liveness watchdog: there the refusal
+arrives with no banner behind it and no retry coming. What the client loses is
+the command, not the room, and the separation is what stops a recoverable state
+being reported as a terminal one.
+
+**The `409` and the `400` get no client surface, and that is settled rather than
+left open.** A `409` means the round was revealed without this click, by someone
+pressing Show or by the last outstanding member's vote auto-revealing it, so the
+snapshot that disables the deck is already in flight and lands within a round
+trip; that snapshot is the surface, and it arrives whether or not anyone
+clicked. The one
+case where it does not is a dead stream, which `docs/known-issues.md` assigns to
+the backlog's connection-liveness watchdog rather than to this refusal. The `400`
+needs none either, the card values being hardcoded in the client, so only a
+hand-written request draws one. What that entry calls reading as accepted closes
+with the optimistic assignment above, which leaves a refused click showing no
+card rather than a confirmed one.
+
+**An unknown room answers `401` rather than `404`**, matching what
+`RoomManager`'s `ValidateToken` already answers for one. A `404` would be more
+honest about the resource and would hand out a room-existence oracle: a request
+with no cookie would draw `404` for an absent room and `401` for a live one, and
+the two checks cannot be reordered, since only the room can validate a token.
+That is harmless against UUIDs and much less so at step 7, where ids become
+three guessable words while rate limiting stays open in `docs/known-issues.md`.
+A `404` would also be falsified by the reload that silently re-creates the room.
+
+**What that buys is narrower than it sounds, and worth stating before someone
+notices `/join` and reopens this.** A guesser willing to join learns far more
+than a status code: against a room that exists, a guessed slug plus `/join` plus
+`/events` yields the participant list, the issue and the vote state. Against one
+that does not, `RequestSession` creates it and the prober learns only what they
+just made, which is the same nothing the `404` would have denied them. The
+difference is cost to the prober. A status probe is
+silent, free and repeatable; joining puts a name in `users` for everyone,
+moves the member count, and stalls auto-reveal until the intruder votes, since
+the round reveals when every member has. The page route discloses nothing either
+way, reading no cookie and serving the page for any id. So `/join` is the only
+disclosure in the set, the `401` removes the only silent one, and what the
+rate-limiting entry protects at step 7 is a path that announces itself.
+
+**The reply travels by relay**, each `RoomManager` command carrying a `replyTo`
+through to the room, which is how `RequestSession` and `ValidateToken` already
+work. The manager answers `NoSession` itself for an unknown room and for the
+missing-cookie case its `Option` silently drops today, so room refs stay inside
+their owner and a stopped room is answered from the map's absence rather than by
+an ask timing out. This does not revive the reply channel step 4a deleted, for
+the reason recorded there.
 
 tapir lands here rather than later because this step already rewrites all five
 command endpoints plus `/join`, `/events` and the leave endpoint it adds, so
@@ -2488,6 +2882,42 @@ issue and the same-room two-tab collision, and it closes the reload duplicate
 structurally rather than by beacon timing. The routes themselves do not move:
 there is no `:tabId` segment, and the cookie keeps the `/rooms/:slug` path 08-20
 gave it.
+
+**It lands as endpoint descriptions only.** The OpenAPI document and the
+`openapi-typescript` gate wait for step 8, where the generated types get a
+consumer: a document nothing reads is the no-consumer case this design applies to
+`version` and `scale`, and it is a few lines derived from the descriptions on the
+day it is wanted. What the descriptions buy immediately is one place declaring
+each endpoint's inputs, outputs and status codes, and the `400` validator above.
+
+**It also carries the one-line cache fix** `docs/known-issues.md` schedules here,
+`Cache-Control: no-cache` on the two `getFromFile` routes, so no later deploy can
+pair a cached page with a new server. That entry's own argument for folding it in
+is the ordered rebase: doing it on a branch of its own adds an `API.scala`
+conflict to a stack this step is already editing that file in.
+
+**The connection id is a required parameter, and the two meet here.** The
+header above protects pages served from this deploy onward, not the ones a
+browser already holds: those carry no `Cache-Control` at all and may be reused
+under heuristic freshness. Such a page joins successfully, since `/join`
+answering `204` costs it nothing, then opens `/events` with no id and gets the
+`400`. `EventSource` treats any non-2xx as terminal, so the page reports "Your
+session has ended" over a session seconds old, and the reload it advises
+revalidates and recovers. Declaring the parameter optional would spare that
+window and cost the contract permanently, leaving a page that forgets the id
+with a connection the leave endpoint cannot name instead of a loud refusal.
+
+**Step 6a. Warnings become errors.** `-Werror` across main and test, which step 6
+declined in favour of making only the exhaustivity warning fatal. Measured on
+step 6's tree, it trips on two warnings and nothing else: `Main extends App`,
+deprecated since Scala 3.8.0, and 28 test sites passing an implicit
+positionally, `TestProbe()(testKit.system.classicSystem)` and its kin in
+`RoomSpec` and `RoomManagerSpec`, which want `(using ...)`. The second is
+mechanical under `-rewrite -source 3.7-migration`. The first changes the entry
+point, so the step checks that the staged start script and the Docker image
+still launch it. `-Werror` subsumes step 6's targeted `-Wconf`, which the step
+removes. Waits on step 6 only, and is a branch of its own so the entry-point
+change is not reviewed inside a protocol diff.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
@@ -2504,8 +2934,9 @@ slug where a UUID was, which orphans any cookie minted before the cutover, at no
 cost since they are session cookies.
 
 A second one is a route hazard rather than a cookie one. **The page route stops
-being self-limiting.** `path(JavaUUID)` (`API.scala:66`) matches only a UUID, so
-it can sit anywhere in the `concat`; `path(Segment)` matches every single-segment
+being self-limiting.** `path(JavaUUID)`, in `PageRoutes.scala` since step 6 lifted
+the static routes there, matches only a UUID, so it can sit anywhere in the
+`concat`; `path(Segment)` matches every single-segment
 path there will ever be, so from this step on it must come last, after
 `create-room` and after whatever static route step 8's bundled assets need. Today
 there is nothing to shadow, since every asset comes from a CDN, which is exactly
@@ -2513,8 +2944,9 @@ why the trap is invisible until step 8 adds the first local one.
 
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
-inheriting step 6's rejoin on a snapshot that does not name the client as a
-member, and client types checked against the server contract. Waits on steps 1 and 6.
+which owns the connection id step 6 mints and closes the old stream before
+opening a new one, and client types checked against the server contract. Waits on
+steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
 
@@ -2600,7 +3032,9 @@ reasoning behind each move rather than as work outstanding.
   reasoning under "Deferred, with triggers".
 - The backlog's client-side connection-liveness watchdog stays in the backlog,
   with a note that step 8 should arm it on `pageshow`: a page restored holding a
-  stream that is dead but silent is the one case section 5's rejoin cannot see.
+  stream that is dead but silent reports nothing and receives nothing, so no
+  snapshot and no `/events` status can reach it. A command it sends still draws
+  its own status, which is why the `403` above arrives with no banner behind it.
 
 ## Known issues disposition
 
@@ -2628,7 +3062,7 @@ than execution.
 | **new** A participant who departs during a reconnect gap is never pruned | Step 1. Under a snapshot an absent participant is absent. |
 | **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
 | **new** A disconnection outlasting the grace period forces a page reload | Step 5, then step 4a. Step 5 retains the token past its member's removal, which closes it for everyone but the room's last member: their removal empties `users`, `ConfirmLeave` stops the room, and the retained token has nothing left to resolve against. Step 4a keeps the room alive far longer than any outage the retry has to cross, closing the remainder. |
-| **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, by making `/join` resolve the existing cookie rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
+| **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, for a tab holding the cookie, by making `/join` resolve it rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. Not for two tabs that both load before either has joined: neither holds a cookie, so both mint and the second `setCookie` overwrites the first's shared slot, which `docs/known-issues.md` narrows the entry to rather than closes. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
 | The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. |
 
 The rate-limiting entry was rewritten rather than left alone: its bounded-mode

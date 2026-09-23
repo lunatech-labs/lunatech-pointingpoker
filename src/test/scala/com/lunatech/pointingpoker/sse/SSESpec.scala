@@ -27,9 +27,10 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
     val roomId           = UUID.randomUUID()
     val userId           = UUID.randomUUID()
     val token            = Room.SessionToken.mint()
+    val connectionId     = Room.ConnectionId.parse(UUID.randomUUID().toString).get
     val (user, probe)    =
       SSE
-        .source(roomManagerProbe.ref, roomId, userId, "Alice", token)
+        .source(roomManagerProbe.ref, roomId, userId, "Alice", token, connectionId)
         .toMat(TestSink())(Keep.both)
         .run()
     (roomId, userId, user, probe)
@@ -66,7 +67,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       probe.request(5)
       // bufferSize + 1 survive: the one already current, plus the newest queued behind it.
-      probe.expectNextN(2).last.data must include("issue 5")
+      probe.expectNextN(2).last.data.getOrElse("") must include("issue 5")
       probe.expectNoMessage()
     }
 
@@ -100,7 +101,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       probe.expectNoMessage(300.millis)
 
       probe.request(2)
-      probe.expectNext().data must include("first")
+      probe.expectNext().data.getOrElse("") must include("first")
       probe.expectComplete()
     }
   }

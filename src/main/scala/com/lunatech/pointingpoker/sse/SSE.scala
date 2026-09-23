@@ -8,9 +8,9 @@ import scala.util.{Failure, Success}
 
 import io.circe.syntax.*
 import org.apache.pekko.actor.ActorRef
-import org.apache.pekko.http.scaladsl.model.sse.ServerSentEvent
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
+import sttp.model.sse.ServerSentEvent
 import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}
 
 object SSE:
@@ -38,6 +38,7 @@ object SSE:
       userId: UUID,
       name: String,
       token: Room.SessionToken,
+      connectionId: Room.ConnectionId,
       retryMillis: Int = defaultRetryMillis
   )(using ec: ExecutionContext): Source[ServerSentEvent, ActorRef] =
     Source
@@ -48,7 +49,7 @@ object SSE:
         OverflowStrategy.dropHead
       )
       .mapMaterializedValue { user =>
-        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, user)
+        roomManager ! RoomManager.ConnectToRoom(roomId, userId, name, token, connectionId, user)
         user
       }
       .watchTermination() { (user, done) =>
@@ -58,8 +59,10 @@ object SSE:
         }
         user
       }
-      .map(snapshot => ServerSentEvent(data = snapshot.asJson.noSpaces, retry = Some(retryMillis)))
-      .keepAlive(heartbeatInterval, () => ServerSentEvent.heartbeat)
+      .map(snapshot =>
+        ServerSentEvent(data = Some(snapshot.asJson.noSpaces), retry = Some(retryMillis))
+      )
+      .keepAlive(heartbeatInterval, () => ServerSentEvent(data = Some("")))
 
   // Room.StreamCompleted is the one thing that ends a stream from outside; everything else
   // ends it via watchTermination (client disconnect, stream failure, etc).

@@ -46,7 +46,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.EditIssue(user.token, issue)
+      roomRef ! Room.EditIssue(user.token, issue, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       expectSnapshot(userProbe).currentIssue mustBe issue
@@ -65,7 +65,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.ClearVotes(user.token)
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
@@ -93,7 +93,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
 
       // The other half of publish's pairing guard; the vote case above carries the note.
       for (probe, member) <- List((userProbe, user), (user2Probe, user2)) do
@@ -117,7 +117,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.ShowVotes(user.token)
+      roomRef ! Room.ShowVotes(user.token, TestInbox[Room.CommandResult]().ref)
 
       expectSnapshot(userProbe).votesRevealed mustBe true
       expectSnapshot(user2Probe).votesRevealed mustBe true
@@ -133,7 +133,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user.token, estimation)
+      roomRef ! Room.Vote(user.token, estimation, TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // Two probes, not one: this is the guard on publish pairing each snapshot with its own
@@ -161,7 +161,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(Room.SessionToken.mint(), "5")
+      roomRef ! Room.Vote(Room.SessionToken.mint(), "5", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       userProbe.expectNoMessage()
@@ -268,6 +268,76 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data mustBe withUsers(user2).withMemberlessSession(user).withEstimate(user)
     }
 
+    "remove the member when a departure takes its last connection" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", false, "")
+      val (other, otherProbe) = createUser(UUID.randomUUID(), "user2", false, "")
+      val replyProbe          = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)        = createRoom(UUID.randomUUID(), withUsers(user, other))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      replyProbe.expectMessage(Room.Applied)
+      data.members.keySet mustBe Set(other.id)
+      data.connections.keySet mustBe Set(other.id)
+      // The announcement is the other half of the task: asserting only that a snapshot
+      // arrived would pass on one that still listed the leaver.
+      expectSnapshot(otherProbe).users.map(_.id) mustBe List(other.id)
+      // The leaver's stream is ended rather than fed: it is out of connections before the
+      // publish, so StreamCompleted is the one thing it gets and no snapshot follows it out.
+      userProbe.expectMsg(Room.StreamCompleted)
+      userProbe.expectNoMessage(300.millis)
+    }
+
+    "keep the member when a departure leaves another connection open" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val secondProbe       = TestProbe()(testKit.system.classicSystem)
+      val secondId          = newConnectionId()
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(
+        UUID.randomUUID(),
+        withUsers(user).withSecondConnection(user, secondId, secondProbe.ref)
+      )
+
+      roomRef ! Room.Depart(user.token, secondId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      replyProbe.expectMessage(Room.Applied)
+      data.members.keySet mustBe Set(user.id)
+      data.connections(user.id) mustBe Map(user.connectionId -> userProbe.ref)
+      // The other branch of the same rule: the tab that left gets its stream ended even
+      // though the member stayed, which is why the send is not a removal-only case.
+      secondProbe.expectMsg(Room.StreamCompleted)
+    }
+
+    "answer a departure naming a connection that is already gone, and still remove the member" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      // The beacon lost the race with its own stream's teardown: no entry at all is left.
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withNoConnection(user))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      replyProbe.expectMessage(Room.Applied)
+      dataProbe.expectMessageType[Room.DataStatus].data.members mustBe empty
+    }
+
+    "answer 403-worthy NotAMember for a departure after grace expiry" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withDeparted(user))
+
+      roomRef ! Room.Depart(user.token, user.connectionId, replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NotAMember)
+    }
+
     "stay alive when its last member is removed" in {
       val probe = TestProbe()(testKit.system.classicSystem)
       val user  =
@@ -293,6 +363,24 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       behaviorTestKit.isAlive mustBe true
     }
 
+    "cancel a pending ConfirmLeave when a departure removes the member first" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.CommandResult]()
+      val btk               = BehaviorTestKit(
+        Room(UUID.randomUUID(), withUsers(user), testGracePeriod, testStopAfterIdle)
+      )
+
+      // A timer is pending: the stream terminated first. Every non-tick message re-arms the
+      // idle tick, so drain the queue as the other timer cases do.
+      btk.run(Room.Leave(user.id, userProbe.ref))
+      btk.retrieveAllEffects()
+
+      // Two paths to one departure must not both publish it. The key is the assertion:
+      // the grace timer is keyed by the member, the idle re-arm by IdleTickKey.
+      btk.run(Room.Depart(user.token, user.connectionId, replyProbe.ref))
+      btk.retrieveAllEffects() must contain(Effect.TimerCancelled(user.id))
+    }
+
     "ignore a Join whose token is in no session" in {
       val (user, _)                 = createUser(UUID.randomUUID(), "user1", false, "")
       val (stranger, strangerProbe) = createUser(UUID.randomUUID(), "stranger", false, "")
@@ -311,9 +399,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           data.connections.keySet must not contain stranger.id
         }(using testKit.system)
 
-      // Step 6 is expected to redden this: the send that recovers a refused joiner pairs
-      // with its rejoin, and the design's step 4 section carries why neither works alone.
-      strangerProbe.expectNoMessage()
+      // A refused joiner gets no snapshot and no silence: its stream is ended rather than
+      // left open receiving nothing.
+      strangerProbe.expectMsg(Room.StreamCompleted)
     }
 
     "ignore a Join whose token names a different identity" in {
@@ -337,9 +425,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
           data.connections.keySet must not contain claimant.id
         }(using testKit.system)
 
-      // copy carries impostor's ref, so this is the claimant's own connection. Step 6
-      // reddens it for the same reason as the case above.
-      impostorProbe.expectNoMessage()
+      // copy carries impostor's ref, so this is the claimant's own connection, refused the
+      // same as the case above.
+      impostorProbe.expectMsg(Room.StreamCompleted)
     }
 
     "publish the whole room to a joiner and to everyone already in it" in {
@@ -383,12 +471,63 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
+    "resolve an existing session on a second join rather than minting over it" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      val first = replyProbe.expectMessageType[Room.SessionMinted]
+
+      roomRef ! Room.RequestSession("Alice", Some(first.token), replyProbe.ref)
+      val second = replyProbe.expectMessageType[Room.SessionMinted]
+
+      second.userId mustBe first.userId
+      second.token mustBe first.token
+    }
+
+    "mint a fresh identity when the offered token resolves to nothing" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", Some(Room.SessionToken.mint()), replyProbe.ref)
+
+      replyProbe.expectMessageType[Room.SessionMinted]
+    }
+
+    "rename the session and the member together on a join under a new name" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe        = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.RequestSession("renamed", Some(user.token), replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      // Both sides move or RoomData.of refuses the next construction outright.
+      data.sessions(user.token) mustBe Room.Session(user.id, "renamed")
+      data.members(user.id) mustBe Room.Member("renamed")
+      expectSnapshot(userProbe).users.map(_.name) mustBe List("renamed")
+    }
+
+    "not create a member on a join, whatever the name" in {
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), Room.RoomData.empty)
+
+      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // Invariant 5: a member who holds no connection would block auto-reveal for the meeting.
+      dataProbe.expectMessageType[Room.DataStatus].data.members mustBe empty
+    }
+
     "mint a session and store it on RequestSession" in {
       val sessionProbe      = testKit.createTestProbe[Room.SessionMinted]()
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (roomId, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
 
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
@@ -407,7 +546,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
@@ -443,7 +582,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val userProbe    = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef) = createRoom(UUID.randomUUID(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
@@ -470,7 +609,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Through RequestSession and Join, since promotion is what used to consume the entry:
       // seeding the map directly leaves the case green with the old code.
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.
@@ -500,7 +639,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Same setup as the resolve case above: Alice's token is retained in `sessions`
       // after her member entry is removed at grace expiry.
-      roomRef ! Room.RequestSession("Alice", sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.
@@ -521,11 +660,13 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         roomRef ! Room.GetData(dataProbe.ref)
         dataProbe.expectMessage(Room.DataStatus(data = before))
 
-      assertUnaffected(Room.Vote(minted.token, "8"))
-      assertUnaffected(Room.ClearVotes(minted.token))
-      assertUnaffected(Room.ReVote(minted.token))
-      assertUnaffected(Room.ShowVotes(minted.token))
-      assertUnaffected(Room.EditIssue(minted.token, "a different issue"))
+      assertUnaffected(Room.Vote(minted.token, "8", TestInbox[Room.VoteResult]().ref))
+      assertUnaffected(Room.ClearVotes(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(Room.ReVote(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(Room.ShowVotes(minted.token, TestInbox[Room.CommandResult]().ref))
+      assertUnaffected(
+        Room.EditIssue(minted.token, "a different issue", TestInbox[Room.CommandResult]().ref)
+      )
     }
 
     "reveal the round when the last outstanding vote lands" in {
@@ -537,7 +678,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.Vote(user2.token, "5", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe true
@@ -552,7 +693,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.Vote(user.token, "5")
+      roomRef ! Room.Vote(user.token, "5", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
@@ -567,7 +708,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2)
       )
 
-      roomRef ! Room.ShowVotes(user.token)
+      roomRef ! Room.ShowVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe true
@@ -607,12 +748,16 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user).withRevealed()
       )
 
-      roomRef ! Room.ClearVotes(user.token)
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
 
-      roomRef ! Room.Vote(user.token, "5") // re-reveals: the only member has voted
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.Vote(
+        user.token,
+        "5",
+        TestInbox[Room.VoteResult]().ref
+      ) // re-reveals: the only member has voted
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
     }
@@ -626,7 +771,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
@@ -644,7 +789,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withRevealed()
       )
 
-      roomRef ! Room.Vote(user2.token, "5")
+      roomRef ! Room.Vote(user2.token, "5", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
@@ -660,11 +805,53 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user).withRevealed()
       )
 
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.VoteResult]().ref)
 
       val snapshot = expectSnapshot(userProbe)
       snapshot.votesRevealed mustBe true
       snapshot.users.map(_.estimation) mustBe List("3")
+    }
+
+    "answer a vote into a revealed round with RoundRevealed, and still publish" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "5")
+      val replyProbe        = testKit.createTestProbe[Room.VoteResult]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user).withRevealed())
+
+      roomRef ! Room.Vote(user.token, "8", replyProbe.ref)
+
+      replyProbe.expectMessage(Room.RoundRevealed)
+      // The refusal publishes: the outcome answers the caller, it does not suppress a broadcast.
+      expectSnapshot(userProbe)
+    }
+
+    "answer a blank estimation with BlankEstimation" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.VoteResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.Vote(user.token, "  ", replyProbe.ref)
+
+      replyProbe.expectMessage(Room.BlankEstimation)
+    }
+
+    "answer NoSession for a token the room does not hold" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.ShowVotes(Room.SessionToken.mint(), replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NoSession)
+    }
+
+    "answer NotAMember for a session whose member has been removed" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", false, "")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withDeparted(user))
+
+      roomRef ! Room.ShowVotes(user.token, replyProbe.ref)
+
+      replyProbe.expectMessage(Room.NotAMember)
     }
 
     "keep a reconnecting user's vote instead of resetting it" in {
@@ -672,15 +859,15 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
 
-      // A reconnect Joins the same identity under a new ref; the estimate is keyed by
-      // id in the round, so the rejoin never touches it.
+      // A reconnect Joins the same identity and connection id under a new ref; the estimate
+      // is keyed by id in the round, so the rejoin never touches it.
       val newRefProbe = TestProbe()(testKit.system.classicSystem)
-      roomRef ! Room.Join(user.id, user.name, user.token, newRefProbe.ref)
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, newRefProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.estimateFor(user) mustBe Some(("5", true))
-      data.connections(user.id) mustBe Set(user.ref, newRefProbe.ref)
+      data.connections(user.id) mustBe Map(user.connectionId -> newRefProbe.ref)
     }
 
     "build a RoomData when every member has a matching session" in {
@@ -762,8 +949,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user, user2))
 
-      roomRef ! Room.Vote(user.token, "")
-      roomRef ! Room.Vote(user2.token, "   ")
+      roomRef ! Room.Vote(user.token, "", TestInbox[Room.VoteResult]().ref)
+      roomRef ! Room.Vote(user2.token, "   ", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // Absence is structural now, so a blank value would enter the tally as its own bucket.
@@ -776,7 +963,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
       val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
 
-      roomRef ! Room.Vote(user.token, "")
+      roomRef ! Room.Vote(user.token, "", TestInbox[Room.VoteResult]().ref)
 
       // The absence of a special case: vote returns unchanged data through the same publish.
       expectSnapshot(userProbe).users.map(_.hasEstimation) mustBe List(false)
@@ -793,7 +980,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user).withRevealed())
 
-      roomRef ! Room.ReVote(user.token)
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // The state Estimate exists to express: an estimation with no confirmation.
@@ -806,8 +993,8 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user, user2).withRevealed())
 
-      roomRef ! Room.ReVote(user.token)
-      roomRef ! Room.Vote(user.token, "8")
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.Vote(user.token, "8", TestInbox[Room.VoteResult]().ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // A re-vote keeps both values, so only the confirmation can hold the reveal back.
@@ -847,10 +1034,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val secondTab           = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
-        withUsers(user, user2).withSecondConnection(user, secondTab.ref)
+        withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref)
       )
 
-      roomRef ! Room.EditIssue(user.token, "an issue")
+      roomRef ! Room.EditIssue(user.token, "an issue", TestInbox[Room.CommandResult]().ref)
 
       // One participant, two connections, one identity: both tabs are redacted for user.
       for probe <- List(userProbe, secondTab) do
@@ -865,14 +1052,47 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(UUID.randomUUID(), withUsers(user))
 
-      val replacement = TestProbe()(testKit.system.classicSystem)
-      roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
+      val replacement   = TestProbe()(testKit.system.classicSystem)
+      val replacementId = newConnectionId()
+      roomRef ! Room.Join(user.id, user.name, user.token, replacementId, replacement.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // A map keyed by id cannot duplicate the member; the second tab is a second ref.
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.members.keySet mustBe Set(user.id)
-      data.connections(user.id) mustBe Set(user.ref, replacement.ref)
+      data.connections(user.id) mustBe
+        Map(user.connectionId -> user.ref, replacementId -> replacement.ref)
+    }
+
+    "replace a connection's ref when the same id reconnects, and feed only the new one" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      // Same id, new ref: an EventSource retry reuses the id its page was given.
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, replacementProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+
+      data.connections(user.id) mustBe Map(user.connectionId -> replacementProbe.ref)
+      expectSnapshot(replacementProbe)
+      userProbe.expectNoMessage(300.millis)
+    }
+
+    "remove a superseded ref by value, not by id, when its stream finally terminates" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
+      val replacementProbe  = TestProbe()(testKit.system.classicSystem)
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(UUID.randomUUID(), withUsers(user))
+
+      roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, replacementProbe.ref)
+      // The old stream's termination arrives after the new one is established.
+      roomRef ! Room.Leave(user.id, userProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.connections(user.id) mustBe
+        Map(user.connectionId -> replacementProbe.ref)
     }
 
     "schedule no removal when the connection that drops is not the member's last" in {
@@ -887,8 +1107,9 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
 
       // The race itself, driven rather than seeded: the replacement stream is established
-      // before the old one's termination arrives, so the set briefly holds two refs.
-      roomRef ! Room.Join(user.id, user.name, user.token, replacement.ref)
+      // before the old one's termination arrives, so the map briefly holds two refs.
+      val replacementId = newConnectionId()
+      roomRef ! Room.Join(user.id, user.name, user.token, replacementId, replacement.ref)
       roomRef ! Room.Leave(user.id, user.ref)
 
       // Problem C made unrepresentable: the question is answered at Leave time, so the
@@ -897,7 +1118,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus].data
       data.members.keySet mustBe Set(user.id, user2.id)
-      data.connections(user.id) mustBe Set(replacement.ref)
+      data.connections(user.id) mustBe Map(replacementId -> replacement.ref)
     }
 
     "schedule no removal when the connection that drops belongs to no member" in {
@@ -912,7 +1133,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       roomRef ! Room.Leave(departed.id, departed.ref)
 
-      // Section 4's leave endpoint: membership ended first, so the tab's own drop removes nobody.
+      // The conjunct's second half: membership ended first, so the tab's own drop removes nobody.
       Thread.sleep(200) // past the 50ms grace period, so a scheduled removal would have fired
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -928,7 +1149,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         withUsers(user, user2).withNoConnection(user)
       )
 
-      roomRef ! Room.EditIssue(user2.token, "an issue")
+      roomRef ! Room.EditIssue(user2.token, "an issue", TestInbox[Room.CommandResult]().ref)
 
       // The grace period doing its job: the row survives, the sends do not.
       expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user.id, user2.id)
@@ -941,7 +1162,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val secondTab           = TestProbe()(testKit.system.classicSystem)
       val (_, roomRef)        = createRoom(
         UUID.randomUUID(),
-        withUsers(user, user2).withSecondConnection(user, secondTab.ref),
+        withUsers(user, user2).withSecondConnection(user, newConnectionId(), secondTab.ref),
         gracePeriod = 200.millis
       )
 
@@ -958,19 +1179,19 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val thrown = intercept[IllegalArgumentException] {
         RoomData.of(
           sessions = Map(user.token -> Room.Session(user.id, user.name)),
-          connections = Map(stranger -> Set(user.ref))
+          connections = Map(stranger -> Map(newConnectionId() -> user.ref))
         )
       }
 
       thrown.getMessage must include("resolves to no session")
     }
 
-    "allow a connection whose member has gone, which is what a departure produces" in {
+    "allow a connection whose member has gone, which nothing now produces" in {
       val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
       val (departed, _) = createUser(UUID.randomUUID(), "user2", false, "")
 
-      // Required rather than tolerated: section 4's leave endpoint removes the member
-      // while that tab's stream is still open, and step 6 is what recovers it.
+      // Tolerated rather than required: section 4's leave takes the ref with the member, and
+      // a guard in of would leave the tolerance unconstructible since apply and copy are shut.
       val data = withUsers(user, departed).withDeparted(departed)
 
       data.members.keySet mustBe Set(user.id)

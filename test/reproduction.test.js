@@ -23,7 +23,7 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: 'Ada' })
   })
-  assert.equal(joined.status, 200)
+  assert.equal(joined.status, 204)
   // Load-bearing: without a cookie /events answers 401, a small finite response the stub
   // releases promptly, so a reproduction that skipped the join would prove nothing.
   const cookie = joined.headers
@@ -35,7 +35,9 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
   // Without this the test cannot tell "the proxy buffered it" from "the app sent nothing".
   // The control stream stays open for the rest of the test so the member never leaves.
   stub.setBuffering(false)
-  const control = http.get(`${stub.baseUrl}/rooms/${roomId}/events`, { headers: { cookie } })
+  // One id per stream, as two tabs would: a reused id replaces the control stream's connection.
+  const events = () => `${stub.baseUrl}/rooms/${roomId}/events?connectionId=${crypto.randomUUID()}`
+  const control = http.get(events(), { headers: { cookie } })
   t.after(() => control.destroy())
   let controlEnded = false
   const streamed = await new Promise(resolve => {
@@ -62,7 +64,7 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
 
   const started = Date.now()
   const result = await new Promise(resolve => {
-    const req = http.get(`${stub.baseUrl}/rooms/${roomId}/events`, { headers: { cookie } })
+    const req = http.get(events(), { headers: { cookie } })
     let bytes = 0
     let response = null
     req.on('response', res => {

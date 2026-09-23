@@ -14,7 +14,8 @@ import {
   issueButton,
   votedMark,
   hiddenMark,
-  vote
+  vote,
+  ownEstimation
 } from './fixtures.js'
 
 test('two browsers exchange votes', async ({ join }) => {
@@ -83,17 +84,21 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await expect(participantRows(alice.page)).toHaveCount(2)
   await expect(participantRows(bob.page)).toHaveCount(2)
 
+  // No grace period and no traffic to force detection: the leave endpoint removes the member
+  // on the request, so the default timeout is the whole budget.
   await bob.page.getByRole('link', { name: 'Leave' }).click()
-  // The app notices a dead stream only when a write to it fails, and the first write after a
-  // close only draws the reset, so two broadcasts stand in for the heartbeat 15s away.
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.click()
-  await clear.click()
-
-  // 25s, not 20s: if detection ever falls back to the 15s heartbeat the removal lands at about
-  // 20.1s, just outside the tighter cap, and this case has no cut whose budget a wait spends.
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 25_000 })
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0)
   await expect(participantRows(alice.page)).toHaveCount(1)
+})
+
+// Plain HTTP off localhost is not a secure context, and randomUUID is undefined there.
+test('a page without crypto.randomUUID still joins and leaves', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob', { initScript: () => delete Crypto.prototype.randomUUID })
+  await expect(participantRows(alice.page)).toHaveCount(2)
+  // The leave names the fallback's id, so a malformed one would draw a 400 and leave Bob listed.
+  await bob.page.getByRole('link', { name: 'Leave' }).click()
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(0)
 })
 
 test('the issue box is readonly until the pencil is pressed', async ({ join }) => {
@@ -284,27 +289,64 @@ test('a straggler closing their tab leaves the votes hidden', async ({ join }) =
   await stragglerDepartsWithVotesHidden(
     join,
     carol => carol.close(),
-    // 25s for the reason the leave case above records: if detection ever falls back to the
-    // 15s heartbeat the removal lands at about 20.1s, just outside a tighter cap.
+    // 25s: if detection ever fell back to a 15s heartbeat the removal would land at about
+    // 20.1s, just outside a tighter cap, and the beacon leaves no cut whose budget a wait spends.
     alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(0, { timeout: 25_000 })
   )
 })
 
 test('a straggler reloading leaves the votes hidden', async ({ join }) => {
-  // Vacuous for the latch today: a non-voting Carol remains, so no re-derived predicate would
-  // fire. Kept for step 6, where a beacon removes her instead of replacing her.
+  // Hostile now: the beacon removes Carol on the reload, so the latch is the only thing
+  // keeping the round shut until she returns.
   await stragglerDepartsWithVotesHidden(
     join,
-    // created() rejoins from localStorage, so a reload is a departure plus an immediate new
-    // participant and /join mints a second id: Carol is listed twice until the prune.
+    // created() rejoins from localStorage, and /join resolves the cookie rather than minting,
+    // so the reload returns the same Carol instead of a second one.
     async (carol, alice) => {
       await carol.page.reload()
-      await expect(participantRow(alice.page, 'Carol')).toHaveCount(2)
+      // Her own table is empty until the snapshot lands, so this is what proves the rejoin
+      // finished. A minted second id would render four rows here.
+      await expect(participantRows(carol.page)).toHaveCount(3)
+      await expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
+      await expect(participantRows(alice.page)).toHaveCount(3)
     },
-    // Step 6's idempotent join removes the duplicate, so this count becomes 1 throughout and
-    // this expectation is one the step has to revisit.
-    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1, { timeout: 25_000 })
+    // Carol already rejoined above, so this only confirms the departure left no stale entry.
+    alice => expect(participantRow(alice.page, 'Carol')).toHaveCount(1)
   )
+})
+
+test('two tabs on one room are one participant', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const second = await bob.newTab()
+  await expect(participantRows(alice.page)).toHaveCount(2)
+
+  await vote(second, '5')
+  // One identity, one vote: the first tab sees its own estimation arrive from the second.
+  await expect(ownEstimation(bob.page)).toHaveText('5')
+  await expect(participantRows(alice.page)).toHaveCount(2)
+
+  await second.close()
+  // The surviving tab keeps the member: only its own ref went.
+  await vote(alice.page, '3')
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(1)
+})
+
+test('a reload keeps its identity and its vote', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await vote(bob.page, '8')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+
+  await bob.page.reload()
+  await expect(bob.page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+
+  // One Bob, not two, and the estimation came back with him rather than being recast.
+  await expect(participantRow(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
+  await expect(participantRows(alice.page)).toHaveCount(2)
+  await expect(ownEstimation(bob.page)).toHaveText('8')
 })
 
 test('the tally counts only the votes that were cast', async ({ join }) => {
@@ -348,10 +390,10 @@ test('an empty estimation posted directly is refused, not stored as an empty vot
   const bob = await join('Bob')
 
   await vote(alice.page, '5')
-  // Nothing validates the estimation at the HTTP layer, but vote refuses a blank one outright,
-  // as silently as a revealed round refuses one: the request still returns 204 and changes nothing.
+  // Refused at the edge now: a tapir validator answers 400 before the room sees the request,
+  // and the actor's own guard stays behind it as insurance.
   const posted = await bob.page.request.post(`/rooms/${room}/vote`, { data: { estimation: '' } })
-  expect(posted.status()).toBe(204)
+  expect(posted.status()).toBe(400)
 
   // Bob never voted, so the round stays hidden until Show is pressed.
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(0)

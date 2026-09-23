@@ -357,7 +357,6 @@
         if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1;
       });
       return {
-        inRoom: true,
         users: s.users,
         votesRevealed: s.votesRevealed,
         // Do not clobber the issue input while the user is typing in it.
@@ -366,6 +365,23 @@
         ownVoteConfirmed: !me || me.voted || !me.estimation,
         votesSummary: Object.entries(tally).sort(function (a, b) { return b[1] - a[1]; })
       };
+    }
+    // randomUUID exists only in a secure context; getRandomValues also works over plain HTTP.
+    function mintConnectionId() {
+      if (crypto.randomUUID) return crypto.randomUUID();
+      var bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+      var hex = Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); });
+      return hex.join('').replace(/^(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-');
+    }
+    // One per page instance, never persisted: a reload must mint a new one, or its own late
+    // beacon would name the id the replacement page is now using.
+    var connectionId = mintConnectionId();
+    // sendBeacon rather than a POST: an unload-adjacent fetch is not reliably delivered, and
+    // a body would arrive as text/plain and be refused where nothing could report it.
+    function postLeave(roomId) {
+      navigator.sendBeacon('/rooms/' + roomId + '/leave?connectionId=' + connectionId);
     }
     var app = new Vue({
       el: '#app',
@@ -419,8 +435,13 @@
           localStorage.setItem("roomId", this.roomId);
           localStorage.setItem("name", this.user.name);
           axios.post('/rooms/' + this.roomId + '/join', { name: this.user.name })
-          .then(function (response) {
-            ref.eventSource = new EventSource('/rooms/' + ref.roomId + '/events');
+          .then(function () {
+            // Entering a room is a navigation decision, not room state: no later frame can put
+            // the page back into a room the user has left.
+            var entering = true;
+            ref.eventSource = new EventSource(
+              '/rooms/' + ref.roomId + '/events?connectionId=' + connectionId
+            );
             ref.eventSource.onopen = function() {
               // EventSource retries automatically on transient network blips; a
               // successful (re)connection means any earlier "connection lost"
@@ -437,7 +458,10 @@
                 { issueFocused: ref.issueFocused, currentIssue: ref.currentIssue },
                 JSON.parse(event.data)
               );
-              ref.inRoom = next.inRoom;
+              if (entering) {
+                ref.inRoom = true;
+                entering = false;
+              }
               ref.users = next.users;
               ref.votesRevealed = next.votesRevealed;
               ref.currentIssue = next.currentIssue;
@@ -486,13 +510,16 @@
           });
         },
         doLeave: function () {
+          // Closed before the request, not after: the server ends a departed connection's
+          // stream, and an EventSource reconnects unless it was closed from this side.
+          this.eventSource.close();
+          postLeave(this.roomId);
           localStorage.clear();
           this.inRoom = false;
           this.issueFocused = false;
           this.votesSummary = [],
           this.user.estimation = "";
-          this.users = [],
-          this.eventSource.close();
+          this.users = [];
         },
         doEdit: function () {
           this.editing = false;
@@ -517,11 +544,10 @@
           }, 2000);
         },
         vote: function (voteValue) {
-          // The server refuses it anyway; this only spares the doomed POST and the optimistic flag.
+          // The server refuses it anyway; this only spares the doomed POST.
           if (this.votesRevealed) {
             return;
           }
-          this.ownVoteConfirmed = true;
           axios.post('/rooms/' + this.roomId + '/vote', { estimation: voteValue })
           .catch(function (error) {
             console.log(error);
@@ -547,6 +573,13 @@
         }
       }
     })
+
+    window.addEventListener('pagehide', function (event) {
+      // Only a page being discarded: a back/forward cache entry can be restored with no page
+      // load, so removing its member would leave a live page as a non-member.
+      if (event.persisted || !app.inRoom) return;
+      postLeave(app.roomId);
+    });
   </script>
 
 </html>

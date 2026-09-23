@@ -17,17 +17,40 @@ object Room:
     def parse(raw: String): Option[SessionToken]    = scala.util.Try(UUID.fromString(raw)).toOption
     extension (token: SessionToken) def raw: String = token.toString
 
+  opaque type ConnectionId = UUID
+
+  object ConnectionId:
+    def parse(raw: String): Option[ConnectionId] =
+      scala.util.Try(UUID.fromString(raw)).toOption
+    extension (id: ConnectionId) def raw: String = id.toString
+
   sealed trait Command
-  final case class Join(userId: UUID, name: String, token: SessionToken, ref: UntypedRef)
+  final case class Join(
+      userId: UUID,
+      name: String,
+      token: SessionToken,
+      connectionId: ConnectionId,
+      ref: UntypedRef
+  ) extends Command
+  final case class Leave(userId: UUID, ref: UntypedRef)       extends Command
+  final private[actors] case class ConfirmLeave(userId: UUID) extends Command
+  final case class Depart(
+      token: SessionToken,
+      connectionId: ConnectionId,
+      replyTo: ActorRef[CommandResult]
+  ) extends Command
+  final case class Vote(token: SessionToken, estimation: String, replyTo: ActorRef[VoteResult])
       extends Command
-  final case class Leave(userId: UUID, ref: UntypedRef)                           extends Command
-  final private[actors] case class ConfirmLeave(userId: UUID)                     extends Command
-  final case class Vote(token: SessionToken, estimation: String)                  extends Command
-  final case class ClearVotes(token: SessionToken)                                extends Command
-  final case class ReVote(token: SessionToken)                                    extends Command
-  final case class ShowVotes(token: SessionToken)                                 extends Command
-  final case class EditIssue(token: SessionToken, issue: String)                  extends Command
-  final case class RequestSession(name: String, replyTo: ActorRef[SessionMinted]) extends Command
+  final case class ClearVotes(token: SessionToken, replyTo: ActorRef[CommandResult]) extends Command
+  final case class ReVote(token: SessionToken, replyTo: ActorRef[CommandResult])     extends Command
+  final case class ShowVotes(token: SessionToken, replyTo: ActorRef[CommandResult])  extends Command
+  final case class EditIssue(token: SessionToken, issue: String, replyTo: ActorRef[CommandResult])
+      extends Command
+  final case class RequestSession(
+      name: String,
+      existing: Option[SessionToken],
+      replyTo: ActorRef[SessionMinted]
+  ) extends Command
   final case class ValidateToken(token: SessionToken, replyTo: ActorRef[TokenResolution])
       extends Command
   final private[actors] case class GetData(replyTo: ActorRef[DataStatus]) extends Command
@@ -38,6 +61,17 @@ object Room:
   sealed trait TokenResolution
   final case class Resolved(userId: UUID, name: String) extends TokenResolution
   case object Unresolved                                extends TokenResolution
+
+  case object Applied
+  enum Refusal:
+    case NoSession, NotAMember
+  enum VoteRefusal:
+    case RoundRevealed, BlankEstimation
+  export Refusal.{NoSession, NotAMember}
+  export VoteRefusal.{BlankEstimation, RoundRevealed}
+  // Per endpoint, so the compiler refuses a result the endpoint's status table does not list.
+  type CommandResult = Applied.type | Refusal
+  type VoteResult    = CommandResult | VoteRefusal
 
   // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
   case object StreamCompleted
@@ -70,19 +104,31 @@ object Room:
       state: RoomState,
       members: Map[UUID, Member],
       sessions: Map[SessionToken, Session],
-      connections: Map[UUID, Set[UntypedRef]]
+      connections: Map[UUID, Map[ConnectionId, UntypedRef]]
   ):
-    private[Room] def connect(userId: UUID, name: String, ref: UntypedRef): RoomData =
+    private[Room] def connect(
+        userId: UUID,
+        name: String,
+        connectionId: ConnectionId,
+        ref: UntypedRef
+    ): RoomData =
+      // Replacing by id is what stops a page that reconnects being fed through two streams.
       this.copy(
         members = this.members + (userId -> Member(name)),
-        connections =
-          this.connections.updatedWith(userId)(refs => Some(refs.getOrElse(Set.empty) + ref))
+        connections = this.connections.updatedWith(userId)(refs =>
+          Some(refs.getOrElse(Map.empty) + (connectionId -> ref))
+        )
       )
 
     private[Room] def disconnect(userId: UUID, ref: UntypedRef): RoomData =
-      // The entry goes when its set empties, so "holds no connection" means what it says.
+      // By value, never by id: removing by id would evict a live replacement.
       this.copy(connections =
-        this.connections.updatedWith(userId)(_.map(_ - ref).filter(_.nonEmpty))
+        this.connections.updatedWith(userId)(_.map(_.filterNot(_._2 == ref)).filter(_.nonEmpty))
+      )
+
+    private[Room] def dropConnection(userId: UUID, connectionId: ConnectionId): RoomData =
+      this.copy(connections =
+        this.connections.updatedWith(userId)(_.map(_ - connectionId).filter(_.nonEmpty))
       )
 
     private[Room] def removeMember(userId: UUID): RoomData =
@@ -92,20 +138,30 @@ object Room:
     private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
       this.copy(sessions = this.sessions + (token -> Session(userId, name)))
 
+    private[Room] def rename(token: SessionToken, userId: UUID, name: String): RoomData =
+      // Both sides or neither: of requires a member's name to equal its session's.
+      this.copy(
+        sessions = this.sessions + (token -> Session(userId, name)),
+        members = this.members.updatedWith(userId)(_.map(_ => Member(name)))
+      )
+
     // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
-    def actingMember(token: SessionToken): Option[UUID] =
-      this.sessions.get(token).map(_.userId).filter(this.members.contains)
+    def acting(token: SessionToken): Either[Refusal, UUID] =
+      this.sessions.get(token) match
+        case None                                       => Left(NoSession)
+        case Some(session) if !isMember(session.userId) => Left(NotAMember)
+        case Some(session)                              => Right(session.userId)
 
     def isMember(userId: UUID): Boolean = this.members.contains(userId)
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
-    def vote(userId: UUID, estimation: String): RoomData = // unchanged from task 1
-      if this.state.round.revealed || estimation.isBlank then this
+    def vote(userId: UUID, estimation: String): (RoomData, Applied.type | VoteRefusal) =
+      if this.state.round.revealed then (this, RoundRevealed)
+      else if estimation.isBlank then (this, BlankEstimation)
       else
         val estimates = this.state.round.estimates + (userId -> Estimate.of(estimation))
-        withRound(Round(estimates, everyMemberHasVoted(estimates)))
-    end vote
+        (withRound(Round(estimates, everyMemberHasVoted(estimates))), Applied)
 
     def show(): RoomData   = withRound(this.state.round.copy(revealed = true))
     def clear(): RoomData  = withRound(Round.fresh)
@@ -132,7 +188,7 @@ object Room:
         state: RoomState = RoomState.empty,
         members: Map[UUID, Member] = Map.empty,
         sessions: Map[SessionToken, Session] = Map.empty,
-        connections: Map[UUID, Set[UntypedRef]] = Map.empty
+        connections: Map[UUID, Map[ConnectionId, UntypedRef]] = Map.empty
     ): RoomData =
       // Every id resolves to a session, which is conspicuously not "every id is a member":
       // a connection or an estimate outliving its member is a state this design requires.
@@ -183,6 +239,24 @@ object Room:
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
+        // The commands whose only outcome past the membership check is an update and a publish.
+        def act(token: SessionToken, replyTo: ActorRef[CommandResult])(
+            update: RoomData => RoomData
+        ): Behavior[Command] =
+          data.acting(token) match
+            case Right(_) =>
+              replyTo ! Applied
+              receiveBehaviour(
+                roomId,
+                publish(update(data), context),
+                gracePeriod,
+                stopAfterIdle,
+                timers
+              )
+            case Left(refusal) =>
+              replyTo ! refusal
+              Behaviors.same
+
         // Any message re-arms the tick a full delay out, so none lands between ValidateToken and
         // ConnectToRoom. Invariant: connections change only on this path, so the timer is exact.
         if message != IdleTick then armIdleTick(timers, stopAfterIdle)
@@ -196,14 +270,14 @@ object Room:
             else
               armIdleTick(timers, stopAfterIdle)
               Behaviors.same
-          case Join(userId, name, token, ref) =>
-            // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
+          case Join(userId, name, token, connectionId, ref) =>
+            // A same-id restart or rename between resolution and Join. Warn, not raise, which stops
             // the room; a refused joiner gets no snapshot and, deliberately, no connection.
             if data.sessions.get(token).contains(Session(userId, name)) then
               // The arriving connection cancels any pending removal, so ConfirmLeave needs no
               // staleness check of its own.
               timers.cancel(userId)
-              val newData = publish(data.connect(userId, name, ref), context)
+              val newData = publish(data.connect(userId, name, connectionId, ref), context)
               receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
             else
               val reason =
@@ -211,57 +285,37 @@ object Room:
                   "its token's session names a different identity"
                 else "its token resolves to no session"
               context.log.warn("Ignoring Join for user {} in room {}: {}.", userId, roomId, reason)
+              // The stream is ended rather than left open: a refused page has nothing coming.
+              ref ! StreamCompleted
               Behaviors.same
-          case RequestSession(name, replyTo) =>
-            val userId  = UUID.randomUUID()
-            val token   = SessionToken.mint()
-            val newData = data.registerSession(token, userId, name)
-            replyTo ! SessionMinted(userId, token)
-            receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
-          case Vote(token, estimation) =>
-            data.actingMember(token) match
-              case Some(userId) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.vote(userId, estimation), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
-          case ClearVotes(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.clear(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
-          case ReVote(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.reVote(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
-          case ShowVotes(token) =>
-            data.actingMember(token) match
-              case Some(_) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.show(), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
+          case RequestSession(name, existing, replyTo) =>
+            existing.flatMap(t => data.sessions.get(t).map(t -> _)) match
+              case Some((token, session)) =>
+                // Taking the name rather than ignoring it is the nearest this app has to a rename.
+                val newData = publish(data.rename(token, session.userId, name), context)
+                replyTo ! SessionMinted(session.userId, token)
+                receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+              case None =>
+                val userId  = UUID.randomUUID()
+                val token   = SessionToken.mint()
+                val newData = data.registerSession(token, userId, name)
+                replyTo ! SessionMinted(userId, token)
+                receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
+          case Vote(token, estimation, replyTo) =>
+            data.acting(token) match
+              case Right(userId) =>
+                val (next, outcome) = data.vote(userId, estimation)
+                replyTo ! outcome
+                receiveBehaviour(roomId, publish(next, context), gracePeriod, stopAfterIdle, timers)
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case ClearVotes(token, replyTo) =>
+            act(token, replyTo)(_.clear())
+          case ReVote(token, replyTo) =>
+            act(token, replyTo)(_.reVote())
+          case ShowVotes(token, replyTo) =>
+            act(token, replyTo)(_.show())
           case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
@@ -272,17 +326,35 @@ object Room:
           case ConfirmLeave(userId) =>
             val newData = publish(data.removeMember(userId), context)
             receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
-          case EditIssue(token, issue) =>
-            data.actingMember(token) match
-              case Some(_) =>
-                receiveBehaviour(
-                  roomId,
-                  publish(data.editIssue(issue), context),
-                  gracePeriod,
-                  stopAfterIdle,
-                  timers
-                )
-              case None => Behaviors.same
+          case Depart(token, connectionId, replyTo) =>
+            data.acting(token) match
+              case Right(userId) =>
+                replyTo ! Applied
+                // The server ends the stream it removes deliberately, the same rule a refused
+                // Join follows. A ref whose stream already ended dead-letters harmlessly.
+                data.connections
+                  .get(userId)
+                  .flatMap(_.get(connectionId))
+                  .foreach(_ ! StreamCompleted)
+                val next = data.dropConnection(userId, connectionId)
+                if next.holdsConnection(userId) then
+                  receiveBehaviour(roomId, next, gracePeriod, stopAfterIdle, timers)
+                else
+                  // Removing the member cancels the grace timer, so only one path publishes.
+                  timers.cancel(userId)
+                  receiveBehaviour(
+                    roomId,
+                    publish(next.removeMember(userId), context),
+                    gracePeriod,
+                    stopAfterIdle,
+                    timers
+                  )
+                end if
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case EditIssue(token, issue, replyTo) =>
+            act(token, replyTo)(_.editIssue(issue))
           case ValidateToken(token, replyTo) =>
             // The map is the single authority now that it is retained: a member removed at
             // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.
@@ -299,7 +371,7 @@ object Room:
       }
       .receiveSignal { case (_, PostStop) =>
         // A room that stops owes its attached streams an answer; the alternative is silence.
-        data.connections.values.flatten.foreach(_ ! StreamCompleted)
+        data.connections.values.flatMap(_.values).foreach(_ ! StreamCompleted)
         Behaviors.same
       }
 
@@ -310,7 +382,7 @@ object Room:
     // One snapshot per member, shared by that member's connections: redaction is per identity.
     data.connections.foreach { (id, refs) =>
       val snapshot = RoomSnapshot.of(data, id)
-      refs.foreach(_ ! snapshot)
+      refs.values.foreach(_ ! snapshot)
     }
     data
   end publish

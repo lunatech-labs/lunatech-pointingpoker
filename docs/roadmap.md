@@ -33,12 +33,17 @@ inside a long-lived socket payload.
       query string of every action and the SSE connect, landing repeatedly in
       server access logs, browser history, and proxy logs, instead of being minted
       once server-side per WebSocket connection as before.
-- [ ] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
+- [x] Switch command endpoints (`vote`, `show`, `clear`, `revote`, `edit-issue`)
       from fire-and-forget (`roomManager ! ...`) to the ask-pattern already used by
-      `create-room`, so `Room`/`RoomManager` can reply with a real result (applied /
-      room not found / not a member) instead of the API always answering `204`
-      regardless of what happened. Natural to build alongside the identity
-      validation above, since both need the same request/response plumbing.
+      `create-room`, so `Room`/`RoomManager` can reply with a real result
+      instead of the API always answering `204` regardless of what happened. The
+      design settles the result per endpoint, in the status table under step 6:
+      applied and the round already revealed are decided by the handler, while
+      no session and not a member are cross-cutting rules that run across every
+      endpoint. An unrecognized room id is answered as no session rather than as
+      a not-found of its own, for the reason recorded under step 6. Natural to
+      build alongside the identity validation above, since both need the same
+      request/response plumbing.
       **Becomes step 6**, alongside idempotent `/join` and the explicit leave
       endpoint.
 
@@ -216,12 +221,17 @@ directly in the new frontend.
       practice. The first question below needs to know that two members shared a
       name, not what the name was, so emit a boolean.
       Four questions, in priority order: how often a member is pruned while
-      another member shares its name, which is the ghost rate in
-      `docs/known-issues.md` that nobody can currently size; how long rooms live
-      and how long they sit idle before dying; participants per room and rounds
-      per session; and how often a round is revealed by Show rather than by the
-      vote latch. Each of those is a number some existing decision was guessed
-      at, and `config/LifecycleConfig.scala` says so about its own, calling them
+      another member shares its name, the ghost rate, a departed participant's
+      stale entry outliving them long enough to still hold a counted vote, which
+      nobody can currently size. Step 6 closed the rate's two common causes, a
+      deliberate tab close and a reload, so what is left to measure is the
+      residual `docs/known-issues.md` still tracks: a crash, a sleeping laptop,
+      or a silent network drop, none of which fires the leave beacon. The other
+      three questions: how long rooms live and how long they sit idle before
+      dying; participants per room and rounds per session; and how often a round
+      is revealed by Show rather than by the vote latch. Each of those is a
+      number some existing decision was guessed at, and
+      `config/LifecycleConfig.scala` says so about its own, calling them
       "heuristics, not measured figures".
       **This blocks nothing and must not be made to.** Emitting the lines is
       additive and depends on no other step; acting on what they say needs weeks
@@ -241,6 +251,8 @@ directly in the new frontend.
       This also unblocks the logging policy item above, whose open question is an
       activity signal that does not depend on debug-level noise. These lines are
       that signal, at INFO.
+- [ ] Fatal compiler warnings across main and test. **Becomes step 6a**, which
+      records the two pre-existing warnings it has to clear first.
 
 ## Backlog: suggested, not yet prioritized
 
