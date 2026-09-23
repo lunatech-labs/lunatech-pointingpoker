@@ -251,6 +251,8 @@ directly in the new frontend.
       This also unblocks the logging policy item above, whose open question is an
       activity signal that does not depend on debug-level noise. These lines are
       that signal, at INFO.
+- [ ] Fatal compiler warnings across main and test. **Becomes step 6a**, which
+      records the two pre-existing warnings it has to clear first.
 
 ## Backlog: suggested, not yet prioritized
 

@@ -2375,3 +2375,7 @@ Task 1's rewrite carried none of them forward. A task-scoped review checking
 Task 1's stated behavioral scope, unchanged in every status it answers, had
 no reason to diff every log line, so this was caught and restored in the
 final review's fix wave rather than at Task 1.
+
+A second review round ran after the fix wave above, over the whole branch with a
+correctness and a security pass. Its decisions, and the fixes it scheduled, are
+in `2026-09-23-protocol-architecture-6-review-fixes.md`.

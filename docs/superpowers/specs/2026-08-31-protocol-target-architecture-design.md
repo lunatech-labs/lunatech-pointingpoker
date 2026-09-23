@@ -880,7 +880,12 @@ should recognise a returning page. Reuse an id across instances and section 4's
 late-beacon guarantee fails: a reload gets the same id, the old instance's
 beacon then names an id now holding the new page's ref, and the leave endpoint
 removes by id because the id is all it has. That evicts a live ref, which is
-what the rule below forbids for terminations.
+what the rule below forbids for terminations. Within one instance the id does
+outlive a Leave: rejoining from the landing view reuses it, so a beacon
+delivered after the rejoin's `Join` would drop the new ref. That needs the
+beacon to lose to a person typing a name, a `/join` round trip and the
+`/events` handshake, and the member it removes comes back on the stream's own
+retry, so it is accepted rather than closed by minting in `doLeave`.
 
 **`connect` on an id already present replaces the ref**, and
 `ConnectionCompleted` and `ConnectionFailure` remove by matching ref value, never
@@ -2302,14 +2307,27 @@ every heartbeat's empty payload. With no snapshot, `inRoom` never leaves `false`
 so the join card stays rendered with its fields filled, as though the button had
 done nothing, and there is no banner and no retry behind it.
 
-The refusal needs the actor that answered `ValidateToken` to be a different actor
-from the one receiving `Join`. The mailbox is sequential and `ConnectToRoom` is
-only ever sent after the same actor resolved the token, so it takes a same-id
-stop and recreation inside the milliseconds between the resolution and
-`SSE.source`'s `mapMaterializedValue` send. Today the stop half of that
-coincidence is armed by every departure, since any `ConfirmLeave` emptying the
-room fires it; after step 4a it is armed only by a two-hourly tick. The
-recreation half is unchanged, so the whole becomes strictly less reachable.
+Before step 6's idempotent `/join`, the refusal needed the actor that answered
+`ValidateToken` to be a different actor from the one receiving `Join`. The
+mailbox is sequential and `ConnectToRoom` is only ever sent after the same
+actor resolved the token, so it takes a same-id stop and recreation inside the
+milliseconds between the resolution and `SSE.source`'s `mapMaterializedValue`
+send. Today the stop half of that coincidence is armed by every departure,
+since any `ConfirmLeave` emptying the room fires it; after step 4a it is armed
+only by a two-hourly tick. The recreation half is unchanged, so the whole
+becomes strictly less reachable.
+
+**Idempotent `/join` added a second way in, inside one actor.** `RequestSession`
+on a known token renames the session, so a `/join` carrying a new name that lands
+between a reconnect's `ValidateToken` and its `Join` leaves that `Join` naming
+the old one. It takes two tabs, one of which has cleared its stored name through
+Leave and rejoins under a different one, racing the other tab's reconnect by
+milliseconds. The ended stream heals it: the retry resolves the new name and
+joins. One side effect is accepted rather than guarded. The refused stream's
+completion arrives as a `Leave` for a ref never added, and for a member already
+in grace that re-arms `ConfirmLeave`, delaying the removal by up to one grace
+period. The joining tab's own `Join` then cancels the timer, in every ordering
+except the one where that tab never connects.
 
 **A refused `Join` therefore adds nothing to `connections`, and that is a rule
 rather than an omission.** The split makes the wrong fix look free: `publish`
@@ -2888,6 +2906,18 @@ session has ended" over a session seconds old, and the reload it advises
 revalidates and recovers. Declaring the parameter optional would spare that
 window and cost the contract permanently, leaving a page that forgets the id
 with a connection the leave endpoint cannot name instead of a loud refusal.
+
+**Step 6a. Warnings become errors.** `-Werror` across main and test, which step 6
+declined in favour of making only the exhaustivity warning fatal. Measured on
+step 6's tree, it trips on two warnings and nothing else: `Main extends App`,
+deprecated since Scala 3.8.0, and 28 test sites passing an implicit
+positionally, `TestProbe()(testKit.system.classicSystem)` and its kin in
+`RoomSpec` and `RoomManagerSpec`, which want `(using ...)`. The second is
+mechanical under `-rewrite -source 3.7-migration`. The first changes the entry
+point, so the step checks that the staged start script and the Docker image
+still launch it. `-Werror` subsumes step 6's targeted `-Wconf`, which the step
+removes. Waits on step 6 only, and is a branch of its own so the entry-point
+change is not reviewed inside a protocol diff.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
