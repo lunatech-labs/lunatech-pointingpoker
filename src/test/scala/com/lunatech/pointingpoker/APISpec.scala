@@ -10,7 +10,7 @@ import ch.qos.logback.classic.Logger as LogbackLogger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import com.lunatech.pointingpoker.config.{ApiConfig, LifecycleConfig, ProbeConfig}
-import com.lunatech.pointingpoker.slug.LegacySlug
+import com.lunatech.pointingpoker.slug.{LegacySlug, Slug}
 import com.lunatech.pointingpoker.slug.SlugFixtures.aSlug
 import com.typesafe.config.ConfigFactory
 import org.apache.pekko.http.scaladsl.server.*
@@ -40,7 +40,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val apiConfig: ApiConfig             = ApiConfig.load(ConfigFactory.load())
   val lifecycleConfig: LifecycleConfig = LifecycleConfig.load(ConfigFactory.load())
   val probeConfig: ProbeConfig         = ProbeConfig.load(ConfigFactory.load())
-  val roomId: String                   = UUID.randomUUID().toString
+  val roomId: Slug                     = aSlug()
 
   val testKit: ActorTestKit = ActorTestKit()
 
@@ -56,11 +56,13 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
   val voteReply: java.util.concurrent.atomic.AtomicReference[Room.VoteResult] =
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
+  val createReply: java.util.concurrent.atomic.AtomicReference[RoomManager.Response] =
+    new java.util.concurrent.atomic.AtomicReference(RoomManager.RoomId(roomId))
 
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
-        replyTo ! RoomManager.RoomId(roomId)
+        replyTo ! createReply.get()
         Behaviors.same
       case RoomManager.RequestSession(_, _, existing, replyTo) =>
         replyTo ! Room.SessionMinted(UUID.randomUUID(), existing.getOrElse(validToken))
@@ -187,8 +189,13 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       // create-room plain now is stringBody on the endpoint, not the absence of an import.
       Post("/create-room") ~> apiRoute ~> check {
         contentType mustBe ContentTypes.`text/plain(UTF-8)`
-        responseAs[String] mustBe roomId
+        responseAs[String] mustBe roomId.raw
       }
+    "answer 503 when the manager finds no free room name" in {
+      createReply.set(RoomManager.NoFreeRoomName)
+      try Post("/create-room") ~> apiRoute ~> check(status mustBe StatusCodes.ServiceUnavailable)
+      finally createReply.set(RoomManager.RoomId(roomId))
+    }
     "join a room and set a session cookie" in
       Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
@@ -243,7 +250,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
       commandProbe.expectMessageType[RoomManager.Vote] match
         case RoomManager.Vote(id, tok, estimation, _) =>
-          (id, tok, estimation) mustBe (UUID.fromString(roomId), Some(token), "5")
+          (id, tok, estimation) mustBe (roomId, Some(token), "5")
     }
 
     "dispatch a show command" in {
@@ -252,7 +259,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         status.isSuccess() mustBe true
       }
       commandProbe.expectMessageType[RoomManager.Show] match
-        case RoomManager.Show(id, tok, _) => (id, tok) mustBe (UUID.fromString(roomId), Some(token))
+        case RoomManager.Show(id, tok, _) => (id, tok) mustBe (roomId, Some(token))
     }
 
     "dispatch a clear command" in {
@@ -262,7 +269,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
       commandProbe.expectMessageType[RoomManager.Clear] match
         case RoomManager.Clear(id, tok, _) =>
-          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
+          (id, tok) mustBe (roomId, Some(token))
     }
 
     "dispatch a revote command" in {
@@ -274,7 +281,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
       commandProbe.expectMessageType[RoomManager.Revote] match
         case RoomManager.Revote(id, tok, _) =>
-          (id, tok) mustBe (UUID.fromString(roomId), Some(token))
+          (id, tok) mustBe (roomId, Some(token))
     }
 
     "dispatch an edit-issue command" in {
@@ -287,7 +294,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
       commandProbe.expectMessageType[RoomManager.EditIssue] match
         case RoomManager.EditIssue(id, tok, issue, _) =>
-          (id, tok, issue) mustBe (UUID.fromString(roomId), Some(token), "new issue")
+          (id, tok, issue) mustBe (roomId, Some(token), "new issue")
     }
 
     "reject an events connection with no session cookie" in
@@ -410,5 +417,26 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       finally commandReply.set(Room.Applied)
       commandProbe.expectMessageType[RoomManager.Depart]
     }
+
+    "answer 404 for a command on a name outside the vocabulary, without asking the manager" in {
+      Post("/rooms/brave-golden-oter/show") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+      }
+      commandProbe.expectNoMessage(200.millis)
+    }
+    // The page route lowercases a mixed-case name; the API has no reason to see one.
+    "answer 404 for a join on a name in mixed case" in
+      Post("/rooms/Brave-Golden-Otter/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+      }
+    // Only the page route knows UUIDs.
+    "answer 404 for an events stream on a legacy UUID" in
+      Get(s"/rooms/${UUID.randomUUID()}/events?connectionId=$connectionId") ~> addHeader(
+        Cookie("session", validToken.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+      }
   }
 end APISpec

@@ -7,6 +7,7 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, PostStop}
 import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors, TimerScheduler}
 import org.apache.pekko.actor.ActorRef as UntypedRef
+import com.lunatech.pointingpoker.slug.Slug
 
 object Room:
 
@@ -218,7 +219,7 @@ object Room:
     timers.startSingleTimer(IdleTickKey, IdleTick, stopAfterIdle)
 
   def apply(
-      roomId: UUID,
+      roomId: Slug,
       initialData: RoomData = RoomData.empty,
       gracePeriod: FiniteDuration,
       stopAfterIdle: FiniteDuration
@@ -231,7 +232,7 @@ object Room:
     }
 
   private[actors] def receiveBehaviour(
-      roomId: UUID,
+      roomId: Slug,
       data: RoomData,
       gracePeriod: FiniteDuration,
       stopAfterIdle: FiniteDuration,

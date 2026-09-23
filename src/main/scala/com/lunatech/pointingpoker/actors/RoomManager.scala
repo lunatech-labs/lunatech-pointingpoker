@@ -8,16 +8,17 @@ import org.apache.pekko.actor.typed.scaladsl.{ActorContext, Behaviors}
 import org.apache.pekko.actor.typed.{ActorRef, Behavior, Terminated}
 import org.apache.pekko.actor.ActorRef as UntypedRef
 import com.lunatech.pointingpoker.actors
+import com.lunatech.pointingpoker.slug.Slug
 
 object RoomManager:
 
   sealed trait Command
   case class CreateRoom(replyTo: ActorRef[Response])                          extends Command
-  case class ConnectionCompleted(roomId: UUID, userId: UUID, ref: UntypedRef) extends Command
-  case class ConnectionFailure(roomId: UUID, userId: UUID, ref: UntypedRef, t: Throwable)
+  case class ConnectionCompleted(roomId: Slug, userId: UUID, ref: UntypedRef) extends Command
+  case class ConnectionFailure(roomId: Slug, userId: UUID, ref: UntypedRef, t: Throwable)
       extends Command
   case class ConnectToRoom(
-      roomId: UUID,
+      roomId: Slug,
       userId: UUID,
       name: String,
       token: Room.SessionToken,
@@ -25,58 +26,59 @@ object RoomManager:
       ref: UntypedRef
   ) extends Command
   case class Vote(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       estimation: String,
       replyTo: ActorRef[Room.VoteResult]
   ) extends Command
   case class Depart(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       connectionId: Room.ConnectionId,
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
   case class Show(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
   case class Clear(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
   case class Revote(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
   case class EditIssue(
-      roomId: UUID,
+      roomId: Slug,
       token: Option[Room.SessionToken],
       issue: String,
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
   case class RequestSession(
-      roomId: UUID,
+      roomId: Slug,
       name: String,
       existing: Option[Room.SessionToken],
       replyTo: ActorRef[Room.SessionMinted]
   ) extends Command
   case class ValidateToken(
-      roomId: UUID,
+      roomId: Slug,
       token: Room.SessionToken,
       replyTo: ActorRef[Room.TokenResolution]
   ) extends Command
 
   sealed trait Response
-  case class RoomId(value: String) extends Response
+  case class RoomId(value: Slug) extends Response
+  case object NoFreeRoomName     extends Response
 
-  final case class RoomManagerData(rooms: Map[UUID, ActorRef[Room.Command]]):
-    def addRoom(roomId: UUID, roomActor: ActorRef[Room.Command]): RoomManagerData =
+  final case class RoomManagerData(rooms: Map[Slug, ActorRef[Room.Command]]):
+    def addRoom(roomId: Slug, roomActor: ActorRef[Room.Command]): RoomManagerData =
       this.copy(rooms = this.rooms + (roomId -> roomActor))
   object RoomManagerData:
-    val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[UUID, ActorRef[Room.Command]])
+    val empty: RoomManagerData = RoomManagerData(rooms = Map.empty[Slug, ActorRef[Room.Command]])
 
   def apply(
       gracePeriod: FiniteDuration,
@@ -89,12 +91,13 @@ object RoomManager:
   private[actors] def receiveBehaviour(
       data: RoomManagerData,
       gracePeriod: FiniteDuration,
-      stopAfterIdle: FiniteDuration
+      stopAfterIdle: FiniteDuration,
+      random: java.util.Random = Slug.secureRandom
   ): Behavior[Command] =
     Behaviors
       .receive[Command] { (context, message) =>
         // A stopped room is answered from the map's absence rather than by a timing-out ask.
-        def relay(roomId: UUID, token: Option[Room.SessionToken], replyTo: ActorRef[Room.Refusal])(
+        def relay(roomId: Slug, token: Option[Room.SessionToken], replyTo: ActorRef[Room.Refusal])(
             command: Room.SessionToken => Room.Command
         ): Behavior[Command] =
           (data.rooms.get(roomId), token) match
@@ -104,13 +107,19 @@ object RoomManager:
 
         message match
           case CreateRoom(replyTo) =>
-            val roomId    = UUID.randomUUID()
-            val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
-            val newData   = data.addRoom(roomId, roomActor)
+            Slug.generate(data.rooms.contains, random) match
+              case Some(roomId) =>
+                val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
+                val newData   = data.addRoom(roomId, roomActor)
 
-            context.watch(roomActor)
-            replyTo ! RoomId(roomId.toString)
-            receiveBehaviour(newData, gracePeriod, stopAfterIdle)
+                context.watch(roomActor)
+                replyTo ! RoomId(roomId)
+                receiveBehaviour(newData, gracePeriod, stopAfterIdle, random)
+              case None =>
+                // The spec asks for this to be loud: it means scale or an abused create-room.
+                context.log.error("No free room name found with {} rooms live", data.rooms.size)
+                replyTo ! NoFreeRoomName
+                Behaviors.same
           case ConnectToRoom(roomId, userId, name, token, connectionId, ref) =>
             data.rooms
               .get(roomId)
@@ -124,7 +133,7 @@ object RoomManager:
                 context.watch(roomActor)
                 val newData = data.addRoom(roomId, roomActor)
                 roomActor ! Room.RequestSession(name, existing, replyTo)
-                receiveBehaviour(newData, gracePeriod, stopAfterIdle)
+                receiveBehaviour(newData, gracePeriod, stopAfterIdle, random)
               } { room =>
                 room ! Room.RequestSession(name, existing, replyTo)
                 Behaviors.same
@@ -157,17 +166,17 @@ object RoomManager:
       }
       .receiveSignal { case (_, Terminated(ref)) =>
         val leftoverRooms = data.rooms.filterNot { case (_, roomRef) => roomRef == ref }
-        receiveBehaviour(RoomManagerData(leftoverRooms), gracePeriod, stopAfterIdle)
+        receiveBehaviour(RoomManagerData(leftoverRooms), gracePeriod, stopAfterIdle, random)
       }
 
   private[actors] def createRoom(
-      roomId: UUID,
+      roomId: Slug,
       context: ActorContext[Command],
       gracePeriod: FiniteDuration,
       stopAfterIdle: FiniteDuration
   ): ActorRef[Room.Command] =
     context.spawn(
       actors.Room(roomId, gracePeriod = gracePeriod, stopAfterIdle = stopAfterIdle),
-      name = roomId.toString
+      name = roomId.raw
     )
 end RoomManager

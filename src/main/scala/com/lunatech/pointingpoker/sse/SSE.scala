@@ -12,6 +12,7 @@ import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.stream.{CompletionStrategy, OverflowStrategy}
 import sttp.model.sse.ServerSentEvent
 import com.lunatech.pointingpoker.actors.{Room, RoomManager, RoomSnapshot}
+import com.lunatech.pointingpoker.slug.Slug
 
 object SSE:
 
@@ -34,7 +35,7 @@ object SSE:
 
   def source(
       roomManager: ActorRef,
-      roomId: UUID,
+      roomId: Slug,
       userId: UUID,
       name: String,
       token: Room.SessionToken,
