@@ -54,8 +54,13 @@ for years and want blank state at the start of each meeting, so what was wanted
 here was slug stability rather than durable state.
 
 - [ ] Slug-based room ids replacing raw UUIDs, auto-generated three-word names
-      (for example `nice-brave-otter`), unique among the rooms currently in
-      memory. **Becomes step 7.**
+      (for example `brave-golden-otter`), unique among the rooms currently in
+      memory. **Becomes step 7.** The design's "Slug allocation" section settles
+      the vocabulary, the refusal of names outside it, and the redirect that
+      keeps today's pinned UUID links working.
+- [ ] Remove the legacy UUID redirect step 7 adds, with its derivation and
+      banner. Trigger: six months with no redirect logged, long enough to cover
+      an invitation opened once a quarter.
 
 Dropped from this phase, recorded so the reasoning is not re-derived:
 
@@ -300,3 +305,6 @@ sessions):
 - Jira/ticketing integration (auto-pull ticket titles from links).
 - Multi-item backlog queue (pre-loaded list of tickets to estimate in order).
 - Participant avatars/colors, vote-confidence flags.
+- Suggesting the nearest *live* room for a mistyped slug. It tells a visitor
+  which rooms exist; step 7's rejection page suggests from the vocabulary alone
+  instead.

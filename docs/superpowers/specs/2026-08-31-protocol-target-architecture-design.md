@@ -1052,7 +1052,8 @@ either way. What the table would have held is a slug, two timestamps and
 What is genuinely given up: cross-session round history, which nobody has asked
 for, and the truthful 404, which retains a small residual value in telling
 someone they mistyped a slug instead of leaving them alone in a phantom room.
-Neither is worth a database. The trigger that would reopen this is in "Deferred,
+Neither is worth a database, and step 7 recovers most of the second without
+one, by refusing a name outside the vocabulary; "Slug allocation" says how. The trigger that would reopen this is in "Deferred,
 with triggers".
 
 #### Two lifetimes, not one
@@ -1189,32 +1190,148 @@ to step 8's connection module.
 
 #### Slug allocation
 
-Generated slugs are three words, for example `nice-brave-otter`, allocated
-**unique among rooms currently in memory** by retrying generation on collision.
-There is no record of rooms that have stopped, so uniqueness is scoped to what is
-running rather than to all rooms ever, which keeps the namespace bounded by
-concurrent usage rather than by total history.
+Generated slugs are three words drawn from three separate pools, a character
+trait, an appearance word and an animal, in that order: `brave-golden-otter`.
+They are allocated **unique among rooms currently in memory** by drawing one word
+from each pool at random and retrying on collision. There is no record of rooms
+that have stopped, so uniqueness is scoped to what is running rather than to all
+rooms ever, which keeps the namespace bounded by concurrent usage rather than by
+total history.
 
 The requirement driving this is not aesthetics. The slug exists so a person
 working with two teams on the same project can tell at a glance which room to
 join, which means live rooms must be mutually *memorable*, not merely distinct.
-That rules out a numeric discriminator: `nice-otter-42` against `nice-otter-17`
+That rules out a numeric discriminator: `brave-otter-42` against `brave-otter-17`
 recreates most of the problem that replacing UUIDs was meant to solve, because
 the memorable part is identical and the distinguishing part is not memorable.
-Three words over a few hundred each gives tens of millions of combinations,
-which is where the namespace size comes from instead.
+
+**The vocabulary is warm but tame, and animals only.** A product owner in
+contact with the customer chose it over neutral landscape words and over
+playful ones. A trait beside an animal reads as a small character, which is the
+easiest kind of name to remember, and nothing in it is awkward on a screen shared
+with a client or pinned in a wiki for years. One theme rather than several, since
+nobody picks a slug and a team choosing its own theme is most of custom names.
+
+**Three pools in natural English order, so a swapped pair is not a name.** With
+one adjective pool, `calm-brave-otter` and `brave-calm-otter` would be two
+rooms, and someone typing from memory recalls the words rather than their order.
+Character before appearance is the order English puts them in anyway.
+
+**The pools are safe by construction rather than filtered by combination:**
+
+- Character words are positive traits, with no double meanings.
+- Appearance words are colours, patterns and sizes, with no body words.
+- Animals exclude any used as an insult, any with a sexual slang meaning, and
+  every primate, since a colour beside a primate can read as a slur.
+
+Every word is common English at about CEFR A2 to B1, 3 to 8 letters, lowercase
+ASCII and singular, with one spelling across British and American English, no
+homophone and no silent letter. Slugs are read aloud in meetings and typed from
+memory, often by people for whom English is a second language. Before step 7
+merges, a native French speaker and a native Dutch speaker review the lists for
+false friends and for words they would misspell, which is the one check no rule
+can make. A bad slug found later is fixed by removing a word and deploying. A
+runtime blocklist of combinations was considered and not taken, since what
+belongs on it is unknowable until a bad slug has already appeared.
+
+**Tests enforce what is mechanical:** lowercase ASCII, no word in two pools, no
+two words in one pool within one edit of each other, and the namespace floor
+below. The near-twin rule is load-bearing rather than cosmetic: the refusal
+below only catches a typo that lands outside the vocabulary, and `vole` for
+`mole` would not.
+
+**The namespace has a floor of 200,000, stated as a floor rather than an
+estimate.** The test computes the product of the pool sizes, so the figure
+cannot go stale in prose. Realistic pools under the rules above give about
+200,000 to 750,000.
 
 **A pinned slug is not reserved while its room is stopped, and that is the one
 hazard worth naming.** A team's room stops two hours after their meeting,
 so for most of the fortnight their slug is free and `create-room` could draw it
-for someone else. Their pinned link would then open a room another team is in.
-The chance is negligible, one specific triple out of tens of millions against a
-few hundred rooms generated a year, and landing in the wrong room announces
-itself immediately through an unfamiliar participant list. It is nonetheless a
-hazard that raw UUIDs did not have, and it is the price of memorable names.
+for someone else. The product owner's usage figures size it: about 20 teams
+pinning up to 5 rooms a year gives about 100 pinned slugs, and another 100
+one-time rooms make about 200 draws a year. At the floor that is
+200 × 100 ÷ 200,000, one expected collision a decade, rising to about one every
+two years if 500 stale pins accumulate.
+
+A collision is also usually invisible. Rooms are blank each meeting and a live
+slug is never issued, so two groups on one slug meet only if they are in it at
+the same time. A one-time room clashes only if the pinned team starts during that
+one meeting; the recurring case needs two pinned teams sharing a slug and a
+meeting slot. When it does happen it announces itself through an unfamiliar
+participant list. It is nonetheless a hazard that raw UUIDs did not have, and it
+is the price of memorable names.
 
 Reserving slugs against it would need exactly the durable record this design
 declines to keep, which is the trade rather than an oversight.
+
+**A name outside the vocabulary is refused rather than created.** Auto-create
+stays for a valid slug that is not live, which is the pinned link working. A
+string that is not three pool words in order cannot be a room anybody was given,
+so nothing is lost by refusing it, and refusing recovers what "No durable
+storage" gives up: telling someone they mistyped a slug, instead of leaving them
+alone in a phantom room while their meeting carries on in the real one. The
+refusal reads only the syntax and a static vocabulary, never which rooms are
+live, so it tells a prober nothing about rooms. It does make the vocabulary
+discoverable, which the source already does, and that still leaves the namespace
+above to guess. It is today's boundary carried over: `path(JavaUUID)` and the UUID
+codec in `API.scala` already refuse a malformed id and create only a well-formed
+one.
+
+- One parser serves the page route and the tapir path codec, replacing
+  `JavaUUID` and the UUID codec, so an invalid slug never reaches `RoomManager`.
+- A slug in mixed case redirects to its lowercase form rather than being
+  refused, since the case is deliberate rather than the typo.
+- The page route answers an invalid slug with `404` and a small server-rendered
+  page naming it as not a room name, with a link to create a room. The echoed
+  text is HTML-escaped.
+- The API endpoints answer an invalid slug with tapir's own `404`. The page never
+  produces one in normal use, so it needs no message.
+
+**The rejection page suggests a correction only when it cannot be ambiguous.** It
+offers "did you mean `brave-golden-otter`?" as a link when every word has exactly
+one pool word within one edit, or when two words exist but in each other's
+pools, and otherwise shows the plain message. It reads only the vocabulary.
+Correcting automatically was refused: a guaranteed-unique correction needs pool
+words three edits apart, which would empty the short-word pools the rules above
+ask for, and below that a silent redirect can land someone in the wrong room
+unnoticed. Suggesting the nearest *live* room was refused too, since it tells a
+visitor which rooms exist.
+
+**Existing UUID links redirect to a derived slug.** Somewhere between 10 and 20
+teams hold a UUID link in a meeting invitation today. The first deploy with slugs
+is when those links would break, possibly at a PI planning in front of
+management, and a tool that fails to open from the invitation gets replaced
+rather than re-linked. So step 7 ships the redirect in the same PR:
+
+- `GET /<uuid>` answers `302` to `/<derived-slug>?moved=1`, ahead of the slug
+  matcher. `302` rather than `301` because a browser caches a `301` forever, and
+  the server must keep deciding where an old link goes. Only the page route knows
+  UUIDs; the API, the cookie path and `RoomManager` see slugs only.
+- The derivation is a pure function of the UUID and the current pools: a stable
+  hash of the UUID's bits, modulo each pool's size. **The same UUID gives the same
+  slug for a given vocabulary, not forever.** All that matters is that everyone
+  clicking one old link lands together, and a stronger guarantee would freeze pool
+  order and forbid the word removal above. A vocabulary change can split a team
+  whose members updated their links at different times. That is a stale bookmark
+  noticed in a live meeting, and it converges, since only UUID holders ever move.
+- Tests: the same UUID maps the same within a run, every derived slug passes the
+  parser, and the hash depends on nothing that varies between processes.
+- The page reads `moved=1`, shows a dismissible banner saying the old link now
+  opens this address and asking for the invitation to be updated, and removes the
+  parameter with `history.replaceState` so a copied link is clean. The banner
+  claims the address for this link only, since after a vocabulary change the
+  invitation may already hold another valid slug. It must not hide or displace
+  the deck. Without it nobody updates a link that still works, and the removal
+  signal below never fires.
+- Each redirect logs one INFO line carrying the derived slug and no participant
+  name.
+- **Removal:** after six months with no redirect logged, the route, the
+  derivation and the banner go. Six months because an invitation for a PI
+  planning may be opened once a quarter. `docs/roadmap.md` carries the item with
+  that trigger.
+- A derived slug can coincide with a live generated room, which is the pinned-slug
+  hazard above and is counted in its 100 pins.
 
 **Custom chosen names stay deferred.** The moment a user can claim `team-alpha`,
 "is this name taken forever" becomes unavoidable, and answering it requires
@@ -1963,6 +2080,14 @@ Added, each with the step it lands at so nothing here is unassigned:
   inline in `index.html` with nothing importing it and `npm test` covers the
   testkit alone, so any client rule that a browser cannot reach has nowhere to be
   tested at all.
+
+  Step 7 adds unit tests for the pool rules and the namespace floor, the parser,
+  the suggestion (a unique match within one edit, and a swapped pair) and the
+  UUID derivation. It adds route tests for the rejection page with its escaping,
+  the lowercase redirect, the UUID `302` and the order in `PageRoutes`. In the
+  browser it adds two cases: the banner shown, dismissed and its parameter
+  removed with the deck still usable, and the rejection page's suggestion link
+  reaching the room.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -2863,7 +2988,9 @@ difference is cost to the prober. A status probe is
 silent, free and repeatable; joining puts a name in `users` for everyone,
 moves the member count, and stalls auto-reveal until the intruder votes, since
 the round reveals when every member has. The page route discloses nothing either
-way, reading no cookie and serving the page for any id. So `/join` is the only
+way, reading no cookie and serving the page for any id. From step 7 an invalid
+slug draws `404` before any room is consulted, which reads syntax alone and so
+is no oracle either. So `/join` is the only
 disclosure in the set, the `401` removes the only silent one, and what the
 rate-limiting entry protects at step 7 is a path that announces itself.
 
@@ -2925,9 +3052,12 @@ the `-Wconf:name=PatternMatchExhaustivity:e` line step 6's note describes;
 `-Werror` now makes an incomplete match fatal along with everything else.
 
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
-`create-room` and unique among the rooms currently in memory. Waits on steps 4
-and 6. About 60 and 50. This is what remains of Phase 2 once voting scale moves
-to the backlog and durable storage is dropped.
+`create-room` and unique among the rooms currently in memory, with the
+vocabulary, the refusal of invalid names and the UUID redirect that "Slug
+allocation" settles. Waits on steps 4 and 6. About 250 lines, roughly a third of
+them word lists, and 200 of tests; the first estimate, 60 and 50, predates the
+refusal and the redirect. This is what remains of Phase 2 once voting scale
+moves to the backlog and durable storage is dropped.
 
 **It waits on step 6 for the same reason tapir lands there.** Slugs change every
 route matcher from `path("rooms" / JavaUUID / ...)` to a segment, so landing this
@@ -2943,7 +3073,8 @@ being self-limiting.** `path(JavaUUID)`, in `PageRoutes.scala` since step 6 lift
 the static routes there, matches only a UUID, so it can sit anywhere in the
 `concat`; `path(Segment)` matches every single-segment
 path there will ever be, so from this step on it must come last, after
-`create-room` and after whatever static route step 8's bundled assets need. Today
+`create-room`, after the UUID redirect and after whatever static route step 8's
+bundled assets need. Today
 there is nothing to shadow, since every asset comes from a CDN, which is exactly
 why the trap is invisible until step 8 adds the first local one.
 
@@ -3055,7 +3186,7 @@ than execution.
 
 | Entry | Closed by |
 | --- | --- |
-| Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it costs is telling someone they mistyped a slug. |
+| Unrecognized `roomId` silently creates an empty room | Stays open, reclassified. See "No durable storage": auto-create is what the pinned-URL usage actually wants, so this is the primary use case working rather than a defect. What it cost was telling someone they mistyped a slug, which step 7 recovers by refusing a name outside the vocabulary, narrowing the entry to a valid slug that is not live. |
 | No GC for abandoned or never-joined rooms | Step 4a, against accidental abandonment. A client looping requests at a stopped-but-idle room defers its stop indefinitely; bounding that belongs to the rate-limiting entry, which stays open. |
 | A `/join` with no follow-up `/events` leaks a pending session | Step 4a, which bounds a room's lifetime. Step 5's retained sessions remove the pending/promoted distinction the entry is phrased around, and deliberately add no TTL. |
 | SSE reverse-proxy buffering is undocumented | Step 1 |

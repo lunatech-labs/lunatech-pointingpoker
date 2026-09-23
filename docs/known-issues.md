@@ -32,7 +32,10 @@ roadmap item instead of leaving it here as stale history.
   ever reported it. A truthful 404 would need a durable record of rooms that
   existed, which that design declines to keep, and its residual value is telling
   someone they mistyped a slug rather than leaving them alone in a phantom
-  room.
+  room. Step 7 recovers most of that residual without the record: a name
+  outside the slug vocabulary is refused with a `404` and, where unambiguous, a
+  suggested correction, so the entry narrows to a valid slug that is not live.
+  The design's "Slug allocation" section owns the rules.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
