@@ -53,7 +53,7 @@ Reduced to one item. The target design establishes that teams pin one room URL
 for years and want blank state at the start of each meeting, so what was wanted
 here was slug stability rather than durable state.
 
-- [ ] Slug-based room ids replacing raw UUIDs, auto-generated three-word names
+- [x] Slug-based room ids replacing raw UUIDs, auto-generated three-word names
       (for example `brave-golden-otter`), unique among the rooms currently in
       memory. **Becomes step 7.** The design's "Slug allocation" section settles
       the vocabulary, the refusal of names outside it, and the redirect that

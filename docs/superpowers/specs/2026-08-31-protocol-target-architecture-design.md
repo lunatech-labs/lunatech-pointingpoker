@@ -539,8 +539,8 @@ carry forward. It splits three ways, and the block below shows the whole of
 `RoomData` around that split:
 
 ```
-RoomState   slug, currentIssue, round: Round, history: List[RoundRecord]
-            // slug arrives at step 7, not with the split: step 4 says why
+RoomState   currentIssue, round: Round, history: List[RoundRecord]
+            // slug stays Room's parameter rather than a field: steps 4 and 7 say why
             // history, and RoundRecord with it, arrives at step 9
 Round       estimates: Map[UUID, Estimate], revealed
 Estimate    value: String, confirmed: Boolean
@@ -1196,7 +1196,12 @@ They are allocated **unique among rooms currently in memory** by drawing one wor
 from each pool at random and retrying on collision. There is no record of rooms
 that have stopped, so uniqueness is scoped to what is running rather than to all
 rooms ever, which keeps the namespace bounded by concurrent usage rather than by
-total history.
+total history. Retrying stops after 100 draws that all hit a live room.
+`RoomManager` then logs one ERROR line with the live room count, `create-room`
+answers `503` and the page says the room could not be created. An unused room
+lives two hours, so an unthrottled `create-room` script can fill the namespace,
+and an endless retry inside the manager, which handles one message at a time,
+would freeze every room until a restart.
 
 The requirement driving this is not aesthetics. The slug exists so a person
 working with two teams on the same project can tell at a glance which room to
@@ -1236,7 +1241,10 @@ belongs on it is unknowable until a bad slug has already appeared.
 
 **Tests enforce what is mechanical:** lowercase ASCII, no word in two pools, no
 two words in one pool within one edit of each other, and the namespace floor
-below. The near-twin rule is load-bearing rather than cosmetic: the refusal
+below. One edit is an insertion, a deletion, a substitution or a swap of two
+adjacent letters, the measure the suggestion below uses too, so a swap typo
+gets a suggestion and the uniqueness the suggestion relies on still holds. The
+near-twin rule is load-bearing rather than cosmetic: the refusal
 below only catches a typo that lands outside the vocabulary, and `vole` for
 `mole` would not.
 
@@ -1285,8 +1293,13 @@ one.
 - The page route answers an invalid slug with `404` and a small server-rendered
   page naming it as not a room name, with a link to create a room. The echoed
   text is HTML-escaped.
-- The API endpoints answer an invalid slug with tapir's own `404`. The page never
-  produces one in normal use, so it needs no message.
+- The API endpoints answer an invalid slug with `404`. tapir answers `400` for
+  a path segment whose codec reports a decode error but tries the next
+  endpoint on a mismatch, so the slug codec reports a mismatch and, with no
+  endpoint left, Pekko answers `404`. The page reaches one only through a name
+  typed into the Join form or a room remembered in `localStorage` from before
+  the cutover, and answers it by navigating to that name, where the page
+  route's refusal, lowercase redirect or UUID redirect applies.
 
 **The rejection page suggests a correction only when it cannot be ambiguous.** It
 offers "did you mean `brave-golden-otter`?" as a link when every word has exactly
@@ -1321,9 +1334,9 @@ rather than re-linked. So step 7 ships the redirect in the same PR:
   opens this address and asking for the invitation to be updated, and removes the
   parameter with `history.replaceState` so a copied link is clean. The banner
   claims the address for this link only, since after a vocabulary change the
-  invitation may already hold another valid slug. It must not hide or displace
-  the deck. Without it nobody updates a link that still works, and the removal
-  signal below never fires.
+  invitation may already hold another valid slug. It must never cover the
+  deck, and only the reader's own dismissal may move it. Without it nobody
+  updates a link that still works, and the removal signal below never fires.
 - Each redirect logs one INFO line carrying the derived slug and no participant
   name.
 - **Removal:** after six months with no redirect logged, the route, the
@@ -2082,12 +2095,17 @@ Added, each with the step it lands at so nothing here is unassigned:
   tested at all.
 
   Step 7 adds unit tests for the pool rules and the namespace floor, the parser,
-  the suggestion (a unique match within one edit, and a swapped pair) and the
-  UUID derivation. It adds route tests for the rejection page with its escaping,
-  the lowercase redirect, the UUID `302` and the order in `PageRoutes`. In the
-  browser it adds two cases: the banner shown, dismissed and its parameter
-  removed with the deck still usable, and the rejection page's suggestion link
-  reaching the room.
+  the suggestion (a unique match within one edit, and a swapped pair), the UUID
+  derivation and the generator's limit of 100 draws. The manager refuses a room
+  once every draw hits a live one, logs at ERROR and keeps serving. It adds
+  route tests for the rejection page with its escaping, the lowercase redirect,
+  the UUID `302`, the order in `PageRoutes`, the API's `404` for a name outside
+  the vocabulary and `create-room`'s `503`. In the browser it adds five cases: a
+  refused creation reported on the page; the banner shown at phone width over
+  no card, dismissed and its parameter removed with the deck still usable; the
+  rejection page's suggestion link reaching the room; a mistyped name in the
+  Join form reaching the rejection page; and a UUID remembered in
+  `localStorage` reopening under its derived slug.
 - **A contract test** (step 8, when the client first has generated types to
   check) taking a real server-produced snapshot and validating it against the
   client's types. **This is the drift gate for `RoomSnapshot`, not a cheap stand-in
@@ -3078,6 +3096,26 @@ bundled assets need. Today
 there is nothing to shadow, since every asset comes from a CDN, which is exactly
 why the trap is invisible until step 8 adds the first local one.
 
+Landed. The `slug` package holds the three pools, the opaque `Slug` whose only
+public constructors are `Slug.parse`, `Slug.generate` and `LegacySlug.derive`,
+the suggestion and `LegacySlug`. Deleting `LegacySlug`, the `path(JavaUUID)`
+block in `PageRoutes` and the page's `moved` banner is the whole removal the
+roadmap schedules. `PageRoutes` now comes last in `API.route`, after the tapir
+endpoints. The slug codec answers a name outside the vocabulary with a decode
+mismatch rather than an error, since tapir answers an error with `400` and a
+mismatch by trying the next endpoint, which is how the API reaches its `404`.
+**`RoomState` still carries no `slug`**, which supersedes step 4's "Step 7 adds
+the field": step 4's reason held, since `roomId` stays a parameter of
+`Room.receiveBehaviour` and a copy would have no reader. `create-room` answers
+`503` rather than retrying forever once 100 draws all hit a live room, and
+logs at ERROR, which closes open question 4. The page sends a `404` from
+`/join` back to `/<name>`, since the Join form and a remembered pre-cutover
+room are the two ways a name reaches the API unchecked. The banner sits in the
+flow above the room rather than over it, since a banner fixed to the viewport
+covered the last cards on a phone. It covers nothing, and only the reader's
+dismissal moves the deck. It uses `role="status"` so the connection-alert
+assertions never see it.
+
 **Step 8. Frontend rewrite.** Phase 3: TypeScript, build tooling, components,
 light and dark theme, responsive layout, the connection logic as its own module,
 which owns the connection id step 6 mints and closes the old stream before
@@ -3223,6 +3261,7 @@ is unchanged.
    value, or whether a `clear` of a revealed round appends one without an
    outcome. Specified when step 9 starts; it blocks nothing earlier.
 4. **Wordlist size and source for slug generation**, and the fallback when
-   generation cannot find a free triple. Answer at step 7. The fallback should
-   log loudly, since exhaustion means either genuine scale or an unthrottled
-   `create-room` being abused.
+   generation cannot find a free triple. Settled at step 7: "Slug allocation"
+   gives the pools, the namespace floor and the fallback, which stops after 100
+   draws, logs at ERROR, since exhaustion means either genuine scale or an
+   unthrottled `create-room` being abused, and answers `503`.

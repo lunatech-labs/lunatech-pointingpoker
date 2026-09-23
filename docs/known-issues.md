@@ -17,12 +17,12 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
   (`RequestSession`'s find-or-create).
 - **Issue:** `/join` (and, transitively, `/events`) auto-creates a room for any
-  `roomId` it doesn't recognize, rather than rejecting it. A bookmarked room link
+  valid slug it doesn't recognize, rather than rejecting it. A bookmarked room link
   therefore never *errors* - but if the room's actor has already been reaped (idle
   long enough to stop, or the process restarted), the link silently opens a
-  brand-new, empty room under the same UUID: no prior participants, no vote
+  brand-new, empty room under the same name: no prior participants, no vote
   history, no in-progress issue. There is currently no way for the server to tell
-  "this UUID was never used" apart from "this UUID was a real room that went idle"
+  "this slug was never used" apart from "this slug was a real room that went idle"
   - both look identical: an absent map entry.
 - **Resolution:** Stays open, and reclassified rather than scheduled.
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
@@ -32,7 +32,7 @@ roadmap item instead of leaving it here as stale history.
   ever reported it. A truthful 404 would need a durable record of rooms that
   existed, which that design declines to keep, and its residual value is telling
   someone they mistyped a slug rather than leaving them alone in a phantom
-  room. Step 7 recovers most of that residual without the record: a name
+  room. Step 7 recovered most of that residual without the record: a name
   outside the slug vocabulary is refused with a `404` and, where unambiguous, a
   suggested correction, so the entry narrows to a valid slug that is not live.
   The design's "Slug allocation" section owns the rules.
