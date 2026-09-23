@@ -271,7 +271,7 @@ object Room:
               armIdleTick(timers, stopAfterIdle)
               Behaviors.same
           case Join(userId, name, token, connectionId, ref) =>
-            // Needs a same-id restart between resolution and Join. Warn, not raise, which stops
+            // A same-id restart or rename between resolution and Join. Warn, not raise, which stops
             // the room; a refused joiner gets no snapshot and, deliberately, no connection.
             if data.sessions.get(token).contains(Session(userId, name)) then
               // The arriving connection cancels any pending removal, so ConfirmLeave needs no

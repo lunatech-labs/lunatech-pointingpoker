@@ -865,14 +865,14 @@ extends that to the second `doJoin` as well. `ConnectionId` is an opaque type
 over `UUID` in the shape `SessionToken` already has, minted with
 `crypto.randomUUID()` where the page has it, so tapir refuses a malformed one
 with the same `400` as a missing one. That call exists only in a secure
-context, which `SECURE_COOKIES=false` gives up. The setting is for
-development, a LAN address during development being the case it exists for, so
-people on several machines can join one dev server. In that case the page
-builds a version 4 id from `crypto.getRandomValues`, which has no such
-requirement. Without the fallback the script throws before Vue mounts, leaving
-a page that is dead with nothing on it to say why. Production keeps the
-default, where a plain-HTTP visitor never gets its `Secure` cookie back and
-stops at the `401` from `/events`.
+context, which a plain-HTTP LAN address lacks and which `SECURE_COOKIES=false`
+is what makes usable. The setting is for development, a LAN address during
+development being the case it exists for, so people on several machines can
+join one dev server. In that case the page builds a version 4 id from
+`crypto.getRandomValues`, which has no such requirement. Without the fallback
+the script throws before Vue mounts, leaving a page that is dead with nothing
+on it to say why. Production keeps the default, where a plain-HTTP visitor
+never gets its `Secure` cookie back and stops at the `401` from `/events`.
 
 **A page instance must not persist its id.** This is the half of "per page
 instance" most likely to be read backwards, the instinct being that the server
@@ -2322,12 +2322,12 @@ on a known token renames the session, so a `/join` carrying a new name that land
 between a reconnect's `ValidateToken` and its `Join` leaves that `Join` naming
 the old one. It takes two tabs, one of which has cleared its stored name through
 Leave and rejoins under a different one, racing the other tab's reconnect by
-milliseconds. The ended stream heals it: the retry resolves the new name and
-joins. One side effect is accepted rather than guarded. The refused stream's
-completion arrives as a `Leave` for a ref never added, and for a member already
-in grace that re-arms `ConfirmLeave`, delaying the removal by up to one grace
-period. The joining tab's own `Join` then cancels the timer, in every ordering
-except the one where that tab never connects.
+milliseconds. The stream that step 6's guard ends heals it: the retry resolves
+the new name and joins. One side effect is accepted rather than guarded. The
+refused stream's completion arrives as a `Leave` for a ref never added, and for
+a member already in grace that re-arms `ConfirmLeave`, delaying the removal by
+up to one grace period. The joining tab's own `Join` then cancels the timer, in
+every ordering except the one where that tab never connects.
 
 **A refused `Join` therefore adds nothing to `connections`, and that is a rule
 rather than an omission.** The split makes the wrong fix look free: `publish`
