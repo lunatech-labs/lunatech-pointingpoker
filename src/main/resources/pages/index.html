@@ -436,6 +436,7 @@
           })
           .catch(function (error) {
             console.log(error);
+            ref.showError = true;
             ref.errorMessage = "Could not create a room. Please try again.";
           });
         },
