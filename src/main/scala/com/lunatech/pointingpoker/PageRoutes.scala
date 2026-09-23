@@ -36,7 +36,7 @@ class PageRoutes(apiConfig: ApiConfig):
       path(JavaUUID) { uuid =>
         get {
           val slug = LegacySlug.derive(uuid)
-          log.info("Redirecting a legacy room link to {}", slug.raw)
+          log.info("Redirecting legacy room link {} to {}", uuid, slug.raw)
           redirect(s"/${slug.raw}?moved=1", StatusCodes.Found)
         }
       },
@@ -49,8 +49,10 @@ class PageRoutes(apiConfig: ApiConfig):
               index
             case None =>
               Slug.parse(raw.toLowerCase(Locale.ROOT)) match
-                case Some(slug) => redirect(s"/${slug.raw}", StatusCodes.Found)
-                case None       => revalidated(complete(notARoom(raw)))
+                case Some(slug) =>
+                  log.debug("Redirecting a mis-cased room link {} to {}", raw, slug.raw)
+                  redirect(s"/${slug.raw}", StatusCodes.Found)
+                case None => revalidated(complete(notARoom(raw)))
         }
       }
     )

@@ -140,11 +140,16 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
     }
     // The case is deliberate rather than the typo, so it is corrected rather than refused.
-    "redirect a room name in mixed case to its lowercase form" in
-      Get("/Brave-Golden-Otter") ~> apiRoute ~> check {
-        status mustBe StatusCodes.Found
-        header[Location].map(_.uri.toString) mustBe Some("/brave-golden-otter")
-      }
+    "redirect a room name in mixed case to its lowercase form, and log it" in {
+      pageLog {
+        Get("/Brave-Golden-Otter") ~> apiRoute ~> check {
+          status mustBe StatusCodes.Found
+          header[Location].map(_.uri.toString) mustBe Some("/brave-golden-otter")
+        }
+      } mustBe List(
+        ("DEBUG", "Redirecting a mis-cased room link Brave-Golden-Otter to brave-golden-otter")
+      )
+    }
     "refuse a name outside the vocabulary with a page suggesting the correction" in
       Get("/brave-golden-oter") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
@@ -175,7 +180,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
           status mustBe StatusCodes.Found
           header[Location].map(_.uri.toString) mustBe Some(s"/${slug.raw}?moved=1")
         }
-      } mustBe List(("INFO", s"Redirecting a legacy room link to ${slug.raw}"))
+      } mustBe List(("INFO", s"Redirecting legacy room link $uuid to ${slug.raw}"))
     }
     // Mail clients and wikis have been seen to upper-case a pasted link.
     "derive the same room for a legacy link in upper case" in {
