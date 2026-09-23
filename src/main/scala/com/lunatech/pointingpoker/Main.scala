@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.concurrent.duration.*
 import scala.util.{Failure, Success}
 
-object Main extends App:
+@main def run(): Unit =
 
   val log = LoggerFactory.getLogger("com.lunatech.pointingpoker.Main")
   given system: ActorSystem[SpawnProtocol.Command] =
@@ -61,4 +61,4 @@ object Main extends App:
       log.error("Error creating the room manager, exiting", exception)
       System.exit(1)
   }
-end Main
+end run
