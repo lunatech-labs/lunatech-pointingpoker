@@ -2919,6 +2919,11 @@ still launch it. `-Werror` subsumes step 6's targeted `-Wconf`, which the step
 removes. Waits on step 6 only, and is a branch of its own so the entry-point
 change is not reviewed inside a protocol diff.
 
+Landed. The entry point is `com.lunatech.pointingpoker.run`, a top-level
+`@main def` replacing `object Main extends App`. `build.sbt` no longer carries
+the `-Wconf:name=PatternMatchExhaustivity:e` line step 6's note describes;
+`-Werror` now makes an incomplete match fatal along with everything else.
+
 **Step 7. Slug room ids.** Three-word slugs replacing raw UUIDs, generated on
 `create-room` and unique among the rooms currently in memory. Waits on steps 4
 and 6. About 60 and 50. This is what remains of Phase 2 once voting scale moves
