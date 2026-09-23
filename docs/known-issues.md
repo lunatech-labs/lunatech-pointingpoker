@@ -911,6 +911,37 @@ roadmap item instead of leaving it here as stale history.
   when the step is retired, or when something exercises the upload path itself on
   an ordinary run.
 
+### `API.route`'s top-level order is untested, and today it matters
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, `val route`.
+- **Issue:** The route is `concat(ProbeRoutes(...).route, tapir's endpoints,
+  PageRoutes(...).route)`, in that order, because `PageRoutes`'s slug matcher
+  answers every single-segment `GET`. Step 7's plan called this order
+  unobservable ("today nothing observable depends on it"), which was true when
+  written but stopped being true once `ProbeRoutes` shipped: it serves
+  `GET /probe` when the probe is enabled, a single-segment `GET`. If `PageRoutes`
+  moved ahead of `ProbeRoutes`, an enabled probe would silently start answering
+  with the "not a room name" rejection page instead of the probe page, and no
+  existing test would catch it - `ProbeRoutesSpec` tests `ProbeRoutes.route` on
+  its own, and `APISpec`'s `/probe` case expects a `404` either way, which a
+  swallowed probe also produces.
+- **Resolution:** Stays open. A cheap fix is one `APISpec` case that builds
+  `API` with an enabled `ProbeConfig` and asserts `GET /probe` serves the probe
+  page, not the rejection page.
+
+### `Suggestion.suggest` runs the full edit-distance table against every pool word, for any input length
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/slug/Suggestion.scala`,
+  `nearest`.
+- **Issue:** `EditDistance` builds a full `(n+1)×(m+1)` table for every one of
+  the 199 pool words, whatever the length of the typed word. A 3,000-character
+  path segment measured at about 48ms of CPU for one request. No pool word
+  exceeds 8 letters, so nothing longer than 9 characters can ever be within one
+  edit of a pool word, which makes the cost pure waste past that length.
+- **Resolution:** Stays open. A length guard in `nearest` (skip a word once it
+  is longer than the longest pool word plus one) removes the cost with no
+  behaviour change.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
