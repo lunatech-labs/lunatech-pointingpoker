@@ -226,7 +226,7 @@ client, so every command's path, body and responses are checked at compile time.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
 owns the stream: the page's connection id, the `EventSource`, close-before-open,
-the staleness check, the probe and reload on a refusal, the leave beacon and the
+the staleness check, the liveness fetch and reload on a refusal, the leave beacon and the
 `pagehide`, `pageshow` and `visibilitychange` listeners. It exposes a store of
 `{ lost: boolean, fatal: boolean, snapshot }` through `subscribe` and
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
@@ -345,7 +345,7 @@ source with hot reload and forwards `/rooms` and `/create-room` to port 8080,
 SSE included, so the browser sees one origin and the cookie works. `/<slug>`
 works because Vite serves the page for unknown paths; the not-a-room page and
 the UUID redirect are not reproduced there, and the e2e suite covers them
-against the staged app. Nor is the probe's wait: Vite answers `/<slug>` itself
+against the staged app. Nor is the liveness fetch's wait: Vite answers `/<slug>` itself
 with sbt down, so the page reloads, and the e2e case against the stub covers it. For backend work, `npm run build` once and `sbt run`
 alone on port 8080, as today. A combined `npm run dev:all` is left until
 someone asks for it.
@@ -399,26 +399,26 @@ A failed stream has two recoveries, and each failure maps to one:
 | The stream went quiet: a network drop, a sleeping laptop, a suspended phone tab | Nothing heard for 35 s | Reopen with the same connection id |
 | The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
 
-- **One check** decides from the stream alone: CLOSED, it probes; stale, it
-  reopens; otherwise it does nothing. It runs on `onerror`, on a periodic tick
-  and on `visibilitychange` to visible, so a failed probe is simply retried on
-  the next run. Reopening only when stale matters because tab switches are
-  frequent and each reopen is a Join published to the room.
+- **One check** decides from the stream alone: CLOSED, it runs the liveness
+  fetch; stale, it reopens; otherwise it does nothing. It runs on `onerror`, on
+  a periodic tick and on `visibilitychange` to visible, so a failed fetch is
+  simply retried on the next run. Reopening only when stale matters because tab
+  switches are frequent and each reopen is a Join published to the room.
 - **A closed stream is never reopened.** `EventSource` reaches CLOSED only on
   an error response or the page's own `close()`; a network drop leaves it
   CONNECTING and the browser retries by itself. So CLOSED means a refusal, or
   a Leave that must stay closed.
-- **A closed stream is probed before any reload.** `EventSource` closes on any
-  error response, and a proxy in front of a stopped app answers one too (the
-  testkit stub's `502`, Clever's and Vite's proxies). So a CLOSED stream first
-  fetches `/<slug>`: a `200` comes only from the running app, so the refusal is
-  real and the page reloads; any other answer or a network error means the app
-  is down, and the next run of the check probes again.
+- **A closed stream gets a liveness fetch before any reload.** `EventSource`
+  closes on any error response, and a proxy in front of a stopped app answers
+  one too (the testkit stub's `502`, Clever's and Vite's proxies). So a CLOSED
+  stream first fetches `/<slug>`: a `200` comes only from the running app, so
+  the refusal is real and the page reloads; any other answer or a network error
+  means the app is down, and the next run of the check fetches again.
 - **A back/forward cache restore reloads.** `pageshow` with `persisted` reloads
   the page, so a restored page is a fresh load like every other way into a
   room, including Back after Leave.
 - **Nothing runs while `fatal` or once the page is navigating**, for Leave or a
-  pending reload, so no check or probe races a page load.
+  pending reload, so no check or fetch races a page load.
 - **One banner**, "Connection to the room was lost", shows after any `onerror`
   or 35 s of silence, and clears on the next `onopen` or frame, as today. The browser's own retry
   on the server's `retry` interval keeps running under it.
@@ -440,7 +440,7 @@ means only the first tab creates it. A refusal means the room is gone, not the
 member: `Room` keeps sessions past the grace period, and "a disconnection
 outlasting the grace period comes back without a reload" covers that. Reloading
 rather than rejoining in place means the page always runs the server's own
-build, which the strict contract assumes. The probe means the reload waits
+build, which the strict contract assumes. The liveness fetch means the reload waits
 until the app answers, so it never lands on a proxy's error page.
 
 **Accepted.** A room that crashes on something sent right after a join makes
@@ -556,10 +556,10 @@ refused command changes nothing visible, and the next snapshot is the truth.
   `immutable` header from beside `index-path`; and a missing asset answering `404`.
 - **Vitest unit tests** in `frontend/src/**/*.test.ts`: `connection.ts` with a
   fake `EventSource` and fake timers, covering close-before-open, both rows of the connection
-  table, a closed stream with a failing probe retrying without reloading, a
+  table, a closed stream with a failing liveness fetch retrying without reloading, a
   refused stream and Leave's close never reopened, a `persisted` `pageshow`
   reloading, the check's three triggers, heartbeats alone keeping the stream fresh
-  past 35 s, an invalid snapshot leaving the store unchanged, no check or probe
+  past 35 s, an invalid snapshot leaving the store unchanged, no check or liveness fetch
   once navigating or `fatal`, and the reach-the-room rule; `view.ts`, including
   name order ignoring case and accents with the id tie-break; every
   `useIssueEditor` transition, including the three ways settling ends; the
