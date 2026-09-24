@@ -54,7 +54,7 @@ Available endpoints:
 | Path                            | Method | Request body          | Description                                                          |
 |---------------------------------|--------|-----------------------|----------------------------------------------------------------------|
 |`/`                              | GET    | none                  | Load index with frontend                                             |
-|`/create-room`                   | POST   | none                  | Creates a room and returns the roomId as plain text                  |
+|`/create-room`                   | POST   | none                  | Creates a room and returns its name, for example `brave-golden-otter`, as plain text. Answers `503` when no free name is found |
 |`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Resumes the session the cookie already names, renaming it, or mints one and sets a room-scoped session cookie. Answers `204` with no body, and creates the room when its id is absent |
 |`/rooms/{roomId}/events?connectionId={uuid}` | GET | none      | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. The page mints the id once per page instance. Requires a valid session cookie from a prior `/join`; `401` otherwise, `400` without a connection id |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
@@ -65,13 +65,19 @@ Available endpoints:
 |`/rooms/{roomId}/leave?connectionId={uuid}` | POST | none       | Ends the named connection's membership at once instead of after the grace period. Sent by `navigator.sendBeacon` on `pagehide` and by the Leave link |
 
 Command endpoints answer what the room decided, with no body: `204` when applied,
-`401` without a session (including an unknown `roomId`), and `403` when the session
+`401` without a session (including a valid name with no live room), and `403` when the session
 is no longer a member. `/vote` adds `409` for a revealed round and `400` for a
 blank estimation. `/leave` answers `204` on every branch it reaches past those two,
-and `400` without a connection id.
+and `400` without a connection id. A `{roomId}` that is not three vocabulary
+words in order answers `404` on every endpoint, before any room is consulted.
 
-There is also a `GET /{roomId}` route that serves the same frontend index page,
-so a room link can be shared directly.
+`GET /{roomId}` serves the same frontend index page, so a room link can be
+shared directly. A room name in mixed case redirects to its lowercase form,
+and any other name answers `404` with a page that suggests the intended name
+when only one is close. `GET /{uuid}`, the pre-slug link form, answers `302`
+to a room name derived from the UUID with `?moved=1`, which the page turns
+into a banner asking for the link to be updated. `docs/roadmap.md` schedules
+its removal.
 
 ### Cookies
 

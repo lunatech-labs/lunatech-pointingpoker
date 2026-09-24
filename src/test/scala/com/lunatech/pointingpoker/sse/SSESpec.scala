@@ -13,6 +13,7 @@ import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
 import com.lunatech.pointingpoker.actors.{Room, RoomSnapshot}
+import com.lunatech.pointingpoker.slug.SlugFixtures.aSlug
 
 class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -24,7 +25,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
   private def wire() =
     val roomManagerProbe = TestProbe()
-    val roomId           = UUID.randomUUID()
+    val roomId           = aSlug()
     val userId           = UUID.randomUUID()
     val token            = Room.SessionToken.mint()
     val connectionId     = Room.ConnectionId.parse(UUID.randomUUID().toString).get

@@ -17,12 +17,12 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
   (`RequestSession`'s find-or-create).
 - **Issue:** `/join` (and, transitively, `/events`) auto-creates a room for any
-  `roomId` it doesn't recognize, rather than rejecting it. A bookmarked room link
+  valid slug it doesn't recognize, rather than rejecting it. A bookmarked room link
   therefore never *errors* - but if the room's actor has already been reaped (idle
   long enough to stop, or the process restarted), the link silently opens a
-  brand-new, empty room under the same UUID: no prior participants, no vote
+  brand-new, empty room under the same name: no prior participants, no vote
   history, no in-progress issue. There is currently no way for the server to tell
-  "this UUID was never used" apart from "this UUID was a real room that went idle"
+  "this slug was never used" apart from "this slug was a real room that went idle"
   - both look identical: an absent map entry.
 - **Resolution:** Stays open, and reclassified rather than scheduled.
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
@@ -32,7 +32,10 @@ roadmap item instead of leaving it here as stale history.
   ever reported it. A truthful 404 would need a durable record of rooms that
   existed, which that design declines to keep, and its residual value is telling
   someone they mistyped a slug rather than leaving them alone in a phantom
-  room.
+  room. Step 7 recovered most of that residual without the record: a name
+  outside the slug vocabulary is refused with a `404` and, where unambiguous, a
+  suggested correction, so the entry narrows to a valid slug that is not live.
+  The design's "Slug allocation" section owns the rules.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
@@ -907,6 +910,37 @@ roadmap item instead of leaving it here as stale history.
   thing would silently reopen the runtime half of this entry. Remove this entry
   when the step is retired, or when something exercises the upload path itself on
   an ordinary run.
+
+### `API.route`'s top-level order is untested, and today it matters
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/API.scala`, `val route`.
+- **Issue:** The route is `concat(ProbeRoutes(...).route, tapir's endpoints,
+  PageRoutes(...).route)`, in that order, because `PageRoutes`'s slug matcher
+  answers every single-segment `GET`. Step 7's plan called this order
+  unobservable ("today nothing observable depends on it"), which was true when
+  written but stopped being true once `ProbeRoutes` shipped: it serves
+  `GET /probe` when the probe is enabled, a single-segment `GET`. If `PageRoutes`
+  moved ahead of `ProbeRoutes`, an enabled probe would silently start answering
+  with the "not a room name" rejection page instead of the probe page, and no
+  existing test would catch it - `ProbeRoutesSpec` tests `ProbeRoutes.route` on
+  its own, and `APISpec`'s `/probe` case expects a `404` either way, which a
+  swallowed probe also produces.
+- **Resolution:** Stays open. A cheap fix is one `APISpec` case that builds
+  `API` with an enabled `ProbeConfig` and asserts `GET /probe` serves the probe
+  page, not the rejection page.
+
+### `Suggestion.suggest` runs the full edit-distance table against every pool word, for any input length
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/slug/Suggestion.scala`,
+  `nearest`.
+- **Issue:** `EditDistance` builds a full `(n+1)×(m+1)` table for every one of
+  the 199 pool words, whatever the length of the typed word. A 3,000-character
+  path segment measured at about 48ms of CPU for one request. No pool word
+  exceeds 8 letters, so nothing longer than 9 characters can ever be within one
+  edit of a pool word, which makes the cost pure waste past that length.
+- **Resolution:** Stays open. A length guard in `nearest` (skip a word once it
+  is longer than the longest pool word plus one) removes the cost with no
+  behaviour change.
 
 ## Traceability note
 

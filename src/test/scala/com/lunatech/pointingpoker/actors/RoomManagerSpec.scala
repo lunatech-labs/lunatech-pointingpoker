@@ -5,10 +5,13 @@ import java.util.UUID
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationInt
 
-import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit}
+import org.apache.pekko.actor.testkit.typed.Effect
+import org.apache.pekko.actor.testkit.typed.scaladsl.{ActorTestKit, BehaviorTestKit, TestInbox}
 import org.apache.pekko.testkit.*
 import com.lunatech.pointingpoker.actors.RoomDataFixtures.*
 import com.lunatech.pointingpoker.actors.RoomManager.RoomManagerData
+import com.lunatech.pointingpoker.slug.{Slug, Vocabulary}
+import com.lunatech.pointingpoker.slug.SlugFixtures.{ScriptedRandom, StuckRandom, aSlug}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
@@ -33,8 +36,68 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       sender.expectMessageType[RoomManager.RoomId]
     }
 
+    "create a room under a valid slug, spawned under that name" in {
+      val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
+      val inbox           = TestInbox[RoomManager.Response]()
+
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+
+      val slug = inbox.receiveMessage() match
+        case RoomManager.RoomId(value)  => value
+        case RoomManager.NoFreeRoomName => fail("expected a room")
+      Slug.parse(slug.raw) mustBe Some(slug)
+      behaviorTestKit.retrieveAllEffects().collect { case s: Effect.Spawned[?] =>
+        s.childName
+      } mustBe
+        Seq(slug.raw)
+    }
+
+    "create a room under a slug no live room holds" in {
+      def nth(i: Int) = Slug
+        .parse(s"${Vocabulary.character(i)}-${Vocabulary.appearance(i)}-${Vocabulary.animal(i)}")
+        .get
+      val live            = testKit.createTestProbe[Room.Command]()
+      val behaviorTestKit = BehaviorTestKit(
+        RoomManager.receiveBehaviour(
+          RoomManagerData(Map(nth(0) -> live.ref)),
+          testGracePeriod,
+          testStopAfterIdle,
+          ScriptedRandom(0, 0, 0, 1, 1, 1)
+        )
+      )
+      val inbox = TestInbox[RoomManager.Response]()
+
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+
+      inbox.receiveMessage() mustBe RoomManager.RoomId(nth(1))
+    }
+
+    "refuse a room when every draw hits a live one, and keep serving" in {
+      val behaviorTestKit =
+        BehaviorTestKit(
+          RoomManager.receiveBehaviour(
+            RoomManagerData.empty,
+            testGracePeriod,
+            testStopAfterIdle,
+            StuckRandom
+          )
+        )
+      val inbox = TestInbox[RoomManager.Response]()
+
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+      val first = inbox.receiveMessage()
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+
+      inbox.receiveMessage() mustBe RoomManager.NoFreeRoomName
+      behaviorTestKit.logEntries().map(e => (e.level, e.message)) mustBe
+        Seq((org.slf4j.event.Level.ERROR, "No free room name found with 1 rooms live"))
+      behaviorTestKit.run(RoomManager.CreateRoom(inbox.ref))
+      inbox.receiveMessage() mustBe RoomManager.NoFreeRoomName
+      first mustBe a[RoomManager.RoomId]
+    }
+
     "connect user to room" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -76,7 +139,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
     "no-op ConnectToRoom for an unknown room" in {
       val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
-      val unknownRoomId   = UUID.randomUUID()
+      val unknownRoomId   = aSlug()
       val probe           = TestProbe()(using testKit.system.classicSystem)
 
       // No startup effects to drain: setup no longer spawns a MessageAdapter on this branch.
@@ -98,17 +161,17 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
     "pass RequestSession through to the room, auto-creating it if needed" in {
       val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
-      val roomId          = UUID.randomUUID()
+      val roomId          = aSlug()
       val sessionProbe    = testKit.createTestProbe[Room.SessionMinted]()
 
       behaviorTestKit.run(RoomManager.RequestSession(roomId, "Alice", None, sessionProbe.ref))
 
-      val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.toString)
+      val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.raw)
       childInbox.expectMessage(Room.RequestSession("Alice", None, sessionProbe.ref))
     }
 
     "pass ValidateToken through to an existing room" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -127,7 +190,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "pass RequestSession through to an existing room without creating a new one" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -146,7 +209,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
 
     "resolve ValidateToken against an unknown room as Unresolved instead of creating it" in {
       val behaviorTestKit = BehaviorTestKit(RoomManager(testGracePeriod, testStopAfterIdle))
-      val roomId          = UUID.randomUUID()
+      val roomId          = aSlug()
       val resultProbe     = testKit.createTestProbe[Room.TokenResolution]()
 
       // No startup effects to drain: setup no longer spawns a MessageAdapter on this branch.
@@ -166,7 +229,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       given org.apache.pekko.stream.Materializer =
         org.apache.pekko.stream.Materializer.matFromSystem(using testKit.system.classicSystem)
 
-      val roomId       = UUID.randomUUID()
+      val roomId       = aSlug()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
       val connectionId = newConnectionId()
@@ -194,7 +257,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       given org.apache.pekko.stream.Materializer =
         org.apache.pekko.stream.Materializer.matFromSystem(using testKit.system.classicSystem)
 
-      val roomId       = UUID.randomUUID()
+      val roomId       = aSlug()
       val userId       = UUID.randomUUID()
       val token        = Room.SessionToken.mint()
       val connectionId = newConnectionId()
@@ -216,7 +279,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "handle connection completed" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -235,7 +298,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "handle connection failure by removing the user from the room" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -254,7 +317,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "handle typed per-command messages" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val managerRef =
         testKit.spawn(
@@ -285,8 +348,8 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "no-op typed per-command messages for an unknown room" in {
-      val knownRoomId   = UUID.randomUUID()
-      val unknownRoomId = UUID.randomUUID()
+      val knownRoomId   = aSlug()
+      val unknownRoomId = aSlug()
       val roomProbe     = testKit.createTestProbe[Room.Command]()
       val replyProbe    = testKit.createTestProbe[Room.VoteResult]()
       val managerRef    =
@@ -310,7 +373,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "no-op a command with no session token, without asking the room" in {
-      val roomId     = UUID.randomUUID()
+      val roomId     = aSlug()
       val roomProbe  = testKit.createTestProbe[Room.Command]()
       val replyProbe = testKit.createTestProbe[Room.VoteResult]()
       val managerRef =
@@ -333,7 +396,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
 
       managerRef ! RoomManager.Show(
-        UUID.randomUUID(),
+        aSlug(),
         Some(Room.SessionToken.mint()),
         replyProbe.ref
       )
@@ -345,13 +408,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val replyProbe = testKit.createTestProbe[Room.CommandResult]()
       val managerRef = testKit.spawn(RoomManager(testGracePeriod, testStopAfterIdle))
 
-      managerRef ! RoomManager.Show(UUID.randomUUID(), None, replyProbe.ref)
+      managerRef ! RoomManager.Show(aSlug(), None, replyProbe.ref)
 
       replyProbe.expectMessage(Room.NoSession)
     }
 
     "keep a member's vote when ConnectToRoom re-registers them after a reconnect" in {
-      val roomId      = UUID.randomUUID()
+      val roomId      = aSlug()
       val userId      = UUID.randomUUID()
       val token       = Room.SessionToken.mint()
       val firstProbe  = TestProbe()(using testKit.system.classicSystem)
@@ -401,7 +464,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
     }
 
     "drop a stopped room from its map so a later request creates a fresh one" in {
-      val roomId       = UUID.randomUUID()
+      val roomId       = aSlug()
       val idleTimeout  = 200.millis
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val managerRef   = testKit.spawn(

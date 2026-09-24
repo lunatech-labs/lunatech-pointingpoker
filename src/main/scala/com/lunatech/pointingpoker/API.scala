@@ -1,7 +1,5 @@
 package com.lunatech.pointingpoker
 
-import java.util.UUID
-
 import org.apache.pekko.actor.typed.{ActorRef, ActorSystem, SpawnProtocol}
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.server.Directives.concat
@@ -13,6 +11,7 @@ import org.apache.pekko.util.Timeout
 import com.lunatech.pointingpoker.actors.Room
 import com.lunatech.pointingpoker.actors.RoomManager
 import com.lunatech.pointingpoker.sse.SSE
+import com.lunatech.pointingpoker.slug.Slug
 import com.lunatech.pointingpoker.config.{ApiConfig, LifecycleConfig, ProbeConfig}
 import com.lunatech.pointingpoker.probe.ProbeRoutes
 import org.slf4j.{Logger, LoggerFactory}
@@ -41,7 +40,7 @@ class API(
 
   private val SessionCookieName = "session"
 
-  private def sessionCookie(roomId: UUID, token: Room.SessionToken): CookieValueWithMeta =
+  private def sessionCookie(roomId: Slug, token: Room.SessionToken): CookieValueWithMeta =
     CookieValueWithMeta.unsafeApply(
       value = token.raw,
       path = Some(s"/rooms/$roomId"),
@@ -55,13 +54,23 @@ class API(
     streamTextBody(PekkoStreams)(CodecFormat.TextEventStream(), Some(StandardCharsets.UTF_8))
       .map(PekkoServerSentEvents.parseBytesToSSE)(PekkoServerSentEvents.serialiseSSEToBytes)
 
-  private val roomPath = "rooms" / path[UUID]("roomId")
+  // Mismatch, not Error: tapir answers an error with 400 but tries the next endpoint on a mismatch.
+  private given Codec[String, Slug, CodecFormat.TextPlain] =
+    Codec.string.mapDecode(raw =>
+      Slug
+        .parse(raw)
+        .map(DecodeResult.Value(_))
+        .getOrElse(DecodeResult.Mismatch("a room name", raw))
+    )(_.raw)
+
+  private val roomPath = "rooms" / path[Slug]("roomId")
 
   private val sessionIn = cookie[Option[String]](SessionCookieName)
 
   private val createRoom = endpoint.post
     .in("create-room")
     .out(stringBody)
+    .errorOut(statusCode(StatusCode.ServiceUnavailable))
 
   private val join = endpoint.post
     .in(roomPath / "join")
@@ -144,12 +153,14 @@ class API(
     raw.flatMap(Room.SessionToken.parse)
 
   private val endpoints = List(
-    createRoom.serverLogicSuccess[Future] { _ =>
+    createRoom.serverLogic[Future] { _ =>
       log.debug("Create room call")
       (roomManager ? RoomManager.CreateRoom.apply)
-        .mapTo[RoomManager.RoomId]
         .andThen { case Failure(reason) => log.error("Error while creating room: {}", reason) }
-        .map(_.value)
+        .map {
+          case RoomManager.RoomId(slug)   => Right(slug.raw)
+          case RoomManager.NoFreeRoomName => Left(())
+        }
     },
     join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
@@ -236,11 +247,12 @@ class API(
     }
   )
 
+  // Pages last: their slug matcher answers every single-segment GET, so nothing after it is reached.
   val route: Route =
     concat(
       ProbeRoutes(probeConfig).route,
-      PageRoutes(apiConfig).route,
-      PekkoHttpServerInterpreter().toRoute(endpoints)
+      PekkoHttpServerInterpreter().toRoute(endpoints),
+      PageRoutes(apiConfig).route
     )
 
   def run(): Future[Http.ServerBinding] =
