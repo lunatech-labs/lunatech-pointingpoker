@@ -133,8 +133,9 @@ Step 8's commits, in order:
 
 1. **Tooling.** Vite, TypeScript, React, zod, `mise.toml`,
    `clevercloud/build-frontend.sh`, CI's reordered steps, the page served from
-   `frontend/dist/` with the `/assets/` route and the `503`, and `index-path`
-   defaulting there.
+   `frontend/dist/` with the `/assets/` route and the `503`, `index-path`
+   defaulting there, and Vitest as `npm run test:unit` and ESLint with the React
+   hooks rule.
    Today's page moves by `git mv` to `frontend/index.html`, so no copy survives
    to be served instead; Vite leaves its CDN tags alone. `testkit/app.js`'s
    `INDEX_PATH` moves to `frontend/dist/index.html`, and the `pretest` and
@@ -143,10 +144,13 @@ Step 8's commits, in order:
    check, failing with "Run: npm run build" rather than a 30 s readiness
    timeout. `DockerPlugin`, `dockerEnvVars` and `dockerBaseImage` leave
    `build.sbt`, since an image would now ship without the page and nothing
-   builds one; `testkit/app.js`'s header stops citing Docker.
+   builds one; `testkit/app.js`'s header stops citing Docker. `APISpec`'s index
+   cases move to a temp fixture page, `ApiConfigSpec` asserts the new default,
+   and the new `503` and `/assets/` cases land here too.
 2. **Straight port.** Today's behaviour and markup, Bootstrap, icons and axios
    bundled instead of loaded from CDNs, `applySnapshot` carried over unchanged.
-   axios comes from npm until commit 3 replaces it.
+   axios comes from npm until commit 3 replaces it. The `e2e/fixtures.js`
+   comments citing Vue (`v-if`, `inRoom`) credit the React mount.
 3. **Contracts.** The OpenAPI document, `openapi-typescript` and
    `openapi-fetch` replacing axios, the regenerate-and-diff gate, and the strict
    snapshot contract test.
@@ -155,7 +159,7 @@ Step 8's commits, in order:
    it, and a contract state for each of the five tags.
 5. **Behaviour changes, as separate commits:** the path decides the page,
    including Leave keeping the name where today's `doLeave` clears
-   `localStorage`, first, since the connection commits build on it; close the old stream
+   `localStorage` and a restored page reloading, first, since the connection commits build on it; close the old stream
    before opening a new one; the staleness check with self-healing reconnect;
    the reload on a refusal with the restart notice; alphabetical participant order; the revealed-round live
    region; the issue
@@ -177,7 +181,8 @@ pinned:
   it" stop arguing from the focus guard the commit removes.
 
 The pass condition for commits 1 to 4 is the existing e2e suite green with at
-most listed selector changes. Each commit in 5 brings a test shown failing
+most listed selector changes to the cases, beside the harness changes commits
+1 and 2 list. Each commit in 5 brings a test shown failing
 against the commit before it.
 
 Step 8a: component library and look, light and dark theme, responsive layout,
@@ -340,7 +345,8 @@ source with hot reload and forwards `/rooms` and `/create-room` to port 8080,
 SSE included, so the browser sees one origin and the cookie works. `/<slug>`
 works because Vite serves the page for unknown paths; the not-a-room page and
 the UUID redirect are not reproduced there, and the e2e suite covers them
-against the staged app. For backend work, `npm run build` once and `sbt run`
+against the staged app. Nor is the probe's wait: Vite answers `/<slug>` itself
+with sbt down, so the page reloads, and the e2e case against the stub covers it. For backend work, `npm run build` once and `sbt run`
 alone on port 8080, as today. A combined `npm run dev:all` is left until
 someone asks for it.
 
@@ -393,10 +399,10 @@ A failed stream has two recoveries, and each failure maps to one:
 | The stream went quiet: a network drop, a sleeping laptop, a suspended phone tab | Nothing heard for 35 s | Reopen with the same connection id |
 | The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
 
-- **One check** reopens a stale stream, and only a stale one. It runs on a
-  periodic tick and on `visibilitychange` to visible. Reopening only when stale
-  matters because tab switches are frequent and each reopen is a Join published
-  to the room.
+- **One check** reopens a stale stream, and only a stale one, and probes again
+  a closed stream whose last probe failed. It runs on a periodic tick and on
+  `visibilitychange` to visible. Reopening only when stale matters because tab
+  switches are frequent and each reopen is a Join published to the room.
 - **A closed stream is never reopened.** `EventSource` reaches CLOSED only on
   an error response or the page's own `close()`; a network drop leaves it
   CONNECTING and the browser retries by itself. So CLOSED means a refusal, or
@@ -413,15 +419,15 @@ A failed stream has two recoveries, and each failure maps to one:
 - **Nothing runs while `fatal` or once the page is navigating**, for Leave or a
   pending reload, so no check or probe races a page load.
 - **One banner**, "Connection to the room was lost", shows from an `onerror`
-  with `readyState` CONNECTING or from 35 s of silence, and clears on the next
-  `onopen` or frame, as today. The browser's own retry on the server's `retry`
-  interval keeps running under it.
+  with `readyState` CONNECTING, from 35 s of silence, or from a failed probe,
+  and clears on the next `onopen` or frame, as today. The browser's own retry
+  on the server's `retry` interval keeps running under it.
 - **Frames.** A heartbeat (empty frame) and a snapshot both record "last heard
   from". A snapshot is parsed with zod: valid, the store updates; invalid,
   logged and dropped.
 - **Reload only after reaching the room.** A page load that never received a
   snapshot shows "Your session has ended. Please reload the page to rejoin."
-  instead, so a stream refused every time, such as a `SECURE_COOKIES`
+  instead and sets `fatal`, so a stream refused every time, such as a `SECURE_COOKIES`
   mismatch, cannot loop.
 - **`pagehide`**, not entering the back/forward cache, sends the leave beacon
   while a stream is open. Leave closes the stream first, so it is sent once.
@@ -476,7 +482,7 @@ rewrites only the markup.
 | editing | The draft, editable | Enter or check: to saving. Escape or cancel: to viewing, draft dropped |
 | editing, conflict | The draft, plus "Changed by someone else to: X" and "Use theirs" | Shown while the room's issue differs from the starting point. "Use theirs" sets draft and starting point to X. Saving overwrites X knowingly |
 | saving | The draft, read-only | POST fails: to editing, draft kept, "Could not save the issue". POST succeeds: to settling |
-| settling | The saved text | To viewing when a snapshot carries the saved text, on a reconnect, or after 5 s |
+| settling | The saved text | To viewing when a snapshot carries the saved text, on a reconnect (`lost` returning to false), or after 5 s |
 
 **Why settling exists.** `Room` replies `Applied` and publishes while handling
 the same message, so a completed POST means the room holds the value, but the
@@ -552,15 +558,22 @@ refused command changes nothing visible, and the next snapshot is the truth.
   fake `EventSource` and fake timers, covering close-before-open, both rows of the connection
   table, a closed stream with a failing probe retrying without reloading, a
   refused stream and Leave's close never reopened, a `persisted` `pageshow`
-  reloading, the check's two triggers and the reach-the-room rule; `view.ts`; every `useIssueEditor` transition,
-  including the three ways settling ends; the strict contract test. They do not
-  overlap `node --test`'s `test/` folder, and CI runs both.
+  reloading, the check's two triggers, heartbeats alone keeping the stream fresh
+  past 35 s, an invalid snapshot leaving the store unchanged, no check or probe
+  once navigating or `fatal`, and the reach-the-room rule; `view.ts`, including
+  name order ignoring case and accents with the id tie-break; every
+  `useIssueEditor` transition, including the three ways settling ends; the
+  strict contract test. They do not overlap `node --test`'s `test/` folder, and
+  CI runs both.
+- **The stub's `freeze`** gets a case in `test/stub.test.js`: sockets held open,
+  nothing forwarded, new requests let through.
 
 ## Docs in the same PR
 
 - `README.md`: `mise.toml`'s Node, or any Node of that major; both dev modes,
   the two-terminal page loop and `npm run build` before `sbt run` alone; `npm run test:unit`;
-  asset caching; the page path now owned by `application.conf`.
+  asset caching; the page path now owned by `application.conf`; the pre-hooks
+  now build, then stage.
 - `docs/known-issues.md`: remove the CDN entry and the editor entry; amend "An
   unrecognized `roomId` silently creates an empty room" for the lobby, where a
   mistyped but valid room name now opens a new empty room; add to "A second tab
@@ -572,7 +585,8 @@ refused command changes nothing visible, and the next snapshot is the truth.
   re-vote") to the symbols that replace them.
 - `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8a,
   and reword "tentatively Vue 3, framework choice still open" to React; tick
-  the backlog's connection-liveness watchdog, which step 8 delivers.
+  the backlog's connection-liveness watchdog, which step 8 delivers, noting
+  that a persisted `pageshow` reloads rather than arming it.
 - The parent design: step 8's "Landed" paragraph. The pointers from its step 8
   section and its contract test to this document land with this document.
 
