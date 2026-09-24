@@ -399,10 +399,11 @@ A failed stream has two recoveries, and each failure maps to one:
 | The stream went quiet: a network drop, a sleeping laptop, a suspended phone tab | Nothing heard for 35 s | Reopen with the same connection id |
 | The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
 
-- **One check** reopens a stale stream, and only a stale one, and probes again
-  a closed stream whose last probe failed. It runs on a periodic tick and on
-  `visibilitychange` to visible. Reopening only when stale matters because tab
-  switches are frequent and each reopen is a Join published to the room.
+- **One check** decides from the stream alone: CLOSED, it probes; stale, it
+  reopens; otherwise it does nothing. It runs on `onerror`, on a periodic tick
+  and on `visibilitychange` to visible, so a failed probe is simply retried on
+  the next run. Reopening only when stale matters because tab switches are
+  frequent and each reopen is a Join published to the room.
 - **A closed stream is never reopened.** `EventSource` reaches CLOSED only on
   an error response or the page's own `close()`; a network drop leaves it
   CONNECTING and the browser retries by itself. So CLOSED means a refusal, or
@@ -412,15 +413,14 @@ A failed stream has two recoveries, and each failure maps to one:
   testkit stub's `502`, Clever's and Vite's proxies). So a CLOSED stream first
   fetches `/<slug>`: a `200` comes only from the running app, so the refusal is
   real and the page reloads; any other answer or a network error means the app
-  is down, so the banner shows and the check probes again on its next run.
+  is down, and the next run of the check probes again.
 - **A back/forward cache restore reloads.** `pageshow` with `persisted` reloads
   the page, so a restored page is a fresh load like every other way into a
   room, including Back after Leave.
 - **Nothing runs while `fatal` or once the page is navigating**, for Leave or a
   pending reload, so no check or probe races a page load.
-- **One banner**, "Connection to the room was lost", shows from an `onerror`
-  with `readyState` CONNECTING, from 35 s of silence, or from a failed probe,
-  and clears on the next `onopen` or frame, as today. The browser's own retry
+- **One banner**, "Connection to the room was lost", shows after any `onerror`
+  or 35 s of silence, and clears on the next `onopen` or frame, as today. The browser's own retry
   on the server's `retry` interval keeps running under it.
 - **Frames.** A heartbeat (empty frame) and a snapshot both record "last heard
   from". A snapshot is parsed with zod: valid, the store updates; invalid,
@@ -558,7 +558,7 @@ refused command changes nothing visible, and the next snapshot is the truth.
   fake `EventSource` and fake timers, covering close-before-open, both rows of the connection
   table, a closed stream with a failing probe retrying without reloading, a
   refused stream and Leave's close never reopened, a `persisted` `pageshow`
-  reloading, the check's two triggers, heartbeats alone keeping the stream fresh
+  reloading, the check's three triggers, heartbeats alone keeping the stream fresh
   past 35 s, an invalid snapshot leaving the store unchanged, no check or probe
   once navigating or `fatal`, and the reach-the-room rule; `view.ts`, including
   name order ignoring case and accents with the id tie-break; every
