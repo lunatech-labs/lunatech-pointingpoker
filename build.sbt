@@ -7,6 +7,7 @@ ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val circe        = "0.14.16"
+  val commonsText  = "1.15.0"
   val logback      = "1.6.3"
   val owaspEncoder = "1.3.1"
   val pekko        = "1.7.0"
@@ -26,6 +27,7 @@ lazy val root = project
     libraryDependencies += "io.circe"                    %% "circe-core"        % V.circe,
     libraryDependencies += "io.circe"                    %% "circe-parser"      % V.circe,
     libraryDependencies += "io.circe"                    %% "circe-generic"     % V.circe,
+    libraryDependencies += "org.apache.commons"           % "commons-text"      % V.commonsText,
     libraryDependencies += "org.owasp.encoder"            % "encoder"           % V.owaspEncoder,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-core"        % V.tapir,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-json-circe"  % V.tapir,
