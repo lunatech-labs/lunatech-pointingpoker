@@ -75,10 +75,11 @@ build that produces the file, with no console change to time against a deploy.
 
 **sbt drives npm, only when packaging.** Clever runs sbt from source on each
 push, then starts the app from the checkout. A `frontendBuild` task that `stage`
-depends on keeps Clever's existing build working unchanged, while `compile`,
-`test` and `run` never need Node, so a Scala contributor can fix a backend bug
-without it. A Clever build hook was declined because it would put the build back
-in the console, and npm driving sbt because Clever calls sbt.
+depends on keeps Clever's existing build working unchanged. `compile` and `test`
+never need Node or a built page, because CI runs `sbt qa`, whose first command
+is `clean`, before it sets Node up. `run` does not build the page either: in the
+dev loop Vite serves it. A Clever build hook was declined because it would put
+the build back in the console, and npm driving sbt because Clever calls sbt.
 
 **Strict snapshot contract.** The parent design's contract test let a new server
 field pass, so that backend work could land ahead of its UI. This document makes
@@ -101,8 +102,12 @@ Step 8's commits, in order:
 
 1. **Tooling.** Vite, TypeScript, React, zod, the sbt `frontendBuild` task, the
    page served from `target/frontend/`, and `index-path` defaulting there.
-2. **Straight port.** Today's behaviour and markup, Bootstrap and icons bundled
-   instead of loaded from CDNs, `applySnapshot` carried over unchanged.
+   Today's page moves by `git mv` to `frontend/index.html`, so no copy survives
+   to be served instead; Vite leaves its CDN tags alone. `testkit/app.js`'s
+   `INDEX_PATH` moves to `target/frontend/index.html` in the same commit.
+2. **Straight port.** Today's behaviour and markup, Bootstrap, icons and axios
+   bundled instead of loaded from CDNs, `applySnapshot` carried over unchanged.
+   axios comes from npm until commit 3 replaces it.
 3. **Contracts.** The OpenAPI document, `openapi-typescript` and
    `openapi-fetch` replacing axios, the regenerate-and-diff gate, and the strict
    snapshot contract test.
@@ -124,7 +129,7 @@ Known issues this closes:
 
 | Entry in `docs/known-issues.md` | Closed by |
 | --- | --- |
-| The page and the browser suite depend on three public CDNs at runtime | Step 8, commit 2, together with the `assets` fixture in `e2e/fixtures.js` and the CDN notes in `playwright.config.js` |
+| The page and the browser suite depend on three public CDNs at runtime | Step 8, commit 2, together with the CDN notes in `playwright.config.js`. The `assets` fixture in `e2e/fixtures.js` becomes a guard that fails any case whose page requests a host other than `127.0.0.1` |
 | The issue editor has no cancel, and an unfocused draft is replaced by any room activity | Step 8, commit 4 |
 | A reveal with votes still pushes the participants list down | Step 8a, as a layout change |
 
@@ -143,20 +148,25 @@ protocol (plain TS)    zod snapshot schema, generated API types, typed client
 ```
 
 **Protocol** (`frontend/src/protocol/`). `snapshot.ts` holds the zod schema for
-`RoomSnapshot` and the type inferred from it. `generated/openapi.json` and
-`generated/openapi.d.ts` are committed outputs of tapir and
-`openapi-typescript`. `api.ts` is the `openapi-fetch` client, so every command's
-path, body and responses are checked at compile time.
+`RoomSnapshot` and the type inferred from it. The schema is written once, as a
+function of the object constructor that every nested object goes through, and
+exported twice: `snapshotSchema` with `z.object` for the page and
+`strictSnapshotSchema` with `z.strictObject` for the contract test. zod's
+strictness is per object, so two hand-written schemas could drift apart
+silently. `generated/openapi.json` and `generated/openapi.d.ts` are committed
+outputs of tapir and `openapi-typescript`. `api.ts` is the `openapi-fetch`
+client, so every command's path, body and responses are checked at compile time.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
 owns the stream: the page's connection id, the `EventSource`, close-before-open,
 the watchdog, the leave beacon and the `pagehide`, `pageshow` and
 `visibilitychange` listeners. It exposes a store of
 `{ status: connecting | open | lost | ended, snapshot }` through `subscribe` and
-`getSnapshot`, the shape `useSyncExternalStore` consumes. `view.ts` is today's
-`applySnapshot`: the tally, the reader's own estimation and whether it is
-confirmed. The editor commit removes its `issueFocused` input, leaving a pure
-function of the snapshot.
+`getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
+something changes, since a fresh object per call makes React re-render forever.
+`view.ts` is today's `applySnapshot`: the tally, the reader's own estimation and
+whether it is confirmed. The editor commit removes its `issueFocused` input,
+leaving a pure function of the snapshot.
 
 **Components** (`frontend/src/components/`) follow today's page regions and
 read room state through one hook, `useRoom`. Purely local UI state (the lobby
@@ -185,9 +195,17 @@ maintained continuation, with Lucide's equivalents of the five icons in use
 
 ## Build, serving and the dev loop
 
-**`frontendBuild`.** Runs `npm ci` and `npm run build`; Vite writes to
-`target/frontend/`, which is gitignored and cleared by `sbt clean`. `stage`
-depends on it. `Universal / mappings` includes `target/frontend` so a zip or
+**`frontendBuild`.** Runs `npm run build`; Vite writes to `target/frontend/`,
+which is gitignored and cleared by `sbt clean`. `stage` depends on it. Before
+building it runs `npm ci --include=dev --prefer-offline --no-audit --no-fund
+--fetch-timeout=60000`, but only when `node_modules/.frontend-install-stamp`,
+a hash of `package-lock.json` written after a successful install, is missing or
+stale. Otherwise every `npm test` and `npm run e2e` would reinstall through
+their `stage` pre-hooks, and `npm ci` deletes `node_modules` under a running
+Vite dev server. The flags are CI's, whose comment records the 300 s audit
+stall, and `--include=dev` keeps the build working if `NODE_ENV=production` is
+ever set. The stamp lives in `node_modules`, so `sbt clean` does not force a
+reinstall. `Universal / mappings` includes `target/frontend` so a zip or
 Docker build stays complete. `probe.html` and its mapping are untouched.
 
 **Node guard.** `package.json` declares `"engines": { "node": ">=22.12" }` and
@@ -201,16 +219,23 @@ because Clever updates its image on its own schedule.
 and keeps `PageRoutes`' `no-cache` revalidation. A new `/assets/` route serves
 Vite's content-hashed files with `Cache-Control: public, max-age=31536000,
 immutable`; a file's name changes with its content, and the revalidated page
-names the new files after a deploy. Step 7's route hazard is closed three
-ways: Vite emits everything under `/assets/`, two segments deep where
-`PageRoutes`' `path(Segment)` cannot match; nothing is emitted at the root; and
-the route sits before `PageRoutes` in `API.route`.
+names the new files after a deploy. It reads the `assets/` directory beside
+`index-path`, so the one setting locates both and an override such as testkit's
+or Docker's `INDEX_PATH` cannot serve a page without its scripts. Step 7's
+route hazard is closed three ways: Vite emits everything under `/assets/`, two
+segments deep where `PageRoutes`' `path(Segment)` cannot match; nothing is
+emitted at the root; and the route sits before `PageRoutes` in `API.route`.
 
 **Startup check.** The server refuses to start when the `index-path` file does
 not exist, logging why. Clever's health check accepts any status from 200 to
 500, so a missing page would otherwise deploy successfully and answer `404` to
 everyone. Failing at startup leaves no listening port, which fails the deploy
-and keeps the previous instance serving.
+and keeps the previous instance serving. The check is `require-index`, `true` in
+`application.conf`, and `build.sbt` sets it `false` through `run / javaOptions`
+(`run` forks): the dev loop's `sbt run` needs no built page, and a fresh
+checkout or an `sbt clean` would otherwise stop it from starting. Under `run` a
+missing page logs a warning and `/` answers `404`. Everything started through
+the staged launcher (Clever, Docker, the zip, testkit) keeps the check.
 
 **Generated API types.** An sbt task writes tapir's OpenAPI document to
 `frontend/src/protocol/generated/openapi.json`, adding `tapir-openapi-docs`;
@@ -223,10 +248,12 @@ and fails on `git diff`.
 the reveal with the reader's own estimate, after the reveal, an empty issue)
 and writes them to `target/contract/`. A Vitest test parses each with the strict
 schema, and fails with "run sbt test first" when the files are absent rather
-than passing on nothing. CI's `sbt qa` already runs before `npm test`.
+than passing on nothing. CI's `sbt qa` already runs before it.
 
 **CI additions.** `tsc` in strict mode, ESLint with the React hooks rule,
-Vitest, and the regenerate-and-diff check. This edits
+Vitest as `npm run test:unit`, and the regenerate-and-diff check. Vitest gets
+its own script because `npm test` stays `node --test` behind a `stage`
+pre-hook that unit tests do not need. This edits
 `.github/workflows/ci.yml`, which the `gh` token cannot merge, so the PR is
 merged in GitHub's interface.
 
@@ -247,9 +274,15 @@ the e2e suite covers it against the staged app.
 | `onerror`, `readyState` CLOSED | Status `ended`: "Your session has ended. Please reload the page to rejoin." No reconnect, since the session is gone |
 | `onerror`, `readyState` CONNECTING | Status `lost`: "Connection to the room was lost". The browser retries on the server's `retry` interval |
 | 35 s without hearing anything | Status `lost`, then close and reopen with the same connection id |
-| `visibilitychange` to visible, or `pageshow` | Reconnect at once if "last heard from" is older than 35 s |
+| `visibilitychange` to visible | Reconnect at once if "last heard from" is older than 35 s. Tab switches are frequent and each reconnect is a Join published to the room |
+| `pageshow` with `persisted` | Reconnect at once, always: a restored page may hold a stream closed while it was cached, and its member may be gone after the grace period |
 | `leave()` | Closes the stream, then sends the leave beacon |
 | `pagehide`, not entering the back/forward cache, while in a room | Sends the leave beacon |
+
+`ended` and `leave()` are terminal: the watchdog is disarmed and the resume
+rows do nothing until the next `open()`. Otherwise an ended page would retry
+into a `401` every 35 s, and a page that left would rejoin, since sessions are
+retained and a Join re-adds the member.
 
 **Why the watchdog reconnects rather than only warning.** A stream that dies
 silently (a network drop, a sleeping laptop, a phone suspending the tab) often
@@ -257,8 +290,8 @@ fires no `onerror`, so the browser believes it is open and never retries, and
 the page freezes on a stale room. The roadmap's backlog recorded this from
 manual testing with devtools' offline mode. Reopening with the same connection
 id is the path the browser's own retry takes, and the server already supports
-it: `Room` removes a connection by value, never by id, so a live replacement
-survives.
+it: `RoomData.connect` replaces by id and `RoomData.disconnect` removes by
+value, so a live replacement survives.
 
 **Why timestamps.** Browsers throttle timers in background tabs, so the
 watchdog compares "last heard from" against the clock instead of trusting a
@@ -315,24 +348,34 @@ refused command changes nothing visible, and the next snapshot is the truth.
   `.estimation-button-selected`, `#join-roomId`). Any selector change is listed
   in the PR with its reason. Moving those to role-based selectors belongs to
   step 8a, where the markup changes.
+- **The off-origin guard.** From commit 2, `context` routes every request:
+  `127.0.0.1`, the stub and the app, continues, anything else is aborted and
+  recorded, and the fixture fails the case if anything was. It fails against
+  commit 1, whose page still loads the CDNs, and keeps "no CDN request" true
+  after later dependency changes.
 - **New e2e cases**, each shown failing against the commit before it: going
   offline with `context.setOffline(true)`, returning, and seeing the room
   update; a draft surviving blur and room activity; cancel restoring the room's
   issue; a concurrent change showing the notice; "Use theirs"; saving over a
   concurrent change. The editor cases find elements by role and name, so step
   8a's restyle does not break them.
+- **The Scala specs need no built page.** `APISpec`'s index cases write a
+  fixture page to a temp file and build `ApiConfig` with it, since `sbt qa`
+  starts with `clean`. `ApiConfigSpec` asserts the new default.
 - **Vitest unit tests** in `frontend/src/**/*.test.ts`: `connection.ts` with a
-  fake `EventSource` and fake timers, covering every row of the connection
-  table; `view.ts`; every `useIssueEditor` transition, including the three ways
-  settling ends; the strict contract test. They do not overlap `node --test`'s
-  `test/` folder, and CI runs both.
+  fake `EventSource` and fake timers, covering every row of the connection table
+  and the terminal rule under it; `view.ts`; every `useIssueEditor` transition,
+  including the three ways settling ends; the strict contract test. They do not
+  overlap `node --test`'s `test/` folder, and CI runs both.
 
 ## Docs in the same PR
 
-- `README.md`: Node 22.12 or newer to stage; the dev loop; asset caching; the
-  page path now owned by `application.conf`.
+- `README.md`: Node 22.12 or newer to stage; the dev loop; `npm run test:unit`;
+  asset caching; the page path now owned by `application.conf`.
 - `docs/known-issues.md`: remove the CDN entry and the editor entry.
-- `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8a.
+- `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8a,
+  and reword "tentatively Vue 3, framework choice still open" to React; tick
+  the backlog's connection-liveness watchdog, which step 8 delivers.
 - The parent design: step 8's "Landed" paragraph. The pointers from its step 8
   section and its contract test to this document land with this document.
 
@@ -349,5 +392,5 @@ refused command changes nothing visible, and the next snapshot is the truth.
 
 The e2e suite is green, unchanged or with listed selector changes; the new e2e
 and unit tests pass and were shown failing first; `tsc`, ESLint and the
-regenerate-and-diff gate are green; the page makes no CDN request; and the docs
-above are updated.
+regenerate-and-diff gate are green; the off-origin guard is in place; and the
+docs above are updated.
