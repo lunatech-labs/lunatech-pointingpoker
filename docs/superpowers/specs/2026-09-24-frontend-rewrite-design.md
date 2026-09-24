@@ -227,15 +227,17 @@ segments deep where `PageRoutes`' `path(Segment)` cannot match; nothing is
 emitted at the root; and the route sits before `PageRoutes` in `API.route`.
 
 **Startup check.** The server refuses to start when the `index-path` file does
-not exist, logging why. Clever's health check accepts any status from 200 to
-500, so a missing page would otherwise deploy successfully and answer `404` to
-everyone. Failing at startup leaves no listening port, which fails the deploy
-and keeps the previous instance serving. The check is `require-index`, `true` in
-`application.conf`, and `build.sbt` sets it `false` through `run / javaOptions`
-(`run` forks): the dev loop's `sbt run` needs no built page, and a fresh
-checkout or an `sbt clean` would otherwise stop it from starting. Under `run` a
-missing page logs a warning and `/` answers `404`. Everything started through
-the staged launcher (Clever, Docker, the zip, testkit) keeps the check.
+not exist, logging why. With no `CC_HEALTH_CHECK_PATH` set, Clever's deploy
+check requests `/` and accepts any status from 200 to 499 (its "Health Check"
+reference page), so a missing page would otherwise deploy successfully and
+answer `404` to everyone. Failing at startup leaves no listening port, which
+fails the deploy and keeps the previous instance serving. The check is
+`require-index`, `true` in `application.conf`, and `build.sbt` sets it `false`
+through `run / javaOptions` (`run` forks): the dev loop's `sbt run` needs no
+built page, and a fresh checkout or an `sbt clean` would otherwise stop it from
+starting. Under `run` a missing page logs a warning and `/` answers `404`.
+Everything started through the staged launcher (Clever, Docker, the zip,
+testkit) keeps the check.
 
 **Generated API types.** An sbt task writes tapir's OpenAPI document to
 `frontend/src/protocol/generated/openapi.json`, adding `tapir-openapi-docs`;
