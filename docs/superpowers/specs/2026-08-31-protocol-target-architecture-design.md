@@ -2119,7 +2119,8 @@ Added, each with the step it lands at so nothing here is unassigned:
   gate here: a removed or renamed field fails as a missing required property,
   while a newly added server field passes, which is the direction the additive
   field strategy depends on being safe and which a schema diff would flag as
-  noise.
+  noise. **Superseded:** `2026-09-24-frontend-rewrite-design.md` makes the
+  test strict, so an unlisted field fails, and says why.
 - **`openapi-typescript` over tapir's OpenAPI document** (step 8, with the first
   consumer of the generated types) with a CI step that regenerates and fails on a
   diff, covering the command endpoints. Step 6 lands the tapir descriptions and
@@ -3123,6 +3124,8 @@ opening a new one, and client types checked against the server contract. Waits o
 steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
+Designed in `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md`,
+which splits it into step 8, the technical migration, and step 8a, the UI/UX.
 
 **It also revisits step 3a's frozen deck**, which is fifteen lines of Bootstrap
 utility classes and a `:disabled` rule chosen because they are cheap in a page
