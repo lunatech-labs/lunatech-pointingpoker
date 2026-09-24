@@ -160,7 +160,7 @@ Step 8's commits, in order:
 5. **Behaviour changes, as separate commits:** the path decides the page,
    including Leave keeping the name where today's `doLeave` clears
    `localStorage` and a restored page reloading, first, since the connection commits build on it; close the old stream
-   before opening a new one; the staleness check with self-healing reconnect;
+   before opening a new one; the watchdog with self-healing reconnect;
    the reload on a refusal with the restart notice; alphabetical participant order; the revealed-round live
    region; the issue
    editor's cancel and conflict notice.
@@ -226,7 +226,7 @@ client, so every command's path, body and responses are checked at compile time.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
 owns the stream: the page's connection id, the `EventSource`, close-before-open,
-the staleness check, the liveness fetch and reload on a refusal, the leave beacon and the
+the watchdog, the liveness fetch and reload on a refusal, the leave beacon and the
 `pagehide`, `pageshow` and `visibilitychange` listeners. It exposes a store of
 `{ lost: boolean, fatal: boolean, snapshot }` through `subscribe` and
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
@@ -397,9 +397,9 @@ A failed stream has two recoveries, and each failure maps to one:
 | What happened | Noticed by | Action |
 | --- | --- | --- |
 | The stream went quiet: a network drop, a sleeping laptop, a suspended phone tab | Nothing heard for 35 s | Reopen with the same connection id |
-| The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
+| The stream was refused, usually because the room is gone (a deploy, a crash, an idle stop); a transient proxy error on a live room reloads harmlessly too | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
 
-- **One check** decides from the stream alone: CLOSED, it runs the liveness
+- **One watchdog** decides from the stream alone: CLOSED, it runs the liveness
   fetch; stale, it reopens; otherwise it does nothing. It runs on `onerror`, on
   a periodic tick and on `visibilitychange` to visible, so a failed fetch is
   simply retried on the next run. Reopening only when stale matters because tab
@@ -412,23 +412,30 @@ A failed stream has two recoveries, and each failure maps to one:
   closes on any error response, and a proxy in front of a stopped app answers
   one too (the testkit stub's `502`, Clever's and Vite's proxies). So a CLOSED
   stream first fetches `/<slug>`: a `200` comes only from the running app, so
-  the refusal is real and the page reloads; any other answer or a network error
-  means the app is down, and the next run of the check fetches again.
+  the refusal is real and the page reloads, or shows the message below if it
+  never reached the room; any other answer or a network error means the app is
+  down, and the next run of the watchdog fetches again. One fetch runs at a
+  time, each bounded by a 10 s timeout, so a fetch hung on a proxy is abandoned
+  and the next run tries again.
 - **A back/forward cache restore reloads.** `pageshow` with `persisted` reloads
   the page, so a restored page is a fresh load like every other way into a
   room, including Back after Leave.
 - **Nothing runs while `fatal` or once the page is navigating**, for Leave or a
-  pending reload, so no check or fetch races a page load.
+  pending reload, so no watchdog run or fetch races a page load.
 - **One banner**, "Connection to the room was lost", shows after any `onerror`
-  or 35 s of silence, and clears on the next `onopen` or frame, as today. The browser's own retry
-  on the server's `retry` interval keeps running under it.
-- **Frames.** A heartbeat (empty frame) and a snapshot both record "last heard
-  from". A snapshot is parsed with zod: valid, the store updates; invalid,
+  or 35 s of silence, and clears on the next `onopen` or frame, as today. The
+  browser's own retry on the server's `retry` interval keeps running under it.
+  `fatal` hides it, since the message says more.
+- **Frames.** A heartbeat (empty frame), a snapshot and a reopen all record
+  "last heard from", so a reopened stream gets a full 35 s before it is
+  judged. A snapshot is parsed with zod: valid, the store updates; invalid,
   logged and dropped.
-- **Reload only after reaching the room.** A page load that never received a
-  snapshot shows "Your session has ended. Please reload the page to rejoin."
-  instead and sets `fatal`, so a stream refused every time, such as a `SECURE_COOKIES`
-  mismatch, cannot loop.
+- **Reload only after reaching the room.** When the liveness fetch answers
+  `200` on a page load that never received a snapshot, the page shows "Your
+  session has ended. Please reload the page to rejoin." instead of reloading
+  and sets `fatal`, so a stream refused every time, such as a `SECURE_COOKIES`
+  mismatch, cannot loop. Fetching first means a page caught by a deploy shows
+  it only once the app answers, so the reload it asks for works.
 - **`pagehide`**, not entering the back/forward cache, sends the leave beacon
   while a stream is open. Leave closes the stream first, so it is sent once.
 
@@ -440,8 +447,8 @@ means only the first tab creates it. A refusal means the room is gone, not the
 member: `Room` keeps sessions past the grace period, and "a disconnection
 outlasting the grace period comes back without a reload" covers that. Reloading
 rather than rejoining in place means the page always runs the server's own
-build, which the strict contract assumes. The liveness fetch means the reload waits
-until the app answers, so it never lands on a proxy's error page.
+build, which the strict contract assumes. The liveness fetch means the reload
+waits until the app answers, so it never lands on a proxy's error page.
 
 **Accepted.** A room that crashes on something sent right after a join makes
 every tab reload in a loop, since each load reaches the room. It needs a server
@@ -458,9 +465,9 @@ value, so a live replacement survives.
 
 **Why timestamps.** Browsers throttle timers in background tabs, so the
 watchdog compares "last heard from" against the clock instead of trusting a
-timer to fire on time, which is also what makes the check on `visibilitychange` work. The
-35 s is twice `SSE.heartbeatInterval` (15 s) plus a margin; the constant in
-`connection.ts` and `SSE.heartbeatInterval` each name the other.
+timer to fire on time, which is also what makes the run on `visibilitychange`
+work. The 35 s is twice `SSE.heartbeatInterval` (15 s) plus a margin; the
+constant in `connection.ts` and `SSE.heartbeatInterval` each name the other.
 
 ## Issue editor behaviour
 
@@ -550,17 +557,21 @@ refused command changes nothing visible, and the next snapshot is the truth.
     restyle does not break them.
 - **The Scala specs need no built page.** `APISpec`'s index cases write a
   fixture page to a temp file and build `ApiConfig` with it, since sbt's tests
-  must not depend on npm having run. `ApiConfigSpec` asserts the new default. New `APISpec`
-  cases go through `API.route`: `/` and `/<slug>` answering `503` with the
-  message when the page file is missing; an `/assets/` file served with the
-  `immutable` header from beside `index-path`; and a missing asset answering `404`.
+  must not depend on npm having run. `ApiConfigSpec` asserts the new default.
+  New `APISpec` cases go through `API.route`: `/` and `/<slug>` answering `503`
+  with the message when the page file is missing; an `/assets/` file served
+  with the `immutable` header from beside `index-path`; and a missing asset
+  answering `404`.
 - **Vitest unit tests** in `frontend/src/**/*.test.ts`: `connection.ts` with a
-  fake `EventSource` and fake timers, covering close-before-open, both rows of the connection
-  table, a closed stream with a failing liveness fetch retrying without reloading, a
-  refused stream and Leave's close never reopened, a `persisted` `pageshow`
-  reloading, the check's three triggers, heartbeats alone keeping the stream fresh
-  past 35 s, an invalid snapshot leaving the store unchanged, no check or liveness fetch
-  once navigating or `fatal`, and the reach-the-room rule; `view.ts`, including
+  fake `EventSource` and fake timers, covering close-before-open, both rows of
+  the connection table, a closed stream with a failing liveness fetch retrying
+  without reloading, no second liveness fetch while one is in flight, a hung
+  one abandoned after 10 s, a refused stream and Leave's close never reopened,
+  a `persisted` `pageshow` reloading, the watchdog's three triggers, heartbeats
+  alone keeping the stream fresh past 35 s, a reopen not repeated before
+  another 35 s of silence, an invalid snapshot leaving the store unchanged, no
+  watchdog run or liveness fetch once navigating or `fatal`, the banner hidden
+  while `fatal`, and the reach-the-room rule; `view.ts`, including
   name order ignoring case and accents with the id tie-break; every
   `useIssueEditor` transition, including the three ways settling ends; the
   strict contract test. They do not overlap `node --test`'s `test/` folder, and
