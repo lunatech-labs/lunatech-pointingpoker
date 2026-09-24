@@ -11,6 +11,7 @@ import org.apache.pekko.http.scaladsl.server.directives.ContentTypeResolver.Defa
 import com.lunatech.pointingpoker.config.ApiConfig
 import com.lunatech.pointingpoker.slug.{LegacySlug, Slug, Suggestion}
 import org.slf4j.{Logger, LoggerFactory}
+import org.owasp.encoder.Encode
 
 // The static half stays raw directives: tapir describes what the client calls, not what the
 // server hands back off disk.
@@ -66,7 +67,7 @@ class PageRoutes(apiConfig: ApiConfig):
          |<html lang="en">
          |<head><meta charset="utf-8"><title>Not a room name</title></head>
          |<body>
-         |<p><code>${escape(raw)}</code> is not a room name.</p>
+         |<p><code>${Encode.forHtml(raw)}</code> is not a room name.</p>
          |$suggestion
          |<p><a href="/">Create a room</a></p>
          |</body>
@@ -74,17 +75,6 @@ class PageRoutes(apiConfig: ApiConfig):
          |""".stripMargin
     HttpResponse(StatusCodes.NotFound, entity = HttpEntity(ContentTypes.`text/html(UTF-8)`, page))
   end notARoom
-
-  // The name is whatever was typed into the address bar.
-  private def escape(text: String): String =
-    text.flatMap {
-      case '&'  => "&amp;"
-      case '<'  => "&lt;"
-      case '>'  => "&gt;"
-      case '"'  => "&quot;"
-      case '\'' => "&#39;"
-      case c    => c.toString
-    }
 end PageRoutes
 
 object PageRoutes:
