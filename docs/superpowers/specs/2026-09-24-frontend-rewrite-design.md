@@ -7,8 +7,8 @@ Parent: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.m
 ## Purpose
 
 The page is one hand-written `src/main/resources/pages/index.html`: Vue 2.6,
-end of life since 2023, with Bootstrap 4, axios and feather-icons loaded from
-three public CDNs and no build step. The parent design's step 8 replaces it
+end of life since 2023, with Vue itself, Bootstrap 4, axios and feather-icons, four assets, loaded
+from three public CDNs and no build step. The parent design's step 8 replaces it
 with TypeScript, build tooling, components, a connection module and client
 types checked against the server contract, then adds a theme and a responsive
 layout. This document settles how, and splits the work in two:
@@ -71,16 +71,18 @@ install, web push) stays open as a cheap later addition for any framework.
 **The repo owns the page path.** Clever Cloud's `INDEX_PATH` only overrode
 `application.conf`'s identical default, so it was removed from the console,
 confirmed absent from `clever env` on 2026-09-24. Step 8 then moves the default
-in the same commit as the build that produces the file, with no console change
-to time against a deploy.
+in the same commit as the build that produces the file. The one console
+change left is the build hook, timed in the rollout.
 
-**sbt drives npm, only when packaging.** Clever runs sbt from source on each
-push, then starts the app from the checkout. A `frontendBuild` task that `stage`
-depends on keeps Clever's existing build working unchanged. `compile` and `test`
-never need Node or a built page, because CI runs `sbt qa`, whose first command
-is `clean`, before it sets Node up. `run` does not build the page either: in the
-dev loop Vite serves it. A Clever build hook was declined because it would put
-the build back in the console, and npm driving sbt because Clever calls sbt.
+**The build order lives in a script, not in either tool.** Clever runs sbt
+from source on each push, so a first design had sbt run npm while packaging.
+It needed an install stamp, a bypass for `sbt run`, a Node check in sbt and
+a packaging dependency that sbt does not order on its own, each only because
+one tool drove the other. Clever's `CC_PRE_BUILD_HOOK` runs a repository
+script before the build, which Clever documents for steps a build tool cannot
+own, so the console holds one stable pointer and the steps stay reviewed in the
+repo. A Docker runtime would also keep everything in the repo but needs a new
+Clever application and a domain move, for a problem the hook already solves.
 
 **Strict snapshot contract.** The parent design's contract test let a new server
 field pass, so that backend work could land ahead of its UI. This document makes
@@ -97,32 +99,68 @@ break the page. One rule goes with it: **a new field never changes the meaning
 of an existing one**; a changed meaning gets a new name, and the rename fails
 the test.
 
+**The estimation becomes a tagged union on the wire.** The parent design's
+section 2 deferred it here: `voted`, `hasEstimation` and `estimation` admit
+eight combinations of which five are legal, and its three costs (a custom
+encoder, the two `RoomSnapshotSpec` tests pinning today's shape, the Vue page's
+six read sites) all disappear once the client is rewritten. The participant
+field becomes one `estimation` tagged `NoEstimation`, `ConfirmedHidden`,
+`Confirmed(value)`, `UnconfirmedHidden` or `Unconfirmed(value)`, carrying
+`confirmed` so the re-vote state stays distinct. It is its own commit after the
+strict contract test, so the wire change is reviewed as a contract diff. No
+mixed-version window exists, since a deploy ends every session.
+
+**Participants are listed alphabetically.** The parent design leaves the
+snapshot's `users` order unspecified and gives step 8 the default. `view.ts`
+sorts by name with `localeCompare` at base sensitivity, ignoring case and
+accents, and breaks ties by user id, so every client shows the same stable
+list. "Yourself first" was declined because a screen-sharer's table would
+differ from everyone else's again; by-vote orders stay with Phase 4.
+
+**The revealed-round notice gets a live region.** The parent design's step 3a
+section says step 8 owes it one. Today the notice is toggled with `visibility`,
+which hides it from screen readers, and a region inserted with its text is not
+reliably announced. So one `role="status"` element is always rendered, empty
+before the reveal and holding the sentence after it, in the row's reserved
+height so the look is unchanged. `role="alert"` stays refused, as the parent
+records.
+
 ## Scope and sequencing
 
 Step 8's commits, in order:
 
-1. **Tooling.** Vite, TypeScript, React, zod, the sbt `frontendBuild` task, the
-   page served from `target/frontend/`, and `index-path` defaulting there.
+1. **Tooling.** Vite, TypeScript, React, zod, `mise.toml`,
+   `clevercloud/build-frontend.sh`, CI's reordered steps, the page served from
+   `frontend/dist/` with the `/assets/` route and the `503`, and `index-path`
+   defaulting there.
    Today's page moves by `git mv` to `frontend/index.html`, so no copy survives
    to be served instead; Vite leaves its CDN tags alone. `testkit/app.js`'s
-   `INDEX_PATH` moves to `target/frontend/index.html` in the same commit.
+   `INDEX_PATH` moves to `frontend/dist/index.html`, and the `pretest` and
+   `pree2e` hooks become `npm run build && npm run stage`, in the same commit.
 2. **Straight port.** Today's behaviour and markup, Bootstrap, icons and axios
    bundled instead of loaded from CDNs, `applySnapshot` carried over unchanged.
    axios comes from npm until commit 3 replaces it.
 3. **Contracts.** The OpenAPI document, `openapi-typescript` and
    `openapi-fetch` replacing axios, the regenerate-and-diff gate, and the strict
    snapshot contract test.
-4. **Behaviour changes, as separate commits:** close the old stream before
-   opening a new one; the watchdog with self-healing reconnect; the issue
+4. **Estimation union.** The custom Circe encoder, `RoomSnapshotSpec`'s two
+   shape tests rewritten for the union, the zod schema and `view.ts` reading
+   it, and a contract state for each of the five tags.
+5. **Behaviour changes, as separate commits:** the path decides the page,
+   first, since the connection commits build on it; close the old stream
+   before opening a new one; the staleness check with self-healing reconnect;
+   the reload on a refusal with the restart notice; alphabetical participant order; the revealed-round live
+   region; the issue
    editor's cancel and conflict notice.
 
-The pass condition for commits 1 to 3 is the existing e2e suite green with at
-most listed selector changes. Each commit in 4 brings a test shown failing
+The pass condition for commits 1 to 4 is the existing e2e suite green with at
+most listed selector changes. Each commit in 5 brings a test shown failing
 against the commit before it.
 
 Step 8a: component library and look, light and dark theme, responsive layout,
-the frozen-deck tooltip step 3a declined, restyling the editor, and placing the
-participants list above the results. It restyles step 8's interactions and does
+the frozen-deck tooltip step 3a declined, restyling the editor, placing the
+participants list above the results, and a "Not Alice?" way to join under
+another name than the remembered one. It restyles step 8's interactions and does
 not redesign them; a different interaction there is a deliberate decision with
 a known cost.
 
@@ -130,8 +168,8 @@ Known issues this closes:
 
 | Entry in `docs/known-issues.md` | Closed by |
 | --- | --- |
-| The page and the browser suite depend on three public CDNs at runtime | Step 8, commit 2, together with the CDN notes in `playwright.config.js`. The `assets` fixture in `e2e/fixtures.js` becomes a guard that fails any case whose page requests a host other than `127.0.0.1` |
-| The issue editor has no cancel, and an unfocused draft is replaced by any room activity | Step 8, commit 4 |
+| The page and the browser suite depend on three public CDNs at runtime | Step 8, commit 2, together with the CDN notes in `playwright.config.js`. The `assets` fixture in `e2e/fixtures.js` becomes a guard, installed on every context including those `join` creates, that fails any case whose page requests a host other than `127.0.0.1` |
+| The issue editor has no cancel, and an unfocused draft is replaced by any room activity | Step 8, commit 5 |
 | A reveal with votes still pushes the participants list down | Step 8a, as a layout change |
 
 ## Frontend architecture
@@ -160,9 +198,9 @@ client, so every command's path, body and responses are checked at compile time.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
 owns the stream: the page's connection id, the `EventSource`, close-before-open,
-the watchdog, the leave beacon and the `pagehide`, `pageshow` and
-`visibilitychange` listeners. It exposes a store of
-`{ status: connecting | open | lost | ended, snapshot }` through `subscribe` and
+the staleness check, the reload on a refusal, the leave beacon and the
+`pagehide`, `pageshow` and `visibilitychange` listeners. It exposes a store of
+`{ lost: boolean, fatal: boolean, snapshot }` through `subscribe` and
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
 something changes, since a fresh object per call makes React re-render forever.
 `view.ts` is today's `applySnapshot`: the tally, the reader's own estimation and
@@ -179,8 +217,8 @@ components. User actions go through `api.ts` as POSTs and their effect returns
 as the next snapshot. Nothing updates optimistically except the editor showing
 its own text while a save settles.
 
-**Not added:** a router library (the path is read once at startup, as today:
-`/<slug>` and `?moved=1`), a state library, CSS-in-JS.
+**Not added:** a router library (the path is read once at startup:
+`/<slug>`, `?moved=1` and `?restarted=1`), a state library, CSS-in-JS.
 
 **Layout.** `frontend/` at the repo root holds `index.html`, `src/`,
 `vite.config.ts` and `tsconfig.json`. There is one root `package.json`, shared
@@ -189,56 +227,60 @@ lockfile. Playwright's browsers are a separate download, which keeps Clever's
 install light.
 
 **Keeping the look in step 8.** Bootstrap from npm at 4.6.2, the last 4.x
-release, in place of the CDN's 4.4.1; the e2e suite and a side-by-side look
-confirm the two render alike. feather-icons becomes `lucide-react`, Feather's
-maintained continuation, with Lucide's equivalents of the five icons in use
-(`check`, `check-circle`, `edit-2`, `lock`, `shield-off`).
+release, in place of the CDN's 4.4.1. `.github/dependabot.yml` ignores
+Bootstrap's major versions until 8a, in the commit that adds it, since
+Bootstrap 5 would break the frozen look. feather-icons becomes `lucide-react`,
+Feather's maintained continuation, with Lucide's equivalents of the five icons
+in use (`check`, `check-circle`, `edit-2`, `lock`, `shield-off`), sized to
+today's 20px rather than Lucide's default 24. Commit 1 still serves today's
+page unchanged, so it takes Playwright `toHaveScreenshot` baselines of the
+lobby and a room before and after a reveal; commits 2 to 4 compare against
+them, and the baselines are deleted before commit 5 changes the look.
 
 ## Build, serving and the dev loop
 
-**`frontendBuild`.** Runs `npm run build`; Vite writes to `target/frontend/`,
-which is gitignored and cleared by `sbt clean`. `stage` depends on it. Before
-building it runs `npm ci --include=dev --prefer-offline --no-audit --no-fund
---fetch-timeout=60000`, but only when `node_modules/.frontend-install-stamp`,
-a hash of `package-lock.json` written after a successful install, is missing or
-stale. Otherwise every `npm test` and `npm run e2e` would reinstall through
-their `stage` pre-hooks, and `npm ci` deletes `node_modules` under a running
-Vite dev server. The flags are CI's, whose comment records the 300 s audit
-stall, and `--include=dev` keeps the build working if `NODE_ENV=production` is
-ever set. The stamp lives in `node_modules`, so `sbt clean` does not force a
-reinstall. `Universal / mappings` includes `target/frontend` so a zip or
-Docker build stays complete. `probe.html` and its mapping are untouched.
+**Two builds, one order, and neither tool calls the other.** `npm ci` and
+`npm run build` write the page to `frontend/dist/`; `sbt stage` builds the
+server and knows nothing about npm. Whatever runs them runs the frontend first:
 
-**Node guard.** `package.json` declares `"engines": { "node": ">=22.12" }` and
-a committed `.npmrc` sets `engine-strict=true`, so `npm ci` refuses an older
-Node with its own message. A missing `node` makes the sbt task fail with
-"Node >= 22.12 is needed to package the frontend". Clever's image had Node
-24.21.0 and npm 11.19.0 on 2026-09-24, matching CI's Node 24; the guard is there
-because Clever updates its image on its own schedule.
+| Where | How |
+| --- | --- |
+| Clever | `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh`, which Clever runs before its usual `sbt stage`, failing the deploy if the script fails. The script is `npm ci --include=dev --prefer-offline --no-audit --no-fund --fetch-timeout=60000 && npm run build`, CI's flags, whose comment records the 300 s audit stall |
+| CI | `setup-node`, the same install, `npm run build`, then `sbt qa`, then the node and browser suites |
+| A laptop | See the dev loop below |
 
-**Serving.** `ApiConfig.indexPath` defaults to `target/frontend/index.html`
-and keeps `PageRoutes`' `no-cache` revalidation. A new `/assets/` route serves
+`frontend/dist/` is gitignored and sits outside `target/`, so `sbt clean` leaves
+it alone. `--include=dev` keeps the build working if `NODE_ENV=production` is
+ever set. `Universal / mappings` gains nothing: the app runs with the checkout
+as its working directory, the way today's `src/main/resources/pages` path is
+found, and no zip or Docker build is produced. `probe.html` and its mapping are
+untouched.
+
+**Node is pinned in `mise.toml`.** Clever runs `mise install` before the build
+on every runtime, putting the pinned Node on the build's `PATH`; `mise` 2026.6.14
+and Node 24.21.0 were on the instance by `clever ssh` on 2026-09-24. CI's
+`setup-node` reads the same version, and a laptop can use `mise install` or any
+Node of that major. A syntax error in `mise.toml` fails the deploy with a
+misleading message, so the file stays a single `[tools]` line.
+
+**Serving.** `ApiConfig.indexPath` defaults to `frontend/dist/index.html` and
+keeps `PageRoutes`' `no-cache` revalidation. A new `/assets/` route serves
 Vite's content-hashed files with `Cache-Control: public, max-age=31536000,
 immutable`; a file's name changes with its content, and the revalidated page
 names the new files after a deploy. It reads the `assets/` directory beside
-`index-path`, so the one setting locates both and an override such as testkit's
-or Docker's `INDEX_PATH` cannot serve a page without its scripts. Step 7's
-route hazard is closed three ways: Vite emits everything under `/assets/`, two
-segments deep where `PageRoutes`' `path(Segment)` cannot match; nothing is
-emitted at the root; and the route sits before `PageRoutes` in `API.route`.
+`index-path`, so the one setting locates both and an override such as
+testkit's `INDEX_PATH` cannot serve a page without its scripts. Step 7's route
+hazard is closed three ways: Vite emits everything under `/assets/`, two
+segments deep where `PageRoutes`' `path(Segment)` cannot match; there is no
+`frontend/public/`, so nothing is emitted at the root; and the route sits before
+`PageRoutes` in `API.route`.
 
-**Startup check.** The server refuses to start when the `index-path` file does
-not exist, logging why. With no `CC_HEALTH_CHECK_PATH` set, Clever's deploy
-check requests `/` and accepts any status from 200 to 499 (its "Health Check"
-reference page), so a missing page would otherwise deploy successfully and
-answer `404` to everyone. Failing at startup leaves no listening port, which
-fails the deploy and keeps the previous instance serving. The check is
-`require-index`, `true` in `application.conf`, and `build.sbt` sets it `false`
-through `run / javaOptions` (`run` forks): the dev loop's `sbt run` needs no
-built page, and a fresh checkout or an `sbt clean` would otherwise stop it from
-starting. Under `run` a missing page logs a warning and `/` answers `404`.
-Everything started through the staged launcher (Clever, Docker, the zip,
-testkit) keeps the check.
+**A missing page answers `503`.** When the `index-path` file does not exist,
+`/` and `/<slug>` answer `503` with "The page is not built: run `npm run
+build`", and startup logs the same. With no `CC_HEALTH_CHECK_PATH` set,
+Clever's deploy check requests `/` and accepts only 200 to 499 (its "Health
+Check" reference page), so a deploy without a page fails and the previous
+instance keeps serving, while `sbt run` still starts for backend work.
 
 **Generated API types.** An sbt task writes tapir's OpenAPI document to
 `frontend/src/protocol/generated/openapi.json`, adding `tapir-openapi-docs`;
@@ -248,44 +290,103 @@ and fails on `git diff`.
 
 **Snapshot contract test.** A Scala test builds snapshots through
 `RoomSnapshot.of` and the production encoder for representative states (before
-the reveal with the reader's own estimate, after the reveal, an empty issue)
-and writes them to `target/contract/`. A Vitest test parses each with the strict
+the reveal with the reader's own estimate, after the reveal, an empty issue,
+and from commit 4 one per estimation tag)
+and writes them to `target/contract/`, emptying it first so a removed state
+leaves no file behind. A Vitest test parses each with the strict
 schema, and fails with "run sbt test first" when the files are absent rather
 than passing on nothing. CI's `sbt qa` already runs before it.
 
 **CI additions.** `tsc` in strict mode, ESLint with the React hooks rule,
 Vitest as `npm run test:unit`, and the regenerate-and-diff check. Vitest gets
-its own script because `npm test` stays `node --test` behind a `stage`
-pre-hook that unit tests do not need. This edits
+its own script because `npm test` stays `node --test` behind a build and
+stage pre-hook that unit tests do not need. This edits
 `.github/workflows/ci.yml`, which the `gh` token cannot merge, so the PR is
 merged in GitHub's interface.
 
-**Dev loop.** `npm run dev` starts Vite's dev server with hot reload and
-forwards `/rooms` and `/create-room` to `sbt run` on port 8080, SSE included.
-`/<slug>` works because Vite serves the page for unknown paths. The server-side
-page logic (the not-a-room page, the UUID redirect) is not reproduced there;
-the e2e suite covers it against the staged app.
+**Dev loop.** Two terminals, one per tool. For page work, `SECURE_COOKIES=false
+sbt run` and `npm run dev`, then open Vite's address: it serves the page from
+source with hot reload and forwards `/rooms` and `/create-room` to port 8080,
+SSE included, so the browser sees one origin and the cookie works. `/<slug>`
+works because Vite serves the page for unknown paths; the not-a-room page and
+the UUID redirect are not reproduced there, and the e2e suite covers them
+against the staged app. For backend work, `npm run build` once and `sbt run`
+alone on port 8080, as today. A combined `npm run dev:all` is left until
+someone asks for it.
+
+## Pages and navigation
+
+The URL is the only thing that decides what the page shows, and every change of
+room is a page load:
+
+| Path | Shows |
+| --- | --- |
+| `/` | The lobby, always: Create and Join, the remembered name prefilled, and "Rejoin brave-golden-otter as Alice" when a room is remembered |
+| `/<slug>` | The room. With a remembered name it joins at once; without one, the join form with the slug fixed. Invalid slugs and legacy UUIDs keep the server's not-a-room page and `?moved=1` redirect |
+| `/<slug>?restarted=1` | The room, with a dismissible "The room was restarted, so votes were reset" notice, cleared from the address like `?moved=1` |
+
+Create and Join store the name and room, then go to `/<slug>`. Leave closes the
+stream, sends the leave beacon, forgets the room but keeps the name, and goes
+to `/`. Back from `/` therefore reloads `/<slug>` and rejoins, which is where
+the user was. Step 7's "a room remembered from before the cutover reopens
+under its derived name" in `e2e/slug.spec.js` relied on `/` rejoining, so it
+changes to clicking the lobby's rejoin link, which reaches the server's UUID
+redirect; that change is listed in the PR.
+
+Two costs are left open. A shared link opened with someone else's name
+remembered joins as them, as today; a "Not Alice?" affordance belongs to step
+8a. A mistyped but valid slug creates an empty room, since `/join` creates any
+valid slug; that is a server question, recorded in `docs/known-issues.md`.
+
+**Why.** Today `created()` rejoins the remembered room even on `/`, so a bare
+`/` opens a room from days ago, recreated empty, and after Create the address
+still reads `/`. Making the path decide gives startup one rule and a URL that
+always names the room shown. Because the page never changes rooms in place, no
+frame can put it back into a room it left, with no terminal state, one-shot
+`entering` flag or router to maintain. The cost is a page load on create, join
+and leave, unnoticed on a laptop and up to a second on a weak phone connection.
 
 ## Connection behaviour
 
-| Event | Result |
-| --- | --- |
-| `open()` | Closes any existing stream, opens one with the page's connection id. Status `connecting`, watchdog armed |
-| `onopen` | Status `open`; any connection banner clears |
-| Heartbeat (empty frame) | Records "last heard from" |
-| Snapshot frame | Parsed with zod. Valid: the store updates. Invalid: logged and dropped. Either way, records "last heard from" |
-| `onerror`, `readyState` CLOSED | Status `ended`: "Your session has ended. Please reload the page to rejoin." No reconnect, since the session is gone |
-| `onerror`, `readyState` CONNECTING | Status `lost`: "Connection to the room was lost". The browser retries on the server's `retry` interval |
-| 35 s without hearing anything | Status `lost`, then close and reopen with the same connection id |
-| `visibilitychange` to visible | Reconnect at once if "last heard from" is older than 35 s. Tab switches are frequent and each reconnect is a Join published to the room |
-| `pageshow` with `persisted` | Reconnect at once, always: a restored page may hold a stream closed while it was cached, and its member may be gone after the grace period |
-| `leave()` | Closes the stream, then sends the leave beacon |
-| `pagehide`, not entering the back/forward cache, while in a room | Sends the leave beacon |
+A failed stream has two recoveries, and each failure maps to one:
 
-`ended` and `leave()` are terminal: the watchdog is disarmed and the resume
-rows do nothing until the next `open()`. Otherwise an ended page would retry
-into a `401` every 35 s, and a page that left would rejoin, since sessions are
-retained and a Join re-adds the member.
+| What happened | Noticed by | Action |
+| --- | --- | --- |
+| The stream went quiet or broke: a network drop, a sleeping laptop, a back/forward cache restore | Nothing heard for 35 s, or the stream is closed | Reopen with the same connection id |
+| The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED | Reload to `/<slug>?restarted=1`, which rejoins |
+
+- **One check** reopens a stale or closed stream. It runs on a periodic tick,
+  on `visibilitychange` to visible and on `pageshow`. Reopening only when stale
+  matters because tab switches are frequent and each reopen is a Join published
+  to the room.
+- **One banner**, "Connection to the room was lost", shows from an `onerror`
+  with `readyState` CONNECTING or from 35 s of silence, and clears on the next
+  `onopen` or frame, as today. The browser's own retry on the server's `retry`
+  interval keeps running under it.
+- **Frames.** A heartbeat (empty frame) and a snapshot both record "last heard
+  from". A snapshot is parsed with zod: valid, the store updates; invalid,
+  logged and dropped.
+- **Reload only after reaching the room.** A page load that never received a
+  snapshot shows "Your session has ended. Please reload the page to rejoin."
+  instead, so a stream refused every time, such as a `SECURE_COOKIES`
+  mismatch, cannot loop.
+- **`pagehide`**, not entering the back/forward cache, sends the leave beacon
+  while a stream is open. Leave closes the stream first, so it is sent once.
+
+**Why reload on a refusal.** The parent design gives step 8's connection module
+the rejoin under the remembered name, and a reload already is one: `/<slug>`
+with a remembered name joins, `/join` recreates a valid slug that no longer
+exists (`RoomManager`'s `RequestSession`), and one-at-a-time handling there
+means only the first tab creates it. A refusal means the room is gone, not the
+member: `Room` keeps sessions past the grace period, and "a disconnection
+outlasting the grace period comes back without a reload" covers that. Reloading
+rather than rejoining in place means the page always runs the server's own
+build, which the strict contract assumes. A refusal is a server response, so the
+reload never lands on a server that is down.
+
+**Accepted.** A room that crashes on something sent right after a join makes
+every tab reload in a loop, since each load reaches the room. It needs a server
+bug and is loud rather than silent, so no reload budget guards it.
 
 **Why the watchdog reconnects rather than only warning.** A stream that dies
 silently (a network drop, a sleeping laptop, a phone suspending the tab) often
@@ -298,7 +399,7 @@ value, so a live replacement survives.
 
 **Why timestamps.** Browsers throttle timers in background tabs, so the
 watchdog compares "last heard from" against the clock instead of trusting a
-timer to fire on time, which is also what makes the resume check work. The
+timer to fire on time, which is also what makes the check on `visibilitychange` work. The
 35 s is twice `SSE.heartbeatInterval` (15 s) plus a margin; the constant in
 `connection.ts` and `SSE.heartbeatInterval` each name the other.
 
@@ -329,9 +430,10 @@ the same message, so a completed POST means the room holds the value, but the
 SSE frame carrying it can reach the browser after the HTTP response. Returning
 to snapshots at once would flash the old text. Each connection receives the
 room's snapshots in order, so the one carrying the edit precedes any later
-edit's, and waiting for the saved text cannot hide someone else's later change.
-The reconnect and the timeout cover the one case where that snapshot never
-arrives: a slow client whose queue dropped it on overflow.
+edit's, so waiting for the saved text hides someone else's later change only
+in the one case where that snapshot never arrives: a slow client whose queue
+dropped it on overflow. The reconnect and the timeout bound that to at most
+5 s.
 
 This also removes both narrow windows the parent design recorded for the focus
 guard, the blur landing before the commit click and the revert during the save
@@ -346,36 +448,57 @@ refused command changes nothing visible, and the next snapshot is the truth.
 ## Testing
 
 - **The existing e2e suite, in Chromium and Firefox, is the judge of commits 1
-  to 3.** The port keeps Bootstrap's markup and class names, so the suite
+  to 4.** The port keeps Bootstrap's markup and class names, so the suite
   should pass unchanged, CSS-class selectors included (`tbody tr`,
   `.estimation-button-selected`, `#join-roomId`). Any selector change is listed
   in the PR with its reason. Moving those to role-based selectors belongs to
   step 8a, where the markup changes.
-- **The off-origin guard.** From commit 2, `context` routes every request:
-  `127.0.0.1`, the stub and the app, continues, anything else is aborted and
-  recorded, and the fixture fails the case if anything was. It fails against
+- **The off-origin guard.** From commit 2, one helper in `e2e/fixtures.js`
+  installs the guard on every browser context the suite opens: the `context`
+  fixture's and each one `join` creates with `browser.newContext`. It routes
+  only a URL predicate, `url => url.hostname !== '127.0.0.1'`, so same-origin
+  traffic (the stub, the app, `/events` streams) never passes through the
+  runner. A matched request is aborted and recorded, and the fixture fails the
+  case if anything was. A guard on `context` alone would miss every page
+  `join` opens and still pass. It fails against
   commit 1, whose page still loads the CDNs, and keeps "no CDN request" true
   after later dependency changes.
 - **New e2e cases**, each shown failing against the commit before it: going
   offline with `context.setOffline(true)`, returning, and seeing the room
-  update; a draft surviving blur and room activity; cancel restoring the room's
+  update; `/` showing the lobby with a rejoin link rather than joining, and
+  Create, Join and Leave changing the address; a session ended by restarting
+  the app, the page rejoining the recreated room under its name with the
+  restart notice; a refused stream on a page that never reached the room
+  showing the message without reloading; `getByRole('status')` present and empty before a reveal and holding
+  the notice after it; a draft surviving blur and room activity; Enter saving and Escape
+  cancelling; cancel restoring the room's
   issue; a concurrent change showing the notice; "Use theirs"; saving over a
   concurrent change. The editor cases find elements by role and name, so step
   8a's restyle does not break them.
 - **The Scala specs need no built page.** `APISpec`'s index cases write a
   fixture page to a temp file and build `ApiConfig` with it, since `sbt qa`
-  starts with `clean`. `ApiConfigSpec` asserts the new default.
+  starts with `clean`. `ApiConfigSpec` asserts the new default. New `APISpec`
+  cases go through `API.route`: `/` and `/<slug>` answering `503` with the
+  message when the page file is missing; an `/assets/` file served with the
+  `immutable` header from beside `index-path`; a missing asset answering `404`;
+  and `/assets/x.js` never reaching `PageRoutes`.
 - **Vitest unit tests** in `frontend/src/**/*.test.ts`: `connection.ts` with a
-  fake `EventSource` and fake timers, covering every row of the connection table
-  and the terminal rule under it; `view.ts`; every `useIssueEditor` transition,
+  fake `EventSource` and fake timers, covering both rows of the connection
+  table, the check's three triggers and the reach-the-room rule; `view.ts`; every `useIssueEditor` transition,
   including the three ways settling ends; the strict contract test. They do not
   overlap `node --test`'s `test/` folder, and CI runs both.
 
 ## Docs in the same PR
 
-- `README.md`: Node 22.12 or newer to stage; the dev loop; `npm run test:unit`;
+- `README.md`: `mise.toml`'s Node, or any Node of that major; both dev modes,
+  the two-terminal page loop and `npm run build` before `sbt run` alone; `npm run test:unit`;
   asset caching; the page path now owned by `application.conf`.
-- `docs/known-issues.md`: remove the CDN entry and the editor entry.
+- `docs/known-issues.md`: remove the CDN entry and the editor entry; add "A
+  mistyped but valid room name opens a new empty room", since `/join` creates
+  any valid slug; move the citations of entries that point into today's
+  `index.html` ("A reveal with votes still pushes the participants list down",
+  "A tied vote is broken by JavaScript key order", "A Show during a partial
+  re-vote") to the symbols that replace them.
 - `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8a,
   and reword "tentatively Vue 3, framework choice still open" to React; tick
   the backlog's connection-liveness watchdog, which step 8 delivers.
@@ -384,13 +507,39 @@ refused command changes nothing visible, and the next snapshot is the truth.
 
 ## Rollout
 
+Done outside working hours, since the merge restarts the server and ends every
+live room.
+
 1. ~~Remove `INDEX_PATH` from the Clever console.~~ Done: absent from
    `clever env` on 2026-09-24.
-2. Merge in GitHub's interface, because of the `ci.yml` change.
-3. The merge restarts the server and ends every live room, so it waits for a
-   confirmation that no rooms are in use.
-4. After the first deploy, read the deploy log for the `npm ci` and Vite lines
-   and open a room.
+2. Set `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh` just before merging:
+   set earlier, a deploy of the old `main` fails on the missing script, which is
+   safe but noisy.
+3. Merge in GitHub's interface, because of the `ci.yml` change. Clever
+   redeploys on its own.
+4. Read the deploy log for `mise install`, the hook's `npm ci` and Vite lines,
+   then `sbt stage`, in that order.
+5. Test by hand with five participants on four devices: a desktop, a dev VM, a
+   Mac laptop in Safari and in Firefox, and an Android phone. Safari and a real
+   phone are what the e2e suite never runs.
+   - Edit the issue, vote, re-vote, show and clear.
+   - Reload one tab repeatedly, and close another.
+   - Restart the app from Clever's console while in a room: every participant
+     comes back with the restart notice.
+   - Take one browser offline in devtools for about a minute: the banner shows,
+     then clears on return.
+   - Lock the phone, or switch apps, for a minute: the room is current on
+     return.
+
+**Rollback**, if step 5 fails:
+
+1. Remove `CC_PRE_BUILD_HOOK`, since the previous commit has no script.
+2. Redeploy the previous commit from Clever's console. No wait for empty rooms
+   is needed, since a broken page has none.
+3. Revert step 8 on `main` unless the fix lands the same day. It is not yet
+   known which commit Clever builds when it restarts the application on its
+   own; if it takes `main`, that build fails without the hook, which is
+   harmless while an old instance serves and an outage when none does.
 
 ## Done when
 
