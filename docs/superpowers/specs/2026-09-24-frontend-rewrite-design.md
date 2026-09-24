@@ -113,16 +113,18 @@ mixed-version window exists, since a deploy ends every session.
 **Participants are listed alphabetically.** The parent design leaves the
 snapshot's `users` order unspecified and gives step 8 the default. `view.ts`
 sorts by name with `localeCompare` at base sensitivity, ignoring case and
-accents, and breaks ties by user id, so every client shows the same stable
-list. "Yourself first" was declined because a screen-sharer's table would
-differ from everyone else's again; by-vote orders stay with Phase 4.
+accents, and breaks ties by user id. Clients already agree, since
+`RoomSnapshot.of` sorts by id; the reason is readability, since a table sorted by
+id reads as random. "Yourself first" was declined because a screen-sharer's
+table would differ from everyone else's; by-vote orders stay with Phase 4.
 
 **The revealed-round notice gets a live region.** The parent design's step 3a
 section says step 8 owes it one. Today the notice is toggled with `visibility`,
 which hides it from screen readers, and a region inserted with its text is not
 reliably announced. So one `role="status"` element is always rendered, empty
-before the reveal and holding the sentence after it, in the row's reserved
-height so the look is unchanged. `role="alert"` stays refused, as the parent
+before the reveal and holding the sentence after it, and it carries the row's
+reserved height itself, so the look is unchanged and Playwright sees it as
+visible when empty. `role="alert"` stays refused, as the parent
 records.
 
 ## Scope and sequencing
@@ -136,7 +138,12 @@ Step 8's commits, in order:
    Today's page moves by `git mv` to `frontend/index.html`, so no copy survives
    to be served instead; Vite leaves its CDN tags alone. `testkit/app.js`'s
    `INDEX_PATH` moves to `frontend/dist/index.html`, and the `pretest` and
-   `pree2e` hooks become `npm run build && npm run stage`, in the same commit.
+   `pree2e` hooks become `npm run build && npm run stage`, in the same commit,
+   and `testkit/app.js` checks that `INDEX_PATH` exists beside its launcher
+   check, failing with "Run: npm run build" rather than a 30 s readiness
+   timeout. `DockerPlugin`, `dockerEnvVars` and `dockerBaseImage` leave
+   `build.sbt`, since an image would now ship without the page and nothing
+   builds one; `testkit/app.js`'s header stops citing Docker.
 2. **Straight port.** Today's behaviour and markup, Bootstrap, icons and axios
    bundled instead of loaded from CDNs, `applySnapshot` carried over unchanged.
    axios comes from npm until commit 3 replaces it.
@@ -147,11 +154,27 @@ Step 8's commits, in order:
    shape tests rewritten for the union, the zod schema and `view.ts` reading
    it, and a contract state for each of the five tags.
 5. **Behaviour changes, as separate commits:** the path decides the page,
-   first, since the connection commits build on it; close the old stream
+   including Leave keeping the name where today's `doLeave` clears
+   `localStorage`, first, since the connection commits build on it; close the old stream
    before opening a new one; the staleness check with self-healing reconnect;
    the reload on a refusal with the restart notice; alphabetical participant order; the revealed-round live
    region; the issue
    editor's cancel and conflict notice.
+
+Existing e2e cases commit 5 changes, each in the commit whose behaviour it
+pinned:
+
+- **The path decides the page.** `slug.spec.js`'s "a room remembered from before
+  the cutover reopens under its derived name" clicks the lobby's rejoin link
+  (see Pages and navigation). The comments on `newTab` in `e2e/fixtures.js` and
+  in `room.spec.js`'s "a straggler reloading leaves the votes hidden" stop
+  crediting `created()` and credit `/<slug>` joining with the remembered name.
+- **The issue editor.** `room.spec.js`'s "the issue box resyncs once the editor
+  loses focus" is inverted in place into "a draft survives blur and room
+  activity": same setup, the final assertion now expects the draft kept. The
+  comments in "an edit committed with the check button reaches the other
+  browser" and "a commit that never blurred the box still lets the room resync
+  it" stop arguing from the focus guard the commit removes.
 
 The pass condition for commits 1 to 4 is the existing e2e suite green with at
 most listed selector changes. Each commit in 5 brings a test shown failing
@@ -198,7 +221,7 @@ client, so every command's path, body and responses are checked at compile time.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
 owns the stream: the page's connection id, the `EventSource`, close-before-open,
-the staleness check, the reload on a refusal, the leave beacon and the
+the staleness check, the probe and reload on a refusal, the leave beacon and the
 `pagehide`, `pageshow` and `visibilitychange` listeners. It exposes a store of
 `{ lost: boolean, fatal: boolean, snapshot }` through `subscribe` and
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
@@ -232,10 +255,15 @@ Bootstrap's major versions until 8a, in the commit that adds it, since
 Bootstrap 5 would break the frozen look. feather-icons becomes `lucide-react`,
 Feather's maintained continuation, with Lucide's equivalents of the five icons
 in use (`check`, `check-circle`, `edit-2`, `lock`, `shield-off`), sized to
-today's 20px rather than Lucide's default 24. Commit 1 still serves today's
-page unchanged, so it takes Playwright `toHaveScreenshot` baselines of the
-lobby and a room before and after a reveal; commits 2 to 4 compare against
-them, and the baselines are deleted before commit 5 changes the look.
+today's 20px rather than Lucide's default 24. The look is checked side by
+side, not by pixel baselines: a throwaway Playwright script, not committed,
+captures the lobby and a room before and after a reveal at one viewport, run at
+commit 1 (today's page) and at commit 4, and both sets go in the PR with Lucide's
+redrawn icons noted as the expected difference. Pixel baselines were rejected:
+the slug differs every run, baselines differ by platform and browser, and
+commit 2 changes the icons on purpose, so they would need masking, a Docker
+image in CI and a re-baseline for a test deleted three commits later. The
+reveal notice's bounding-box case in `room.spec.js` keeps guarding layout.
 
 ## Build, serving and the dev loop
 
@@ -246,7 +274,7 @@ server and knows nothing about npm. Whatever runs them runs the frontend first:
 | Where | How |
 | --- | --- |
 | Clever | `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh`, which Clever runs before its usual `sbt stage`, failing the deploy if the script fails. The script is `npm ci --include=dev --prefer-offline --no-audit --no-fund --fetch-timeout=60000 && npm run build`, CI's flags, whose comment records the 300 s audit stall |
-| CI | `setup-node`, the same install, `npm run build`, then `sbt qa`, then the node and browser suites |
+| CI | `jdx/mise-action` in place of `setup-node`, installing from `mise.toml`, then `./clevercloud/build-frontend.sh` itself, then `sbt qa`, then the node and browser suites, so the deploy script is run on every push before production first runs it |
 | A laptop | See the dev loop below |
 
 `frontend/dist/` is gitignored and sits outside `target/`, so `sbt clean` leaves
@@ -258,8 +286,9 @@ untouched.
 
 **Node is pinned in `mise.toml`.** Clever runs `mise install` before the build
 on every runtime, putting the pinned Node on the build's `PATH`; `mise` 2026.6.14
-and Node 24.21.0 were on the instance by `clever ssh` on 2026-09-24. CI's
-`setup-node` reads the same version, and a laptop can use `mise install` or any
+and Node 24.21.0 were on the instance by `clever ssh` on 2026-09-24. CI
+installs from the same file with `jdx/mise-action`, since `setup-node`'s
+`node-version-file` does not read `mise.toml`, and a laptop can use `mise install` or any
 Node of that major. A syntax error in `mise.toml` fails the deploy with a
 misleading message, so the file stays a single `[tools]` line.
 
@@ -270,10 +299,9 @@ immutable`; a file's name changes with its content, and the revalidated page
 names the new files after a deploy. It reads the `assets/` directory beside
 `index-path`, so the one setting locates both and an override such as
 testkit's `INDEX_PATH` cannot serve a page without its scripts. Step 7's route
-hazard is closed three ways: Vite emits everything under `/assets/`, two
-segments deep where `PageRoutes`' `path(Segment)` cannot match; there is no
-`frontend/public/`, so nothing is emitted at the root; and the route sits before
-`PageRoutes` in `API.route`.
+hazard is closed two ways: Vite emits everything under `/assets/`, two
+segments deep where `PageRoutes`' `path(Segment)` cannot match; and there is no
+`frontend/public/`, so nothing is emitted at the root.
 
 **A missing page answers `503`.** When the `index-path` file does not exist,
 `/` and `/<slug>` answer `503` with "The page is not built: run `npm run
@@ -298,7 +326,9 @@ schema, and fails with "run sbt test first" when the files are absent rather
 than passing on nothing. CI's `sbt qa` already runs before it.
 
 **CI additions.** `tsc` in strict mode, ESLint with the React hooks rule,
-Vitest as `npm run test:unit`, and the regenerate-and-diff check. Vitest gets
+Vitest as `npm run test:unit`, and the regenerate-and-diff check. Vitest's
+config sets its include to `frontend/src`, so it never picks up `e2e/` or
+`test/`. Vitest gets
 its own script because `npm test` stays `node --test` behind a build and
 stage pre-hook that unit tests do not need. This edits
 `.github/workflows/ci.yml`, which the `gh` token cannot merge, so the PR is
@@ -323,11 +353,17 @@ room is a page load:
 | --- | --- |
 | `/` | The lobby, always: Create and Join, the remembered name prefilled, and "Rejoin brave-golden-otter as Alice" when a room is remembered |
 | `/<slug>` | The room. With a remembered name it joins at once; without one, the join form with the slug fixed. Invalid slugs and legacy UUIDs keep the server's not-a-room page and `?moved=1` redirect |
-| `/<slug>?restarted=1` | The room, with a dismissible "The room was restarted, so votes were reset" notice, cleared from the address like `?moved=1` |
+| `/<slug>?restarted=1` | The room, with a dismissible "The room was restarted, so votes were reset" notice, `role="status"` like `movedBanner` so the `alert` selector never matches it, cleared from the address like `?moved=1` |
 
-Create and Join store the name and room, then go to `/<slug>`. Leave closes the
+Create and Join store the name, then go to `/<slug>` with the typed slug
+passed through `encodeURIComponent`. The room is remembered when the page first
+receives its snapshot, so an unreachable typed name is never offered back and a
+shared link that joins becomes the remembered room. A stored room that is not a
+slug, from before the cutover, is offered as "Rejoin your last room as Alice".
+Leave closes the
 stream, sends the leave beacon, forgets the room but keeps the name, and goes
-to `/`. Back from `/` therefore reloads `/<slug>` and rejoins, which is where
+to `/`. Back from `/` therefore reloads `/<slug>` and rejoins (a back/forward
+cache restore reloads too), which is where
 the user was. Step 7's "a room remembered from before the cutover reopens
 under its derived name" in `e2e/slug.spec.js` relied on `/` rejoining, so it
 changes to clicking the lobby's rejoin link, which reaches the server's UUID
@@ -336,7 +372,9 @@ redirect; that change is listed in the PR.
 Two costs are left open. A shared link opened with someone else's name
 remembered joins as them, as today; a "Not Alice?" affordance belongs to step
 8a. A mistyped but valid slug creates an empty room, since `/join` creates any
-valid slug; that is a server question, recorded in `docs/known-issues.md`.
+valid slug; that is a server question, already recorded in
+`docs/known-issues.md` as "An unrecognized `roomId` silently creates an empty
+room".
 
 **Why.** Today `created()` rejoins the remembered room even on `/`, so a bare
 `/` opens a room from days ago, recreated empty, and after Create the address
@@ -352,13 +390,28 @@ A failed stream has two recoveries, and each failure maps to one:
 
 | What happened | Noticed by | Action |
 | --- | --- | --- |
-| The stream went quiet or broke: a network drop, a sleeping laptop, a back/forward cache restore | Nothing heard for 35 s, or the stream is closed | Reopen with the same connection id |
-| The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED | Reload to `/<slug>?restarted=1`, which rejoins |
+| The stream went quiet: a network drop, a sleeping laptop, a suspended phone tab | Nothing heard for 35 s | Reopen with the same connection id |
+| The server refused the stream, because the room is gone: a deploy, a crash, an idle stop | `onerror` with `readyState` CLOSED, then `GET /<slug>` answering `200` | Reload to `/<slug>?restarted=1`, which rejoins |
 
-- **One check** reopens a stale or closed stream. It runs on a periodic tick,
-  on `visibilitychange` to visible and on `pageshow`. Reopening only when stale
+- **One check** reopens a stale stream, and only a stale one. It runs on a
+  periodic tick and on `visibilitychange` to visible. Reopening only when stale
   matters because tab switches are frequent and each reopen is a Join published
   to the room.
+- **A closed stream is never reopened.** `EventSource` reaches CLOSED only on
+  an error response or the page's own `close()`; a network drop leaves it
+  CONNECTING and the browser retries by itself. So CLOSED means a refusal, or
+  a Leave that must stay closed.
+- **A closed stream is probed before any reload.** `EventSource` closes on any
+  error response, and a proxy in front of a stopped app answers one too (the
+  testkit stub's `502`, Clever's and Vite's proxies). So a CLOSED stream first
+  fetches `/<slug>`: a `200` comes only from the running app, so the refusal is
+  real and the page reloads; any other answer or a network error means the app
+  is down, so the banner shows and the check probes again on its next run.
+- **A back/forward cache restore reloads.** `pageshow` with `persisted` reloads
+  the page, so a restored page is a fresh load like every other way into a
+  room, including Back after Leave.
+- **Nothing runs while `fatal` or once the page is navigating**, for Leave or a
+  pending reload, so no check or probe races a page load.
 - **One banner**, "Connection to the room was lost", shows from an `onerror`
   with `readyState` CONNECTING or from 35 s of silence, and clears on the next
   `onopen` or frame, as today. The browser's own retry on the server's `retry`
@@ -381,8 +434,8 @@ means only the first tab creates it. A refusal means the room is gone, not the
 member: `Room` keeps sessions past the grace period, and "a disconnection
 outlasting the grace period comes back without a reload" covers that. Reloading
 rather than rejoining in place means the page always runs the server's own
-build, which the strict contract assumes. A refusal is a server response, so the
-reload never lands on a server that is down.
+build, which the strict contract assumes. The probe means the reload waits
+until the app answers, so it never lands on a proxy's error page.
 
 **Accepted.** A room that crashes on something sent right after a join makes
 every tab reload in a loop, since each load reaches the room. It needs a server
@@ -463,28 +516,43 @@ refused command changes nothing visible, and the next snapshot is the truth.
   `join` opens and still pass. It fails against
   commit 1, whose page still loads the CDNs, and keeps "no CDN request" true
   after later dependency changes.
-- **New e2e cases**, each shown failing against the commit before it: going
-  offline with `context.setOffline(true)`, returning, and seeing the room
-  update; `/` showing the lobby with a rejoin link rather than joining, and
-  Create, Join and Leave changing the address; a session ended by restarting
-  the app, the page rejoining the recreated room under its name with the
-  restart notice; a refused stream on a page that never reached the room
-  showing the message without reloading; `getByRole('status')` present and empty before a reveal and holding
-  the notice after it; a draft surviving blur and room activity; Enter saving and Escape
-  cancelling; cancel restoring the room's
-  issue; a concurrent change showing the notice; "Use theirs"; saving over a
-  concurrent change. The editor cases find elements by role and name, so step
-  8a's restyle does not break them.
+- **New e2e cases**, each shown failing against the commit before it:
+  - A stream frozen by a new stub `freeze(match)` mode, which keeps the live
+    stream sockets open, forwards nothing and lets new requests through: the
+    banner after 35 s, the page reopening on its own, the next vote arriving.
+    It runs under `test.setTimeout(90_000)` since the 15 s heartbeat is fixed.
+    `stub.cut()` fires `onerror` and `setOffline` differs by browser on an open
+    stream, so neither reaches the watchdog.
+  - `/` showing the lobby with a rejoin link rather than joining, and clicking
+    it reaching the room; Create, Join and Leave changing the address; Leave
+    keeping the name prefilled.
+  - A session ended by restarting the app: the page rejoining the recreated
+    room under its name with the restart notice, `?restarted=1` cleared from
+    the address, and the notice dismissible.
+  - The same with the app down for a few seconds behind the stub: the page
+    waiting under the banner rather than reloading onto the stub's `502`.
+  - A refused stream on a page that never reached the room: the message, no
+    reload and no further `/events` request.
+  - The reveal's live region, found by name within the round rather than by
+    `getByRole('status')` alone, since the moved banner and the restart notice
+    are also status: present and empty before a reveal, holding the notice
+    after it.
+  - The editor: a draft surviving blur and room activity (the inverted case
+    above); Enter saving and Escape cancelling; cancel restoring the room's
+    issue; a concurrent change showing the notice; "Use theirs"; saving over a
+    concurrent change. These find elements by role and name, so step 8a's
+    restyle does not break them.
 - **The Scala specs need no built page.** `APISpec`'s index cases write a
-  fixture page to a temp file and build `ApiConfig` with it, since `sbt qa`
-  starts with `clean`. `ApiConfigSpec` asserts the new default. New `APISpec`
+  fixture page to a temp file and build `ApiConfig` with it, since sbt's tests
+  must not depend on npm having run. `ApiConfigSpec` asserts the new default. New `APISpec`
   cases go through `API.route`: `/` and `/<slug>` answering `503` with the
   message when the page file is missing; an `/assets/` file served with the
-  `immutable` header from beside `index-path`; a missing asset answering `404`;
-  and `/assets/x.js` never reaching `PageRoutes`.
+  `immutable` header from beside `index-path`; and a missing asset answering `404`.
 - **Vitest unit tests** in `frontend/src/**/*.test.ts`: `connection.ts` with a
-  fake `EventSource` and fake timers, covering both rows of the connection
-  table, the check's three triggers and the reach-the-room rule; `view.ts`; every `useIssueEditor` transition,
+  fake `EventSource` and fake timers, covering close-before-open, both rows of the connection
+  table, a closed stream with a failing probe retrying without reloading, a
+  refused stream and Leave's close never reopened, a `persisted` `pageshow`
+  reloading, the check's two triggers and the reach-the-room rule; `view.ts`; every `useIssueEditor` transition,
   including the three ways settling ends; the strict contract test. They do not
   overlap `node --test`'s `test/` folder, and CI runs both.
 
@@ -493,9 +561,12 @@ refused command changes nothing visible, and the next snapshot is the truth.
 - `README.md`: `mise.toml`'s Node, or any Node of that major; both dev modes,
   the two-terminal page loop and `npm run build` before `sbt run` alone; `npm run test:unit`;
   asset caching; the page path now owned by `application.conf`.
-- `docs/known-issues.md`: remove the CDN entry and the editor entry; add "A
-  mistyped but valid room name opens a new empty room", since `/join` creates
-  any valid slug; move the citations of entries that point into today's
+- `docs/known-issues.md`: remove the CDN entry and the editor entry; amend "An
+  unrecognized `roomId` silently creates an empty room" for the lobby, where a
+  mistyped but valid room name now opens a new empty room; add to "A second tab
+  on the same room displaces the first tab's identity" that the reload on a
+  refusal makes its two-tab race routine at every restart, since both tabs
+  POST `/join` with a stale cookie and each mints a session; move the citations of entries that point into today's
   `index.html` ("A reveal with votes still pushes the participants list down",
   "A tied vote is broken by JavaScript key order", "A Show during a partial
   re-vote") to the symbols that replace them.
@@ -534,7 +605,8 @@ live room.
 **Rollback**, if step 5 fails:
 
 1. Remove `CC_PRE_BUILD_HOOK`, since the previous commit has no script.
-2. Redeploy the previous commit from Clever's console. No wait for empty rooms
+2. Redeploy the previous commit with `clever restart --commit <sha>`, checked
+   against Clever's CLI docs before the rollout. No wait for empty rooms
    is needed, since a broken page has none.
 3. Revert step 8 on `main` unless the fix lands the same day. It is not yet
    known which commit Clever builds when it restarts the application on its
@@ -543,7 +615,8 @@ live room.
 
 ## Done when
 
-The e2e suite is green, unchanged or with listed selector changes; the new e2e
+The e2e suite is green, unchanged or with the listed selector and behaviour
+changes; the new e2e
 and unit tests pass and were shown failing first; `tsc`, ESLint and the
 regenerate-and-diff gate are green; the off-origin guard is in place; and the
 docs above are updated.
