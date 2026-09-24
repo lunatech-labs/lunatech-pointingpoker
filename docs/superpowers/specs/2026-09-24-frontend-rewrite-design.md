@@ -69,9 +69,10 @@ have reused the web components anyway. A progressive web app (home-screen
 install, web push) stays open as a cheap later addition for any framework.
 
 **The repo owns the page path.** Clever Cloud's `INDEX_PATH` only overrode
-`application.conf`'s identical default, so it is removed from the console
-before step 8 merges. Step 8 then moves the default in the same commit as the
-build that produces the file, with no console change to time against a deploy.
+`application.conf`'s identical default, so it was removed from the console,
+confirmed absent from `clever env` on 2026-09-24. Step 8 then moves the default
+in the same commit as the build that produces the file, with no console change
+to time against a deploy.
 
 **sbt drives npm, only when packaging.** Clever runs sbt from source on each
 push, then starts the app from the checkout. A `frontendBuild` task that `stage`
@@ -383,7 +384,8 @@ refused command changes nothing visible, and the next snapshot is the truth.
 
 ## Rollout
 
-1. Remove `INDEX_PATH` from the Clever console, any time before the merge.
+1. ~~Remove `INDEX_PATH` from the Clever console.~~ Done: absent from
+   `clever env` on 2026-09-24.
 2. Merge in GitHub's interface, because of the `ci.yml` change.
 3. The merge restarts the server and ends every live room, so it waits for a
    confirmation that no rooms are in use.
