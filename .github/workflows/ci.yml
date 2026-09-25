@@ -50,6 +50,7 @@ jobs:
       - name: Codecov
         uses: codecov/codecov-action@v7
 
+      # After sbt qa, which writes the snapshots the contract test reads.
       - name: frontend unit tests
         run: npm run test:unit
 
