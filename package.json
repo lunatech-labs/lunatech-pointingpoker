@@ -28,6 +28,9 @@
     "vitest": "^5.0.2"
   },
   "dependencies": {
+    "axios": "^1.20.0",
+    "bootstrap": "^4.6.2",
+    "lucide-react": "^1.48.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"

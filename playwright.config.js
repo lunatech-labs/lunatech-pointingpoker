@@ -5,7 +5,7 @@ export default defineConfig({
   testDir: 'e2e',
   // Annotations put a CI failure inline on the PR; the traces in the artifact say why.
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
-  // The per-worker asset cache keeps the CDNs off the critical path, so retries buy nothing.
+  // Nothing off-origin is loaded, so a retry has no flaky network to paper over.
   retries: 0,
   // Insurance for a future retries change: a test.fail() case that passes then fails-as-expected
   // on retry would otherwise report flaky and exit 0.
@@ -16,8 +16,7 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   // Three reconnect cases can exceed the 30s default once their own assertion timeouts sum.
   timeout: 60_000,
-  // The page's scripts are parser-blocking, so a stalling CDN hangs the navigation itself and
-  // only this bounds it: waitUntil cannot, and the mount assertion is never reached.
+  // Bounds a navigation that hangs, which waitUntil cannot and the mount assertion never reaches.
   use: { trace: 'retain-on-failure', navigationTimeout: 20_000 },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
