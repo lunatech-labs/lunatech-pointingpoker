@@ -1,6 +1,7 @@
 package com.lunatech.pointingpoker
 
-import java.util.{Locale, UUID}
+import java.nio.file.{Files, Path}
+import java.util.{Comparator, Locale, UUID}
 
 import org.apache.pekko.actor.testkit.typed.scaladsl.ActorTestKit
 import org.apache.pekko.actor.typed.scaladsl.Behaviors
@@ -32,12 +33,23 @@ import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.*
-import scala.io.Source
 import scala.jdk.CollectionConverters.*
 
 class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest with BeforeAndAfterAll:
 
-  val apiConfig: ApiConfig             = ApiConfig.load(ConfigFactory.load())
+  // A built page stands in for `npm run build`, so the spec does not depend on the frontend.
+  val fixtureDir: Path = Files.createTempDirectory("pages")
+  val fixtureIndex     = "<!DOCTYPE html><html><body>fixture index</body></html>"
+  val fixtureAsset     = "console.log('fixture asset');"
+  val fixtureIndexPath = Files.writeString(fixtureDir.resolve("index.html"), fixtureIndex)
+  val fixtureAssetPath =
+    Files.createDirectories(fixtureDir.resolve("assets")).resolve("app-abc123.js")
+  Files.writeString(fixtureAssetPath, fixtureAsset)
+
+  val apiConfig: ApiConfig =
+    ApiConfig.load(ConfigFactory.load()).copy(indexPath = fixtureIndexPath.toString)
+  val missingConfig: ApiConfig =
+    apiConfig.copy(indexPath = fixtureDir.resolve("missing/index.html").toString)
   val lifecycleConfig: LifecycleConfig = LifecycleConfig.load(ConfigFactory.load())
   val probeConfig: ProbeConfig         = ProbeConfig.load(ConfigFactory.load())
   val roomId: Slug                     = aSlug()
@@ -89,6 +101,9 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
   val apiRoute: Route = handleRejections(RejectionHandler.default) {
     API(roomManager, apiConfig, lifecycleConfig, probeConfig).route
   }
+  val missingRoute: Route = handleRejections(RejectionHandler.default) {
+    API(roomManager, missingConfig, lifecycleConfig, probeConfig).route
+  }
 
   private def json[A: io.circe.Encoder](a: A): HttpEntity.Strict =
     HttpEntity(ContentTypes.`application/json`, a.asJson.noSpaces)
@@ -108,6 +123,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     super.afterAll()
     testKit.shutdownTestKit()
     typedSystem.terminate()
+    Files.walk(fixtureDir).sorted(Comparator.reverseOrder()).forEach(Files.delete)
 
   "API" should {
     // The probe ships in the ordinary binary, so the assembled route must not expose it by default.
@@ -115,11 +131,44 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Get("/probe") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
       }
-    "return index.html" in {
-      val index = Source.fromFile("src/main/resources/pages/index.html").mkString
-
+    "return index.html" in
       Get() ~> apiRoute ~> check {
-        responseAs[String] mustBe index
+        responseAs[String] mustBe fixtureIndex
+      }
+    "answer 503 at the index and under a room name when the page is not built" in {
+      Get() ~> missingRoute ~> check {
+        status mustBe StatusCodes.ServiceUnavailable
+        contentType mustBe ContentTypes.`text/plain(UTF-8)`
+        responseAs[String] mustBe "The page is not built: run `npm run build`"
+      }
+      Get(s"/${aSlug().raw}") ~> missingRoute ~> check {
+        status mustBe StatusCodes.ServiceUnavailable
+        responseAs[String] mustBe "The page is not built: run `npm run build`"
+      }
+    }
+    "warn at construction when the page is not built" in {
+      pageLog(PageRoutes(missingConfig)) mustBe
+        List(("WARN", "The page is not built: run `npm run build`"))
+    }
+    "serve an asset from beside the index, cached as immutable" in
+      Get("/assets/app-abc123.js") ~> apiRoute ~> check {
+        status mustBe StatusCodes.OK
+        responseAs[String] mustBe fixtureAsset
+        header("Cache-Control").map(_.value) mustBe Some("public, max-age=31536000, immutable")
+      }
+    "answer 404 for a missing asset, without the immutable header" in
+      Get("/assets/app-missing.js") ~> apiRoute ~> check {
+        status mustBe StatusCodes.NotFound
+        header("Cache-Control") mustBe None
+      }
+    // Pins Pekko's refusal, so it passes before this task: %2e%2e is collapsed before routing,
+    // and getFromDirectory refuses ..%2F.
+    "not serve the index through a traversal out of the assets directory" in {
+      Get("/assets/..%2Findex.html") ~> apiRoute ~> check {
+        status must not be StatusCodes.OK
+      }
+      Get("/assets/%2e%2e/index.html") ~> apiRoute ~> check {
+        status must not be StatusCodes.OK
       }
     }
     // A page cached without this can outlive the server that served it, so a deploy pairs a
@@ -132,13 +181,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         header("Cache-Control").map(_.value) mustBe Some("no-cache")
       }
     }
-    "serve the index under a room name" in {
-      val index = Source.fromFile("src/main/resources/pages/index.html").mkString
+    "serve the index under a room name" in
       Get(s"/${aSlug().raw}") ~> apiRoute ~> check {
         status mustBe StatusCodes.OK
-        responseAs[String] mustBe index
+        responseAs[String] mustBe fixtureIndex
       }
-    }
     // The case is deliberate rather than the typo, so it is corrected rather than refused.
     "redirect a room name in mixed case to its lowercase form, and log it" in {
       pageLog {
