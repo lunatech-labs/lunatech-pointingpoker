@@ -40,7 +40,6 @@ lazy val root = project
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)
-  .enablePlugins(DockerPlugin)
 
 addCommandAlias(
   "qa",
@@ -53,7 +52,5 @@ addCommandAlias(
 )
 
 Universal / mappings ++= directory("src/main/resources/pages")
-dockerEnvVars   := Map("PORT" -> "$PORT", "HOST" -> "$HOST", "INDEX_PATH" -> "$INDEX_PATH")
-dockerBaseImage := "openjdk:17"
 
 fork := true
