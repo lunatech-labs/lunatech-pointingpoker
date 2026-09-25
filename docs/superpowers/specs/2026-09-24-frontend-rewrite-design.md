@@ -243,7 +243,7 @@ the component that owns it.
 **Data flow.** Snapshot frame, parsed by the connection, into the store, out to
 components. User actions go through `api.ts` as POSTs and their effect returns
 as the next snapshot. Nothing updates optimistically except the editor showing
-its own text while a save settles.
+its own text while a save is confirmed.
 
 **Not added:** a router library (the path is read once at startup:
 `/<slug>`, `?moved=1` and `?restarted=1`), a state library, CSS-in-JS.
@@ -359,7 +359,7 @@ room is a page load:
 | --- | --- |
 | `/` | The lobby, always: Create and Join, the remembered name prefilled, and "Rejoin brave-golden-otter as Alice" when a room is remembered |
 | `/<slug>` | The room. With a remembered name it joins at once; without one, the join form with the slug fixed. Invalid slugs and legacy UUIDs keep the server's not-a-room page and `?moved=1` redirect |
-| `/<slug>?restarted=1` | The room, with a dismissible "The room was restarted, so votes were reset" notice, `role="status"` like `movedBanner` so the `alert` selector never matches it, cleared from the address like `?moved=1` |
+| `/<slug>?restarted=1` | The room, with a dismissible "Reconnected. Please check your vote." notice, true whether the room restarted or survived a transient refusal, `role="status"` like `movedBanner` so the `alert` selector never matches it, cleared from the address like `?moved=1` |
 
 Create and Join store the name, then go to `/<slug>` with the typed slug
 passed through `encodeURIComponent`. The room is remembered when the page first
@@ -401,8 +401,10 @@ A failed stream has two recoveries, and each failure maps to one:
 
 - **One watchdog** decides from the stream alone: CLOSED, it runs the liveness
   fetch; stale, it reopens; otherwise it does nothing. It runs on `onerror`, on
-  a periodic tick and on `visibilitychange` to visible, so a failed fetch is
-  simply retried on the next run. Reopening only when stale matters because tab
+  a 5 s tick and on `visibilitychange` to visible, so a failed fetch is
+  simply retried on the next run. The tick sets how long detecting silence
+  takes, 35 to 40 s, and how soon every tab is back once the app answers after
+  a deploy. Reopening only when stale matters because tab
   switches are frequent and each reopen is a Join published to the room.
 - **A closed stream is never reopened.** `EventSource` reaches CLOSED only on
   an error response or the page's own `close()`; a network drop leaves it
@@ -436,8 +438,10 @@ A failed stream has two recoveries, and each failure maps to one:
   and sets `fatal`, so a stream refused every time, such as a `SECURE_COOKIES`
   mismatch, cannot loop. Fetching first means a page caught by a deploy shows
   it only once the app answers, so the reload it asks for works.
-- **`pagehide`**, not entering the back/forward cache, sends the leave beacon
-  while a stream is open. Leave closes the stream first, so it is sent once.
+- **`pagehide`** sends the leave beacon while a stream is open, whether or not
+  the page enters the back/forward cache: a restore reloads and rejoins, so
+  today's exception for a cached page has nothing left to protect. Leave closes
+  the stream first, so it is sent once.
 
 **Why reload on a refusal.** The parent design gives step 8's connection module
 the rejoin under the remembered name, and a reload already is one: `/<slug>`
@@ -466,7 +470,8 @@ value, so a live replacement survives.
 **Why timestamps.** Browsers throttle timers in background tabs, so the
 watchdog compares "last heard from" against the clock instead of trusting a
 timer to fire on time, which is also what makes the run on `visibilitychange`
-work. The 35 s is twice `SSE.heartbeatInterval` (15 s) plus a margin; the
+work. The tick only samples the clock, so throttling delays a check but never
+distorts it. The 35 s is twice `SSE.heartbeatInterval` (15 s) plus a margin; the
 constant in `connection.ts` and `SSE.heartbeatInterval` each name the other.
 
 ## Issue editor behaviour
@@ -485,21 +490,24 @@ rewrites only the markup.
 
 | State | Shows | Transitions |
 | --- | --- | --- |
-| viewing | The room's issue, read-only, with a pencil | Pencil: to editing, with draft and starting point both set to the room's issue |
-| editing | The draft, editable | Enter or check: to saving. Escape or cancel: to viewing, draft dropped |
-| editing, conflict | The draft, plus "Changed by someone else to: X" and "Use theirs" | Shown while the room's issue differs from the starting point. "Use theirs" sets draft and starting point to X. Saving overwrites X knowingly |
-| saving | The draft, read-only | POST fails: to editing, draft kept, "Could not save the issue". POST succeeds: to settling |
-| settling | The saved text | To viewing when a snapshot carries the saved text, on a reconnect (`lost` returning to false), or after 5 s |
+| viewing | The room's issue, read-only, with a pencil. After a save, the saved text instead, until the room's issue differs from its value when saving began | Pencil: to editing, with draft and starting point both set to the room's issue |
+| editing | The draft, editable. While the room's issue differs from the starting point, also "Changed by someone else to: X" and "Use theirs" | Enter or check: to saving. Escape or cancel: to viewing, draft dropped. "Use theirs" sets draft and starting point to X; saving overwrites X knowingly |
+| saving | The draft, read-only | POST fails: to editing, draft kept, "Could not save the issue". POST succeeds: to viewing |
 
-**Why settling exists.** `Room` replies `Applied` and publishes while handling
-the same message, so a completed POST means the room holds the value, but the
-SSE frame carrying it can reach the browser after the HTTP response. Returning
-to snapshots at once would flash the old text. Each connection receives the
-room's snapshots in order, so the one carrying the edit precedes any later
-edit's, so waiting for the saved text hides someone else's later change only
-in the one case where that snapshot never arrives: a slow client whose queue
-dropped it on overflow. The reconnect and the timeout bound that to at most
-5 s.
+**Why viewing waits for a different issue.** `Room` replies `Applied` and
+publishes while handling the same message, so a completed POST means the room
+holds the value, but the SSE frame carrying it can reach the browser before or
+after the HTTP response. Returning to snapshots at once would flash the old
+text. A frame published before the edit carries the issue as it was when saving
+began, so ignoring that value and nothing else hides every stale frame and shows
+the edit, or any later one, as soon as it arrives. The condition is read from
+the store, so a frame that beat the response ends the wait at once. Two cases
+are accepted. An edit applied just before this one, whose frame arrives
+after the response, shows briefly before this one replaces it. And a page whose
+own frame never arrives, dropped on overflow or lost with its stream, keeps
+showing its text if someone then restores exactly the previous issue, until
+the issue next changes or its user opens the editor, which starts from the
+room's issue.
 
 This also removes both narrow windows the parent design recorded for the focus
 guard, the blur landing before the commit click and the revert during the save
@@ -567,13 +575,16 @@ refused command changes nothing visible, and the next snapshot is the truth.
   the connection table, a closed stream with a failing liveness fetch retrying
   without reloading, no second liveness fetch while one is in flight, a hung
   one abandoned after 10 s, a refused stream and Leave's close never reopened,
-  a `persisted` `pageshow` reloading, the watchdog's three triggers, heartbeats
+  a `persisted` `pageshow` reloading, a `persisted` `pagehide` sending the
+  beacon, the watchdog's three triggers, heartbeats
   alone keeping the stream fresh past 35 s, a reopen not repeated before
   another 35 s of silence, an invalid snapshot leaving the store unchanged, no
   watchdog run or liveness fetch once navigating or `fatal`, the banner hidden
   while `fatal`, and the reach-the-room rule; `view.ts`, including
   name order ignoring case and accents with the id tie-break; every
-  `useIssueEditor` transition, including the three ways settling ends; the
+  `useIssueEditor` transition, including the saved text ignoring a stale frame,
+  ending on a frame that beat the POST response and on someone else's later
+  edit; the
   strict contract test. They do not overlap `node --test`'s `test/` folder, and
   CI runs both.
 - **The stub's `freeze`** gets a case in `test/stub.test.js`: sockets held open,
@@ -626,6 +637,8 @@ live room.
      then clears on return.
    - Lock the phone, or switch apps, for a minute: the room is current on
      return.
+   - On the phone, switch apps and back within 3 s, inside the 6 s grace
+     period: the other browsers never show it leaving, so no `pagehide` fired.
 
 **Rollback**, if step 5 fails:
 
