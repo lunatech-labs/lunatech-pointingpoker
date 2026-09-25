@@ -1,0 +1,464 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Pointing Poker",
+    "version" : "1"
+  },
+  "paths" : {
+    "/create-room" : {
+      "post" : {
+        "operationId" : "postCreate-room",
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "503" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/join" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidJoin",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JoinRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "",
+            "headers" : {
+              "Set-Cookie" : {
+                "required" : false,
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/events" : {
+      "get" : {
+        "operationId" : "getRoomsRoomidEvents",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "connectionId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "X-Forwarded-Proto",
+            "in" : "header",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "",
+            "headers" : {
+              "Cache-Control" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              },
+              "X-Accel-Buffering" : {
+                "required" : true,
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter connectionId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/vote" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidVote",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VoteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : ""
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          },
+          "409" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/show" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidShow",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/clear" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidClear",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/revote" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidRevote",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/edit-issue" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidEdit-issue",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EditIssueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    },
+    "/rooms/{roomId}/leave" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidLeave",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "connectionId",
+            "in" : "query",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid value for: query parameter connectionId",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "EditIssueRequest" : {
+        "title" : "EditIssueRequest",
+        "type" : "object",
+        "required" : [
+          "issue"
+        ],
+        "properties" : {
+          "issue" : {
+            "type" : "string"
+          }
+        }
+      },
+      "JoinRequest" : {
+        "title" : "JoinRequest",
+        "type" : "object",
+        "required" : [
+          "name"
+        ],
+        "properties" : {
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "VoteRequest" : {
+        "title" : "VoteRequest",
+        "type" : "object",
+        "required" : [
+          "estimation"
+        ],
+        "properties" : {
+          "estimation" : {
+            "type" : "string"
+          }
+        }
+      }
+    }
+  }
+}

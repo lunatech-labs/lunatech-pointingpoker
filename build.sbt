@@ -6,6 +6,7 @@ ThisBuild / organization     := "com.lunatech"
 ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
+  val apispec      = "0.11.10"
   val circe        = "0.14.16"
   val commonsText  = "1.15.0"
   val logback      = "1.6.3"
@@ -36,6 +37,8 @@ lazy val root = project
     libraryDependencies += "org.apache.pekko" %% "pekko-actor-testkit-typed" % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-stream-testkit"      % V.pekko     % Test,
     libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test,
+    libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % V.tapir % Test,
+    libraryDependencies += "com.softwaremill.sttp.apispec" %% "openapi-circe" % V.apispec % Test,
     scalacOptions += "-Werror"
   )
   .enablePlugins(JavaAppPackaging)
@@ -49,6 +52,11 @@ addCommandAlias(
 addCommandAlias(
   "styleCheck",
   "; scalafmtCheckAll ; scalafmtSbtCheck"
+)
+
+addCommandAlias(
+  "genOpenApi",
+  "Test/runMain com.lunatech.pointingpoker.writeOpenApi frontend/src/protocol/generated/openapi.json"
 )
 
 Universal / mappings ++= directory("src/main/resources/pages")

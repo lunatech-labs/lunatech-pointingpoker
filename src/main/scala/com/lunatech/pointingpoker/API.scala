@@ -15,14 +15,9 @@ import com.lunatech.pointingpoker.slug.Slug
 import com.lunatech.pointingpoker.config.{ApiConfig, LifecycleConfig, ProbeConfig}
 import com.lunatech.pointingpoker.probe.ProbeRoutes
 import org.slf4j.{Logger, LoggerFactory}
-import sttp.capabilities.pekko.PekkoStreams
-import sttp.model.StatusCode
 import sttp.model.headers.{Cookie as SttpCookie, CookieValueWithMeta}
 import sttp.model.sse.ServerSentEvent as SttpSse
-import sttp.tapir.*
-import sttp.tapir.json.circe.*
-import sttp.tapir.server.pekkohttp.{PekkoHttpServerInterpreter, PekkoServerSentEvents}
-import java.nio.charset.StandardCharsets
+import sttp.tapir.server.pekkohttp.PekkoHttpServerInterpreter
 
 import scala.concurrent.Future
 import scala.util.Failure
@@ -38,8 +33,6 @@ class API(
   private given ec: scala.concurrent.ExecutionContext = actorSystem.executionContext
   private val log: Logger                             = LoggerFactory.getLogger(this.getClass)
 
-  private val SessionCookieName = "session"
-
   private def sessionCookie(roomId: Slug, token: Room.SessionToken): CookieValueWithMeta =
     CookieValueWithMeta.unsafeApply(
       value = token.raw,
@@ -48,96 +41,6 @@ class API(
       httpOnly = true,
       sameSite = Some(SttpCookie.SameSite.Strict)
     )
-
-  // EventSource sets no headers, so the stream rides a text body tapir serialises for us.
-  private val sseBody =
-    streamTextBody(PekkoStreams)(CodecFormat.TextEventStream(), Some(StandardCharsets.UTF_8))
-      .map(PekkoServerSentEvents.parseBytesToSSE)(PekkoServerSentEvents.serialiseSSEToBytes)
-
-  // Mismatch, not Error: tapir answers an error with 400 but tries the next endpoint on a mismatch.
-  private given Codec[String, Slug, CodecFormat.TextPlain] =
-    Codec.string.mapDecode(raw =>
-      Slug
-        .parse(raw)
-        .map(DecodeResult.Value(_))
-        .getOrElse(DecodeResult.Mismatch("a room name", raw))
-    )(_.raw)
-
-  private val roomPath = "rooms" / path[Slug]("roomId")
-
-  private val sessionIn = cookie[Option[String]](SessionCookieName)
-
-  private val createRoom = endpoint.post
-    .in("create-room")
-    .out(stringBody)
-    .errorOut(statusCode(StatusCode.ServiceUnavailable))
-
-  private val join = endpoint.post
-    .in(roomPath / "join")
-    .in(sessionIn)
-    .in(jsonBody[JoinRequest])
-    .out(statusCode(StatusCode.NoContent))
-    .out(setCookie(SessionCookieName))
-
-  private given Codec[String, Room.ConnectionId, CodecFormat.TextPlain] =
-    Codec.string.mapDecode(raw =>
-      Room.ConnectionId
-        .parse(raw)
-        .map(DecodeResult.Value(_))
-        .getOrElse(DecodeResult.Mismatch("a UUID", raw))
-    )(_.raw)
-
-  private val events = endpoint.get
-    .in(roomPath / "events")
-    .in(query[Room.ConnectionId]("connectionId"))
-    .in(sessionIn)
-    .in(header[Option[String]]("X-Forwarded-Proto"))
-    .out(sseBody)
-    .out(header("Cache-Control", "no-cache"))
-    // Proxies that buffer a response body turn SSE into batches or silence;
-    // X-Accel-Buffering is nginx's opt-out and README records the rest.
-    .out(header("X-Accel-Buffering", "no"))
-    .errorOut(statusCode(StatusCode.Unauthorized))
-
-  // Exhaustive, and the build makes a missed case fatal: every refusal has exactly one status.
-  private def status(refusal: Room.Refusal | Room.VoteRefusal): StatusCode = refusal match
-    case Room.NoSession       => StatusCode.Unauthorized
-    case Room.NotAMember      => StatusCode.Forbidden
-    case Room.RoundRevealed   => StatusCode.Conflict
-    case Room.BlankEstimation => StatusCode.BadRequest
-
-  // Built from the enums' values, so a new refusal cannot be left without a variant.
-  private def errors[R <: Room.Refusal | Room.VoteRefusal](refusals: Seq[R]) =
-    val variants = refusals.map(r => oneOfVariantSingletonMatcher(status(r))(r))
-    oneOf[R](variants.head, variants.tail*)
-
-  private val commandErrors = errors(Room.Refusal.values.toSeq)
-  private val voteErrors    = errors(Room.Refusal.values.toSeq ++ Room.VoteRefusal.values)
-
-  private def command(segment: String) = endpoint.post
-    .in(roomPath / segment)
-    .in(sessionIn)
-    .out(statusCode(StatusCode.NoContent))
-    .errorOut(commandErrors)
-
-  private val vote = endpoint.post
-    .in(roomPath / "vote")
-    .in(sessionIn)
-    .in(jsonBody[VoteRequest])
-    .out(statusCode(StatusCode.NoContent))
-    .errorOut(voteErrors)
-
-  private val show      = command("show")
-  private val clear     = command("clear")
-  private val revote    = command("revote")
-  private val editIssue = command("edit-issue").in(jsonBody[EditIssueRequest])
-
-  private val leave = endpoint.post
-    .in(roomPath / "leave")
-    .in(query[Room.ConnectionId]("connectionId"))
-    .in(sessionIn)
-    .out(statusCode(StatusCode.NoContent))
-    .errorOut(commandErrors)
 
   // Applied is the only outcome that is not a refusal, so it is the only Right.
   private def answer(result: Room.CommandResult): Either[Room.Refusal, Unit] = result match
@@ -153,7 +56,7 @@ class API(
     raw.flatMap(Room.SessionToken.parse)
 
   private val endpoints = List(
-    createRoom.serverLogic[Future] { _ =>
+    Endpoints.createRoom.serverLogic[Future] { _ =>
       log.debug("Create room call")
       (roomManager ? RoomManager.CreateRoom.apply)
         .andThen { case Failure(reason) => log.error("Error while creating room: {}", reason) }
@@ -162,7 +65,7 @@ class API(
           case RoomManager.NoFreeRoomName => Left(())
         }
     },
-    join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
+    Endpoints.join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.SessionMinted](
           RoomManager.RequestSession(roomId, request.name, resolveToken(rawCookie), _)
@@ -172,7 +75,7 @@ class API(
         }
         .map(minted => sessionCookie(roomId, minted.token))
     },
-    events.serverLogic[Future] { (roomId, connectionId, rawCookie, forwardedProto) =>
+    Endpoints.events.serverLogic[Future] { (roomId, connectionId, rawCookie, forwardedProto) =>
       resolveToken(rawCookie) match
         case None =>
           // Pekko's listener is always plain HTTP; a reverse proxy terminates TLS, so this
@@ -209,36 +112,36 @@ class API(
                 Left(())
             }
     },
-    vote.serverLogic[Future] { (roomId, rawCookie, request) =>
+    Endpoints.vote.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.VoteResult](
           RoomManager.Vote(roomId, resolveToken(rawCookie), request.estimation, _)
         )
         .map(answerVote)
     },
-    show.serverLogic[Future] { (roomId, rawCookie) =>
+    Endpoints.show.serverLogic[Future] { (roomId, rawCookie) =>
       roomManager
         .ask[Room.CommandResult](RoomManager.Show(roomId, resolveToken(rawCookie), _))
         .map(answer)
     },
-    clear.serverLogic[Future] { (roomId, rawCookie) =>
+    Endpoints.clear.serverLogic[Future] { (roomId, rawCookie) =>
       roomManager
         .ask[Room.CommandResult](RoomManager.Clear(roomId, resolveToken(rawCookie), _))
         .map(answer)
     },
-    revote.serverLogic[Future] { (roomId, rawCookie) =>
+    Endpoints.revote.serverLogic[Future] { (roomId, rawCookie) =>
       roomManager
         .ask[Room.CommandResult](RoomManager.Revote(roomId, resolveToken(rawCookie), _))
         .map(answer)
     },
-    editIssue.serverLogic[Future] { (roomId, rawCookie, request) =>
+    Endpoints.editIssue.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.CommandResult](
           RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue, _)
         )
         .map(answer)
     },
-    leave.serverLogic[Future] { (roomId, connectionId, rawCookie) =>
+    Endpoints.leave.serverLogic[Future] { (roomId, connectionId, rawCookie) =>
       roomManager
         .ask[Room.CommandResult](
           RoomManager.Depart(roomId, resolveToken(rawCookie), connectionId, _)

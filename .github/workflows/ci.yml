@@ -53,6 +53,16 @@ jobs:
       - name: frontend unit tests
         run: npm run test:unit
 
+      # The generated types are committed, so an endpoint change must regenerate them in its PR.
+      - name: generated API types are current
+        run: |
+          sbt genOpenApi
+          npm run gen:api
+          if [ -n "$(git status --porcelain -- frontend/src/protocol/generated)" ]; then
+            git diff -- frontend/src/protocol/generated
+            exit 1
+          fi
+
       # npm test builds and stages first through its pre-hook, so CI has no stage step of its own.
       - name: node tests
         run: npm test

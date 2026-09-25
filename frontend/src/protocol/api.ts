@@ -1,34 +1,51 @@
-import axios from 'axios'
+import createClient from 'openapi-fetch'
+import type { paths } from './generated/openapi'
+
+const client = createClient<paths>()
 
 // Every call rejects on a failure, so a component's catch is the one place a failure lands.
 export type JoinOutcome = 'joined' | 'not-a-room'
 
+const refused = (what: string, response: Response) =>
+  new Error(`${what} answered ${response.status}`)
+
 export async function createRoom(): Promise<string> {
-  const response = await axios.post<string>('/create-room', {})
-  return response.data
+  const { data, response } = await client.POST('/create-room', { parseAs: 'text' })
+  if (data === undefined) throw refused('create-room', response)
+  return data
 }
 
 export async function join(roomId: string, name: string): Promise<JoinOutcome> {
-  try {
-    await axios.post(`/rooms/${roomId}/join`, { name })
-    return 'joined'
-  } catch (error) {
-    // Only a typed or remembered name reaches /join unchecked; the page route answers it.
-    if (axios.isAxiosError(error) && error.response?.status === 404) return 'not-a-room'
-    throw error
-  }
+  const { response } = await client.POST('/rooms/{roomId}/join', {
+    params: { path: { roomId } },
+    body: { name }
+  })
+  // Only a typed or remembered name reaches /join unchecked; the page route answers it.
+  if (response.status === 404) return 'not-a-room'
+  if (!response.ok) throw refused('join', response)
+  return 'joined'
 }
 
 export type Command = 'show' | 'clear' | 'revote'
 
 export async function command(roomId: string, name: Command): Promise<void> {
-  await axios.post(`/rooms/${roomId}/${name}`, {})
+  const path = `/rooms/{roomId}/${name}` as const
+  const { response } = await client.POST(path, { params: { path: { roomId } } })
+  if (!response.ok) throw refused(name, response)
 }
 
 export async function vote(roomId: string, estimation: string): Promise<void> {
-  await axios.post(`/rooms/${roomId}/vote`, { estimation })
+  const { response } = await client.POST('/rooms/{roomId}/vote', {
+    params: { path: { roomId } },
+    body: { estimation }
+  })
+  if (!response.ok) throw refused('vote', response)
 }
 
 export async function editIssue(roomId: string, issue: string): Promise<void> {
-  await axios.post(`/rooms/${roomId}/edit-issue`, { issue })
+  const { response } = await client.POST('/rooms/{roomId}/edit-issue', {
+    params: { path: { roomId } },
+    body: { issue }
+  })
+  if (!response.ok) throw refused('edit-issue', response)
 }
