@@ -17,6 +17,7 @@ Every code block below was compiled and run in throwaway spaces before it was wr
 - **The frontend, end to end.** Tasks 2 to 5's code was assembled in a scratch worktree with Task 1's server changes, and `npm run typecheck`, `npm run lint` and `npm run test:unit` all passed. The unchanged e2e suite passed 70 of 70 in Chromium and Firefox, once with the axios `api.ts` (Task 4's state) and once with the `openapi-fetch` one (Task 5's state).
 - **Teeth.** The off-origin guard failed a `page` case and a `join` case when one CDN stylesheet was added to the page. The trim case in `e2e/lobby.spec.js` failed without the trim. The connection id fallback test failed when the fallback threw. The `503` and immutable-header cases each failed with their mechanism removed.
 - **The Scala.** The OpenAPI generation built under `-Werror` with 206 tests green and gave byte-identical output across two runs. The serving changes gave 211 tests green. Tasks 6 and 7's Scala was verified the same way (see their tasks).
+- **Not yet run.** The review pass added or corrected five failure proofs after the spike, and they have not been run: Task 0's two proofs on the Vue page, Task 4 Step 5's Enter proof, Task 5 Step 5's gate proof, and Task 7's contract proof, now in Step 5. If one does not fail as stated, report it. It also moved the `pagehide` listener into `connection.ts` (D7). The new `connection.ts` and its test passed `tsc` and Vitest in isolation, 8 of 8, and the pagehide case failed without the `persisted` check; Task 4's `main.tsx` change and `App`'s inlined copy hint, which replaced `useFlash`, were not run.
 
 ## Decisions this plan takes that the spec does not settle
 
@@ -27,31 +28,37 @@ Each is a recommendation that the plan implements as written unless review chang
   - The straight port splits into the room state (judged by its unit tests) and the components (judged by the e2e suite).
   - Contracts splits into the typed client (judged by `tsc` and the regenerate gate) and the strict contract test (judged by itself).
 
-  The estimation union stays one commit.
+  The estimation union stays one commit. Task 0, a characterization commit for the lobby (D14), comes before all seven.
 - **D2. TypeScript stays on 5.9.** npm's latest are 6.0 and 7.0, but `openapi-typescript` 7.13 declares a `typescript: ^5.x` peer and typescript-eslint 8.70 declares `<6.1.0`, so `npm ci` would refuse 6 and 7. The pin is `~5.9.3`, and Dependabot ignores TypeScript majors in the same commit, with the reason beside it.
 - **D3. Endpoint descriptions move to an `Endpoints` object.** They were private members of `class API`, which needs an actor system, so nothing could interpret them for documentation. `Endpoints` holds the nine endpoint descriptions and their codecs, and `API` keeps the server logic. The generator is a `@main` in test sources, run by a `genOpenApi` alias, so `tapir-openapi-docs` and `openapi-circe` are `Test` dependencies and ship in nothing. tapir derives operation ids such as `postCreate-room`, which `openapi-fetch` never reads because it is keyed by path, so they are left alone.
-- **D4. The zod schema lands with the room state (Task 3), both exports included.** The port needs the snapshot type, and the lenient runtime parse replaces today's bare `JSON.parse` with the same outcome for a bad frame: logged and dropped. The strict export is the same builder, so it lands with its unit test there, and Task 6 adds the contract test that consumes it.
-- **D5. `api.ts` is a facade with stable signatures.** Task 3 writes it over axios, and Task 5 rewrites its body over `openapi-fetch` without changing a signature, so no component changes in Task 5. Every call rejects on a failure, so a component's `catch` stays the one place a failure lands, as it is with axios today.
+- **D4. The zod schema lands with the room state (Task 3), both exports included.** The port needs the snapshot type, and the lenient runtime parse follows today's bare `JSON.parse`: a frame failing the schema is logged and dropped, and a non-JSON frame throws in the handler, as today. The strict export is the same builder, so it lands with its unit test there, and Task 6 adds the contract test that consumes it.
+- **D5. `api.ts` is a facade with stable signatures.** Task 4 writes it over axios, where the e2e suite first judges it, and Task 5 rewrites its body over `openapi-fetch` without changing a signature, so no component changes in Task 5. Every call rejects on a failure, so a component's `catch` stays the one place a failure lands, as it is with axios today.
 - **D6. No `StrictMode`.** Its development-only double effect would run the startup join twice, and before step 8a's close-before-open the second one opens a second stream. Step 8a can add it once the connection closes the old stream first.
-- **D7. The connection gets its browser APIs injected.** `createConnection` takes `openStream`, `sendBeacon` and the connection id, and exposes `pageHide(persisted)`, which `main.tsx` wires to `pagehide`. So Vitest runs it in node with a fake stream, and no DOM library is added.
+- **D7. The connection gets its browser APIs injected.** `createConnection` takes `openStream`, `sendBeacon`, the connection id and `events`, the target it registers its page listeners on. `main.tsx` passes `window`, so `connection.ts` owns the `pagehide` listener as the spec says, and step 8a adds `pageshow` and `visibilitychange` there alone. Vitest runs it in node with a fake stream and a plain `EventTarget`, and no DOM library is added.
 - **D8. The ported focus guard folds snapshots during render.** `applySnapshot` keeps its `prev` input as the spec requires. The `Room` component stores the last snapshot it saw and folds a new one into its view state during render, React's "adjusting state when a prop changes" pattern. An effect would render one frame with the new snapshot and the old view, and react-hooks 7 flags setting state in an effect.
-- **D9. The wire estimation is `{"type": ..., "value": ...}`.** `value` is present on `Confirmed` and `Unconfirmed` only, so a withheld estimate has no key to leak through. `view.ts` reads the union into the row fields the table already renders, so Task 7 touches no component.
+- **D9. The wire estimation is `{"type": ..., "value": ...}`.** `value` is present on `Confirmed` and `Unconfirmed` only, so a withheld estimate has no key to leak through. `view.ts` reads the union into the row fields the table already renders, so Task 7 touches no component. `ParticipantRow` is a view model built only by `toRow` from a parsed union, so the union's guarantee holds up to it.
 - **D10. `RoomSpec` and `SSESpec` read the union through test-only extensions.** `voted`, `hasEstimation` and `shown` in `RoomDataFixtures` keep the contract change's review on `RoomSnapshotSpec`, whose cases are rewritten against the tags. Those two specs test room behaviour, not the wire shape.
 - **D11. CI keeps an npm cache.** `setup-node`'s `cache: 'npm'` goes with `setup-node`, so an `actions/cache` step on `~/.npm`, keyed by the lockfile, replaces it.
 - **D12. The missing-page check runs per request, and startup logs it at WARN.** A page built while `sbt run` is up is then served without a restart, and WARN rather than ERROR because backend work without a page is a supported mode.
 - **D13. ESLint lints `frontend/` only**, with typescript-eslint's parser and react-hooks' recommended flat config and no other rule set, since the spec names only the hooks rule.
-- **D14. Two new e2e cases in `e2e/lobby.spec.js`,** for the lobby paths the `join` fixture never takes: Enter in the name field, and a room name pasted with spaces. They pass on today's page too, so they are characterization cases, and each is shown failing by removing its mechanism.
+- **D14. Two new e2e cases in `e2e/lobby.spec.js`,** for the lobby paths the `join` fixture never takes: Enter in the name field, and a room name pasted with spaces. They land first, as Task 0, judged by passing on today's page and failing there without each mechanism. Task 4 shows each failing again against the port.
+- **D15. The lobby tab and the copy hint live in `App`,** a departure from the spec's rule that local UI state stays in the component that owns it. `Lobby` unmounts on a join, and the Vue page kept the tab across a leave; the hint renders in `Alerts`, above both views.
 
 Accepted differences in the port, listed in the PR:
 
 - The issue editor's edit mode resets on Leave, since `Room` unmounts. The Vue page kept `editing` across a leave and a rejoin.
 - A lobby error clears when a join succeeds. The Vue page cleared it in `onopen` a few milliseconds later.
+- Leave clears a "Connection to the room was lost" or "Your session has ended" banner, since `leave()` resets the store. The Vue page's `doLeave` left it standing in the lobby.
+- The connection and the lobby have their own error slots, and a connection message hides a lobby error while both are set. The Vue page had one `errorMessage`, where the last writer won.
+- The `href="#"` links (the lobby tabs, Copy link, Leave) call `preventDefault`, so the address no longer gains a `#` and a history entry on each click.
+- Join with no room id typed posts `/rooms//join`, not `/rooms/null/join`, since the port starts from `''` where the Vue page started from `localStorage`'s `null`. On a 404 it therefore reloads the lobby at `/` rather than opening the not-a-room page at `/null`.
+- The Vue page's `entering` guard is gone: the room shows whenever the store holds a snapshot. After a double open (a Join clicked while the startup rejoin is in flight), `leave()` closes only the later stream, so a frame from the earlier one can put the page back into the room the user left. Accepted until step 8a's close-before-open, which merges in the same window.
 - Vite minifies the stylesheet, and Bootstrap is 4.6.2 rather than 4.4.1.
 - Lucide's icons are redrawn Feather icons, the expected difference in the look comparison.
 
 ## Global Constraints
 
-- Branch: `20260831.protocol_architecture_8_frontend_rewrite`, already carrying the spec commits (last `dfd8b36`). Work on it directly. Steps 8a and 8b stack on it later.
+- Branch: `20260831.protocol_architecture_8_frontend_rewrite`, already carrying the spec commits and this plan. Work on it directly. Steps 8a and 8b stack on it later.
 - Node: `mise.toml` is exactly one `[tools]` table with one line, `node = "24.21.0"`, since a syntax error there fails Clever's deploy with a misleading message.
 - `clevercloud/build-frontend.sh` runs `npm ci --include=dev --prefer-offline --no-audit --no-fund --fetch-timeout=60000` then `npm run build`, and its comment records the 300 s audit stall.
 - The page is served from `frontend/dist/`, which is gitignored and outside `target/`. `index-path` defaults to `frontend/dist/index.html`. `/assets/` answers with `Cache-Control: public, max-age=31536000, immutable` from the `assets/` directory beside `index-path`. A missing page answers `503` with "The page is not built: run `npm run build`".
@@ -67,11 +74,11 @@ Accepted differences in the port, listed in the PR:
 
 ## Review Focus
 
-- **A path that climbs out of `/assets/`.** A person expects `/assets/..%2Findex.html` and `/assets/%2e%2e/index.html` never to serve anything but an asset. The spike found that Pekko collapses `%2e%2e` before routing, so that request reaches the slug matcher, not the assets route. Task 1 asserts neither returns the page.
+- **A path that climbs out of `/assets/`.** A person expects `/assets/..%2Findex.html` and `/assets/%2e%2e/index.html` never to serve anything but an asset. The spike found that Pekko collapses `%2e%2e` before routing, so that request reaches the slug matcher, and that `getFromDirectory` refuses `..%2F` itself. Task 1 asserts neither returns the page; both cases pin Pekko's own refusal, so they pass before Task 1 by design.
 - **`sbt run` for backend work with no page built.** A person expects a clear message rather than a blank `404` or a crash. Task 1 asserts the `503` body on `/` and on `/<slug>`, and the WARN at startup.
 - **A frame from a newer server carrying a field this page does not know.** A person expects the room to keep working. Task 3 asserts the connection stores the snapshot without the field.
 - **A page served over plain HTTP, where `crypto.randomUUID` is missing.** A person expects to join and leave as usual. Task 3 asserts the fallback mints valid, distinct version 4 ids, beside the existing e2e case.
-- **The lobby's keyboard and paste paths.** A person expects Enter in the name field to create or join, and a pasted room name with spaces to still join. No existing case takes either path, since the `join` fixture clicks. Task 4 adds `e2e/lobby.spec.js`.
+- **The lobby's keyboard and paste paths.** A person expects Enter in the name field to create or join, and a pasted room name with spaces to still join. No existing case takes either path, since the `join` fixture clicks. Task 0 adds `e2e/lobby.spec.js`.
 
 ---
 
@@ -97,6 +104,62 @@ Accepted differences in the port, listed in the PR:
 | Create `frontend/src/**/*.test.ts` | Vitest cases |
 | Modify `testkit/app.js`, `test/startup.test.js`, `e2e/fixtures.js`, `e2e/smoke.spec.js`, `playwright.config.js`; create `e2e/lobby.spec.js` | Harness changes |
 | Modify `README.md`, `docs/known-issues.md`, `docs/roadmap.md`, the parent design, the frontend spec's status, `docs/superpowers/plans/README.md` | Task 9 |
+
+---
+
+### Task 0: Characterize the lobby's Enter and paste paths
+
+Its own commit, judged by passing on today's Vue page and failing without each mechanism there. Task 4 then judges the port by the same cases, unchanged.
+
+**Files:**
+- Create: `e2e/lobby.spec.js`
+
+- [ ] **Step 1: Write the cases**
+
+Create `e2e/lobby.spec.js`:
+
+```js
+import { test, expect, nameInput } from './fixtures.js'
+
+// The join fixture clicks the buttons, so these are the keyboard and paste paths nothing else takes.
+test('Enter in the name field creates a room', async ({ page, origin }) => {
+  await page.goto(`${origin}/`)
+  await nameInput(page).fill('Alice')
+  await nameInput(page).press('Enter')
+  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+})
+
+test('a room name pasted with spaces into the Join form still joins', async ({
+  page,
+  origin,
+  room
+}) => {
+  await page.goto(`${origin}/`)
+  await page.getByRole('link', { name: 'Join' }).click()
+  await page.locator('#join-roomId').fill(`  ${room} `)
+  await nameInput(page).fill('Alice')
+  await nameInput(page).press('Enter')
+  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: room, exact: true })).toBeVisible()
+})
+```
+
+- [ ] **Step 2: Run them on today's page, then prove each can fail**
+
+Run: `npm run stage && npx playwright test e2e/lobby.spec.js`
+Expected: PASS, four runs.
+
+Then, one at a time, in `src/main/resources/pages/index.html`, rerunning `npx playwright test e2e/lobby.spec.js` after each edit and restoring it after:
+
+1. Delete `@keyup.enter="doCreate"` and `@keyup.enter="doJoin"` from the two name inputs: both cases fail.
+2. Change `v-model.trim="roomId"` to `v-model="roomId"`: only the paste case fails.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/lobby.spec.js
+git commit -m "test(e2e): characterize the lobby's Enter and paste paths"
+```
 
 ---
 
@@ -186,7 +249,8 @@ Replace the cases "return index.html" and "serve the index under a room name" so
         status mustBe StatusCodes.NotFound
         header("Cache-Control") mustBe None
       }
-    // %2e%2e is collapsed before routing and reaches the slug matcher; ..%2F reaches the assets route.
+    // Pins Pekko's refusal, so it passes before this task: %2e%2e is collapsed before routing,
+    // and getFromDirectory refuses ..%2F.
     "not serve the index through a traversal out of the assets directory" in {
       Get("/assets/..%2Findex.html") ~> apiRoute ~> check {
         status must not be StatusCodes.OK
@@ -208,7 +272,7 @@ Replace the cases "return index.html" and "serve the index under a room name" so
 - [ ] **Step 2: Run the spec and watch the new cases fail**
 
 Run: `sbt "testOnly com.lunatech.pointingpoker.APISpec"`
-Expected: FAIL. The two `503` cases, the WARN case and the asset case fail, since `PageRoutes` has neither. The fixture-index cases and the two negative cases pass already.
+Expected: FAIL. The `503` case, the WARN case and the asset case fail, since `PageRoutes` has neither. The fixture-index cases and the two negative cases pass already.
 
 - [ ] **Step 3: Implement the serving changes in `PageRoutes`**
 
@@ -481,7 +545,7 @@ In `application.conf`, set `index-path = "frontend/dist/index.html"` (keep the `
       apiConfig.indexPath mustBe "frontend/dist/index.html"
 ```
 
-In `build.sbt`, delete `.enablePlugins(DockerPlugin)` and the two lines `dockerEnvVars := ...` and `dockerBaseImage := ...`. `JavaAppPackaging`, `UniversalPlugin` and the `Universal / mappings` line for `probe.html` stay.
+In `build.sbt`, delete `.enablePlugins(DockerPlugin)` and the two lines `dockerEnvVars := ...` and `dockerBaseImage := ...`. `JavaAppPackaging`, `UniversalPlugin` and the `Universal / mappings ++= directory("src/main/resources/pages")` line stay; with `index.html` moved, it maps only `probe.html`.
 
 - [ ] **Step 5: Reorder CI, and ignore TypeScript majors**
 
@@ -513,7 +577,6 @@ In `.github/workflows/ci.yml`'s `test` job, replace everything from `- name: tes
       - name: Codecov
         uses: codecov/codecov-action@v7
 
-      # After sbt qa, which writes the snapshots the contract test reads.
       - name: frontend unit tests
         run: npm run test:unit
 ```
@@ -609,17 +672,16 @@ git commit -m "build(frontend): build the page with Vite and serve it from front
 `applySnapshot`, the stream handling and the connection id move into plain TypeScript with unit tests, unused by the page until Task 4. Behaviour is today's, including what step 8a later changes.
 
 **Files:**
-- Create: `frontend/src/protocol/snapshot.ts`, `frontend/src/protocol/api.ts`, `frontend/src/room/view.ts`, `frontend/src/room/connection.ts`, `frontend/src/room/connectionId.ts`
+- Create: `frontend/src/protocol/snapshot.ts`, `frontend/src/room/view.ts`, `frontend/src/room/connection.ts`, `frontend/src/room/connectionId.ts`
 - Test: `frontend/src/protocol/snapshot.test.ts`, `frontend/src/room/view.test.ts`, `frontend/src/room/connection.test.ts`, `frontend/src/room/connectionId.test.ts`
-- Modify: `frontend/vite.config.ts` (drop `passWithNoTests`), `package.json` (axios)
+- Modify: `frontend/vite.config.ts` (drop `passWithNoTests`)
 
 **Interfaces:**
 - Produces, for Task 4:
   - `snapshot.ts`: `snapshotSchema`, `strictSnapshotSchema`, `type RoomSnapshot`, `type Participant`.
   - `view.ts`: `type ParticipantRow`, `type View = { users: ParticipantRow[]; votesRevealed: boolean; currentIssue: string; userEstimation: string; ownVoteConfirmed: boolean; votesSummary: [string, number][] }`, `type Previous = { issueFocused: boolean; currentIssue: string }`, `applySnapshot(prev: Previous, s: RoomSnapshot): View`.
-  - `connection.ts`: `type RoomStore = { lost: boolean; fatal: boolean; snapshot: RoomSnapshot | null }`, `type Stream`, `type ConnectionDeps = { connectionId: string; openStream: (url: string) => Stream; sendBeacon: (url: string) => void }`, `type Connection = { subscribe(listener): () => void; getSnapshot(): RoomStore; open(roomId: string): void; leave(): void; pageHide(persisted: boolean): void }`, `createConnection(deps: ConnectionDeps): Connection`.
+  - `connection.ts`: `type RoomStore = { lost: boolean; fatal: boolean; snapshot: RoomSnapshot | null }`, `type Stream`, `type ConnectionDeps = { connectionId: string; openStream: (url: string) => Stream; sendBeacon: (url: string) => void; events: EventTarget }`, `type Connection = { subscribe(listener): () => void; getSnapshot(): RoomStore; open(roomId: string): void; leave(): void }`, `createConnection(deps: ConnectionDeps): Connection`.
   - `connectionId.ts`: `mintConnectionId(): string`.
-  - `api.ts`: `type JoinOutcome = 'joined' | 'not-a-room'`, `createRoom(): Promise<string>`, `join(roomId, name): Promise<JoinOutcome>`, `type Command = 'show' | 'clear' | 'revote'`, `command(roomId, name: Command): Promise<void>`, `vote(roomId, estimation): Promise<void>`, `editIssue(roomId, issue): Promise<void>`. Task 5 keeps these signatures.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -736,6 +798,7 @@ const frame = JSON.stringify({
 describe('createConnection', () => {
   let streams: FakeStream[]
   let beacons: string[]
+  let events: EventTarget
   const connect = () =>
     createConnection({
       connectionId: 'c-1',
@@ -744,12 +807,17 @@ describe('createConnection', () => {
         streams.push(s)
         return s
       },
-      sendBeacon: url => void beacons.push(url)
+      sendBeacon: url => void beacons.push(url),
+      events
     })
+  // Node has no PageTransitionEvent, so persisted rides a plain Event.
+  const pageHide = (persisted: boolean) =>
+    events.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }))
 
   beforeEach(() => {
     streams = []
     beacons = []
+    events = new EventTarget()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -807,12 +875,12 @@ describe('createConnection', () => {
   it('sends the beacon on pagehide only for a discarded page that reached the room', () => {
     const c = connect()
     c.open('r')
-    c.pageHide(false)
+    pageHide(false)
     expect(beacons).toEqual([])
     streams[0].message(frame)
-    c.pageHide(true)
+    pageHide(true)
     expect(beacons).toEqual([])
-    c.pageHide(false)
+    pageHide(false)
     expect(beacons).toEqual(['/rooms/r/leave?connectionId=c-1'])
   })
 
@@ -862,10 +930,6 @@ Run: `npm run test:unit`
 Expected: FAIL, every file failing to import its module.
 
 - [ ] **Step 3: Write the modules**
-
-```bash
-npm install --no-audit --no-fund axios@1.20.0
-```
 
 `frontend/src/protocol/snapshot.ts`:
 
@@ -975,6 +1039,8 @@ export type ConnectionDeps = {
   connectionId: string
   openStream: (url: string) => Stream
   sendBeacon: (url: string) => void
+  // The page's window in the browser; the page listeners live here, not in main.tsx.
+  events: EventTarget
 }
 
 export type Connection = {
@@ -982,7 +1048,6 @@ export type Connection = {
   getSnapshot(): RoomStore
   open(roomId: string): void
   leave(): void
-  pageHide(persisted: boolean): void
 }
 
 const CLOSED = 2
@@ -1003,6 +1068,13 @@ export function createConnection(deps: ConnectionDeps): Connection {
   // sendBeacon rather than a POST: an unload-adjacent fetch is not reliably delivered.
   const postLeave = (id: string) =>
     deps.sendBeacon(`/rooms/${id}/leave?connectionId=${deps.connectionId}`)
+
+  // Only a page being discarded: a cached page can be restored with no load.
+  deps.events.addEventListener('pagehide', event => {
+    const persisted = (event as PageTransitionEvent).persisted
+    if (persisted || store.snapshot === null || roomId === null) return
+    postLeave(roomId)
+  })
 
   return {
     subscribe(listener) {
@@ -1043,67 +1115,22 @@ export function createConnection(deps: ConnectionDeps): Connection {
       if (roomId !== null) postLeave(roomId)
       roomId = null
       update(initial)
-    },
-
-    // Only a page being discarded: a cached page can be restored with no load.
-    pageHide(persisted) {
-      if (persisted || store.snapshot === null || roomId === null) return
-      postLeave(roomId)
     }
   }
-}
-```
-
-`frontend/src/protocol/api.ts`:
-
-```ts
-import axios from 'axios'
-
-// Every call rejects on a failure, so a component's catch is the one place a failure lands.
-export type JoinOutcome = 'joined' | 'not-a-room'
-
-export async function createRoom(): Promise<string> {
-  const response = await axios.post<string>('/create-room', {})
-  return response.data
-}
-
-export async function join(roomId: string, name: string): Promise<JoinOutcome> {
-  try {
-    await axios.post(`/rooms/${roomId}/join`, { name })
-    return 'joined'
-  } catch (error) {
-    // Only a typed or remembered name reaches /join unchecked; the page route answers it.
-    if (axios.isAxiosError(error) && error.response?.status === 404) return 'not-a-room'
-    throw error
-  }
-}
-
-export type Command = 'show' | 'clear' | 'revote'
-
-export async function command(roomId: string, name: Command): Promise<void> {
-  await axios.post(`/rooms/${roomId}/${name}`, {})
-}
-
-export async function vote(roomId: string, estimation: string): Promise<void> {
-  await axios.post(`/rooms/${roomId}/vote`, { estimation })
-}
-
-export async function editIssue(roomId: string, issue: string): Promise<void> {
-  await axios.post(`/rooms/${roomId}/edit-issue`, { issue })
 }
 ```
 
 - [ ] **Step 4: Run the tests, then prove the fallback test can fail**
 
 Run: `npm run test:unit && npm run typecheck && npm run lint`
-Expected: PASS, 13 tests.
+Expected: PASS, 14 tests.
 
 Then add `throw new Error('fallback')` as the first line after the `randomUUID` check in `mintConnectionId`, run `npm run test:unit`, confirm only "mints a version 4 UUID without crypto.randomUUID" fails, and remove the line.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add frontend package.json package-lock.json
+git add frontend
 git commit -m "feat(frontend): port the room state to TypeScript"
 ```
 
@@ -1115,42 +1142,14 @@ The page switches to the React mount. The Playwright suite, unchanged but for th
 
 **Files:**
 - Replace: `frontend/index.html`
-- Create: `frontend/src/main.tsx`, `frontend/src/styles.css`, `frontend/src/components/{App,Alerts,Lobby,Room,RoomHeader,IssueEditor,Deck,Controls,Results,Participants}.tsx`, `frontend/src/components/useRoom.ts`, `frontend/src/components/useFlash.ts`, `e2e/lobby.spec.js`
-- Modify: `e2e/fixtures.js`, `e2e/smoke.spec.js`, `playwright.config.js`, `.github/dependabot.yml`, `package.json` (Bootstrap, Lucide)
+- Create: `frontend/src/protocol/api.ts`, `frontend/src/main.tsx`, `frontend/src/styles.css`, `frontend/src/components/{App,Alerts,Lobby,Room,RoomHeader,IssueEditor,Deck,Controls,Results,Participants}.tsx`, `frontend/src/components/useRoom.ts`
+- Modify: `e2e/fixtures.js`, `e2e/smoke.spec.js`, `playwright.config.js`, `.github/dependabot.yml`, `package.json` (Bootstrap, Lucide, axios)
 
 **Interfaces:**
 - Consumes: everything Task 3 produces.
-- Produces: `useRoom(connection: Connection): RoomStore`. The DOM keeps today's markup and class names, which every e2e selector relies on.
+- Produces: `useRoom(connection: Connection): RoomStore`, and `api.ts`: `type JoinOutcome = 'joined' | 'not-a-room'`, `createRoom(): Promise<string>`, `join(roomId, name): Promise<JoinOutcome>`, `type Command = 'show' | 'clear' | 'revote'`, `command(roomId, name: Command): Promise<void>`, `vote(roomId, estimation): Promise<void>`, `editIssue(roomId, issue): Promise<void>`. Task 5 keeps these signatures. The DOM keeps today's markup and class names, which every e2e selector relies on.
 
-- [ ] **Step 1: Write the lobby cases and the off-origin guard, and run them against today's page**
-
-Create `e2e/lobby.spec.js`:
-
-```js
-import { test, expect, nameInput } from './fixtures.js'
-
-// The join fixture clicks the buttons, so these are the keyboard and paste paths nothing else takes.
-test('Enter in the name field creates a room', async ({ page, origin }) => {
-  await page.goto(`${origin}/`)
-  await nameInput(page).fill('Alice')
-  await nameInput(page).press('Enter')
-  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
-})
-
-test('a room name pasted with spaces into the Join form still joins', async ({
-  page,
-  origin,
-  room
-}) => {
-  await page.goto(`${origin}/`)
-  await page.getByRole('link', { name: 'Join' }).click()
-  await page.locator('#join-roomId').fill(`  ${room} `)
-  await nameInput(page).fill('Alice')
-  await nameInput(page).press('Enter')
-  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: room, exact: true })).toBeVisible()
-})
-```
+- [ ] **Step 1: Write the off-origin guard, and run it against today's page**
 
 In `e2e/fixtures.js`, replace the `CDN` and `DROPPED` constants and their comments with:
 
@@ -1182,9 +1181,8 @@ Delete the whole `assets` fixture. Replace the `context` fixture with:
   },
 ```
 
-In `join`, change the fixture's parameters from `{ browser, origin, room, stub, assets }` to `{ browser, origin, room, stub, offOrigin }`, and replace `await context.route(CDN, assets)` with `await guard(context, offOrigin)`. Then update three comments in `join`:
+In `join`, change the fixture's parameters from `{ browser, origin, room, stub, assets }` to `{ browser, origin, room, stub, offOrigin }`, and replace `await context.route(CDN, assets)` with `await guard(context, offOrigin)`. Then update two comments in `join`. The `newTab` comment crediting `created()` stays, as does its twin in `room.spec.js`'s "a straggler reloading leaves the votes hidden": the spec rewrites both in step 8a.
 
-- `// one participant. localStorage already holds the name and room, so created() rejoins.` becomes `// one participant. localStorage holds the name and room, so the React mount rejoins.`
 - `// The input renders under v-if, so this is the mount; navigationTimeout owns the transport.` becomes `// The lobby renders only once React mounts, so this is the mount.`
 - `// inRoom flips on the first SSE message, so the room view proves the stream arrived.` becomes `// The room renders on the first SSE message, so the room view proves the stream arrived.`
 
@@ -1193,12 +1191,12 @@ In `e2e/smoke.spec.js`, change `inRoom flips on the first SSE message` to `The r
 In `playwright.config.js`, replace the `retries` comment with `// Nothing off-origin is loaded, so a retry has no flaky network to paper over.` and the two-line `use` comment with `// Bounds a navigation that hangs, which waitUntil cannot and the mount assertion never reaches.`
 
 Run: `npm run e2e`
-Expected: FAIL across the suite. Every case's page requests the three CDNs, which the guard aborts and records, so Vue never mounts and the cases fail on their first assertion or on the guard itself. That is the guard's failure against today's page. Then run `npx playwright test e2e/lobby.spec.js` with the guard's `route.abort()` temporarily replaced by `route.continue()` and the `expect` in `offOrigin` commented out: both lobby cases pass on today's page, which makes them characterization cases. Restore both lines.
+Expected: FAIL across the suite. Every case's page requests the three CDNs, which the guard aborts and records, so Vue never mounts and the cases fail on their first assertion or on the guard itself. That is the guard's failure against today's page.
 
-- [ ] **Step 2: Add Bootstrap and Lucide, and ignore Bootstrap majors**
+- [ ] **Step 2: Add Bootstrap, Lucide and axios, and ignore Bootstrap majors**
 
 ```bash
-npm install --no-audit --no-fund bootstrap@4.6.2 lucide-react@1.48.0
+npm install --no-audit --no-fund bootstrap@4.6.2 lucide-react@1.48.0 axios@1.20.0
 ```
 
 In `.github/dependabot.yml`'s `ignore` list, add:
@@ -1262,12 +1260,51 @@ import { mintConnectionId } from './room/connectionId'
 const connection = createConnection({
   connectionId: mintConnectionId(),
   openStream: url => new EventSource(url),
-  sendBeacon: url => void navigator.sendBeacon(url)
+  sendBeacon: url => void navigator.sendBeacon(url),
+  events: window
 })
-window.addEventListener('pagehide', event => connection.pageHide(event.persisted))
 
 // No StrictMode: its double effect would join twice, and 8a's close-before-open is not here yet.
 createRoot(document.getElementById('app')!).render(<App connection={connection} />)
+```
+
+`frontend/src/protocol/api.ts`:
+
+```ts
+import axios from 'axios'
+
+// Every call rejects on a failure, so a component's catch is the one place a failure lands.
+export type JoinOutcome = 'joined' | 'not-a-room'
+
+export async function createRoom(): Promise<string> {
+  const response = await axios.post<string>('/create-room', {})
+  return response.data
+}
+
+export async function join(roomId: string, name: string): Promise<JoinOutcome> {
+  try {
+    await axios.post(`/rooms/${roomId}/join`, { name })
+    return 'joined'
+  } catch (error) {
+    // Only a typed or remembered name reaches /join unchecked; the page route answers it.
+    if (axios.isAxiosError(error) && error.response?.status === 404) return 'not-a-room'
+    throw error
+  }
+}
+
+export type Command = 'show' | 'clear' | 'revote'
+
+export async function command(roomId: string, name: Command): Promise<void> {
+  await axios.post(`/rooms/${roomId}/${name}`, {})
+}
+
+export async function vote(roomId: string, estimation: string): Promise<void> {
+  await axios.post(`/rooms/${roomId}/vote`, { estimation })
+}
+
+export async function editIssue(roomId: string, issue: string): Promise<void> {
+  await axios.post(`/rooms/${roomId}/edit-issue`, { issue })
+}
 ```
 
 `frontend/src/components/useRoom.ts`:
@@ -1282,25 +1319,6 @@ export function useRoom(connection: Connection): RoomStore {
 }
 ```
 
-`frontend/src/components/useFlash.ts`:
-
-```ts
-import { useCallback, useEffect, useRef, useState } from 'react'
-
-// A flag that turns itself off after ms; flashing again restarts the wait.
-export function useFlash(ms: number): [boolean, () => void] {
-  const [on, setOn] = useState(false)
-  const timer = useRef<number | undefined>(undefined)
-  useEffect(() => () => window.clearTimeout(timer.current), [])
-  const flash = useCallback(() => {
-    setOn(true)
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setOn(false), ms)
-  }, [ms])
-  return [on, flash]
-}
-```
-
 `frontend/src/components/App.tsx`:
 
 ```tsx
@@ -1310,7 +1328,6 @@ import type { Connection } from '../room/connection'
 import { Alerts } from './Alerts'
 import { Lobby, type LobbyTab } from './Lobby'
 import { Room } from './Room'
-import { useFlash } from './useFlash'
 import { useRoom } from './useRoom'
 
 // Read once at startup: the path wins over the remembered room, and the name persists.
@@ -1326,7 +1343,7 @@ export function App({ connection }: { connection: Connection }) {
   const [tab, setTab] = useState<LobbyTab>(pathRoom ? 'join' : 'create')
   const [error, setError] = useState('')
   const [moved, setMoved] = useState(movedOnLoad)
-  const [copied, flashCopied] = useFlash(2000)
+  const [copied, setCopied] = useState(false)
 
   const doJoin = (id: string) => {
     localStorage.setItem('roomId', id)
@@ -1359,6 +1376,12 @@ export function App({ connection }: { connection: Connection }) {
         console.log(reason)
         setError('Could not create a room. Please try again.')
       })
+  }
+
+  // Today's doCopy: one bare timeout, so a second copy does not extend the hint.
+  const onCopied = () => {
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
   }
 
   const doLeave = () => {
@@ -1404,7 +1427,7 @@ export function App({ connection }: { connection: Connection }) {
           }}
         />
       ) : (
-        <Room roomId={roomId} snapshot={room.snapshot} onCopied={flashCopied} onLeave={doLeave} />
+        <Room roomId={roomId} snapshot={room.snapshot} onCopied={onCopied} onLeave={doLeave} />
       )}
     </>
   )
@@ -1924,17 +1947,18 @@ npm run build && grep -c 'https://' frontend/dist/index.html   # expect 0
 npm run e2e
 ```
 
-Expected: all green. The e2e suite passes in both browsers with no selector change, 70 cases plus the four new lobby runs.
+Expected: all green. The e2e suite passes in both browsers with no selector change, 74 runs with Task 0's lobby cases.
 
 - [ ] **Step 5: Prove the guard and the trim case can fail**
 
 1. Add `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/x@1/x.css">` after the `<title>` in `frontend/index.html`, run `npm run build && npx playwright test e2e/smoke.spec.js e2e/room.spec.js:21 --project chromium`, and confirm both fail with "requests to a host other than 127.0.0.1" listing that URL. The second case uses the `join` fixture, so this also proves the guard covers `join`'s contexts. Remove the link.
 2. Change `const id = roomId.trim()` to `const id = roomId` in `App.tsx`, run `npm run build && npx playwright test e2e/lobby.spec.js --project chromium`, and confirm only the paste case fails. Restore it and rebuild.
+3. Delete `onKeyUp={onEnter(action)}` from `nameRow` in `Lobby.tsx`, run the same two commands, and confirm both lobby cases fail, since both submit with Enter. Restore it and rebuild.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend e2e playwright.config.js .github/dependabot.yml package.json package-lock.json
+git add frontend e2e/fixtures.js e2e/smoke.spec.js playwright.config.js .github/dependabot.yml package.json package-lock.json
 git commit -m "feat(frontend): replace the Vue page with React components"
 ```
 
@@ -1947,7 +1971,7 @@ git commit -m "feat(frontend): replace the Vue page with React components"
 - Modify: `src/main/scala/com/lunatech/pointingpoker/API.scala`, `build.sbt`, `package.json`, `package-lock.json`, `frontend/src/protocol/api.ts`, `.github/workflows/ci.yml`
 
 **Interfaces:**
-- Consumes: Task 3's `api.ts` signatures, kept exactly.
+- Consumes: Task 4's `api.ts` signatures, kept exactly.
 - Produces: `Endpoints.{createRoom, join, events, vote, show, clear, revote, editIssue, leave, all, SessionCookieName}`; `sbt genOpenApi`; `npm run gen:api`.
 
 - [ ] **Step 1: Move the endpoint descriptions to `Endpoints`, with no behaviour change**
@@ -2083,10 +2107,10 @@ In `build.sbt`, after the `pekko-http-testkit` line:
 
 ```scala
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % V.tapir % Test,
-    libraryDependencies += "com.softwaremill.sttp.apispec" %% "openapi-circe" % "0.11.10" % Test,
+    libraryDependencies += "com.softwaremill.sttp.apispec" %% "openapi-circe" % V.apispec % Test,
 ```
 
-and after the `qa` alias:
+with `val apispec      = "0.11.10"` added to the `V` block in alphabetical order, and after the `qa` alias:
 
 ```scala
 addCommandAlias(
@@ -2225,7 +2249,7 @@ Expected: all green, the e2e suite as in Task 4.
 Then:
 
 1. In `api.ts`, change `body: { issue }` to `body: { isue: issue }`, run `npm run typecheck`, and confirm TS2561 ("'isue' does not exist"). Restore it.
-2. In `Requests.scala`, rename `JoinRequest`'s field `name` to `nickname`, run `sbt genOpenApi && npm run gen:api && npm run typecheck`, and confirm that `git status` shows both generated files modified and that `tsc` fails in `api.ts`'s `join`. Then `git checkout -- src/main/scala frontend/src/protocol/generated`.
+2. First stage the task's work with Step 6's `git add` line, so the generated files are tracked and the restore keeps Step 1's refactor. Then, in `Requests.scala`, rename `JoinRequest`'s field `name` to `nickname`, and its one reader in `API.scala`'s join logic, `request.name`, to `request.nickname`, so main still compiles and `genOpenApi` can run. Run `sbt genOpenApi && npm run gen:api && npm run typecheck`, and confirm that `git status` shows both generated files modified and that `tsc` fails in `api.ts`'s `join`. Then `git checkout -- src/main/scala frontend/src/protocol/generated`.
 
 - [ ] **Step 6: Commit**
 
@@ -2240,6 +2264,7 @@ git commit -m "feat(frontend): type the API client from tapir's OpenAPI document
 
 **Files:**
 - Create: `src/test/scala/com/lunatech/pointingpoker/actors/SnapshotContractSpec.scala`, `frontend/src/protocol/snapshot.contract.test.ts`
+- Modify: `.github/workflows/ci.yml` (one comment)
 
 **Interfaces:**
 - Consumes: `RoomSnapshot.of`, the production `Encoder[RoomSnapshot]`, `RoomDataFixtures`; Task 3's `strictSnapshotSchema`.
@@ -2310,7 +2335,7 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
   override def afterAll(): Unit =
     system.terminate()
 
-  // Fixed ids keep each file byte-stable across runs, so a contract change shows as a diff.
+  // Fixed ids keep each file byte-stable across runs, so two runs compare with a plain diff.
   private val ids = Map("Alice" -> 1, "Bob" -> 2)
 
   private def user(name: String, voted: Boolean, estimation: String): Attendee =
@@ -2369,9 +2394,11 @@ Then:
 
 - [ ] **Step 4: Run the suites and commit**
 
+In `.github/workflows/ci.yml`, give the `frontend unit tests` step the comment `# After sbt qa, which writes the snapshots the contract test reads.`
+
 ```bash
 sbt test && npm run test:unit
-git add src/test/scala/com/lunatech/pointingpoker/actors/SnapshotContractSpec.scala frontend/src/protocol/snapshot.contract.test.ts
+git add src/test/scala/com/lunatech/pointingpoker/actors/SnapshotContractSpec.scala frontend/src/protocol/snapshot.contract.test.ts .github/workflows/ci.yml
 git commit -m "test(contract): check server snapshots against the strict client schema"
 ```
 
@@ -2671,9 +2698,9 @@ object RoomSnapshot:
 ```
 
 Run: `sbt scalafmtAll test`
-Expected: PASS (215 in the spike).
+Expected: PASS, 220 tests by count: Task 1's 211, Task 6's three contract states, and here one `RoomSnapshotSpec` case and five contract states. The spike recorded 215; if the run gives neither, report it.
 
-Prove it can fail: make `ConfirmedHidden` encode as `tagged("ConfirmedHidden", "value" -> Json.fromString(""))`, run `sbt test`, confirm only "keep a withheld estimation out of the serialized frame entirely" fails, then run `npm run test:unit` and confirm the contract case for `estimation-confirmed-hidden.json` fails with `unrecognized_keys`, the second place that catches it. Restore the encoder.
+Prove it can fail: make `ConfirmedHidden` encode as `tagged("ConfirmedHidden", "value" -> Json.fromString(""))`, run `sbt test`, confirm only "keep a withheld estimation out of the serialized frame entirely" fails, and restore the encoder. The client half of this proof waits for Step 5, since until Step 3 the schema fails every file for its old shape.
 
 At this point the page is broken against the new wire (`npm run test:unit` fails on every contract file), which is what the contract test is for. Step 3 fixes the client.
 
@@ -2855,6 +2882,8 @@ npm run typecheck && npm run lint && sbt test && npm run test:unit && npm run e2
 
 Expected: all green. Vitest has 25 cases, eight of them contract states. The e2e suite has 74 runs, the same as Task 4.
 
+Then prove the contract catches a leak: make `ConfirmedHidden` encode with `"value" -> Json.fromString("")` again, run `sbt "testOnly *SnapshotContractSpec" && npm run test:unit`, and confirm the contract cases for `before-reveal.json` and `estimation-confirmed-hidden.json` fail with `unrecognized_keys`, the two files with a `ConfirmedHidden` row. Restore the encoder and rerun `sbt "testOnly *SnapshotContractSpec"`.
+
 - [ ] **Step 6: Commit**
 
 ```bash
@@ -2893,16 +2922,26 @@ Same PR, own commit, since the docs describe the code that landed.
 - **Tech stack:** replace `* Vue.js` with `* React, TypeScript and Vite, under `frontend/``.
 - **Running locally:** before the `SECURE_COOKIES` paragraph, add that the page needs Node, the version in `mise.toml` (`mise install`) or any Node of that major. Then describe the two dev modes. For page work, run `SECURE_COOKIES=false sbt run` and `npm run dev` in two terminals and open Vite's address: it hot-reloads and forwards `/rooms` and `/create-room` to port 8080, SSE included. It does not reproduce the not-a-room page or the UUID redirect, which the e2e suite covers. For backend work, run `npm run build` once and then `sbt run` alone on port 8080. Without a build, `/` answers `503` with "The page is not built: run `npm run build`".
 - **Testing:** add `npm run test:unit`, the Vitest suite under `frontend/src`, noting that its contract test reads the snapshots `sbt test` writes to `target/contract/`, so it runs after `sbt test`. Update the pre-hook paragraph: the hooks are now `npm run build && npm run stage`, and invoking `node --test` or `npx playwright test` directly skips both.
-- **Deployment:** add that the page is built before sbt by `clevercloud/build-frontend.sh`, which Clever runs as `CC_PRE_BUILD_HOOK`; that `application.conf`'s `index-path` (`frontend/dist/index.html`) is the one setting, and the `/assets/` files beside it are served `immutable` for a year, since each name carries a content hash and the revalidated page names the new files after a deploy.
+- **Messaging:** the example participant becomes `{"id": ..., "name": "John Doe", "estimation": {"type": "Confirmed", "value": "5"}}`. Rewrite the redaction paragraph for the union: `estimation` is one of the five tags; `value` is present on `Confirmed` and `Unconfirmed` only, on a disclosed row that holds an estimate: the recipient's own, or any once `votesRevealed` is set; `ConfirmedHidden` and `UnconfirmedHidden` mark a withheld vote without its value; and an `Unconfirmed` tag, hidden or not, is a participant who has been asked to re-vote.
+- **Deployment:** add that the page is built before sbt by `clevercloud/build-frontend.sh`, which Clever runs as `CC_PRE_BUILD_HOOK`; that `application.conf`'s `index-path` (`frontend/dist/index.html`) is the one setting, and the `/assets/` files beside it are served `immutable` for a year, since each name carries a content hash and the revalidated page names the new files after a deploy. That replaces the restart paragraph's last two sentences, "The page is a separate artifact, served with no `Cache-Control`, ..." through "... the cosmetic symptom it has today.", which were already stale: `PageRoutes` revalidates the page, and `known-issues.md` has no such entry. In the same paragraph, replace "This is also why the wire format carries no version field: no session outlives the server that served it." with "This is also why the wire format carries no version field: no session outlives the server that served it. A page can, and `docs/known-issues.md` records what a stale one does with a changed snapshot."
 
 - [ ] **Step 2: `docs/known-issues.md`**
 
 - Remove the entry "The page and the browser suite depend on three public CDNs at runtime" whole.
 - Move the citations of the four entries that point into the deleted `index.html` to the symbols that replace it. Rewrite each entry's **Where** line, and any `index.html:NNN` in its body, as one edit per paragraph:
-  - "The issue editor has no cancel, and an unfocused draft is replaced by any room activity": `frontend/src/components/IssueEditor.tsx` (`commit`, and the pencil setting `editing`), `Room.tsx`'s `issueFocused` state, and `applySnapshot`'s `prev.issueFocused ? prev.currentIssue : s.currentIssue` in `frontend/src/room/view.ts`. The spec lists three entries to move, and this is the fourth: the same rule applies, since its target is deleted.
+  - "The issue editor has no cancel, and an unfocused draft is replaced by any room activity": `frontend/src/components/IssueEditor.tsx` (`commit`, and the pencil setting `editing`), `Room.tsx`'s `issueFocused` state, and `applySnapshot`'s `prev.issueFocused ? prev.currentIssue : s.currentIssue` in `frontend/src/room/view.ts`.
   - "A tied vote is broken by JavaScript key order, not by a rule anyone chose": the `votesSummary` sort in `applySnapshot`, `frontend/src/room/view.ts`, whose comparator is now `(a, b) => b[1] - a[1]`. Correct the quoted code in the Issue paragraph to match.
   - "A Show during a partial re-vote tallies two rounds as one distribution": the tally in `applySnapshot`, `frontend/src/room/view.ts`.
   - "A reveal with votes still pushes the participants list down": `frontend/src/components/Results.tsx` (the summary block, rendered only while revealed with a non-empty tally) above `Participants.tsx`. The frozen-round notice it contrasts with is the hidden row in `Deck.tsx`.
+- In "No request payload is validated", replace "the page renders all three through Vue interpolation or `v-model` and uses no `v-html`" with "the page renders all three as React text or input values and uses no `dangerouslySetInnerHTML`".
+- Add this entry at the end of "Open":
+
+  > ### A page left open across a deploy misreads a changed snapshot
+  >
+  > - **Where:** `frontend/src/room/connection.ts` (`onmessage`), and `frontend/src/protocol/snapshot.ts`'s lenient `snapshotSchema`.
+  > - **Issue:** A deploy ends every session but not every page. A tab open across it, in the lobby or restored from the back-forward cache, can join the new server and read its frames with the old code. Step 8's estimation union did this to the Vue page, which rendered the tags as text until reloaded. From step 8 on, the lenient schema drops an unknown field, but a changed one, or a new union tag, fails the parse: the connection drops every frame with only a `console.error`, and the page stays in the lobby after a successful join, with no message.
+  > - **Resolution:** Accepted for step 8, whose rollout reloads open tabs by hand. It stays open for later wire changes: telling the user to reload when a frame fails to parse is the natural fix, and it fits step 8a's connection notices.
+
 - Leave the historical `index.html` mentions in the stale-citation entry alone. They record what earlier steps did.
 
 - [ ] **Step 3: `docs/roadmap.md`**
@@ -2913,7 +2952,7 @@ In Phase 3, tick "Migrate off Vue 2" and reword it to `Migrate off Vue 2, to Rea
 
 In `2026-08-31-protocol-target-architecture-design.md`, add this paragraph after step 8's "It also revisits step 3a's frozen deck" paragraph and before "**Step 9.":
 
-> Landed. Step 8, the technical migration, in seven commits where the frontend spec lists four, each split where its halves are judged by different tests: the server's `/assets/` route and `503`, the Vite toolchain building the old page, the room state in TypeScript, the React components, the typed client, the strict contract test and the estimation union. The page lives in `frontend/`, is built to `frontend/dist/` by `clevercloud/build-frontend.sh` before sbt runs, and is served from there. The endpoint descriptions moved from `API` to `Endpoints`, so `genOpenApi` writes the document from test sources without an actor system. The participant's `voted`, `hasEstimation` and `estimation` are one `estimation` union now, which closes section 2's deferral. The e2e suite passed with no selector change. Steps 8a to 8c extend this paragraph.
+> Landed. Step 8, the technical migration, in seven commits where the frontend spec lists four, each split where its halves are judged by different tests: the server's `/assets/` route and `503`, the Vite toolchain building the old page, the room state in TypeScript, the React components, the typed client, the strict contract test and the estimation union, after a commit pinning the lobby's Enter and paste paths on the Vue page. The page lives in `frontend/`, is built to `frontend/dist/` by `clevercloud/build-frontend.sh` before sbt runs, and is served from there. The endpoint descriptions moved from `API` to `Endpoints`, so `genOpenApi` writes the document from test sources without an actor system. The participant's `voted`, `hasEstimation` and `estimation` are one `estimation` union now, which closes section 2's deferral. The e2e suite passed with no selector change. Steps 8a to 8c extend this paragraph.
 
 - [ ] **Step 5: The frontend spec's status and the plans record**
 
@@ -2927,7 +2966,7 @@ In `docs/superpowers/plans/README.md`, append to "The record so far":
 
 ```bash
 grep -rn "src/main/resources/pages/index.html" README.md docs/known-issues.md docs/roadmap.md   # expect nothing
-grep -n "—" README.md docs/known-issues.md docs/roadmap.md docs/superpowers/plans/README.md docs/superpowers/plans/2026-09-25-protocol-architecture-8-frontend-rewrite.md   # expect nothing new
+grep -nP '\x{2014}' README.md docs/known-issues.md docs/roadmap.md docs/superpowers/plans/README.md docs/superpowers/plans/2026-09-25-protocol-architecture-8-frontend-rewrite.md   # expect nothing: no em dash
 git add README.md docs
 git commit -m "docs: record step 8 as landed"
 ```
@@ -2946,5 +2985,5 @@ sbt genOpenApi && npm run gen:api && git status --porcelain -- frontend/src/prot
 sbt styleCheck && npm test && npm run e2e
 ```
 
-- [ ] `git log --oneline main..` shows the spec commits and then the eight commits of Tasks 1 to 7 and 9, each a Conventional Commit with no attribution line.
+- [ ] `git log --oneline main..` shows the spec commits and then the nine commits of Tasks 0 to 7 and 9, each a Conventional Commit with no attribution line.
 - [ ] Report to the user with the test counts, the look comparison and the PR description's list of harness changes: the guard replacing the asset cache, the `fixtures.js`, `smoke.spec.js` and `playwright.config.js` comments, the testkit's `INDEX_PATH` and page check, the pre-hooks, and the new `lobby.spec.js`. Say that no selector changed, and list the accepted port differences from the decisions above. Push and open the PR only when the user asks. The rollout (`CC_PRE_BUILD_HOOK`, the merge in GitHub's interface, the stack order) is theirs.

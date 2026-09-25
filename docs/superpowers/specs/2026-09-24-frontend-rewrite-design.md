@@ -116,8 +116,11 @@ six read sites) all disappear once the client is rewritten. The participant
 field becomes one `estimation` tagged `NoEstimation`, `ConfirmedHidden`,
 `Confirmed(value)`, `UnconfirmedHidden` or `Unconfirmed(value)`, carrying
 `confirmed` so the re-vote state stays distinct. It is its own commit after the
-strict contract test, so the wire change is reviewed as a contract diff. No
-mixed-version window exists, since a deploy ends every session.
+strict contract test, so the wire change is reviewed as a contract diff. A
+deploy ends every session but not every page: a Vue page loaded before the
+deploy and joined after it renders the union as nonsense until reloaded. That
+window is accepted, since a reload closes it and the rollout runs outside
+working hours.
 
 **Participants are listed alphabetically.** The parent design leaves the
 snapshot's `users` order unspecified and gives step 8 the default, which
@@ -625,11 +628,15 @@ Each step's PR carries its own:
 - **Step 8.** `README.md`: `mise.toml`'s Node, or any Node of that major; both
   dev modes, the two-terminal page loop and `npm run build` before `sbt run`
   alone; `npm run test:unit`; asset caching; the page path now owned by
-  `application.conf`; the pre-hooks now build, then stage.
+  `application.conf`; the pre-hooks now build, then stage; the Messaging
+  section's example and redaction paragraph for the estimation union.
   `docs/known-issues.md`: remove the CDN entry; move the citations of entries
   that point into today's `index.html` ("A reveal with votes still pushes the
   participants list down", "A tied vote is broken by JavaScript key order", "A
-  Show during a partial re-vote") to the symbols that replace them.
+  Show during a partial re-vote", "The issue editor has no cancel") to the
+  symbols that replace them; say React, not Vue, in "No request payload is
+  validated"; add an entry for a stale page misreading a changed snapshot.
+  `README.md`'s "no version field" sentence names that window too.
   `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8c,
   and reword "tentatively Vue 3, framework choice still open" to React. The
   parent design: step 8's "Landed" paragraph, which each later step extends.
@@ -659,7 +666,8 @@ since each merge restarts the server and ends every live room.
    8a onto `main`, wait for CI, merge it; the same for 8b. Clever redeploys on
    its own after each.
 4. Read step 8's deploy log for `mise install`, the hook's `npm ci` and Vite
-   lines, then `sbt stage`, in that order.
+   lines, then `sbt stage`, in that order. Reload every tab left open across
+   the deploy, lobby tabs included: an old page misreads the new estimation.
 5. Once 8b is deployed, test by hand with five participants on four devices: a
    desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an Android
    phone. Safari and a real phone are what the e2e suite never runs. Each
