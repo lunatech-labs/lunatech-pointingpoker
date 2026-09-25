@@ -12,5 +12,5 @@ export default defineConfig({
   server: {
     proxy: { '/rooms': 'http://localhost:8080', '/create-room': 'http://localhost:8080' }
   },
-  test: { include: ['src/**/*.test.ts'], passWithNoTests: true }
+  test: { include: ['src/**/*.test.ts'] }
 })
