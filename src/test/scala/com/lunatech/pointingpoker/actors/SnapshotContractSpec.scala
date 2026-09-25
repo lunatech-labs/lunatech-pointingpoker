@@ -36,7 +36,23 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
     val id = UUID.fromString(f"00000000-0000-0000-0000-${ids(name)}%012d")
     Attendee(id, name, voted, estimation, TestProbe().ref, Room.SessionToken.mint())
 
-  final private case class ContractState(name: String, snapshot: () => RoomSnapshot)
+  // tag, when set, must appear as some participant's estimation type, so a name cannot lie.
+  final private case class ContractState(
+      name: String,
+      snapshot: () => RoomSnapshot,
+      tag: Option[String] = None
+  )
+
+  // Alice reads; Bob, when present, holds the state under test.
+  private def tagState(name: String, tag: String, data: (Attendee, Attendee) => Room.RoomData) =
+    ContractState(
+      name,
+      () =>
+        val alice = user("Alice", false, "")
+        RoomSnapshot.of(data(alice, user("Bob", false, "")), alice.id)
+      ,
+      Some(tag)
+    )
 
   private val states: List[ContractState] = List(
     ContractState(
@@ -57,15 +73,42 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
       () =>
         val alice = user("Alice", false, "")
         RoomSnapshot.of(withUsers(alice).withIssue(""), alice.id)
+    ),
+    tagState("estimation-no-estimation", "NoEstimation", (alice, _) => withUsers(alice)),
+    tagState(
+      "estimation-confirmed-hidden",
+      "ConfirmedHidden",
+      (alice, bob) => withUsers(alice, bob.copy(voted = true, estimation = "13"))
+    ),
+    tagState(
+      "estimation-unconfirmed-hidden",
+      "UnconfirmedHidden",
+      (alice, bob) => withUsers(alice, bob.copy(estimation = "13"))
+    ),
+    tagState(
+      "estimation-confirmed",
+      "Confirmed",
+      (alice, _) => withUsers(alice.copy(voted = true, estimation = "5"))
+    ),
+    tagState(
+      "estimation-unconfirmed",
+      "Unconfirmed",
+      (alice, _) => withUsers(alice.copy(estimation = "5"))
     )
   )
 
   "The snapshot contract" should {
     for state <- states do
-      s"write a representative snapshot for ${state.name}" in
-        Files.writeString(
-          contractDir.resolve(s"${state.name}.json"),
-          state.snapshot().asJson.spaces2
-        )
+      s"write a representative snapshot for ${state.name}" in {
+        val json = state.snapshot().asJson
+        val tags = json.hcursor
+          .downField("users")
+          .values
+          .toList
+          .flatten
+          .flatMap(_.hcursor.downField("estimation").get[String]("type").toOption)
+        state.tag.foreach(tag => tags must contain(tag))
+        Files.writeString(contractDir.resolve(s"${state.name}.json"), json.spaces2)
+      }
   }
 end SnapshotContractSpec

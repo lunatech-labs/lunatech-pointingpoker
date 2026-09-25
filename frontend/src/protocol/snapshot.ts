@@ -4,13 +4,15 @@ type ObjectOf = typeof z.object
 
 // One definition for both strictness rules: zod's is per object, so two copies could drift.
 function build(object: ObjectOf) {
-  const participant = object({
-    id: z.string(),
-    name: z.string(),
-    voted: z.boolean(),
-    hasEstimation: z.boolean(),
-    estimation: z.string()
-  })
+  // The five legal states; value only where the reader may see it.
+  const estimation = z.discriminatedUnion('type', [
+    object({ type: z.literal('NoEstimation') }),
+    object({ type: z.literal('ConfirmedHidden') }),
+    object({ type: z.literal('UnconfirmedHidden') }),
+    object({ type: z.literal('Confirmed'), value: z.string() }),
+    object({ type: z.literal('Unconfirmed'), value: z.string() })
+  ])
+  const participant = object({ id: z.string(), name: z.string(), estimation })
   return object({
     you: z.string(),
     currentIssue: z.string(),
@@ -26,3 +28,4 @@ export const strictSnapshotSchema = build(z.strictObject as ObjectOf)
 
 export type RoomSnapshot = z.infer<typeof snapshotSchema>
 export type Participant = RoomSnapshot['users'][number]
+export type Estimation = Participant['estimation']

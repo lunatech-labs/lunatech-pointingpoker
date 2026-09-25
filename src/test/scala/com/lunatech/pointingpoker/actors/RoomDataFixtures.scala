@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import org.apache.pekko.actor.ActorRef as UntypedRef
 
 import com.lunatech.pointingpoker.actors.Room.RoomData
+import com.lunatech.pointingpoker.actors.RoomSnapshot.Estimation
 
 object RoomDataFixtures:
 
@@ -95,6 +96,20 @@ object RoomDataFixtures:
 
     def estimateFor(user: Attendee): Option[(String, Boolean)] =
       data.state.round.estimates.get(user.id).map(e => (e.value, e.confirmed))
+  end extension
+
+  // The pre-union wire's three fields, rebuilt so behaviour specs need not name every tag.
+  extension (participant: RoomSnapshot.Participant)
+    def voted: Boolean = participant.estimation match
+      case Estimation.Confirmed(_) | Estimation.ConfirmedHidden => true
+      case _                                                    => false
+
+    def hasEstimation: Boolean = participant.estimation != Estimation.NoEstimation
+
+    def shown: String = participant.estimation match
+      case Estimation.Confirmed(value)   => value
+      case Estimation.Unconfirmed(value) => value
+      case _                             => ""
   end extension
 
   private def withRound(data: RoomData, f: Room.Round => Room.Round): Room.RoomState =

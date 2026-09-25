@@ -2,7 +2,7 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
-import io.circe.Encoder
+import io.circe.{Encoder, Json}
 import io.circe.generic.semiauto.deriveEncoder
 
 import com.lunatech.pointingpoker.actors.Room.RoomData
@@ -18,13 +18,38 @@ object RoomSnapshot:
 
   // A projection rather than Room.Member: a derived encoder over the room's own state would
   // put every participant's session token on the wire to every other participant.
-  final case class Participant(
-      id: UUID,
-      name: String,
-      voted: Boolean,
-      hasEstimation: Boolean,
-      estimation: String
-  )
+  final case class Participant(id: UUID, name: String, estimation: Estimation)
+
+  // One tag per reachable pair of (confirmed, disclosed), so the wire cannot carry a value
+  // alongside a hidden flag, nor a "voted" with no estimation.
+  enum Estimation:
+    case NoEstimation, ConfirmedHidden, UnconfirmedHidden
+    case Confirmed(value: String)
+    case Unconfirmed(value: String)
+
+  object Estimation:
+    // Explicit tags rather than toString: renaming a case must not silently rename the wire.
+    given Encoder[Estimation] = Encoder.instance {
+      case NoEstimation       => tagged("NoEstimation")
+      case ConfirmedHidden    => tagged("ConfirmedHidden")
+      case UnconfirmedHidden  => tagged("UnconfirmedHidden")
+      case Confirmed(value)   => tagged("Confirmed", "value" -> Json.fromString(value))
+      case Unconfirmed(value) => tagged("Unconfirmed", "value" -> Json.fromString(value))
+    }
+
+    private def tagged(tag: String, fields: (String, Json)*): Json =
+      Json.obj(("type" -> Json.fromString(tag)) +: fields*)
+
+    def of(estimate: Option[Room.Estimate], disclose: Boolean): Estimation =
+      // A tuple rather than guards, so the compiler checks all four pairs are covered.
+      estimate.fold(NoEstimation)(e =>
+        (e.confirmed, disclose) match
+          case (true, true)   => Confirmed(e.value)
+          case (true, false)  => ConfirmedHidden
+          case (false, true)  => Unconfirmed(e.value)
+          case (false, false) => UnconfirmedHidden
+      )
+  end Estimation
 
   object Participant:
     given Encoder[Participant] = deriveEncoder[Participant]
@@ -44,15 +69,8 @@ object RoomSnapshot:
       users = data.members.toList
         .sortWith((a, b) => a._1.compareTo(b._1) < 0)
         .map { (id, member) =>
-          val estimate = round.estimates.get(id)
           val disclose = round.revealed || id == forUser
-          Participant(
-            id = id,
-            name = member.name,
-            voted = estimate.exists(_.confirmed),
-            hasEstimation = estimate.isDefined,
-            estimation = estimate.filter(_ => disclose).map(_.value).getOrElse("")
-          )
+          Participant(id, member.name, Estimation.of(round.estimates.get(id), disclose))
         }
     )
   end of

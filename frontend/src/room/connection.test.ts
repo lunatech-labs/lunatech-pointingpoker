@@ -21,7 +21,7 @@ const frame = JSON.stringify({
   you: 'a',
   currentIssue: 'PP-1',
   votesRevealed: false,
-  users: [{ id: 'a', name: 'Alice', voted: false, hasEstimation: false, estimation: '' }]
+  users: [{ id: 'a', name: 'Alice', estimation: { type: 'NoEstimation' } }]
 })
 
 describe('createConnection', () => {
