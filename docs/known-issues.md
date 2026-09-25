@@ -304,7 +304,7 @@ roadmap item instead of leaving it here as stale history.
   the frontend rewrite, whose section 5 already assigns both an explicit cancel
   and a "someone else changed the issue while you were editing" affordance to
   that step. The trigger for pulling it earlier is anyone actually losing an
-  edit in a real ceremony. Remove this entry when step 8 lands.
+  edit in a real ceremony. Remove this entry when step 8b lands.
 
 ### The page and the browser suite depend on three public CDNs at runtime
 
@@ -852,8 +852,8 @@ roadmap item instead of leaving it here as stale history.
   is real content arriving, and the movement is honest feedback that the reveal
   landed. What the rewrite should carry over is that the shift is the block's
   position rather than its existence, so placing the participants list above the
-  results would settle it without hiding anything. Remove this entry when step 8
-  lands or decides otherwise.
+  results would settle it without hiding anything. Remove this entry when step
+  8c lands or decides otherwise.
 
 ### Only a real e2e failure exercises the artifact upload path
 

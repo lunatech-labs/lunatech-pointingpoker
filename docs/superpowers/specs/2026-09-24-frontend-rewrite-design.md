@@ -1,4 +1,4 @@
-# Frontend Rewrite (Steps 8 and 8a)
+# Frontend Rewrite (Steps 8 to 8c)
 
 Date: 2026-09-24
 Status: Proposed
@@ -11,29 +11,38 @@ end of life since 2023, with Vue itself, Bootstrap 4, axios and feather-icons, f
 from three public CDNs and no build step. The parent design's step 8 replaces it
 with TypeScript, build tooling, components, a connection module and client
 types checked against the server contract, then adds a theme and a responsive
-layout. This document settles how, and splits the work in two:
+layout. This document settles how, and splits the work in four:
 
-- **Step 8, technical migration.** A new stack behind a page that looks the
-  same, followed by a small number of deliberate behaviour changes.
-- **Step 8a, UI/UX.** The redesign, on code already known to be correct.
+- **Step 8, technical migration.** A new stack behind a page that behaves and
+  looks the same.
+- **Step 8a, connection.** The path decides the page, and the stream recovers
+  on its own.
+- **Step 8b, issue editor.** A cancel and a conflict notice.
+- **Step 8c, UI/UX.** The redesign, on code already known to be correct. Its
+  scope is open, from today's components restyled to the company's visual
+  identity to new components and interactions, so its own spec decides whether
+  it splits into further sub-steps.
 
-Both steps follow the parent design's branch naming:
-`20260831.protocol_architecture_8_frontend_rewrite` now, and an `8a` branch
-under the same prefix later.
+All follow the parent design's branch naming:
+`20260831.protocol_architecture_8_frontend_rewrite` now, with
+`..._8a_connection` and `..._8b_issue_editor` stacked on it and merged in the
+same delivery window, and `8c` branches under the same prefix later.
 
 ## Decisions and their reasons
 
-**Two steps, not one.** In one big change the page's behaviour and its tests
+**Four steps, stacked.** In one big change the page's behaviour and its tests
 move together, so nothing independent says whether a difference is a bug or an
-intended redesign. Holding the look still in step 8 keeps the Playwright suite
-an honest judge of the migration, which matters because the connection logic
-carries guarantees from steps 1 and 6. The cost is that step 8's markup is
-restyled in 8a. A third step for the connection duties alone was considered and
-declined: about 30 lines without the watchdog and under 200 with it, too small
-for its own review and merge round when every merge to `main` restarts the
-server. Those duties land instead as separate trailing commits in step 8, so its
-review still sees "same behaviour, new stack" and "behaviour change" as distinct
-diffs.
+intended redesign. Holding behaviour and look still in step 8 keeps the
+Playwright suite an honest judge of the migration, which matters because the
+connection logic carries guarantees from steps 1 and 6. Each behaviour change
+that needs design decisions then gets its own step, judged by its own new
+tests. A first version kept the connection and editor changes as trailing
+commits in step 8, declining a separate step as too small at under 200 lines
+for its own merge round. That measured code when the cost was in decisions:
+those two sections drew most of the review rounds. And a stack costs one
+delivery window, not one per step, with a routine rebase after each merge. 8a
+and 8b are independent, both built on step 8's store, and the connection goes
+first. The cost is that step 8's markup is restyled in 8c.
 
 **React.** Vue 3, React and Angular were compared. None limits anything on the
 roadmap, since every planned feature is snapshot fields, DOM events or browser
@@ -111,7 +120,8 @@ strict contract test, so the wire change is reviewed as a contract diff. No
 mixed-version window exists, since a deploy ends every session.
 
 **Participants are listed alphabetically.** The parent design leaves the
-snapshot's `users` order unspecified and gives step 8 the default. `view.ts`
+snapshot's `users` order unspecified and gives step 8 the default, which
+lands in step 8c since it changes the order the e2e suite reads. `view.ts`
 sorts by name with `localeCompare` at base sensitivity, ignoring case and
 accents, and breaks ties by user id. Clients already agree, since
 `RoomSnapshot.of` sorts by id; the reason is readability, since a table sorted by
@@ -119,9 +129,9 @@ id reads as random. "Yourself first" was declined because a screen-sharer's
 table would differ from everyone else's; by-vote orders stay with Phase 4.
 
 **The revealed-round notice gets a live region.** The parent design's step 3a
-section says step 8 owes it one. Today the notice is toggled with `visibility`,
-which hides it from screen readers, and a region inserted with its text is not
-reliably announced. So one `role="status"` element is always rendered, empty
+section says step 8 owes it one; it lands in step 8c. Today the notice is
+toggled with `visibility`, which hides it from screen readers, and a region
+inserted with its text is not reliably announced. So one `role="status"` element is always rendered, empty
 before the reveal and holding the sentence after it, and it carries the row's
 reserved height itself, so the look is unchanged and Playwright sees it as
 visible when empty. `role="alert"` stays refused, as the parent
@@ -157,16 +167,18 @@ Step 8's commits, in order:
 4. **Estimation union.** The custom Circe encoder, `RoomSnapshotSpec`'s two
    shape tests rewritten for the union, the zod schema and `view.ts` reading
    it, and a contract state for each of the five tags.
-5. **Behaviour changes, as separate commits:** the path decides the page,
-   including Leave keeping the name where today's `doLeave` clears
-   `localStorage` and a restored page reloading, first, since the connection commits build on it; close the old stream
-   before opening a new one; the watchdog with self-healing reconnect;
-   the reload on a refusal with the restart notice; alphabetical participant order; the revealed-round live
-   region; the issue
-   editor's cancel and conflict notice.
 
-Existing e2e cases commit 5 changes, each in the commit whose behaviour it
-pinned:
+Step 8a's commits, in order: the path decides the page, including Leave
+keeping the name where today's `doLeave` clears `localStorage` and a restored
+page reloading, first, since the others build on it; close the old stream
+before opening a new one; the watchdog with self-healing reconnect; the reload
+on a refusal with the restart notice.
+
+Step 8b: the issue editor's cancel and conflict notice, with `api.ts`'s 10 s
+bound, whose one visible effect is the editor's.
+
+Existing e2e cases steps 8a and 8b change, each in the commit whose behaviour
+it pinned:
 
 - **The path decides the page.** `slug.spec.js`'s "a room remembered from before
   the cutover reopens under its derived name" clicks the lobby's rejoin link
@@ -180,29 +192,32 @@ pinned:
   browser" and "a commit that never blurred the box still lets the room resync
   it" stop arguing from the focus guard the commit removes.
 
-The pass condition for commits 1 to 4 is the existing e2e suite green with at
-most listed selector changes to the cases, beside the harness changes commits
-1 and 2 list. Each commit in 5 brings a test shown failing
-against the commit before it.
+The pass condition for step 8 is the existing e2e suite green with at most
+listed selector changes to the cases, beside the harness changes commits 1 and
+2 list. Each commit in 8a and 8b brings a test shown failing against the
+commit before it.
 
-Step 8a: component library and look, light and dark theme, responsive layout,
-the frozen-deck tooltip step 3a declined, restyling the editor, placing the
+Step 8c: component library and look, light and dark theme, responsive layout,
+alphabetical participant order, the revealed-round live region, the
+frozen-deck tooltip step 3a declined, restyling the editor, placing the
 participants list above the results, and a "Not Alice?" way to join under
-another name than the remembered one. It restyles step 8's interactions and does
-not redesign them; a different interaction there is a deliberate decision with
-a known cost.
+another name than the remembered one. By default it restyles the earlier
+steps' interactions and does not redesign them; its own spec may choose
+otherwise, as a deliberate decision with a known cost.
 
 Known issues this closes:
 
 | Entry in `docs/known-issues.md` | Closed by |
 | --- | --- |
 | The page and the browser suite depend on three public CDNs at runtime | Step 8, commit 2, together with the CDN notes in `playwright.config.js`. The `assets` fixture in `e2e/fixtures.js` becomes a guard, installed on every context including those `join` creates, that fails any case whose page requests a host other than `127.0.0.1` |
-| The issue editor has no cancel, and an unfocused draft is replaced by any room activity | Step 8, commit 5 |
-| A reveal with votes still pushes the participants list down | Step 8a, as a layout change |
+| The issue editor has no cancel, and an unfocused draft is replaced by any room activity | Step 8b |
+| A reveal with votes still pushes the participants list down | Step 8c, as a layout change |
 
 ## Frontend architecture
 
-Three layers, with dependencies pointing only downward:
+This is the architecture once step 8b lands. Step 8 builds the layers and
+ports today's behaviour into them. Three layers, with dependencies pointing
+only downward:
 
 ```
 components (React)     App, Lobby, RoomHeader, Alerts, IssueEditor,
@@ -223,7 +238,7 @@ strictness is per object, so two hand-written schemas could drift apart
 silently. `generated/openapi.json` and `generated/openapi.d.ts` are committed
 outputs of tapir and `openapi-typescript`. `api.ts` is the `openapi-fetch`
 client, so every command's path, body and responses are checked at compile time.
-It aborts any request unanswered after 10 s, the liveness fetch's bound, so a
+From step 8b, it aborts any request unanswered after 10 s, the liveness fetch's bound, so a
 dead network ends in a failure rather than a request left hanging.
 
 **Room state** (`frontend/src/room/`), with no React import. `connection.ts`
@@ -258,7 +273,7 @@ install light.
 
 **Keeping the look in step 8.** Bootstrap from npm at 4.6.2, the last 4.x
 release, in place of the CDN's 4.4.1. `.github/dependabot.yml` ignores
-Bootstrap's major versions until 8a, in the commit that adds it, since
+Bootstrap's major versions until 8c, in the commit that adds it, since
 Bootstrap 5 would break the frozen look. feather-icons becomes `lucide-react`,
 Feather's maintained continuation, with Lucide's equivalents of the five icons
 in use (`check`, `check-circle`, `edit-2`, `lock`, `shield-off`), sized to
@@ -354,6 +369,9 @@ someone asks for it.
 
 ## Pages and navigation
 
+Step 8a. Step 8 keeps today's startup, ported, which rejoins the remembered
+room even on `/`.
+
 The URL is the only thing that decides what the page shows, and every change of
 room is a page load:
 
@@ -379,7 +397,7 @@ redirect; that change is listed in the PR.
 
 Two costs are left open. A shared link opened with someone else's name
 remembered joins as them, as today; a "Not Alice?" affordance belongs to step
-8a. A mistyped but valid slug creates an empty room, since `/join` creates any
+8c. A mistyped but valid slug creates an empty room, since `/join` creates any
 valid slug; that is a server question, already recorded in
 `docs/known-issues.md` as "An unrecognized `roomId` silently creates an empty
 room".
@@ -393,6 +411,8 @@ frame can put it back into a room it left, with no terminal state, one-shot
 and leave, unnoticed on a laptop and up to a second on a weak phone connection.
 
 ## Connection behaviour
+
+Step 8a. Until it lands, step 8 keeps today's connection code, ported.
 
 A failed stream has two recoveries, and each failure maps to one:
 
@@ -478,6 +498,8 @@ constant in `connection.ts` and `SSE.heartbeatInterval` each name the other.
 
 ## Issue editor behaviour
 
+Step 8b. Until it lands, step 8 keeps today's focus guard, ported.
+
 Today the only protection for a draft is keyboard focus: every snapshot writes
 the room's issue into the box unless the editable input is focused. Losing
 focus, including alt-tabbing to copy a ticket title, lets the next room activity
@@ -485,9 +507,9 @@ replace the draft, and the only exit from edit mode is the check, which posts
 whatever the box holds. Guarding the whole of edit mode was rejected at step 1
 because, without a cancel, a user who opened the editor and clicked away would
 silently stop receiving issue updates. A cancel and a conflict notice remove
-that objection, so step 8 guards the whole of edit mode.
+that objection, so step 8b guards the whole of edit mode.
 
-`useIssueEditor` holds the logic and `IssueEditor` the markup; step 8a
+`useIssueEditor` holds the logic and `IssueEditor` the markup; step 8c
 rewrites only the markup. Below, the room's issue is the store's, except once
 a save succeeds: the saved text, until the store's issue differs from what it
 held when saving began.
@@ -524,12 +546,14 @@ refused command changes nothing visible, and the next snapshot is the truth.
 
 ## Testing
 
-- **The existing e2e suite, in Chromium and Firefox, is the judge of commits 1
-  to 4.** The port keeps Bootstrap's markup and class names, so the suite
+Each case below lands with the step whose behaviour it pins.
+
+- **The existing e2e suite, in Chromium and Firefox, is the judge of step
+  8.** The port keeps Bootstrap's markup and class names, so the suite
   should pass unchanged, CSS-class selectors included (`tbody tr`,
   `.estimation-button-selected`, `#join-roomId`). Any selector change is listed
   in the PR with its reason. Moving those to role-based selectors belongs to
-  step 8a, where the markup changes.
+  step 8c, where the markup changes.
 - **The off-origin guard.** From commit 2, one helper in `e2e/fixtures.js`
   installs the guard on every browser context the suite opens: the `context`
   fixture's and each one `join` creates with `browser.newContext`. It routes
@@ -564,7 +588,7 @@ refused command changes nothing visible, and the next snapshot is the truth.
   - The editor: a draft surviving blur and room activity (the inverted case
     above); Enter saving and Escape cancelling; cancel restoring the room's
     issue; a concurrent change showing the notice; "Use theirs"; saving over a
-    concurrent change. These find elements by role and name, so step 8a's
+    concurrent change. These find elements by role and name, so step 8c's
     restyle does not break them.
 - **The Scala specs need no built page.** `APISpec`'s index cases write a
   fixture page to a temp file and build `ApiConfig` with it, since sbt's tests
@@ -596,69 +620,79 @@ refused command changes nothing visible, and the next snapshot is the truth.
 
 ## Docs in the same PR
 
-- `README.md`: `mise.toml`'s Node, or any Node of that major; both dev modes,
-  the two-terminal page loop and `npm run build` before `sbt run` alone; `npm run test:unit`;
-  asset caching; the page path now owned by `application.conf`; the pre-hooks
-  now build, then stage.
-- `docs/known-issues.md`: remove the CDN entry and the editor entry; amend "An
-  unrecognized `roomId` silently creates an empty room" for the lobby, where a
-  mistyped but valid room name now opens a new empty room; add to "A second tab
-  on the same room displaces the first tab's identity" that the reload on a
-  refusal makes its two-tab race routine at every restart, since both tabs
-  POST `/join` with a stale cookie and each mints a session; move the citations of entries that point into today's
-  `index.html` ("A reveal with votes still pushes the participants list down",
-  "A tied vote is broken by JavaScript key order", "A Show during a partial
-  re-vote") to the symbols that replace them.
-- `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8a,
-  and reword "tentatively Vue 3, framework choice still open" to React; tick
-  the backlog's connection-liveness watchdog, which step 8 delivers, noting
-  that a persisted `pageshow` reloads rather than arming it.
-- The parent design: step 8's "Landed" paragraph. The pointers from its step 8
-  section and its contract test to this document land with this document.
+Each step's PR carries its own:
+
+- **Step 8.** `README.md`: `mise.toml`'s Node, or any Node of that major; both
+  dev modes, the two-terminal page loop and `npm run build` before `sbt run`
+  alone; `npm run test:unit`; asset caching; the page path now owned by
+  `application.conf`; the pre-hooks now build, then stage.
+  `docs/known-issues.md`: remove the CDN entry; move the citations of entries
+  that point into today's `index.html` ("A reveal with votes still pushes the
+  participants list down", "A tied vote is broken by JavaScript key order", "A
+  Show during a partial re-vote") to the symbols that replace them.
+  `docs/roadmap.md`: tick Phase 3's migration items, leaving appearance to 8c,
+  and reword "tentatively Vue 3, framework choice still open" to React. The
+  parent design: step 8's "Landed" paragraph, which each later step extends.
+  The pointers from its step 8 section and its contract test to this document
+  land with this document.
+- **Step 8a.** `docs/known-issues.md`: amend "An unrecognized `roomId` silently
+  creates an empty room" for the lobby, where a mistyped but valid room name
+  now opens a new empty room; add to "A second tab on the same room displaces
+  the first tab's identity" that the reload on a refusal makes its two-tab race
+  routine at every restart, since both tabs POST `/join` with a stale cookie
+  and each mints a session. `docs/roadmap.md`: tick the backlog's
+  connection-liveness watchdog, noting that a persisted `pageshow` reloads
+  rather than arming it.
+- **Step 8b.** `docs/known-issues.md`: remove the editor entry.
 
 ## Rollout
 
-Done outside working hours, since the merge restarts the server and ends every
-live room.
+The stack of 8, 8a and 8b merges in one delivery window outside working hours,
+since each merge restarts the server and ends every live room.
 
 1. ~~Remove `INDEX_PATH` from the Clever console.~~ Done: absent from
    `clever env` on 2026-09-24.
-2. Set `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh` just before merging:
-   set earlier, a deploy of the old `main` fails on the missing script, which is
-   safe but noisy.
-3. Merge in GitHub's interface, because of the `ci.yml` change. Clever
-   redeploys on its own.
-4. Read the deploy log for `mise install`, the hook's `npm ci` and Vite lines,
-   then `sbt stage`, in that order.
-5. Test by hand with five participants on four devices: a desktop, a dev VM, a
-   Mac laptop in Safari and in Firefox, and an Android phone. Safari and a real
-   phone are what the e2e suite never runs.
-   - Edit the issue, vote, re-vote, show and clear.
-   - Reload one tab repeatedly, and close another.
-   - Restart the app from Clever's console while in a room: every participant
-     comes back with the restart notice.
-   - Take one browser offline in devtools for about a minute: the banner shows,
-     then clears on return.
-   - Lock the phone, or switch apps, for a minute: the room is current on
-     return.
-   - On the phone, switch apps and back within 3 s, inside the 6 s grace
-     period: the other browsers never show it leaving, so no `pagehide` fired.
+2. Set `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh` just before merging
+   step 8: set earlier, a deploy of the old `main` fails on the missing script,
+   which is safe but noisy.
+3. Merge step 8 in GitHub's interface, because of the `ci.yml` change. Rebase
+   8a onto `main`, wait for CI, merge it; the same for 8b. Clever redeploys on
+   its own after each.
+4. Read step 8's deploy log for `mise install`, the hook's `npm ci` and Vite
+   lines, then `sbt stage`, in that order.
+5. Once 8b is deployed, test by hand with five participants on four devices: a
+   desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an Android
+   phone. Safari and a real phone are what the e2e suite never runs. Each
+   check names the step it judges, so a failure points to one.
+   - Step 8: vote, re-vote, show and clear; reload one tab repeatedly, and
+     close another.
+   - Step 8a: restart the app from Clever's console while in a room: every
+     participant comes back with the restart notice. Take one browser offline
+     in devtools for about a minute: the banner shows, then clears on return.
+     Lock the phone, or switch apps, for a minute: the room is current on
+     return. On the phone, switch apps and back within 3 s, inside the 6 s
+     grace period: the other browsers never show it leaving, so no `pagehide`
+     fired.
+   - Step 8b: edit the issue, save and cancel; edit it in two browsers at
+     once: the second to save sees the conflict notice.
 
-**Rollback**, if step 5 fails:
+**Rollback**, if step 5 fails, reverts the failing step and those above it:
 
-1. Remove `CC_PRE_BUILD_HOOK`, since the previous commit has no script.
-2. Redeploy the previous commit with `clever restart --commit <sha>`, checked
-   against Clever's CLI docs before the rollout. No wait for empty rooms
-   is needed, since a broken page has none.
-3. Revert step 8 on `main` unless the fix lands the same day. It is not yet
-   known which commit Clever builds when it restarts the application on its
-   own; if it takes `main`, that build fails without the hook, which is
-   harmless while an old instance serves and an outage when none does.
+1. For step 8 itself, remove `CC_PRE_BUILD_HOOK`, since the commit before it
+   has no script.
+2. Redeploy the last good step's merge commit with `clever restart --commit
+   <sha>`, checked against Clever's CLI docs before the rollout. No wait for
+   empty rooms is needed, since a broken page has none.
+3. Revert the failing steps on `main` unless the fix lands the same day. It is
+   not yet known which commit Clever builds when it restarts the application
+   on its own; if it takes `main` after step 8 is reverted, that build fails
+   without the hook, which is harmless while an old instance serves and an
+   outage when none does.
 
 ## Done when
 
-The e2e suite is green, unchanged or with the listed selector and behaviour
-changes; the new e2e
-and unit tests pass and were shown failing first; `tsc`, ESLint and the
-regenerate-and-diff gate are green; the off-origin guard is in place; and the
-docs above are updated.
+For each step: the e2e suite is green, unchanged for step 8 except the listed
+selector changes, and with the listed behaviour changes for 8a and 8b; the new
+e2e and unit tests pass and were shown failing first; `tsc`, ESLint and the
+regenerate-and-diff gate are green; and its docs above are updated. Step 8
+also has the off-origin guard in place.

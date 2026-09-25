@@ -3130,7 +3130,8 @@ steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
 Designed in `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md`,
-which splits it into step 8, the technical migration, and step 8a, the UI/UX.
+which splits it into step 8, the technical migration, then steps 8a, the
+connection, 8b, the issue editor, and 8c, the UI/UX.
 
 **It also revisits step 3a's frozen deck**, which is fifteen lines of Bootstrap
 utility classes and a `:disabled` rule chosen because they are cheap in a page
