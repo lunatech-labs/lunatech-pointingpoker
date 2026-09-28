@@ -936,16 +936,16 @@ roadmap item instead of leaving it here as stale history.
 - **Issue:** `open` does not close the previous stream, so a Join clicked while
   the startup rejoin is in flight, or a double-clicked Join, leaves two
   `EventSource`s on one connection id. The server holds one ref per connection
-  id and `connect` replaces it without ending the old stream, so after a network
-  blip reconnects both, the orphan can be the one it holds. Leave then closes
-  only the page's latest stream, and `Depart` ends the orphan's. The orphan's
-  `EventSource` reconnects, the session survives `Depart`, so its `Join` makes
-  the user a member again for everyone. The lobby first shows "Connection to the
-  room was lost", then the next frame puts the page back into the room, and with
-  `roomId` cleared, `pagehide` sends no beacon for it.
-- **Resolution:** Accepted for step 8, which ports the Vue page without its
-  `entering` guard. Step 8a's close-before-open closes it; delete this entry
-  there.
+  id and `connect` replaces it without ending the old stream, so the orphan
+  survives Leave. Whenever it reconnects, after a network blip or because the
+  server held it and `Depart` ended it, its `Join` makes the user a member again
+  for everyone, since the session survives `Depart`. The lobby first shows
+  "Connection to the room was lost", then the next frame puts the page back into
+  the room, and with `roomId` cleared, `pagehide` sends no beacon for it.
+- **Resolution:** The re-membership predates step 8: the Vue page's Leave also
+  closed only its latest stream, and its `entering` guard only kept the page
+  from showing the room again. Accepted for step 8. Step 8a's close-before-open
+  closes both halves; delete this entry there.
 
 ## Traceability note
 
