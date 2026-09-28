@@ -63,7 +63,7 @@ Accepted differences in the port, listed in the PR:
 - `clevercloud/build-frontend.sh` runs `npm ci --include=dev --prefer-offline --no-audit --no-fund --fetch-timeout=60000` then `npm run build`, and its comment records the 300 s audit stall.
 - The page is served from `frontend/dist/`, which is gitignored and outside `target/`. `index-path` defaults to `frontend/dist/index.html`. `/assets/` answers with `Cache-Control: public, max-age=31536000, immutable` from the `assets/` directory beside `index-path`. A missing page answers `503` with "The page is not built: run `npm run build`".
 - There is no `frontend/public/`, and Vite's `publicDir` is off, so nothing is emitted at the root where the slug route matches.
-- Bootstrap stays on 4.x until 8c, with Dependabot ignoring its majors. Icons are Lucide's `Check`, `CircleCheck`, `Pencil`, `Lock` and `ShieldOff` at `size={20}`.
+- Bootstrap stays on 4.x until 8c, with Dependabot ignoring its majors. Icons are Lucide's `Check`, `CircleCheckBig`, `Pen`, `Lock` and `ShieldOff` at `size={20}`, the names Lucide aliases Feather's `check-circle` and `edit-2` to.
 - The room state (`frontend/src/room/`) imports nothing from React.
 - `npm test` stays `node --test`; Vitest is `npm run test:unit`, with its include limited to `frontend/src`.
 - The e2e suite is the judge of the port: it passes with **no selector changes** (the dry run needed none). Any change to an existing case beyond the comments this plan lists is a finding to report, not a fix to make quietly.
@@ -1699,7 +1699,7 @@ export function RoomHeader({ roomId, onCopied, onLeave }: Props) {
 
 ```tsx
 import { useState } from 'react'
-import { Check, Pencil } from 'lucide-react'
+import { Check, Pen } from 'lucide-react'
 
 type Props = {
   issue: string
@@ -1747,7 +1747,7 @@ export function IssueEditor({ issue, onIssue, onFocusChange, onCommit }: Props) 
             />
             <div className="input-group-append" onClick={() => setEditing(true)}>
               <button className="btn btn-outline-secondary" type="button">
-                <Pencil size={20} />
+                <Pen size={20} />
               </button>
             </div>
           </div>
@@ -1905,7 +1905,7 @@ export function Results({ view }: { view: View }) {
 `frontend/src/components/Participants.tsx`:
 
 ```tsx
-import { CircleCheck, ShieldOff } from 'lucide-react'
+import { CircleCheckBig, ShieldOff } from 'lucide-react'
 import type { View } from '../room/view'
 
 export function Participants({ view }: { view: View }) {
@@ -1923,7 +1923,7 @@ export function Participants({ view }: { view: View }) {
           <tbody>
             {view.users.map(u => (
               <tr key={u.id}>
-                <td>{u.voted && <CircleCheck size={20} />}</td>
+                <td>{u.voted && <CircleCheckBig size={20} />}</td>
                 <td>{u.name}</td>
                 <td>
                   {u.hasEstimation && !view.votesRevealed && <ShieldOff size={20} />}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Pencil } from 'lucide-react'
+import { Check, Pen } from 'lucide-react'
 
 type Props = {
   issue: string
@@ -47,7 +47,7 @@ export function IssueEditor({ issue, onIssue, onFocusChange, onCommit }: Props) 
             />
             <div className="input-group-append" onClick={() => setEditing(true)}>
               <button className="btn btn-outline-secondary" type="button">
-                <Pencil size={20} />
+                <Pen size={20} />
               </button>
             </div>
           </div>

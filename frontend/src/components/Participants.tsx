@@ -1,4 +1,4 @@
-import { CircleCheck, ShieldOff } from 'lucide-react'
+import { CircleCheckBig, ShieldOff } from 'lucide-react'
 import type { View } from '../room/view'
 
 export function Participants({ view }: { view: View }) {
@@ -16,7 +16,7 @@ export function Participants({ view }: { view: View }) {
           <tbody>
             {view.users.map(u => (
               <tr key={u.id}>
-                <td>{u.voted && <CircleCheck size={20} />}</td>
+                <td>{u.voted && <CircleCheckBig size={20} />}</td>
                 <td>{u.name}</td>
                 <td>
                   {u.hasEstimation && !view.votesRevealed && <ShieldOff size={20} />}
