@@ -1,9 +1,10 @@
 package com.lunatech.pointingpoker
 
+import java.nio.file.{Files, Path, Paths}
 import java.util.Locale
 
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, HttpResponse, StatusCodes}
-import org.apache.pekko.http.scaladsl.model.headers.`Cache-Control`
+import org.apache.pekko.http.scaladsl.model.headers.{CacheDirectives, `Cache-Control`}
 import org.apache.pekko.http.scaladsl.model.headers.CacheDirectives.`no-cache`
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
@@ -23,7 +24,34 @@ class PageRoutes(apiConfig: ApiConfig):
   private def revalidated(route: Route): Route =
     respondWithHeader(`Cache-Control`(`no-cache`))(route)
 
-  private val index: Route = revalidated(getFromFile(apiConfig.indexPath))
+  private val indexFile: Path = Paths.get(apiConfig.indexPath)
+  private val assetsDir: Path = indexFile.resolveSibling("assets")
+  private val notBuilt        = "The page is not built: run `npm run build`"
+
+  if !Files.exists(indexFile) then log.warn(notBuilt)
+
+  // Checked per request, so a page built while the server runs is picked up.
+  private val index: Route =
+    revalidated {
+      extract(_ => Files.exists(indexFile)) { built =>
+        if built then getFromFile(indexFile.toFile)
+        else
+          complete(
+            HttpResponse(
+              StatusCodes.ServiceUnavailable,
+              entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, notBuilt)
+            )
+          )
+      }
+    }
+
+  // Asset names carry a content hash, so a cached copy never goes stale.
+  private val immutable =
+    `Cache-Control`(
+      CacheDirectives.public,
+      CacheDirectives.`max-age`(31536000),
+      CacheDirectives.immutableDirective
+    )
 
   val route: Route =
     concat(
@@ -40,6 +68,10 @@ class PageRoutes(apiConfig: ApiConfig):
           log.info("Redirecting legacy room link {} to {}", uuid, slug.raw)
           redirect(s"/${slug.raw}?moved=1", StatusCodes.Found)
         }
+      },
+      // A missing asset rejects, so the default handler answers 404 without the immutable header.
+      pathPrefix("assets") {
+        respondWithHeader(immutable)(getFromDirectory(assetsDir.toString))
       },
       // Matches every single-segment path, so it stays last here and API.route puts pages last.
       path(Segment) { raw =>

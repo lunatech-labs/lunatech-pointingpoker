@@ -1,0 +1,77 @@
+:root {
+  --lt-dark-red-color: #AB0D1F;
+  --lt-light-red-color: #E2545D;
+  --lt-deep-red-color: #600002;
+  --lt-green-color: #28a745;
+  --lt-white-color: #FFF;
+  --lt-medium-red-color: #DC3545;
+  --lt-pale-red-color: #F5C2C7;
+}
+
+.show-bt {
+  background-color: var(--lt-deep-red-color);
+  color: var(--lt-white-color);
+}
+.show-bt:hover {
+  background-color: var(--lt-white-color);
+  color: var(--lt-deep-red-color);
+  border: 1px solid var(--lt-deep-red-color);
+}
+.revote-bt {
+  background-color: var(--lt-light-red-color);
+  color: var(--lt-white-color);
+}
+.revote-bt:hover {
+  background-color: var(--lt-white-color);
+  color: var(--lt-light-red-color);
+  border: 1px solid var(--lt-light-red-color);
+}
+.clear-bt {
+  background-color: var(--lt-white-color);
+  color: var(--lt-medium-red-color);
+  border: 1px solid var(--lt-medium-red-color);
+}
+.clear-bt:hover {
+  background-color: var(--lt-medium-red-color);
+  color: var(--lt-white-color);
+}
+.summary-card {
+  border-radius: 5px;
+  background-color: var(--lt-light-red-color);
+  color: var(--lt-white-color);
+}
+.estimation-card {
+  border-radius: 5px;
+  height: 100%;
+  background-color: var(--lt-dark-red-color);
+  color: var(--lt-white-color);
+}
+.estimation-text {
+  font-size: 85px;
+}
+.estimation-button {
+  background-color: var(--lt-white-color);
+  color: var(--lt-medium-red-color);
+  border-color: var(--lt-medium-red-color);
+  min-width: 4em;
+}
+.estimation-button:not(:disabled):hover {
+  background-color: var(--lt-medium-red-color);
+  color: var(--lt-white-color);
+  border-color: var(--lt-medium-red-color);
+}
+/* Bootstrap fades a disabled .btn to .65 already; restated so a frozen deck does not
+   depend on Bootstrap's rule, and the cursor is ours either way. */
+.estimation-button:disabled {
+  opacity: .65;
+  cursor: not-allowed;
+}
+.estimation-button-selected {
+  background-color: var(--lt-dark-red-color);
+  color: var(--lt-white-color);
+}
+.estimation-button-uncomfirmed {
+  background-color: var(--lt-pale-red-color);
+  color: var(--lt-dark-red-color);
+  border-color: var(--lt-dark-red-color);
+}

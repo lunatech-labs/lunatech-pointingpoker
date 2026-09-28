@@ -24,23 +24,47 @@ jobs:
           java-version: '21'
 
       - uses: sbt/setup-sbt@v1
-      
+
+      # Reads mise.toml, the file Clever's build installs Node from too.
+      - uses: jdx/mise-action@v4
+
+      # setup-node's npm cache went with setup-node; the lockfile hash retires this one.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # The deploy's own script, so every push runs it before production first does.
+      - name: build the page
+        run: ./clevercloud/build-frontend.sh
+
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: lint
+        run: npm run lint
+
       - name: test coverage
         run: sbt qa
 
       - name: Codecov
         uses: codecov/codecov-action@v7
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: 'npm'
+      # After sbt qa, which writes the snapshots the contract test reads.
+      - name: frontend unit tests
+        run: npm run test:unit
 
-      # --no-audit drops the registry call that once stalled for npm's full 300s fetch-timeout.
-      - name: install node dependencies
-        run: npm ci --prefer-offline --no-audit --no-fund --fetch-timeout=60000
+      # The generated types are committed, so an endpoint change must regenerate them in its PR.
+      - name: generated API types are current
+        run: |
+          sbt genOpenApi
+          npm run gen:api
+          if [ -n "$(git status --porcelain -- frontend/src/protocol/generated)" ]; then
+            git diff -- frontend/src/protocol/generated
+            exit 1
+          fi
 
-      # npm test stages first through its pre-hook, so CI has no stage step of its own.
+      # npm test builds and stages first through its pre-hook, so CI has no stage step of its own.
       - name: node tests
         run: npm test
 

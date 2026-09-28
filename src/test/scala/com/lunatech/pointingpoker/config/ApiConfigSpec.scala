@@ -16,7 +16,7 @@ class ApiConfigSpec extends AnyWordSpec with must.Matchers:
       apiConfig.host mustBe "localhost"
       apiConfig.port mustBe 8080
       apiConfig.timeout mustBe 5.seconds
-      apiConfig.indexPath mustBe "src/main/resources/pages/index.html"
+      apiConfig.indexPath mustBe "frontend/dist/index.html"
       apiConfig.secureCookies mustBe true
     }
   }

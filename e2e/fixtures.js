@@ -2,11 +2,15 @@ import { test as base, expect } from '@playwright/test'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
 
-// The page pulls four assets from three public hosts on every load, and a run opens roughly
-// 55 contexts. Fetch each once per worker instead of once per context.
-const CDN = /^https:\/\/(cdn\.jsdelivr\.net|unpkg\.com|stackpath\.bootstrapcdn\.com)\//
-// fetch decompresses the body, so relaying either of these alongside it corrupts the response.
-const DROPPED = new Set(['content-encoding', 'content-length'])
+// The page is bundled and served by the app, so any other host is a regression. A predicate
+// rather than a glob, so same-origin traffic (the stub, the app, the streams) never reaches it.
+const isOffOrigin = url => url.hostname !== '127.0.0.1'
+const guard = async (context, blocked) => {
+  await context.route(isOffOrigin, route => {
+    blocked.push(route.request().url())
+    return route.abort()
+  })
+}
 
 export const test = base.extend({
   app: [
@@ -18,47 +22,15 @@ export const test = base.extend({
     { scope: 'worker' }
   ],
 
-  assets: [
-    async ({}, use) => {
-      const cache = new Map()
-      const serve = async route => {
-        const url = route.request().url()
-        if (!cache.has(url)) {
-          try {
-            // Bounded, since a CDN that stalls rather than failing is the case this exists for.
-            const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
-            if (!response.ok) {
-              // Release the socket; cancel() rejects if the body already errored, and an
-              // unhandled rejection would be blamed on whichever case is running.
-              response.body?.cancel().catch(() => {})
-              cache.set(url, null)
-            } else {
-              const headers = {}
-              for (const [name, value] of response.headers) {
-                if (!DROPPED.has(name)) headers[name] = value
-              }
-              cache.set(url, {
-                status: response.status,
-                headers,
-                body: Buffer.from(await response.arrayBuffer())
-              })
-            }
-          } catch {
-            cache.set(url, null)
-          }
-        }
-        const hit = cache.get(url)
-        // null is a failure, cached so a dead CDN is paid once per worker, not once per context.
-        // Falling back to the network is what the page did before this fixture existed.
-        return hit ? route.fulfill(hit) : route.continue()
-      }
-      await use(serve)
-    },
-    { scope: 'worker' }
-  ],
+  // Every context the suite opens goes through guard, here and in join, or a page could pass.
+  offOrigin: async ({}, use) => {
+    const blocked = []
+    await use(blocked)
+    expect(blocked, 'requests to a host other than 127.0.0.1').toEqual([])
+  },
 
-  context: async ({ context, assets }, use) => {
-    await context.route(CDN, assets)
+  context: async ({ context, offOrigin }, use) => {
+    await guard(context, offOrigin)
     await use(context)
   },
 
@@ -99,13 +71,13 @@ export const test = base.extend({
 
   // One browser context per participant: two pages in one context share the room cookie and
   // resolve to a single session, which is what newTab is for.
-  join: async ({ browser, origin, room, stub, assets }, use) => {
+  join: async ({ browser, origin, room, stub, offOrigin }, use) => {
     const closers = []
     const join = async (name, { initScript } = {}) => {
       const context = await browser.newContext({ baseURL: origin })
       // Tracked before anything else can throw, so a half-built participant is still torn down.
       closers.push(() => context.close())
-      await context.route(CDN, assets)
+      await guard(context, offOrigin)
       if (initScript) await context.addInitScript(initScript)
       const page = await context.newPage()
       const token = async () => {
@@ -130,11 +102,11 @@ export const test = base.extend({
         newTab
       }
       await page.goto(`/${room}`)
-      // The input renders under v-if, so this is the mount; navigationTimeout owns the transport.
+      // The lobby renders only once React mounts, so this is the mount.
       await expect(nameInput(page)).toBeVisible({ timeout: 15_000 })
       await nameInput(page).fill(name)
       await page.getByRole('button', { name: 'Join' }).click()
-      // inRoom flips on the first SSE message, so the room view proves the stream arrived.
+      // The room renders on the first SSE message, so the room view proves the stream arrived.
       await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
       return participant
     }

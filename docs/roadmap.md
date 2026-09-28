@@ -80,10 +80,10 @@ Dropped from this phase, recorded so the reasoning is not re-derived:
 proven on the current page, so a new framework and a new transport aren't being
 debugged at the same time.
 
-- [ ] Migrate off Vue 2 (tentatively Vue 3, framework choice still open).
-- [ ] Component structure, TypeScript, build tooling, automated tests.
+- [x] Migrate off Vue 2, to React (step 8).
+- [x] Component structure, TypeScript, build tooling, automated tests.
 - [ ] Appearance: light/dark theme (default to system preference), responsive/mobile
-      layout.
+      layout. (step 8c)
 
 ## Phase 4: Voting workflow features
 
@@ -132,8 +132,8 @@ directly in the new frontend.
       piece is somewhere to keep the previous one rather than the wire and the
       rendering alone. Decide what `clear` does to it too. Until it lands, a Show
       during a partly re-voted round reports a distribution built from two rounds;
-      see `docs/known-issues.md`. Wants the new frontend rather than the Vue 2
-      table.
+      see `docs/known-issues.md`. Step 8's React page is what it builds
+      on.
 - [x] Guarantee SSE broadcast delivery before latched reveal is trustworthy.
       Fixed the causes rather than compensating for them: a joining user's catch-up
       replay went out as a single batched message instead of one send per event,
@@ -270,8 +270,9 @@ directly in the new frontend.
       the server surfaces the banner promptly, but simulating offline via
       browser devtools does not). This is newly possible because SSE
       heartbeats arrive as actual `message` events visible to app code
-      (`index.html`'s `onmessage`); the old WebSocket transport's ping/pong
-      keepalive frames were invisible to JavaScript, so this watchdog wasn't
+      (`frontend/src/room/connection.ts`'s `onmessage`); the old WebSocket
+      transport's ping/pong keepalive frames were invisible to JavaScript,
+      so this watchdog wasn't
       buildable under the old transport at all. Not a migration regression,
       an improvement the transport swap unlocked. It is also the only thing that
       would catch a page restored from the back/forward cache holding a stream

@@ -106,3 +106,11 @@ so the reload case is proven before the leave endpoint's own browser case has to
 carry it. That ordering is why it decomposed into five production tasks rather
 than one, with the record, this file's own entry among them, as a sixth task
 that only makes sense once the other five have landed.
+
+Step 8 has one. It is the large-surface-area case, with a new toolchain, a
+second language, ten components and a wire change. What its plan carries
+beyond decomposition is the dry run: every code block was assembled and run
+against the unchanged e2e suite before the plan was written, which is what let
+the plan promise no selector changes. It decomposed into seven production
+commits where the spec listed four, splitting each commit whose halves were
+judged by different tests.

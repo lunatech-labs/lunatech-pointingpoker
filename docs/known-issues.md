@@ -99,9 +99,9 @@ roadmap item instead of leaving it here as stale history.
 ### No request payload is validated on any endpoint that takes one
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala`
-  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), and the `join`, `vote` and
-  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/API.scala`
-  that consume them. `create-room` takes no body.
+  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), the `join`, `vote` and
+  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/Endpoints.scala`
+  that consume them, and their server logic in `API.scala`. `create-room` takes no body.
 - **Issue:** Every request body is a bare `String` with no constraint on it.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
@@ -109,8 +109,8 @@ roadmap item instead of leaving it here as stale history.
   `/vote` and `/edit-issue` require a session token resolving to a member of the
   room; `/join` requires only a room id, open joining being the intended
   behaviour, so there the room URL is the capability. Nothing escapes into HTML
-  either: the page renders all three through Vue interpolation or `v-model` and
-  uses no `v-html`. So this is a data-quality gap rather than an authorization
+  either: the page renders all three as React text or input values and uses no
+  `dangerouslySetInnerHTML`. So this is a data-quality gap rather than an authorization
   or injection one. Body size falls back to the pekko-http default,
   `application.conf` configuring no parsing limits.
 
@@ -118,7 +118,7 @@ roadmap item instead of leaving it here as stale history.
   than the icon it first appeared to be. `RoomSnapshot`'s `hasEstimation` was
   `estimation.nonEmpty`, so an empty estimation read as voted with no estimation;
   step 4 re-expressed the field as the entry existing in `round.estimates`, and
-  the client reads that field twice, in `showUserEstimation` for the
+  the Vue page read that field twice, in `showUserEstimation` for the
   withheld-value icon and in `applySnapshot` to gate the vote tally. Presence
   alone would therefore have admitted a `""` bucket to the distribution, which is
   the defect step 3 exists to remove. So `RoomData.vote` refused a blank
@@ -175,6 +175,16 @@ roadmap item instead of leaving it here as stale history.
   about half the time with an unrelated tab left open. Either way a dropped beacon
   falls back to this same heartbeat path, landing at the same ~35 seconds measured
   above.
+
+  Manual testing on 2026-09-28 cuts against those Playwright-measured rates: 15
+  real Firefox tab closes for one user (5 as the last tab in the window, 10
+  with another tab left open) all departed the room immediately, none falling
+  back to the heartbeat path. That is a real signal at that sample size
+  against a documented 50 to 80 percent drop rate, not noise, though the two
+  trials differ in more than the beacon itself: this one closed a real tab by
+  hand, the earlier one drove `page.close()` from Playwright. No investigation
+  was done into which difference explains the gap. Worth confirming with more
+  real users in production before treating the earlier rate as current.
 - **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
   leave endpoint does not close this: its beacon fires only on `pagehide` for a
   page being discarded deliberately, and a crash, a sleeping laptop, a silent
@@ -273,9 +283,10 @@ roadmap item instead of leaving it here as stale history.
 
 ### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
 
-- **Where:** `src/main/resources/pages/index.html` (`showEdit` and `doEdit`, the
-  `issueFocused` handlers on the editable input, and `applySnapshot`'s
-  `prev.issueFocused ? prev.currentIssue : s.currentIssue`).
+- **Where:** `frontend/src/components/IssueEditor.tsx` (`commit`, and the
+  pencil setting `editing`), `Room.tsx`'s `issueFocused` state, and
+  `applySnapshot`'s `prev.issueFocused ? prev.currentIssue : s.currentIssue` in
+  `frontend/src/room/view.ts`.
 - **Issue:** Two halves of one trap, both observed manually on 2026-09-05.
 
   Under snapshots every publish carries the current issue, so an in-progress
@@ -304,50 +315,7 @@ roadmap item instead of leaving it here as stale history.
   the frontend rewrite, whose section 5 already assigns both an explicit cancel
   and a "someone else changed the issue while you were editing" affordance to
   that step. The trigger for pulling it earlier is anyone actually losing an
-  edit in a real ceremony. Remove this entry when step 8 lands.
-
-### The page and the browser suite depend on three public CDNs at runtime
-
-- **Where:** `src/main/resources/pages/index.html` (the four asset tags: the
-  Bootstrap stylesheet `<link>`, and the feather-icons, axios and Vue `<script>`
-  tags); `e2e/fixtures.js` (the `assets` fixture).
-- **Issue:** Bootstrap, feather-icons, axios and Vue are all loaded from
-  `stackpath.bootstrapcdn.com`, `unpkg.com` and `cdn.jsdelivr.net` on every page
-  load, so an outage at any of the three takes the app down and nothing is
-  vendored to fall back to. The browser suite inherits it: the `assets` fixture
-  caches each asset once per worker, which cut the fetch count but not the
-  dependency, and its fallback on a failed fetch is `route.continue()` to the
-  same unreachable host. The failure mode is therefore all cases failing at once
-  on a page whose Vue never mounts, rather than one case degrading. Only
-  Bootstrap carries an `integrity` attribute; the other three are unverified.
-  The axios tag was also unpinned until it was fixed alongside this entry,
-  resolving to whatever was latest at page load, which made the suite
-  irreproducible across time independently of any outage. The pin closed that
-  and took on a smaller version of the cost this entry declines vendoring for
-  below: 1.20.0 is now served indefinitely, through any future advisory, and
-  nothing in this repository bumps a CDN pin.
-- **Resolution:** Stays open, unscheduled. Step 8 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  the frontend rewrite, would close it structurally, since its build tooling
-  bundles these assets, but nothing schedules it as a fix and the page is
-  expected to keep loading from a CDN until then. Vendoring the four files for
-  the test suite alone was considered and declined: third-party bytes in the
-  repo plus a refresh ritual, bought against an outage nobody has hit, and it
-  would make the suite load something production does not, against the point of
-  driving the real page. The trigger is an observed CDN failure in CI. Remove
-  this entry if step 8 bundles them.
-- **Follow-ups this entry carries.** Two, both unscheduled. **Subresource
-  integrity:** now that axios is pinned its bytes are stable, so `integrity`
-  could cover axios, feather-icons and Vue as it already covers Bootstrap. That
-  wants its own pass where each hash is verified in both engines, not an
-  appendix to a test-suite change. **npm plus Dependabot:** installing the four
-  assets as npm dependencies and serving them from the app would replace the
-  refresh ritual with something that already works here, since
-  `.github/dependabot.yml` runs the `npm` and `github-actions` ecosystems
-  weekly. It overlaps step 8, which bundles these assets anyway, so it is worth
-  deciding with step 8 rather than ahead of it. The `npm` ecosystem was added
-  on 2026-09-08, for `@playwright/test`, which nothing had updated before;
-  vendoring the CDN assets is what this follow-up still carries.
+  edit in a real ceremony. Remove this entry when step 8b lands.
 
 ### Tests that pass with the mechanism they name deleted, as a recurring pattern
 
@@ -761,9 +729,9 @@ roadmap item instead of leaving it here as stale history.
 
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
-- **Where:** `src/main/resources/pages/index.html`, the `votesSummary` sort in
-  `applySnapshot`, read under the "Most voted estimation" heading.
-- **Issue:** The comparator is `function (a, b) { return b[1] - a[1]; }` over
+- **Where:** the `votesSummary` sort in `applySnapshot`,
+  `frontend/src/room/view.ts`, read under the "Most voted estimation" heading.
+- **Issue:** The comparator is `(a, b) => b[1] - a[1]` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
   insertion order: array-index keys come first in ascending numeric order, then
@@ -793,8 +761,8 @@ roadmap item instead of leaving it here as stale history.
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
   (`RoomData.reVote` keeping every estimation and `RoomData.vote` overwriting
-  one), with the tally built in `index.html`'s `applySnapshot` and read under
-  the "Most voted estimation" heading.
+  one), with the tally built in `applySnapshot`, `frontend/src/room/view.ts`,
+  read under the "Most voted estimation" heading.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
   round that some participants have re-voted and others have not holds answers to
   two different rounds at once. A Show there counts both. Alice, Bob and Carol
@@ -833,18 +801,19 @@ roadmap item instead of leaving it here as stale history.
 
 ### A reveal with votes still pushes the participants list down
 
-- **Where:** `src/main/resources/pages/index.html:273` (the summary block, under
-  `v-if="votesRevealed && votesSummary.length"`) sitting above the participants
-  table at `:308`.
+- **Where:** `frontend/src/components/Results.tsx` (the summary block, rendered
+  only while revealed with a non-empty tally) above `Participants.tsx`. The
+  frozen-round notice it contrasts with is the hidden row in `Deck.tsx`.
 - **Issue:** Revealing a round with votes in it inserts the most-voted card and
   the distribution table between the buttons and the participants list, so the
   list a facilitator is reading jumps down by the height of that block. The
-  neighbouring case is fixed rather than open: the frozen-round notice at `:244`
-  used to appear under `v-if`, which resized the estimation card sharing its row
-  (`.estimation-card` is `height: 100%` at `:51`) and shifted every row below it
-  even in a room where nobody voted and no summary appeared. That notice now
-  toggles `visibility` and holds its line at all times, pinned by "the reveal
-  notice claims its space before the reveal" in `e2e/room.spec.js`.
+  neighbouring case is fixed rather than open: the frozen-round notice, the
+  hidden row in `Deck.tsx`, used to appear conditionally, which resized the
+  estimation card sharing its row (`.estimation-card` is `height: 100%`) and
+  shifted every row below it even in a room where nobody voted and no summary
+  appeared. That notice now toggles `visibility` and holds its line at all
+  times, pinned by "the reveal notice claims its space before the reveal" in
+  `e2e/room.spec.js`.
 - **Resolution:** Left to step 8's rewrite, and deliberately not fixed the same
   way. Reserving the summary block's space would put an empty card and an empty
   table on the page for the whole pre-reveal round, which is a worse page than
@@ -852,8 +821,8 @@ roadmap item instead of leaving it here as stale history.
   is real content arriving, and the movement is honest feedback that the reveal
   landed. What the rewrite should carry over is that the shift is the block's
   position rather than its existence, so placing the participants list above the
-  results would settle it without hiding anything. Remove this entry when step 8
-  lands or decides otherwise.
+  results would settle it without hiding anything. Remove this entry when step
+  8c lands or decides otherwise.
 
 ### Only a real e2e failure exercises the artifact upload path
 
@@ -941,6 +910,42 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open. A length guard in `nearest` (skip a word once it
   is longer than the longest pool word plus one) removes the cost with no
   behaviour change.
+
+### A page left open across a deploy misreads a changed snapshot
+
+- **Where:** `frontend/src/room/connection.ts` (`onmessage`), and
+  `frontend/src/protocol/snapshot.ts`'s lenient `snapshotSchema`.
+- **Issue:** A deploy ends every session but not every page. A tab open across
+  it, in the lobby or restored from the back/forward cache, can join the new
+  server and read its frames with the old code. Step 8's estimation union did
+  this to the Vue page, which rendered the tags as text until reloaded. From
+  step 8 on, the lenient schema drops an unknown field, but a changed one, or a
+  new union tag, fails the parse: the connection drops every frame with only a
+  `console.error`, and the page stays in the lobby after a successful join,
+  with no message.
+- **Resolution:** Accepted for step 8, whose rollout reloads open tabs by
+  hand. It stays open for later wire changes: telling the user to reload when a
+  frame fails to parse is the natural fix, and it fits step 8a's connection
+  notices.
+
+### A double open can put the page back into a room the user left
+
+- **Where:** `frontend/src/room/connection.ts` (`open`, `leave`), and
+  `RoomData.connect` and the `Depart` handler in
+  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`.
+- **Issue:** `open` does not close the previous stream, so a Join clicked while
+  the startup rejoin is in flight, or a double-clicked Join, leaves two
+  `EventSource`s on one connection id. The server holds one ref per connection
+  id and `connect` replaces it without ending the old stream, so the orphan
+  survives Leave. Whenever it reconnects, after a network blip or because the
+  server held it and `Depart` ended it, its `Join` makes the user a member again
+  for everyone, since the session survives `Depart`. The lobby first shows
+  "Connection to the room was lost", then the next frame puts the page back into
+  the room, and with `roomId` cleared, `pagehide` sends no beacon for it.
+- **Resolution:** The re-membership predates step 8: the Vue page's Leave also
+  closed only its latest stream, and its `entering` guard only kept the page
+  from showing the room again. Accepted for step 8. Step 8a's close-before-open
+  closes both halves; delete this entry there.
 
 ## Traceability note
 

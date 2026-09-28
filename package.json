@@ -3,13 +3,38 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build frontend",
+    "dev": "vite frontend",
+    "typecheck": "tsc -p frontend",
+    "lint": "eslint frontend",
+    "gen:api": "openapi-typescript frontend/src/protocol/generated/openapi.json -o frontend/src/protocol/generated/openapi.d.ts",
+    "test:unit": "vitest run --root frontend",
     "stage": "sbt \"; coverageOff; Universal/stage\"",
-    "pretest": "npm run stage",
+    "pretest": "npm run build && npm run stage",
     "test": "node --test \"test/**/*.test.js\"",
-    "pree2e": "npm run stage",
+    "pree2e": "npm run build && npm run stage",
     "e2e": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.13.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.70.1",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "bootstrap": "^4.6.2",
+    "lucide-react": "^1.48.0",
+    "openapi-fetch": "^0.17.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   }
 }

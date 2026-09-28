@@ -2,6 +2,7 @@ package com.lunatech.pointingpoker.actors
 
 import java.util.UUID
 
+import io.circe.Json
 import io.circe.syntax.*
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.testkit.TestProbe
@@ -10,6 +11,7 @@ import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 
 import com.lunatech.pointingpoker.actors.RoomDataFixtures.*
+import com.lunatech.pointingpoker.actors.RoomSnapshot.Estimation
 
 class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
@@ -83,7 +85,10 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       )
       // history is step 9; a field with no consumer must not travel.
       json.hcursor.downField("users").downArray.keys.map(_.toList) mustBe Some(
-        List("id", "name", "voted", "hasEstimation", "estimation")
+        List("id", "name", "estimation")
+      )
+      json.hcursor.downField("users").downArray.downField("estimation").focus mustBe Some(
+        Json.obj("type" -> Json.fromString("Confirmed"), "value" -> Json.fromString("5"))
       )
     }
 
@@ -93,12 +98,12 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val data  = withUsers(alice, bob)
 
       val forAlice = RoomSnapshot.of(data, alice.id)
-      forAlice.users.find(_.id == alice.id).map(_.estimation) mustBe Some("5")
-      forAlice.users.find(_.id == bob.id).map(_.estimation) mustBe Some("")
+      forAlice.users.find(_.id == alice.id).map(_.estimation) mustBe Some(Estimation.Confirmed("5"))
+      forAlice.users.find(_.id == bob.id).map(_.estimation) mustBe Some(Estimation.ConfirmedHidden)
 
       val forBob = RoomSnapshot.of(data, bob.id)
-      forBob.users.find(_.id == bob.id).map(_.estimation) mustBe Some("13")
-      forBob.users.find(_.id == alice.id).map(_.estimation) mustBe Some("")
+      forBob.users.find(_.id == bob.id).map(_.estimation) mustBe Some(Estimation.Confirmed("13"))
+      forBob.users.find(_.id == alice.id).map(_.estimation) mustBe Some(Estimation.ConfirmedHidden)
     }
 
     "keep a withheld estimation out of the serialized frame entirely" in {
@@ -110,9 +115,13 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       // The property is about the wire, not the projection: devtools is the threat.
       (json.noSpaces must not).include("\"13\"")
       val rows = json.hcursor.downField("users").values.toList.flatten
-      // The key stays, empty: the wire keeps estimation a String that is always present.
+      // The key stays, as a tag with no value: the wire keeps estimation always present.
       rows.flatMap(_.asObject.map(_.keys.toList)) mustBe List.fill(2)(
-        List("id", "name", "voted", "hasEstimation", "estimation")
+        List("id", "name", "estimation")
+      )
+      val bobsRow = rows.find(_.hcursor.get[UUID]("id").toOption.contains(bob.id))
+      bobsRow.flatMap(_.hcursor.downField("estimation").focus) mustBe Some(
+        Json.obj("type" -> Json.fromString("ConfirmedHidden"))
       )
     }
 
@@ -121,7 +130,8 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val bob   = user(UUID.randomUUID(), "Bob", true, "13")
       val data  = withUsers(alice, bob).withRevealed()
 
-      RoomSnapshot.of(data, alice.id).users.map(_.estimation).toSet mustBe Set("5", "13")
+      RoomSnapshot.of(data, alice.id).users.map(_.estimation).toSet mustBe
+        Set(Estimation.Confirmed("5"), Estimation.Confirmed("13"))
     }
 
     "say that another participant has an estimation without saying what it is" in {
@@ -131,10 +141,9 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
       val bobsRow = RoomSnapshot.of(data, alice.id).users.find(_.id == bob.id)
       // Computed from the unredacted value, so the hidden-value icon renders as it does today.
-      bobsRow.map(_.hasEstimation) mustBe Some(true)
-      bobsRow.map(_.estimation) mustBe Some("")
-      RoomSnapshot.of(data, alice.id).users.find(_.id == alice.id).map(_.hasEstimation) mustBe
-        Some(false)
+      bobsRow.map(_.estimation) mustBe Some(Estimation.ConfirmedHidden)
+      RoomSnapshot.of(data, alice.id).users.find(_.id == alice.id).map(_.estimation) mustBe
+        Some(Estimation.NoEstimation)
     }
 
     "distinguish a re-vote from a clear on another participant's row" in {
@@ -144,10 +153,12 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val data     = withUsers(alice, revoting, cleared)
 
       val snapshot = RoomSnapshot.of(data, alice.id)
-      // voted false with hasEstimation true is the re-vote state, and it has to survive
-      // redaction or every row looks cleared.
-      snapshot.users.find(_.id == revoting.id).map(_.hasEstimation) mustBe Some(true)
-      snapshot.users.find(_.id == cleared.id).map(_.hasEstimation) mustBe Some(false)
+      // UnconfirmedHidden is the re-vote state, and it has to survive redaction or every
+      // row looks cleared.
+      snapshot.users.find(_.id == revoting.id).map(_.estimation) mustBe
+        Some(Estimation.UnconfirmedHidden)
+      snapshot.users.find(_.id == cleared.id).map(_.estimation) mustBe
+        Some(Estimation.NoEstimation)
     }
 
     "withhold every estimation from a snapshot built for someone who is not a member" in {
@@ -157,7 +168,8 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
       // Unreachable today: publish iterates users. Step 4's connections let a departing tab
       // still be handed one snapshot.
-      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation) mustBe List("", "")
+      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation) mustBe
+        List(Estimation.ConfirmedHidden, Estimation.ConfirmedHidden)
     }
 
     "disclose every estimation to a non-member once the room has revealed" in {
@@ -167,7 +179,8 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
       // Intentional: post-reveal values are public in the room, and this recipient held a
       // valid room token.
-      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation).toSet mustBe Set("5", "13")
+      RoomSnapshot.of(data, UUID.randomUUID()).users.map(_.estimation).toSet mustBe
+        Set(Estimation.Confirmed("5"), Estimation.Confirmed("13"))
     }
 
     "count an entry in the round as an estimation, however the value reads" in {
@@ -175,10 +188,36 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val bob   = user(UUID.randomUUID(), "Bob", false, "")
       val data  = withUsers(alice, bob)
 
-      // hasEstimation is the entry existing, not a non-empty string on the participant.
+      // An estimation is the entry existing, not a non-empty string on the participant.
       val rows = RoomSnapshot.of(data, alice.id).users
-      rows.find(_.id == alice.id).map(_.hasEstimation) mustBe Some(true)
-      rows.find(_.id == bob.id).map(_.hasEstimation) mustBe Some(false)
+      rows.find(_.id == alice.id).map(_.estimation) mustBe Some(Estimation.Confirmed("5"))
+      rows.find(_.id == bob.id).map(_.estimation) mustBe Some(Estimation.NoEstimation)
+    }
+
+    "give each participant the one tag its confirmation and disclosure call for" in {
+      val alice       = user(UUID.randomUUID(), "Alice", false, "3")
+      val confirmed   = user(UUID.randomUUID(), "Confirmed", true, "5")
+      val unconfirmed = user(UUID.randomUUID(), "Unconfirmed", false, "8")
+      val none        = user(UUID.randomUUID(), "None", false, "")
+      val data        = withUsers(alice, confirmed, unconfirmed, none)
+
+      def tags(snapshot: RoomSnapshot): Map[UUID, Estimation] =
+        snapshot.users.map(p => p.id -> p.estimation).toMap
+
+      // The reader re-voting sees her own value, unconfirmed; the rest stay hidden.
+      tags(RoomSnapshot.of(data, alice.id)) mustBe Map(
+        alice.id       -> Estimation.Unconfirmed("3"),
+        confirmed.id   -> Estimation.ConfirmedHidden,
+        unconfirmed.id -> Estimation.UnconfirmedHidden,
+        none.id        -> Estimation.NoEstimation
+      )
+      // Show after a partial re-vote discloses an unconfirmed value without confirming it.
+      tags(RoomSnapshot.of(data.withRevealed(), alice.id)) mustBe Map(
+        alice.id       -> Estimation.Unconfirmed("3"),
+        confirmed.id   -> Estimation.Confirmed("5"),
+        unconfirmed.id -> Estimation.Unconfirmed("8"),
+        none.id        -> Estimation.NoEstimation
+      )
     }
 
     "leave an estimate belonging to no participant out of the snapshot entirely" in {

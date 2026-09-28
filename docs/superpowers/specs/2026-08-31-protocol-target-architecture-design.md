@@ -435,7 +435,8 @@ Step 6 later closes the wire half too, giving `VoteRequest` the tapir
 edge that now refuses the same blank before the ask.
 
 **A tagged union would express these three fields better than they express
-themselves, and it is deferred to step 8.** `voted`, `hasEstimation` and
+themselves, and it is deferred to step 8.** Taken there, in
+`2026-09-24-frontend-rewrite-design.md`. `voted`, `hasEstimation` and
 `estimation` admit eight combinations of which five are legal, so
 `(voted = true, hasEstimation = false)` and an estimation present on a row that
 has none are both writable today. The five that are real enumerate cleanly, each
@@ -826,7 +827,8 @@ order, so no two clients who joined at different times agree. Observed in a real
 session, where a participant sharing their screen showed a different table from
 everyone else's. The frontend rewrite's first stable, agreed order is therefore
 a small improvement rather than a preserved invariant, and picking its default
-(alphabetical, most likely) is a product decision step 8 should make knowingly.
+(alphabetical, most likely) is a product decision step 8 should make knowingly. Made in
+`2026-09-24-frontend-rewrite-design.md`.
 
 Join order is the one ordering key a client cannot reconstruct, and it is
 deliberately not carried. **The test for whether a field is safe to defer is
@@ -1186,7 +1188,7 @@ improvement on silence: a completed stream is a transient close to `EventSource`
 so it retries, gets a 401 because the room is gone and its token resolves nowhere,
 and shows "Your session has ended. Please reload the page to rejoin."
 (`index.html`, the `eventSource.onerror` handler). Rejoining automatically under the remembered name belongs
-to step 8's connection module.
+to step 8's connection module. Designed in `2026-09-24-frontend-rewrite-design.md`.
 
 #### Slug allocation
 
@@ -1843,7 +1845,8 @@ and reads as live. And no tooltip, considered and dropped: a native `title` need
 the whole wrapper apparatus, because a disabled button fires no mouse events and
 the pointer over one does not hover its parent either, and what it would say is
 the sentence already sitting under the deck. Step 8 revisits the affordance with
-real components, and owes it a live region: the notice has none today, and adding
+real components, and owes it a live region (taken in
+`2026-09-24-frontend-rewrite-design.md`): the notice has none today, and adding
 `role="status"` to the block as it stands would not fix that, since a region
 inserted along with its content is not reliably announced. A persistent region
 whose text changes is the shape that works. `role="alert"` is the exception that
@@ -2119,7 +2122,8 @@ Added, each with the step it lands at so nothing here is unassigned:
   gate here: a removed or renamed field fails as a missing required property,
   while a newly added server field passes, which is the direction the additive
   field strategy depends on being safe and which a schema diff would flag as
-  noise.
+  noise. **Superseded:** `2026-09-24-frontend-rewrite-design.md` makes the
+  test strict, so an unlisted field fails, and says why.
 - **`openapi-typescript` over tapir's OpenAPI document** (step 8, with the first
   consumer of the generated types) with a CI step that regenerates and fails on a
   diff, covering the command endpoints. Step 6 lands the tapir descriptions and
@@ -2140,7 +2144,9 @@ Added, each with the step it lands at so nothing here is unassigned:
   because the node build must run before sbt packages the assets that
   `build.sbt` already ships via `Universal / mappings`. `DockerPlugin` is
   already enabled. Verify what is available in Clever Cloud's sbt build image
-  before assuming a pre-build hook suffices.
+  before assuming a pre-build hook suffices. Answered in
+  `2026-09-24-frontend-rewrite-design.md`: the sbt runtime stays, with
+  `CC_PRE_BUILD_HOOK` running a repository script that builds the page first.
 - **A restart is destructive**, since nothing is persisted. Deploy outside
   meeting hours and see "What a restart costs".
 
@@ -3123,12 +3129,31 @@ opening a new one, and client types checked against the server contract. Waits o
 steps 1 and 6.
 Absorbs the `connection.js` extraction the 08-28 design scheduled separately,
 whose standalone justification was bounded mode's state machine.
+Designed in `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md`,
+which splits it into step 8, the technical migration, then steps 8a, the
+connection, 8b, the issue editor, and 8c, the UI/UX.
 
 **It also revisits step 3a's frozen deck**, which is fifteen lines of Bootstrap
 utility classes and a `:disabled` rule chosen because they are cheap in a page
 this step rewrites. A component library brings a tooltip primitive with a delay
 worth having, which is the affordance 3a considered and declined on the grounds
 that the bespoke version would be thrown away here.
+
+Landed. Step 8, the technical migration, in seven commits where the frontend
+spec lists four, each split where its halves are judged by different tests:
+the server's `/assets/` route and `503`, the Vite toolchain building the old
+page, the room state in TypeScript, the React components, the typed client,
+the strict contract test and the estimation union, after a commit pinning the
+lobby's Enter and paste paths on the Vue page. The page lives in `frontend/`,
+is built to `frontend/dist/` by `clevercloud/build-frontend.sh` before sbt
+runs, and is served from there. The endpoint descriptions moved from `API` to
+`Endpoints`, so `genOpenApi` writes the document from test sources without an
+actor system. The participant's `voted`, `hasEstimation` and `estimation` are
+one `estimation` union now, which closes section 2's deferral. The e2e suite
+passed with no selector change. A later fix stops a not-a-room Join retargeting to
+the path it is on: in production that is only the empty id on `/`, which now shows
+the join error rather than reloading the lobby. The React components commit, the
+frontend spec's commit 2, closed the CDN defect in the known-defect table. Steps 8a to 8c extend this paragraph.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the
@@ -3237,7 +3262,7 @@ than execution.
 | **new** Pre-reveal estimations are broadcast to every participant and only hidden client-side | Step 2 |
 | **new** A disconnection outlasting the grace period forces a page reload | Step 5, then step 4a. Step 5 retains the token past its member's removal, which closes it for everyone but the room's last member: their removal empties `users`, `ConfirmLeave` stops the room, and the retained token has nothing left to resolve against. Step 4a keeps the room alive far longer than any outage the retry has to cross, closing the remainder. |
 | **new** A second tab on the same room displaces the first tab's identity, so its clicks are silently credited to the other | Step 6, for a tab holding the cookie, by making `/join` resolve it rather than mint over it, so a second tab joins the same participant instead of displacing it. Sharing the identity is the intended outcome; displacing it was the defect. Not for two tabs that both load before either has joined: neither holds a cookie, so both mint and the second `setCookie` overwrites the first's shared slot, which `docs/known-issues.md` narrows the entry to rather than closes. The 08-20 design examined two tabs on *different* rooms, where path scoping works, and this case fell in the gap beside it. |
-| The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. |
+| The page and the browser suite depend on three public CDNs at runtime | Stays open. Step 8's build tooling would bundle the four assets and close it structurally, but nothing schedules it as a fix. Surfaced reviewing step 0 as shipped, so it is not part of this design's own discovery; vendoring for the suite alone was declined there. Scheduled: step 8, commit 2, in `2026-09-24-frontend-rewrite-design.md`. |
 
 The rate-limiting entry was rewritten rather than left alone: its bounded-mode
 request-amplification paragraph described a mode this design cancels, and the
@@ -3248,7 +3273,9 @@ is unchanged.
 
 1. **Clever Cloud's sbt build image.** Whether it can run a node build via a
    pre-build hook, or whether step 8 forces the Docker runtime. Answer before
-   step 8, not before step 1.
+   step 8, not before step 1. Answered in
+   `2026-09-24-frontend-rewrite-design.md`: the image has `mise` and Node
+   24.21.0, and a pre-build hook runs the frontend build.
 2. **Whether the probe earns its 682 lines** over the longer term. Retained
    deliberately for now on option-value grounds, and on one concrete unanswered
    question: probes F and G are what would establish whether the deferred

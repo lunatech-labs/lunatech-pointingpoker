@@ -21,9 +21,7 @@ reconstructs state from a sequence. Json example:
         {
             "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
             "name": "John Doe",
-            "voted": true,
-            "hasEstimation": true,
-            "estimation": "5"
+            "estimation": {"type": "Confirmed", "value": "5"}
         }
     ]
 }
@@ -36,13 +34,14 @@ that completes the round, and cleared by `Clear` and `Re-vote`. While it is set 
 round is closed and the server discards any vote it receives, so a changed mind
 needs a `Clear` or a `Re-vote` rather than another vote.
 
-**Each snapshot is redacted for its recipient.** While `votesRevealed` is false,
-`estimation` carries a value only for the participant the snapshot was built for
-and is `""` for everyone else, so a colleague's vote is not on the wire before
-the reveal rather than merely unrendered. `hasEstimation` says that a
-participant holds an estimation without saying which, which is what lets a client
-mark a withheld vote. `voted` is the confirmed flag, so `voted: false` with
-`hasEstimation: true` is a participant who has been asked to re-vote.
+**Each snapshot is redacted for its recipient.** `estimation` is one of five
+tags: `NoEstimation`, `ConfirmedHidden`, `UnconfirmedHidden`, `Confirmed` and
+`Unconfirmed`. `value` is present on `Confirmed` and `Unconfirmed` only, on a
+disclosed row that holds an estimate: the recipient's own, or any once
+`votesRevealed` is set. `ConfirmedHidden` and `UnconfirmedHidden` mark a
+withheld vote without its value, so a colleague's vote is not on the wire
+before the reveal rather than merely unrendered. An `Unconfirmed` tag, hidden
+or not, is a participant who has been asked to re-vote.
 
 The stream also emits an SSE heartbeat comment every 15 seconds, so an idle
 connection is not closed by the server's idle timeout.
@@ -119,7 +118,7 @@ browser closes.
 ### Tech stack
 
 This project uses:
-  * Vue.js
+  * React, TypeScript and Vite, under `frontend/`
   * pekko/pekko-http
 
 ### Roadmap and known issues
@@ -137,6 +136,16 @@ The Scala suite:
 sbt test
 ```
 
+There is also `npm run test:unit`, the Vitest suite under `frontend/src`. Its
+contract test reads the snapshots `sbt test` writes to `target/contract/`, so it
+runs after `sbt test`.
+
+CI also runs `npm run typecheck` and `npm run lint`. The client's API types are
+generated from tapir's OpenAPI document and committed, so a change to an endpoint
+must run `sbt genOpenApi && npm run gen:api` and commit what changes under
+`frontend/src/protocol/generated/`; CI regenerates them and fails on any
+difference.
+
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
 and a harness that starts the packaged app:
@@ -146,10 +155,10 @@ npm test
 ```
 
 Both node suites run the staged binary rather than `sbt run`, so both stage first. `npm test`
-and `npm run e2e` each do that themselves through an npm pre-hook calling `npm run stage`, which
-is `sbt "; coverageOff; Universal/stage"`. A no-op stage costs about four seconds. Invoke
-`node --test` or `npx playwright test` directly and you skip the hook, which means you test
-whatever was staged last.
+and `npm run e2e` each do that themselves through an npm pre-hook, which is now
+`npm run build && npm run stage`, `stage` being `sbt "; coverageOff; Universal/stage"`. A no-op
+stage costs about four seconds. Invoke `node --test` or `npx playwright test` directly and you
+skip both, which means you test whatever was staged last.
 
 `coverageOff` is insurance rather than a requirement in this form: enabling coverage is a
 session setting, so a separate `sbt` invocation recompiles without instrumentation anyway.
@@ -196,6 +205,15 @@ moves from Create to the room a second or two after `?mode=off`.
 
 ### Running locally
 
+The page needs Node, the version in `mise.toml` (`mise install`) or any Node of
+that major. There are two dev modes. For page work, run `SECURE_COOKIES=false sbt
+run` and `npm run dev` in two terminals and open Vite's address: it hot-reloads
+and forwards `/rooms` and `/create-room` to port 8080, SSE included. It does not
+reproduce the not-a-room page or the UUID redirect, which the e2e suite covers.
+For backend work, run `npm run build` once and then `sbt run` alone on port 8080.
+Without a build, `/` answers `503` with "The page is not built: run `npm run
+build`".
+
 `SECURE_COOKIES` defaults to `true`, which marks the session cookie `Secure` (the
 browser will not send it back over a plain-HTTP connection). Local development that
 isn't served over HTTPS needs:
@@ -229,14 +247,19 @@ Response-scanning appliances are the harder case, since they may buffer to
 inspect the body regardless of headers. `testkit/stub.js` reproduces one locally
 and the testing section above says how to run it.
 
+The page is built before sbt by `clevercloud/build-frontend.sh`, which Clever
+runs as `CC_PRE_BUILD_HOOK`. `application.conf`'s `index-path`
+(`frontend/dist/index.html`) is the one setting, and the `/assets/` files
+beside it are served `immutable` for a year, since each name carries a content
+hash and the revalidated page names the new files after a deploy.
+
 **A restart ends every room, and open tabs need a reload.** Rooms and the
 sessions that reach them live in the process's memory, so a deploy takes them
 with it. A tab that was open across the restart does not fail silently: its next
 SSE attempt gets a 401 because the token no longer resolves, and the page shows
 "Your session has ended. Please reload the page to rejoin." Reloading is the
 whole recovery, since there is no state to migrate and nothing to drain. This is
-also why the wire format carries no version field: no session outlives the server
-that served it. The page is a separate artifact, served with no `Cache-Control`,
-so a cached one can outlive a deploy. `docs/known-issues.md` records that window
-and the cosmetic symptom it has today.
+also why the wire format carries no version field: no session outlives the
+server that served it. A page can, and `docs/known-issues.md` records what a
+stale one does with a changed snapshot.
 

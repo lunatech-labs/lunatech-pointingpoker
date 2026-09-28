@@ -32,3 +32,13 @@ test('a bind failure surfaces as an exit, not as a readiness timeout', {
   const budget = READY_TIMEOUT_MS / 2
   assert.ok(elapsed < budget, `expected an early exit within ${budget}ms, took ${elapsed}ms`)
 })
+
+// The launcher check's twin: a missing page is named at once, not after the readiness cap.
+test('a missing page fails before the app is spawned', async () => {
+  const started = Date.now()
+  await assert.rejects(startApp({ env: { INDEX_PATH: '/nonexistent/index.html' } }), error => {
+    assert.match(error.message, /\/nonexistent\/index\.html is missing\. Run: npm run build/)
+    return true
+  })
+  assert.ok(Date.now() - started < 1000, 'expected the check to fail before spawning')
+})

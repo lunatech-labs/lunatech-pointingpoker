@@ -1,5 +1,5 @@
-// Starts the staged launcher rather than `sbt run`: it boots in about two seconds, it is a
-// single process so teardown is a clean signal, and it is the same artifact Docker ships.
+// Starts the staged launcher rather than `sbt run`: it boots in about two seconds, and it is a
+// single process so teardown is a clean signal.
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import fs from 'node:fs'
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const launcher = path.join(repoRoot, 'target', 'universal', 'stage', 'bin', 'pointingpoker')
-const indexPath = path.join(repoRoot, 'src', 'main', 'resources', 'pages', 'index.html')
+const indexPath = path.join(repoRoot, 'frontend', 'dist', 'index.html')
 
 export const READY_TIMEOUT_MS = 30_000
 const STAGE_COMMAND = 'sbt "; coverageOff; Universal/stage"'
@@ -42,6 +42,10 @@ export async function startApp({ port, env = {} } = {}) {
   if (!fs.existsSync(launcher)) {
     throw new Error(`${launcher} is missing. Run: ${STAGE_COMMAND}`)
   }
+  const page = env.INDEX_PATH ?? indexPath
+  if (!fs.existsSync(page)) {
+    throw new Error(`${page} is missing. Run: npm run build`)
+  }
   const chosen = port ?? (await freePort())
   const child = spawn(launcher, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -55,7 +59,7 @@ export async function startApp({ port, env = {} } = {}) {
       SECURE_COOKIES: 'false',
       // application.conf's default is repo-relative and the staged binary does not run
       // from the repo root.
-      INDEX_PATH: indexPath,
+      INDEX_PATH: page,
       ...testProfile,
       ...env
     }
