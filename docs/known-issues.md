@@ -99,9 +99,9 @@ roadmap item instead of leaving it here as stale history.
 ### No request payload is validated on any endpoint that takes one
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala`
-  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), and the `join`, `vote` and
-  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/API.scala`
-  that consume them. `create-room` takes no body.
+  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), the `join`, `vote` and
+  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/Endpoints.scala`
+  that consume them, and their server logic in `API.scala`. `create-room` takes no body.
 - **Issue:** Every request body is a bare `String` with no constraint on it.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
@@ -118,7 +118,7 @@ roadmap item instead of leaving it here as stale history.
   than the icon it first appeared to be. `RoomSnapshot`'s `hasEstimation` was
   `estimation.nonEmpty`, so an empty estimation read as voted with no estimation;
   step 4 re-expressed the field as the entry existing in `round.estimates`, and
-  the client reads that field twice, in `showUserEstimation` for the
+  the Vue page read that field twice, in `showUserEstimation` for the
   withheld-value icon and in `applySnapshot` to gate the vote tally. Presence
   alone would therefore have admitted a `""` bucket to the distribution, which is
   the defect step 3 exists to remove. So `RoomData.vote` refused a blank
@@ -180,7 +180,7 @@ roadmap item instead of leaving it here as stale history.
   real Firefox tab closes for one user (5 as the last tab in the window, 10
   with another tab left open) all departed the room immediately, none falling
   back to the heartbeat path. That is a real signal at that sample size
-  against a documented 20 to 50 percent drop rate, not noise, though the two
+  against a documented 50 to 80 percent drop rate, not noise, though the two
   trials differ in more than the beacon itself: this one closed a real tab by
   hand, the earlier one drove `page.close()` from Playwright. No investigation
   was done into which difference explains the gap. Worth confirming with more
@@ -916,7 +916,7 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `frontend/src/room/connection.ts` (`onmessage`), and
   `frontend/src/protocol/snapshot.ts`'s lenient `snapshotSchema`.
 - **Issue:** A deploy ends every session but not every page. A tab open across
-  it, in the lobby or restored from the back-forward cache, can join the new
+  it, in the lobby or restored from the back/forward cache, can join the new
   server and read its frames with the old code. Step 8's estimation union did
   this to the Vue page, which rendered the tags as text until reloaded. From
   step 8 on, the lenient schema drops an unknown field, but a changed one, or a

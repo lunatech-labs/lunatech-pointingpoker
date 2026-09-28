@@ -64,7 +64,7 @@ export function App({ connection }: { connection: Connection }) {
       })
   }
 
-  // Today's doCopy: one bare timeout, so a second copy does not extend the hint.
+  // The Vue page's doCopy: one bare timeout, so a second copy does not extend the hint.
   const onCopied = () => {
     setCopied(true)
     window.setTimeout(() => setCopied(false), 2000)
@@ -75,7 +75,7 @@ export function App({ connection }: { connection: Connection }) {
     localStorage.clear()
   }
 
-  // Today's startup rejoin: a room and a name, from the path or from before, join at once.
+  // The Vue page's startup rejoin: a room and a name, from the path or from before, join at once.
   useEffect(() => {
     if (roomId && name) doJoin(roomId)
     // Once, on mount, as the Vue page's created() ran once.
@@ -106,7 +106,7 @@ export function App({ connection }: { connection: Connection }) {
           onName={setName}
           onCreate={doCreate}
           onJoin={() => {
-            // v-model.trim's job: a pasted name with a trailing space is not refused.
+            // As the Vue page's v-model.trim: a pasted name with a trailing space is not refused.
             const id = roomId.trim()
             setRoomId(id)
             doJoin(id)

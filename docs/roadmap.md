@@ -132,8 +132,8 @@ directly in the new frontend.
       piece is somewhere to keep the previous one rather than the wire and the
       rendering alone. Decide what `clear` does to it too. Until it lands, a Show
       during a partly re-voted round reports a distribution built from two rounds;
-      see `docs/known-issues.md`. Wants the new frontend rather than the Vue 2
-      table.
+      see `docs/known-issues.md`. Step 8's React page is what it builds
+      on.
 - [x] Guarantee SSE broadcast delivery before latched reveal is trustworthy.
       Fixed the causes rather than compensating for them: a joining user's catch-up
       replay went out as a single batched message instead of one send per event,

@@ -35,7 +35,7 @@ export function createConnection(deps: ConnectionDeps): Connection {
   let stream: Stream | null = null
   const listeners = new Set<() => void>()
 
-  // A new object only on a change, since useSyncExternalStore re-renders on every new one.
+  // The same object between updates, since useSyncExternalStore re-renders on every new one.
   const update = (next: Partial<RoomStore>) => {
     store = { ...store, ...next }
     listeners.forEach(listener => listener())
@@ -59,7 +59,7 @@ export function createConnection(deps: ConnectionDeps): Connection {
     },
     getSnapshot: () => store,
 
-    // Step 8a closes the previous stream first; today's page does not.
+    // Step 8a closes the previous stream first; this port does not yet.
     open(id) {
       roomId = id
       const opened = deps.openStream(`/rooms/${id}/events?connectionId=${deps.connectionId}`)

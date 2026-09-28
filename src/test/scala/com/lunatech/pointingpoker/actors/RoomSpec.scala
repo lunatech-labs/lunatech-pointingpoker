@@ -103,7 +103,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         snapshot.you mustBe member.id
         snapshot.votesRevealed mustBe false
         snapshot.users.map(_.voted) mustBe List(false, false)
-        // The estimations survive a re-vote, and hasEstimation is now what carries that,
+        // The estimations survive a re-vote, and the Unconfirmed cases now carry that,
         // since the values themselves reach nobody but their owner.
         snapshot.users.map(_.hasEstimation) mustBe List(true, true)
         snapshot.users.find(_.id == member.id).map(_.shown) mustBe Some(member.estimation)
