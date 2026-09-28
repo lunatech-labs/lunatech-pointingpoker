@@ -175,6 +175,16 @@ roadmap item instead of leaving it here as stale history.
   about half the time with an unrelated tab left open. Either way a dropped beacon
   falls back to this same heartbeat path, landing at the same ~35 seconds measured
   above.
+
+  Manual testing on 2026-09-28 cuts against those Playwright-measured rates: 15
+  real Firefox tab closes for one user (5 as the last tab in the window, 10
+  with another tab left open) all departed the room immediately, none falling
+  back to the heartbeat path. That is a real signal at that sample size
+  against a documented 20 to 50 percent drop rate, not noise, though the two
+  trials differ in more than the beacon itself: this one closed a real tab by
+  hand, the earlier one drove `page.close()` from Playwright. No investigation
+  was done into which difference explains the gap. Worth confirming with more
+  real users in production before treating the earlier rate as current.
 - **Resolution:** Stays open, and deliberately unscheduled. Step 6's explicit
   leave endpoint does not close this: its beacon fires only on `pagehide` for a
   page being discarded deliberately, and a crash, a sleeping laptop, a silent
