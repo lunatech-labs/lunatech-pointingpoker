@@ -140,6 +140,12 @@ There is also `npm run test:unit`, the Vitest suite under `frontend/src`. Its
 contract test reads the snapshots `sbt test` writes to `target/contract/`, so it
 runs after `sbt test`.
 
+CI also runs `npm run typecheck` and `npm run lint`. The client's API types are
+generated from tapir's OpenAPI document and committed, so a change to an endpoint
+must run `sbt genOpenApi && npm run gen:api` and commit what changes under
+`frontend/src/protocol/generated/`; CI regenerates them and fails on any
+difference.
+
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
 and a harness that starts the packaged app:
