@@ -25,8 +25,8 @@ layout. This document settles how, and splits the work in four:
 
 All follow the parent design's branch naming:
 `20260831.protocol_architecture_8_frontend_rewrite` now, with
-`..._8a_connection` and `..._8b_issue_editor` stacked on it and merged in the
-same delivery window, and `8c` branches under the same prefix later.
+`..._8a_connection` and `..._8b_issue_editor` built on it and merged together
+in a later delivery window, and `8c` branches under the same prefix later.
 
 ## Decisions and their reasons
 
@@ -654,24 +654,27 @@ Each step's PR carries its own:
 
 ## Rollout
 
-The stack of 8, 8a and 8b merges in one delivery window outside working hours,
-since each merge restarts the server and ends every live room.
+Step 8 merges alone, in a window with no live rooms, since each merge restarts
+the server and ends every live room. It is complete without 8a and 8b, and
+holding it for them would keep a large branch open while they are specified.
+8a and 8b then merge together in a later window.
 
 1. ~~Remove `INDEX_PATH` from the Clever console.~~ Done: absent from
    `clever env` on 2026-09-24.
 2. Set `CC_PRE_BUILD_HOOK=./clevercloud/build-frontend.sh` just before merging
    step 8: set earlier, a deploy of the old `main` fails on the missing script,
    which is safe but noisy.
-3. Merge step 8 in GitHub's interface, because of the `ci.yml` change. Rebase
-   8a onto `main`, wait for CI, merge it; the same for 8b. Clever redeploys on
-   its own after each.
+3. Merge step 8 in GitHub's interface, because of the `ci.yml` change. In the
+   later window, rebase 8a onto `main`, wait for CI, merge it; the same for 8b.
+   Clever redeploys on its own after each.
 4. Read step 8's deploy log for `mise install`, the hook's `npm ci` and Vite
    lines, then `sbt stage`, in that order. Reload every tab left open across
    the deploy, lobby tabs included: an old page misreads the new estimation.
-5. Once 8b is deployed, test by hand with five participants on four devices: a
-   desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an Android
-   phone. Safari and a real phone are what the e2e suite never runs. Each
-   check names the step it judges, so a failure points to one.
+5. After each window's deploy, test by hand with five participants on four
+   devices: a desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an
+   Android phone. Safari and a real phone are what the e2e suite never runs.
+   Each check names the step it judges, so a failure points to one; step 8's
+   window runs only its own checks.
    - Step 8: vote, re-vote, show and clear; reload one tab repeatedly, and
      close another.
    - Step 8a: restart the app from Clever's console while in a room: every
