@@ -3139,6 +3139,19 @@ this step rewrites. A component library brings a tooltip primitive with a delay
 worth having, which is the affordance 3a considered and declined on the grounds
 that the bespoke version would be thrown away here.
 
+Landed. Step 8, the technical migration, in seven commits where the frontend
+spec lists four, each split where its halves are judged by different tests:
+the server's `/assets/` route and `503`, the Vite toolchain building the old
+page, the room state in TypeScript, the React components, the typed client,
+the strict contract test and the estimation union, after a commit pinning the
+lobby's Enter and paste paths on the Vue page. The page lives in `frontend/`,
+is built to `frontend/dist/` by `clevercloud/build-frontend.sh` before sbt
+runs, and is served from there. The endpoint descriptions moved from `API` to
+`Endpoints`, so `genOpenApi` writes the document from test sources without an
+actor system. The participant's `voted`, `hasEstimation` and `estimation` are
+one `estimation` union now, which closes section 2's deferral. The e2e suite
+passed with no selector change. Steps 8a to 8c extend this paragraph.
+
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the
 `history` field that carries it to the client, and the history view. Waits on
