@@ -3150,7 +3150,10 @@ runs, and is served from there. The endpoint descriptions moved from `API` to
 `Endpoints`, so `genOpenApi` writes the document from test sources without an
 actor system. The participant's `voted`, `hasEstimation` and `estimation` are
 one `estimation` union now, which closes section 2's deferral. The e2e suite
-passed with no selector change. Steps 8a to 8c extend this paragraph.
+passed with no selector change. A later fix stops a not-a-room Join retargeting to
+the path it is on: in production that is only the empty id on `/`, which now shows
+the join error rather than reloading the lobby. Commit 2 closed the CDN defect in
+the known-defect table. Steps 8a to 8c extend this paragraph.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the

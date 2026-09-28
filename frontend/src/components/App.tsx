@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import * as api from '../protocol/api'
 import type { Connection } from '../room/connection'
+import { joinAction } from '../room/joinAction'
 import { Alerts } from './Alerts'
-import { joinAction } from './joinAction'
 import { Lobby, type LobbyTab } from './Lobby'
 import { Room } from './Room'
 import { useRoom } from './useRoom'
@@ -12,6 +12,7 @@ const pathRoom = window.location.pathname.split('/')[1] ?? ''
 // Set by the legacy-link redirect; cleared from the address so a copied link is clean.
 const movedOnLoad = new URLSearchParams(window.location.search).get('moved') === '1'
 if (movedOnLoad) history.replaceState(null, '', window.location.pathname)
+const joinError = 'Could not join the room. Please try again.'
 
 export function App({ connection }: { connection: Connection }) {
   const room = useRoom(connection)
@@ -40,12 +41,12 @@ export function App({ connection }: { connection: Connection }) {
             break
           case 'show-error':
             localStorage.removeItem('roomId')
-            setError(action.message)
+            setError(joinError)
             break
         }
       })
       .catch(reason => {
-        setError('Could not join the room. Please try again.')
+        setError(joinError)
         console.error('Failed to join room:', reason)
       })
   }

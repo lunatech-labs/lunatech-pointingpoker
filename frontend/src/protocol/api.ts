@@ -3,7 +3,7 @@ import type { paths } from './generated/openapi'
 
 const client = createClient<paths>()
 
-// Every call rejects on a failure, so a component's catch is the one place a failure lands.
+// A join's 404 resolves; every other failure rejects, so a component's catch is where it lands.
 export type JoinOutcome = 'joined' | 'not-a-room'
 
 const refused = (what: string, response: Response) =>
@@ -20,7 +20,7 @@ export async function join(roomId: string, name: string): Promise<JoinOutcome> {
     params: { path: { roomId } },
     body: { name }
   })
-  // Only a typed or remembered name reaches /join unchecked; the page route answers it.
+  // Only a typed or remembered id reaches /join unchecked; joinAction decides what follows.
   if (response.status === 404) return 'not-a-room'
   if (!response.ok) throw refused('join', response)
   return 'joined'

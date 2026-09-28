@@ -14,9 +14,10 @@ describe('joinAction', () => {
   })
 
   it('shows an error instead of looping when already on the failed room\'s own path', () => {
-    expect(joinAction('not-a-room', 'my-room', 'my-room')).toEqual({
-      kind: 'show-error',
-      message: 'Could not join the room. Please try again.'
-    })
+    expect(joinAction('not-a-room', 'my-room', 'my-room')).toEqual({ kind: 'show-error' })
+  })
+
+  it('shows an error for an empty id on the lobby rather than reloading it', () => {
+    expect(joinAction('not-a-room', '', '')).toEqual({ kind: 'show-error' })
   })
 })
