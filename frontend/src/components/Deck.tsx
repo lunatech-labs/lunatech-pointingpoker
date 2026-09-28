@@ -47,7 +47,7 @@ export function Deck({ view, onVote }: Props) {
             resizes the card and shifts every row below on each reveal. */}
         <div className="row" style={{ visibility: view.votesRevealed ? 'visible' : 'hidden' }}>
           <div className="col text-muted m-1">
-            <Lock size={20} />
+            <Lock size={20} />{' '}
             <small>The round is revealed. Press Re-vote to open it again.</small>
           </div>
         </div>
