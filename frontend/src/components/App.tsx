@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as api from '../protocol/api'
 import type { Connection } from '../room/connection'
 import { Alerts } from './Alerts'
+import { joinAction } from './joinAction'
 import { Lobby, type LobbyTab } from './Lobby'
 import { Room } from './Room'
 import { useRoom } from './useRoom'
@@ -27,13 +28,21 @@ export function App({ connection }: { connection: Connection }) {
     api
       .join(id, name)
       .then(outcome => {
-        if (outcome === 'not-a-room') {
-          localStorage.removeItem('roomId')
-          window.location.assign('/' + encodeURIComponent(id))
-          return
+        const action = joinAction(outcome, id, pathRoom)
+        switch (action.kind) {
+          case 'enter':
+            setError('')
+            connection.open(id)
+            break
+          case 'retarget':
+            localStorage.removeItem('roomId')
+            window.location.assign(action.path)
+            break
+          case 'show-error':
+            localStorage.removeItem('roomId')
+            setError(action.message)
+            break
         }
-        setError('')
-        connection.open(id)
       })
       .catch(reason => {
         setError('Could not join the room. Please try again.')
