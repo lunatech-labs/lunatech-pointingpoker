@@ -53,7 +53,7 @@ Accepted differences in the port, listed in the PR:
 - The `href="#"` links (the lobby tabs, Copy link, Leave) call `preventDefault`, so the address no longer gains a `#` and a history entry on each click.
 - Join with no room id typed posts `/rooms//join`, not `/rooms/null/join`, since the port starts from `''` where the Vue page started from `localStorage`'s `null`. On its 404 `joinAction` finds the empty id equal to the empty path and shows "Could not join the room. Please try again." in the lobby, where the Vue page opened the not-a-room page at `/null`. Retargeting to the current path would only reload it, and under Vite it loops.
 - The Vue page's `entering` guard is gone: the room shows whenever the store holds a snapshot. After a double open (a Join clicked while the startup rejoin is in flight), `leave()` closes only the later stream, so a frame from the earlier one can put the page back into the room the user left. Accepted until step 8a's close-before-open, and recorded in `docs/known-issues.md` with the sequence where Leave itself triggers it.
-- Vite minifies the stylesheet, and Bootstrap is 4.6.2 rather than 4.4.1.
+- Vite minifies the stylesheet, and Bootstrap is 4.6.2 rather than 4.4.1. 4.6.2 sets `small` to `.875em` rather than `80%`, so the reveal notice, the page's only `<small>`, renders at 14px rather than 12.8px and wraps one word earlier. Bootstrap 5 in step 8c keeps `.875em`.
 - Lucide's icons are redrawn Feather icons, the expected difference in the look comparison.
 
 ## Global Constraints
