@@ -1,9 +1,7 @@
-import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  root: fileURLToPath(new URL('.', import.meta.url)),
   // Nothing may be emitted at the root, where the server's slug route matches every segment.
   publicDir: false,
   plugins: [react()],
