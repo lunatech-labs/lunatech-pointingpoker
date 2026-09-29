@@ -253,13 +253,14 @@ runs as `CC_PRE_BUILD_HOOK`. `application.conf`'s `index-path`
 beside it are served `immutable` for a year, since each name carries a content
 hash and the revalidated page names the new files after a deploy.
 
-**A restart ends every room, and open tabs need a reload.** Rooms and the
-sessions that reach them live in the process's memory, so a deploy takes them
-with it. A tab that was open across the restart does not fail silently: its next
-SSE attempt gets a 401 because the token no longer resolves, and the page shows
-"Your session has ended. Please reload the page to rejoin." Reloading is the
-whole recovery, since there is no state to migrate and nothing to drain. This is
-also why the wire format carries no version field: no session outlives the
-server that served it. A page can, and `docs/known-issues.md` records what a
-stale one does with a changed snapshot.
+**A restart ends every room, and a page that was open recovers on its own.**
+Rooms and the sessions that reach them live in the process's memory, so a
+deploy takes them with it. A page whose stream falls silent checks the app on
+the next tick, and once it answers again the page reloads itself: one that had
+reached the room comes back to "Reconnected. Please check your vote.", and one
+that never reached it shows "Your session has ended. Please reload the page to
+rejoin." instead, so a refusal every load repeats cannot loop. This is also why
+the wire format carries no version field: no session outlives the server that
+served it. A page open across a wire change meets that same refusal, since an
+unparsable snapshot closes the stream just as a 401 does.
 
