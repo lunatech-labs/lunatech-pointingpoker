@@ -13,6 +13,7 @@ export class ApiError extends Error {
     readonly status: number
   ) {
     super(`${what} answered ${status}`)
+    this.name = 'ApiError'
   }
 }
 
