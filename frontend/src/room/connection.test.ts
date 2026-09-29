@@ -361,6 +361,45 @@ describe('createConnection', () => {
       }
     })
 
+    it('takes a command refusal the same way, without waiting for the stream to go quiet', async () => {
+      fetchPage.mockReturnValueOnce(answer(200))
+      const c = connect()
+      c.open('r')
+      streams[0].open()
+      streams[0].message(frame)
+      c.refused()
+      expect(c.getSnapshot()).toMatchObject({ lost: true, fatal: false })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchPage).toHaveBeenCalledWith('/r', expect.objectContaining({ redirect: 'manual' }))
+      expect(location.replace).toHaveBeenCalledWith('/r?restarted=1')
+      // The stream itself never closed or errored; refused() alone drove the recovery.
+      expect(streams).toHaveLength(1)
+    })
+
+    it('shares the one-fetch-at-a-time rule with the watchdog', async () => {
+      fetchPage.mockReturnValueOnce(answer(200))
+      const c = connect()
+      c.open('r')
+      streams[0].open()
+      streams[0].message(frame)
+      c.refused()
+      c.refused()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+    })
+
+    it('does nothing once stopped or before a room is open', async () => {
+      const c = connect()
+      c.refused()
+      expect(fetchPage).not.toHaveBeenCalled()
+      c.open('r')
+      streams[0].open()
+      c.leave()
+      c.refused()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchPage).not.toHaveBeenCalled()
+    })
+
     it('aborts a fetch in flight on leave, and ignores its answer', async () => {
       let answered: (response: Response) => void = () => {}
       const signals: AbortSignal[] = []

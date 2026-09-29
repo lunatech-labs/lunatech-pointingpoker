@@ -32,6 +32,9 @@ export type Connection = {
   join(roomId: string, name: string): Promise<JoinResult>
   open(roomId: string): void
   leave(): void
+  // A command's own 401: the instance that answered it does not know this session, which the
+  // stream itself cannot see while it stays pinned to an old instance still draining.
+  refused(): void
 }
 
 const CLOSED = 2
@@ -216,6 +219,14 @@ export function createConnection(deps: ConnectionDeps): Connection {
       stop()
       postLeave(roomId)
       deps.location.assign('/')
+    },
+
+    // The stream can stay healthy on a draining instance while this lands on a newer one, so
+    // waiting on the watchdog would wait forever; a fetch already in flight is answer enough.
+    refused() {
+      if (stopped || roomId === null) return
+      update({ lost: true })
+      if (fetching === null) void check(roomId)
     }
   }
 }

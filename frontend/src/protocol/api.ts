@@ -6,8 +6,19 @@ const client = createClient<paths>()
 // A join's 404 resolves; every other failure rejects, so a component's catch is where it lands.
 export type JoinOutcome = 'joined' | 'not-a-room'
 
-const refused = (what: string, response: Response) =>
-  new Error(`${what} answered ${response.status}`)
+// Carries the status so a caller can single out a 401: the instance answering does not know
+// the session, which happens mid-redeploy when a command lands on a newer instance than the
+// page's own stream did.
+export class ApiError extends Error {
+  constructor(
+    what: string,
+    readonly status: number
+  ) {
+    super(`${what} answered ${status}`)
+  }
+}
+
+const refused = (what: string, response: Response) => new ApiError(what, response.status)
 
 export async function createRoom(): Promise<string> {
   const { data, response } = await client.POST('/create-room', { parseAs: 'text' })
