@@ -123,7 +123,7 @@ export function App({ connection }: { connection: Connection }) {
           snapshot={room.snapshot}
           onCopied={onCopied}
           onLeave={doLeave}
-          onRefused={connection.refused}
+          onRefused={() => connection.refused()}
         />
       )}
     </>

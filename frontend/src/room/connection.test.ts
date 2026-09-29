@@ -82,6 +82,7 @@ describe('createConnection', () => {
       location
     })
   // Node has no PageTransitionEvent, so persisted rides a plain Event.
+  const answer = (status: number) => Promise.resolve(new Response(null, { status }))
   const pageHide = (persisted: boolean) =>
     events.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }))
   const pageShow = (persisted: boolean) =>
@@ -285,8 +286,7 @@ describe('createConnection', () => {
   })
 
   describe('a closed stream', () => {
-    const answer = (status: number) => Promise.resolve(new Response(null, { status }))
-    const refused = (c: ReturnType<typeof connect>, reached: boolean) => {
+    const streamRefused = (c: ReturnType<typeof connect>, reached: boolean) => {
       c.open('r')
       streams[0].open()
       if (reached) streams[0].message(frame)
@@ -297,7 +297,7 @@ describe('createConnection', () => {
     it('reloads to the restart notice on a 200, having reached the room', async () => {
       fetchPage.mockReturnValueOnce(answer(200))
       const c = connect()
-      refused(c, true)
+      streamRefused(c, true)
       await vi.advanceTimersByTimeAsync(TICK_MS)
       expect(fetchPage).toHaveBeenCalledWith('/r', expect.objectContaining({ redirect: 'manual' }))
       expect(location.replace).toHaveBeenCalledWith('/r?restarted=1')
@@ -309,7 +309,7 @@ describe('createConnection', () => {
     it('shows the ended-session message instead, never having reached the room', async () => {
       fetchPage.mockReturnValueOnce(answer(200))
       const c = connect()
-      refused(c, false)
+      streamRefused(c, false)
       await vi.advanceTimersByTimeAsync(TICK_MS)
       expect(location.replace).not.toHaveBeenCalled()
       expect(c.getSnapshot()).toMatchObject({ lost: false, fatal: true })
@@ -323,7 +323,7 @@ describe('createConnection', () => {
         .mockImplementationOnce(() => Promise.reject(new TypeError('Failed to fetch')))
         .mockReturnValueOnce(Promise.resolve(Response.error()))
       const c = connect()
-      refused(c, true)
+      streamRefused(c, true)
       await vi.advanceTimersByTimeAsync(3 * TICK_MS)
       expect(fetchPage).toHaveBeenCalledTimes(3)
       expect(location.replace).not.toHaveBeenCalled()
@@ -338,7 +338,7 @@ describe('createConnection', () => {
           init.signal!.addEventListener('abort', () => reject(new DOMException('', 'AbortError')))
         )
       })
-      refused(connect(), true)
+      streamRefused(connect(), true)
       await vi.advanceTimersByTimeAsync(TICK_MS + FETCH_TIMEOUT_MS - 1)
       expect(signals).toHaveLength(1)
       await vi.advanceTimersByTimeAsync(TICK_MS)
@@ -361,7 +361,39 @@ describe('createConnection', () => {
       }
     })
 
-    it('takes a command refusal the same way, without waiting for the stream to go quiet', async () => {
+
+    it('does not start a second fetch when the watchdog already has one in flight', async () => {
+      fetchPage.mockImplementation(() => new Promise(() => {}))
+      const c = connect()
+      streamRefused(c, true)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+      c.refused()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+    })
+
+    it('aborts a fetch in flight on leave, and ignores its answer', async () => {
+      let answered: (response: Response) => void = () => {}
+      const signals: AbortSignal[] = []
+      fetchPage.mockImplementationOnce((_url, init) => {
+        signals.push(init.signal!)
+        return new Promise(resolve => (answered = resolve))
+      })
+      const c = connect()
+      streamRefused(c, true)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      c.leave()
+      expect(signals[0].aborted).toBe(true)
+      answered(new Response(null, { status: 200 }))
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(location.replace).not.toHaveBeenCalled()
+      expect(location.assign).toHaveBeenCalledWith('/')
+    })
+  })
+
+  describe('a command refusal', () => {
+    it('takes the refusal path without waiting for the stream to go quiet', async () => {
       fetchPage.mockReturnValueOnce(answer(200))
       const c = connect()
       c.open('r')
@@ -388,17 +420,6 @@ describe('createConnection', () => {
       expect(fetchPage).toHaveBeenCalledTimes(1)
     })
 
-    it('does not start a second fetch when the watchdog already has one in flight', async () => {
-      fetchPage.mockImplementation(() => new Promise(() => {}))
-      const c = connect()
-      refused(c, true)
-      await vi.advanceTimersByTimeAsync(TICK_MS)
-      expect(fetchPage).toHaveBeenCalledTimes(1)
-      c.refused()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(fetchPage).toHaveBeenCalledTimes(1)
-    })
-
     it('does nothing once stopped or before a room is open', async () => {
       const c = connect()
       c.refused()
@@ -409,24 +430,6 @@ describe('createConnection', () => {
       c.refused()
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchPage).not.toHaveBeenCalled()
-    })
-
-    it('aborts a fetch in flight on leave, and ignores its answer', async () => {
-      let answered: (response: Response) => void = () => {}
-      const signals: AbortSignal[] = []
-      fetchPage.mockImplementationOnce((_url, init) => {
-        signals.push(init.signal!)
-        return new Promise(resolve => (answered = resolve))
-      })
-      const c = connect()
-      refused(c, true)
-      await vi.advanceTimersByTimeAsync(TICK_MS)
-      c.leave()
-      expect(signals[0].aborted).toBe(true)
-      answered(new Response(null, { status: 200 }))
-      await vi.advanceTimersByTimeAsync(TICK_MS)
-      expect(location.replace).not.toHaveBeenCalled()
-      expect(location.assign).toHaveBeenCalledWith('/')
     })
   })
 })

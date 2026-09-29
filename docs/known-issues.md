@@ -918,7 +918,7 @@ roadmap item instead of leaving it here as stale history.
   is longer than the longest pool word plus one) removes the cost with no
   behaviour change.
 
-### A command's 401 can leave the connection banner up until the next message
+### A command's 401 can leave the connection banner up until the next snapshot
 
 - **Where:** `frontend/src/room/connection.ts`, `refused`.
 - **Issue:** `refused` marks the connection lost, then runs `check`. If `check`
