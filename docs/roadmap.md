@@ -279,6 +279,12 @@ directly in the new frontend.
       that is dead but silent, so step 8 should arm it on `pageshow`.
       Done in step 8a, which reopens a silent stream rather than only warning;
       a page restored from the back/forward cache reloads instead of arming it.
+      Extended after 8a landed: a Clever Cloud rolling redeploy can pin a
+      stream to an old instance still draining while a command lands on the
+      new one, which does not know the session, so the stream itself never
+      goes stale. `connection.ts`'s `refused()` now lets a command's own 401
+      check the app directly, rather than waiting on a stream that may never
+      go quiet.
 - [ ] Per-user command sequencing/idempotency to guard against HTTP POST
       reordering (see `docs/known-issues.md`). Stays here deliberately: under a
       snapshot protocol a reordering is visible rather than silently divergent,

@@ -71,3 +71,25 @@ test('a page refused before it reached the room stops at the message', async ({
   expect(streams).toHaveLength(1)
   expect(await page.evaluate(() => window.sameLoad)).toBe(true)
 })
+
+test('a command refused by a different instance recovers without the stream ever closing', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  let refuseOnce = true
+  await alice.page.route(new RegExp(`/rooms/${room}/show$`), route => {
+    if (!refuseOnce) return route.continue()
+    refuseOnce = false
+    return route.fulfill({ status: 401 })
+  })
+
+  // A rolling redeploy: the stream stays pinned to the old instance, healthy throughout, while
+  // this command lands on the new one, which does not know the session. Without its own
+  // recovery path this would never surface at all, since the stream gives the watchdog no
+  // reason to check the app; a tight timeout here is standing in for "at all".
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+
+  await expect(restartNotice(alice.page)).toBeVisible({ timeout: 5_000 })
+  await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
+})
