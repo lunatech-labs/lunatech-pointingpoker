@@ -10,7 +10,7 @@ import {
 // Two watchdog ticks, long enough for a reload or a second stream to have happened.
 const TWO_TICKS_MS = 10_000
 
-test('a session ended by restarting the app rejoins under its name with the restart notice', async ({
+test('a session ended by a restart rejoins under its name, with the restart notice', async ({
   join,
   app,
   room
