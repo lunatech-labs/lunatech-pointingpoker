@@ -17,6 +17,7 @@ export type ConnectionDeps = {
   sendBeacon: (url: string) => void
   // The page's window in the browser; the page listeners live here, not in main.tsx.
   events: EventTarget
+  location: Pick<Location, 'assign' | 'reload'>
 }
 
 export type Connection = {
@@ -33,6 +34,7 @@ export function createConnection(deps: ConnectionDeps): Connection {
   let store = initial
   let roomId: string | null = null
   let stream: Stream | null = null
+  let stopped = false
   const listeners = new Set<() => void>()
 
   // The same object between updates, since useSyncExternalStore re-renders on every new one.
@@ -45,11 +47,21 @@ export function createConnection(deps: ConnectionDeps): Connection {
   const postLeave = (id: string) =>
     deps.sendBeacon(`/rooms/${id}/leave?connectionId=${deps.connectionId}`)
 
-  // Only a page being discarded: a cached page can be restored with no load.
-  deps.events.addEventListener('pagehide', event => {
-    const persisted = (event as PageTransitionEvent).persisted
-    if (persisted || store.snapshot === null || roomId === null) return
-    postLeave(roomId)
+  // What Leave, a reload and fatal do first, so nothing is left to run against a page load.
+  const stop = () => {
+    stopped = true
+    if (stream === null) return
+    stream.onopen = stream.onmessage = stream.onerror = null
+    stream.close()
+  }
+
+  // Cached or not: a restored page reloads and rejoins, so the member must go either way.
+  deps.events.addEventListener('pagehide', () => {
+    if (stream !== null && stream.readyState !== CLOSED && roomId !== null) postLeave(roomId)
+  })
+  // A restore keeps the page's script state, so a fresh load is the one way back into a room.
+  deps.events.addEventListener('pageshow', event => {
+    if ((event as PageTransitionEvent).persisted) deps.location.reload()
   })
 
   return {
@@ -84,13 +96,12 @@ export function createConnection(deps: ConnectionDeps): Connection {
       }
     },
 
-    // Closed before the beacon: the server ends a departed stream, and an open one reconnects.
+    // Closed before the beacon, so pagehide cannot send it twice; a stopped page is already going.
     leave() {
-      stream?.close()
-      stream = null
-      if (roomId !== null) postLeave(roomId)
-      roomId = null
-      update(initial)
+      if (stopped || roomId === null) return
+      stop()
+      postLeave(roomId)
+      deps.location.assign('/')
     }
   }
 }

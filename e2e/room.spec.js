@@ -300,8 +300,8 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
   // keeping the round shut until she returns.
   await stragglerDepartsWithVotesHidden(
     join,
-    // created() rejoins from localStorage, and /join resolves the cookie rather than minting,
-    // so the reload returns the same Carol instead of a second one.
+    // The room's path joins with the remembered name, and /join resolves the cookie rather than
+    // minting, so the reload returns the same Carol instead of a second one.
     async (carol, alice) => {
       await carol.page.reload()
       // Her own table is empty until the snapshot lands, so this is what proves the rejoin

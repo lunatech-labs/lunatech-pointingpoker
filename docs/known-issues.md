@@ -36,6 +36,9 @@ roadmap item instead of leaving it here as stale history.
   outside the slug vocabulary is refused with a `404` and, where unambiguous, a
   suggested correction, so the entry narrows to a valid slug that is not live.
   The design's "Slug allocation" section owns the rules.
+  From step 8a the lobby's Join goes to the typed name's path, so a mistyped
+  name that is still a valid slug opens a new empty room there rather than an
+  error.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 

@@ -11,7 +11,8 @@ const connection = createConnection({
   connectionId: mintConnectionId(),
   openStream: url => new EventSource(url),
   sendBeacon: url => void navigator.sendBeacon(url),
-  events: window
+  events: window,
+  location: window.location
 })
 
 // No StrictMode: its double effect would join twice, and 8a's close-before-open is not here yet.

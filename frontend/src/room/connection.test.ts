@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { createConnection, type Stream } from './connection'
 
 class FakeStream implements Stream {
@@ -28,6 +28,7 @@ describe('createConnection', () => {
   let streams: FakeStream[]
   let beacons: string[]
   let events: EventTarget
+  let location: { assign: Mock<(url: string | URL) => void>; reload: Mock<() => void> }
   const connect = () =>
     createConnection({
       connectionId: 'c-1',
@@ -37,16 +38,20 @@ describe('createConnection', () => {
         return s
       },
       sendBeacon: url => void beacons.push(url),
-      events
+      events,
+      location
     })
   // Node has no PageTransitionEvent, so persisted rides a plain Event.
   const pageHide = (persisted: boolean) =>
     events.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }))
+  const pageShow = (persisted: boolean) =>
+    events.dispatchEvent(Object.assign(new Event('pageshow'), { persisted }))
 
   beforeEach(() => {
     streams = []
     beacons = []
     events = new EventTarget()
+    location = { assign: vi.fn(), reload: vi.fn() }
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -91,26 +96,42 @@ describe('createConnection', () => {
     expect(c.getSnapshot()).toMatchObject({ lost: false, fatal: true })
   })
 
-  it('closes the stream, then sends the leave beacon and forgets the room, on leave', () => {
+  it('closes and detaches the stream, sends the beacon and goes to the lobby, on leave', () => {
     const c = connect()
     c.open('r')
     streams[0].message(frame)
     c.leave()
     expect(streams[0].closed).toBe(true)
+    expect(streams[0].onmessage).toBeNull()
     expect(beacons).toEqual(['/rooms/r/leave?connectionId=c-1'])
-    expect(c.getSnapshot()).toEqual({ lost: false, fatal: false, snapshot: null })
+    expect(location.assign).toHaveBeenCalledWith('/')
+    // Left on screen until the lobby loads, so a double-clicked Leave arrives here.
+    c.leave()
+    pageHide(false)
+    expect(beacons).toHaveLength(1)
+    expect(location.assign).toHaveBeenCalledTimes(1)
   })
 
-  it('sends the beacon on pagehide only for a discarded page that reached the room', () => {
+  it('sends the beacon on pagehide while a stream is open, cached or not', () => {
     const c = connect()
+    pageHide(false)
+    expect(beacons).toEqual([])
     c.open('r')
-    pageHide(false)
-    expect(beacons).toEqual([])
-    streams[0].message(frame)
     pageHide(true)
-    expect(beacons).toEqual([])
+    streams[0].message(frame)
     pageHide(false)
-    expect(beacons).toEqual(['/rooms/r/leave?connectionId=c-1'])
+    expect(beacons).toEqual(['/rooms/r/leave?connectionId=c-1', '/rooms/r/leave?connectionId=c-1'])
+    streams[0].readyState = 2
+    pageHide(false)
+    expect(beacons).toHaveLength(2)
+  })
+
+  it('reloads a page restored from the back/forward cache, and only that', () => {
+    connect()
+    pageShow(false)
+    expect(location.reload).not.toHaveBeenCalled()
+    pageShow(true)
+    expect(location.reload).toHaveBeenCalledTimes(1)
   })
 
   it('notifies subscribers on a change and stops after unsubscribing', () => {

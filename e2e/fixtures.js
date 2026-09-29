@@ -86,7 +86,7 @@ export const test = base.extend({
         return cookie.value
       }
       // A second page in the same context shares the room cookie, which is what makes two tabs
-      // one participant. localStorage already holds the name and room, so created() rejoins.
+      // one participant. localStorage already holds the name, so the room's path joins at once.
       const newTab = async () => {
         const tab = await context.newPage()
         await tab.goto(`/${room}`)
