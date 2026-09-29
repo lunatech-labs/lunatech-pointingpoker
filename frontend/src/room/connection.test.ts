@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { JoinOutcome } from '../protocol/api'
 import { createConnection, type Stream } from './connection'
 
 class FakeStream implements Stream {
@@ -29,9 +30,11 @@ describe('createConnection', () => {
   let beacons: string[]
   let events: EventTarget
   let location: { assign: Mock<(url: string | URL) => void>; reload: Mock<() => void> }
+  let join: Mock<(roomId: string, name: string) => Promise<JoinOutcome>>
   const connect = () =>
     createConnection({
       connectionId: 'c-1',
+      join,
       openStream: url => {
         const s = new FakeStream(url)
         streams.push(s)
@@ -52,12 +55,44 @@ describe('createConnection', () => {
     beacons = []
     events = new EventTarget()
     location = { assign: vi.fn(), reload: vi.fn() }
+    join = vi.fn(() => Promise.resolve<JoinOutcome>('joined'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   it('opens the room stream under the page connection id', () => {
     connect().open('brave-golden-otter')
     expect(streams.map(s => s.url)).toEqual(['/rooms/brave-golden-otter/events?connectionId=c-1'])
+  })
+
+  it('lets only the first join through, and opens the stream once it succeeds', async () => {
+    let answer: (outcome: JoinOutcome) => void = () => {}
+    join.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
+    const c = connect()
+    const first = c.join('r', 'Alice')
+    // A double-clicked Join, or StrictMode's second effect, while the first is in flight.
+    expect(await c.join('r', 'Alice')).toBe('ignored')
+    answer('joined')
+    expect(await first).toBe('joined')
+    expect(await c.join('r', 'Alice')).toBe('ignored')
+    expect(join).toHaveBeenCalledTimes(1)
+    expect(streams).toHaveLength(1)
+  })
+
+  it('lets a join through again after a failed one', async () => {
+    join.mockResolvedValueOnce('not-a-room').mockRejectedValueOnce(new Error('join answered 500'))
+    const c = connect()
+    expect(await c.join('r', 'Alice')).toBe('failed')
+    expect(await c.join('r', 'Alice')).toBe('failed')
+    expect(streams).toHaveLength(0)
+    expect(await c.join('r', 'Alice')).toBe('joined')
+    expect(streams).toHaveLength(1)
+  })
+
+  it('lets only the first open through', () => {
+    const c = connect()
+    c.open('r')
+    c.open('r')
+    expect(streams).toHaveLength(1)
   })
 
   it('stores a parsed snapshot, and ignores a heartbeat and an invalid frame', () => {

@@ -1,7 +1,9 @@
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './styles.css'
 import { createRoot } from 'react-dom/client'
+import { StrictMode } from 'react'
 import { App } from './components/App'
+import * as api from './protocol/api'
 import { createConnection } from './room/connection'
 import { mintConnectionId } from './room/connectionId'
 
@@ -9,11 +11,16 @@ import { mintConnectionId } from './room/connectionId'
 // beacon would name the id the replacement page is now using.
 const connection = createConnection({
   connectionId: mintConnectionId(),
+  join: api.join,
   openStream: url => new EventSource(url),
   sendBeacon: url => void navigator.sendBeacon(url),
   events: window,
   location: window.location
 })
 
-// No StrictMode: its double effect would join twice, and 8a's close-before-open is not here yet.
-createRoot(document.getElementById('app')!).render(<App connection={connection} />)
+// StrictMode's double effect is safe: the connection lets only the first join and open through.
+createRoot(document.getElementById('app')!).render(
+  <StrictMode>
+    <App connection={connection} />
+  </StrictMode>
+)

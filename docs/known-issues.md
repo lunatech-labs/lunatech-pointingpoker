@@ -931,25 +931,6 @@ roadmap item instead of leaving it here as stale history.
   frame fails to parse is the natural fix, and it fits step 8a's connection
   notices.
 
-### A double open can put the page back into a room the user left
-
-- **Where:** `frontend/src/room/connection.ts` (`open`, `leave`), and
-  `RoomData.connect` and the `Depart` handler in
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`.
-- **Issue:** `open` does not close the previous stream, so a Join clicked while
-  the startup rejoin is in flight, or a double-clicked Join, leaves two
-  `EventSource`s on one connection id. The server holds one ref per connection
-  id and `connect` replaces it without ending the old stream, so the orphan
-  survives Leave. Whenever it reconnects, after a network blip or because the
-  server held it and `Depart` ended it, its `Join` makes the user a member again
-  for everyone, since the session survives `Depart`. The lobby first shows
-  "Connection to the room was lost", then the next frame puts the page back into
-  the room, and with `roomId` cleared, `pagehide` sends no beacon for it.
-- **Resolution:** The re-membership predates step 8: the Vue page's Leave also
-  closed only its latest stream, and its `entering` guard only kept the page
-  from showing the room again. Accepted for step 8. Step 8a's close-before-open
-  closes both halves; delete this entry there.
-
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside

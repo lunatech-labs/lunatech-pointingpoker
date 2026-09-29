@@ -1,3 +1,4 @@
+import type { JoinOutcome } from '../protocol/api'
 import { snapshotSchema, type RoomSnapshot } from '../protocol/snapshot'
 
 export type RoomStore = { lost: boolean; fatal: boolean; snapshot: RoomSnapshot | null }
@@ -13,6 +14,7 @@ export type Stream = {
 
 export type ConnectionDeps = {
   connectionId: string
+  join: (roomId: string, name: string) => Promise<JoinOutcome>
   openStream: (url: string) => Stream
   sendBeacon: (url: string) => void
   // The page's window in the browser; the page listeners live here, not in main.tsx.
@@ -20,9 +22,13 @@ export type ConnectionDeps = {
   location: Pick<Location, 'assign' | 'reload'>
 }
 
+// 'ignored': a join was already in flight or has succeeded, so the caller has nothing to show.
+export type JoinResult = 'joined' | 'failed' | 'ignored'
+
 export type Connection = {
   subscribe(listener: () => void): () => void
   getSnapshot(): RoomStore
+  join(roomId: string, name: string): Promise<JoinResult>
   open(roomId: string): void
   leave(): void
 }
@@ -35,6 +41,7 @@ export function createConnection(deps: ConnectionDeps): Connection {
   let roomId: string | null = null
   let stream: Stream | null = null
   let stopped = false
+  let joining = false
   const listeners = new Set<() => void>()
 
   // The same object between updates, since useSyncExternalStore re-renders on every new one.
@@ -55,6 +62,32 @@ export function createConnection(deps: ConnectionDeps): Connection {
     stream.close()
   }
 
+  // The first open on a page load wins, so nothing can open a second stream.
+  const open = (id: string) => {
+    if (roomId !== null || stopped) return
+    roomId = id
+    const opened = deps.openStream(`/rooms/${id}/events?connectionId=${deps.connectionId}`)
+    stream = opened
+    // A successful (re)connection means any earlier banner from onerror is stale.
+    opened.onopen = () => update({ lost: false, fatal: false })
+    opened.onmessage = event => {
+      // Keep-alive heartbeats arrive as an event with an empty data payload.
+      if (!event.data) return
+      const parsed = snapshotSchema.safeParse(JSON.parse(event.data))
+      if (!parsed.success) {
+        console.error('Dropped an invalid snapshot:', parsed.error)
+        return
+      }
+      update({ snapshot: parsed.data })
+    }
+    // CLOSED means a non-2xx answer the browser will not retry; anything else it is retrying.
+    opened.onerror = event => {
+      if (opened.readyState === CLOSED) update({ lost: false, fatal: true })
+      else update({ lost: true, fatal: false })
+      console.error('EventSource error observed:', event)
+    }
+  }
+
   // Cached or not: a restored page reloads and rejoins, so the member must go either way.
   deps.events.addEventListener('pagehide', () => {
     if (stream !== null && stream.readyState !== CLOSED && roomId !== null) postLeave(roomId)
@@ -71,30 +104,22 @@ export function createConnection(deps: ConnectionDeps): Connection {
     },
     getSnapshot: () => store,
 
-    // Step 8a closes the previous stream first; this port does not yet.
-    open(id) {
-      roomId = id
-      const opened = deps.openStream(`/rooms/${id}/events?connectionId=${deps.connectionId}`)
-      stream = opened
-      // A successful (re)connection means any earlier banner from onerror is stale.
-      opened.onopen = () => update({ lost: false, fatal: false })
-      opened.onmessage = event => {
-        // Keep-alive heartbeats arrive as an event with an empty data payload.
-        if (!event.data) return
-        const parsed = snapshotSchema.safeParse(JSON.parse(event.data))
-        if (!parsed.success) {
-          console.error('Dropped an invalid snapshot:', parsed.error)
-          return
-        }
-        update({ snapshot: parsed.data })
-      }
-      // CLOSED means a non-2xx answer the browser will not retry; anything else it is retrying.
-      opened.onerror = event => {
-        if (opened.readyState === CLOSED) update({ lost: false, fatal: true })
-        else update({ lost: true, fatal: false })
-        console.error('EventSource error observed:', event)
+    // Two cookieless joins would each mint a session, and the second cookie replaces the first.
+    async join(id, name) {
+      if (joining || roomId !== null) return 'ignored'
+      joining = true
+      try {
+        if ((await deps.join(id, name)) !== 'joined') return 'failed'
+        open(id)
+        return 'joined'
+      } catch (reason) {
+        console.error('Failed to join room:', reason)
+        return 'failed'
+      } finally {
+        joining = false
       }
     },
+    open,
 
     // Closed before the beacon, so pagehide cannot send it twice; a stopped page is already going.
     leave() {

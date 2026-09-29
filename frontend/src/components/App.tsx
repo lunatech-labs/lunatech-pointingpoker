@@ -31,17 +31,10 @@ export function App({ connection }: { connection: Connection }) {
   // In place, so a ?moved=1 banner survives joining.
   const joinHere = () => {
     localStorage.setItem('name', name)
-    api
-      .join(pathRoom, name)
-      .then(outcome => {
-        if (outcome !== 'joined') return setError(joinError)
-        setError('')
-        connection.open(pathRoom)
-      })
-      .catch(reason => {
-        setError(joinError)
-        console.error('Failed to join room:', reason)
-      })
+    void connection.join(pathRoom, name).then(result => {
+      if (result === 'failed') setError(joinError)
+      else if (result === 'joined') setError('')
+    })
   }
 
   const doCreate = () => {
