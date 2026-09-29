@@ -923,11 +923,13 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `frontend/src/room/connection.ts`, `refused`.
 - **Issue:** `refused` marks the connection lost, then runs `check`. If `check`
   fails (the client is offline, or the app is not yet answering 200) while the
-  stream stays healthy but quiet, nothing retries: the banner clears only on the
-  next heartbeat or snapshot, or when the user repeats the refused command.
-- **Resolution:** Stays open. The stream's heartbeat clears the banner within
-  15 seconds, and repeating the command retries recovery, so a retry timer would
-  add a state to hide a narrow case.
+  stream stays healthy but quiet, nothing retries: a heartbeat does not clear the
+  banner, so it clears only on the next snapshot (another member acts), or when
+  the user repeats the refused command.
+- **Resolution:** Stays open. Repeating the command retries recovery and any
+  other member's action clears the banner, so a retry timer would add a state to
+  hide a narrow case (it needs an offline or not-yet-200 app at the moment of the
+  refusal).
 
 ## Traceability note
 

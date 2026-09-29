@@ -95,5 +95,5 @@ test('a command refused by a different instance recovers without the stream ever
   await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
   // Only the reloaded page's own stream; a reopen before the reload would make two.
-  expect(streams.length).toBeLessThanOrEqual(1)
+  expect(streams).toHaveLength(1)
 })
