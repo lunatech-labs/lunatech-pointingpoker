@@ -81,8 +81,8 @@ describe('createConnection', () => {
       events,
       location
     })
-  // Node has no PageTransitionEvent, so persisted rides a plain Event.
   const answer = (status: number) => Promise.resolve(new Response(null, { status }))
+  // Node has no PageTransitionEvent, so persisted rides a plain Event.
   const pageHide = (persisted: boolean) =>
     events.dispatchEvent(Object.assign(new Event('pagehide'), { persisted }))
   const pageShow = (persisted: boolean) =>
@@ -360,7 +360,6 @@ describe('createConnection', () => {
         expect(location.replace).toHaveBeenCalledWith('/r?restarted=1')
       }
     })
-
 
     it('does not start a second fetch when the watchdog already has one in flight', async () => {
       fetchPage.mockImplementation(() => new Promise(() => {}))
