@@ -12,6 +12,8 @@ type Props = {
   name: string
   onName: (name: string) => void
   rejoin: { href: string; label: string } | null
+  // A session that has ended: further clicks would be ignored, so the form is inert instead.
+  disabled: boolean
   onCreate: () => void
   onJoin: () => void
 }
@@ -21,7 +23,19 @@ const onEnter = (action: () => void) => (event: KeyboardEvent) => {
 }
 
 export function Lobby(props: Props) {
-  const { tab, onTab, roomId, fixedRoom, onRoomId, name, onName, rejoin, onCreate, onJoin } = props
+  const {
+    tab,
+    onTab,
+    roomId,
+    fixedRoom,
+    onRoomId,
+    name,
+    onName,
+    rejoin,
+    disabled,
+    onCreate,
+    onJoin
+  } = props
   const select = (next: LobbyTab) => (event: MouseEvent) => {
     event.preventDefault()
     onTab(next)
@@ -35,6 +49,7 @@ export function Lobby(props: Props) {
           type="text"
           className="form-control"
           value={name}
+          disabled={disabled}
           onChange={e => onName(e.target.value)}
           onKeyUp={onEnter(action)}
         />
@@ -99,7 +114,12 @@ export function Lobby(props: Props) {
               {nameRow(onJoin)}
               <div className="row">
                 <div className="col-sm-3 offset-sm-9">
-                  <button type="button" className="btn btn-primary" onClick={onJoin}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={disabled}
+                    onClick={onJoin}
+                  >
                     Join
                   </button>
                 </div>

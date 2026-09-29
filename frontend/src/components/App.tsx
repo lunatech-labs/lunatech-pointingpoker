@@ -113,6 +113,7 @@ export function App({ connection }: { connection: Connection }) {
           name={name}
           onName={setName}
           rejoin={rejoin}
+          disabled={room.fatal}
           onCreate={doCreate}
           onJoin={pathRoom ? joinHere : doJoin}
         />

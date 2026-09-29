@@ -64,6 +64,9 @@ test('a page refused before it reached the room stops at the message', async ({
     'Your session has ended. Please reload the page to rejoin.',
     { timeout: 10_000 }
   )
+  // A click here would be ignored, since the one join this page gets already ran.
+  await expect(page.getByRole('button', { name: 'Join' })).toBeDisabled()
+  await expect(nameInput(page)).toBeDisabled()
   await page.waitForTimeout(TWO_TICKS_MS)
   expect(streams).toHaveLength(1)
   expect(await page.evaluate(() => window.sameLoad)).toBe(true)
