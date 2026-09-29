@@ -278,6 +278,8 @@ object Room:
               // The arriving connection cancels any pending removal, so ConfirmLeave needs no
               // staleness check of its own.
               timers.cancel(userId)
+              // Ended, not parked: a displaced live stream would get heartbeats but no snapshot.
+              data.connections.get(userId).flatMap(_.get(connectionId)).foreach(_ ! StreamCompleted)
               val newData = publish(data.connect(userId, name, connectionId, ref), context)
               receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
             else
