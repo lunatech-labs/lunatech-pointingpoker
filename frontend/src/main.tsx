@@ -14,6 +14,7 @@ const connection = createConnection({
   join: api.join,
   openStream: url => new EventSource(url),
   sendBeacon: url => void navigator.sendBeacon(url),
+  fetchPage: (url, init) => fetch(url, init),
   events: window,
   location: window.location
 })

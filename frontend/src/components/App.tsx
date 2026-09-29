@@ -8,9 +8,11 @@ import { useRoom } from './useRoom'
 
 // Read once at startup: the path alone decides the page, and every change of room is a page load.
 const pathRoom = window.location.pathname.split('/')[1] ?? ''
-// Set by the legacy-link redirect; cleared from the address so a copied link is clean.
-const movedOnLoad = new URLSearchParams(window.location.search).get('moved') === '1'
-if (movedOnLoad) history.replaceState(null, '', window.location.pathname)
+// Set by the legacy-link redirect and the reload on a refusal; cleared so a copied link is clean.
+const params = new URLSearchParams(window.location.search)
+const movedOnLoad = params.get('moved') === '1'
+const restartedOnLoad = params.get('restarted') === '1'
+if (movedOnLoad || restartedOnLoad) history.replaceState(null, '', window.location.pathname)
 const joinError = 'Could not join the room. Please try again.'
 // A room remembered from before the cutover is a UUID, which the server's page route redirects.
 const rejoinLabel = (id: string, name: string) =>
@@ -24,6 +26,7 @@ export function App({ connection }: { connection: Connection }) {
   const [tab, setTab] = useState<LobbyTab>(pathRoom ? 'join' : 'create')
   const [error, setError] = useState('')
   const [moved, setMoved] = useState(movedOnLoad)
+  const [restarted, setRestarted] = useState(restartedOnLoad)
   const [copied, setCopied] = useState(false)
   const remembered = localStorage.getItem('roomId')
   const reached = room.snapshot !== null
@@ -97,6 +100,8 @@ export function App({ connection }: { connection: Connection }) {
         copied={copied}
         moved={moved}
         onDismissMoved={() => setMoved(false)}
+        restarted={restarted}
+        onDismissRestarted={() => setRestarted(false)}
       />
       {room.snapshot === null ? (
         <Lobby

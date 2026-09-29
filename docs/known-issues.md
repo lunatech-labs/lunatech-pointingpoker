@@ -283,6 +283,10 @@ roadmap item instead of leaving it here as stale history.
   another tab loading at the same moment, and the server cannot tell two
   cookieless joins apart from two different people arriving together, so neither
   side has a signal to act on.
+  Step 8a's reload on a refusal makes this race routine at every restart:
+  every tab on a room reloads within a tick of the app answering, and both
+  POST `/join` with a cookie the new process does not know, so each mints a
+  session.
 
 ### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
 
@@ -913,23 +917,6 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open. A length guard in `nearest` (skip a word once it
   is longer than the longest pool word plus one) removes the cost with no
   behaviour change.
-
-### A page left open across a deploy misreads a changed snapshot
-
-- **Where:** `frontend/src/room/connection.ts` (`onmessage`), and
-  `frontend/src/protocol/snapshot.ts`'s lenient `snapshotSchema`.
-- **Issue:** A deploy ends every session but not every page. A tab open across
-  it, in the lobby or restored from the back/forward cache, can join the new
-  server and read its frames with the old code. Step 8's estimation union did
-  this to the Vue page, which rendered the tags as text until reloaded. From
-  step 8 on, the lenient schema drops an unknown field, but a changed one, or a
-  new union tag, fails the parse: the connection drops every frame with only a
-  `console.error`, and the page stays in the lobby after a successful join,
-  with no message.
-- **Resolution:** Accepted for step 8, whose rollout reloads open tabs by
-  hand. It stays open for later wire changes: telling the user to reload when a
-  frame fails to parse is the natural fix, and it fits step 8a's connection
-  notices.
 
 ## Traceability note
 

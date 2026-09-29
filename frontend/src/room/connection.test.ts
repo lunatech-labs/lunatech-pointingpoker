@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { JoinOutcome } from '../protocol/api'
-import { createConnection, decide, STALE_MS, type Stream } from './connection'
+import {
+  createConnection,
+  decide,
+  FETCH_TIMEOUT_MS,
+  STALE_MS,
+  TICK_MS,
+  type Stream
+} from './connection'
 
 class FakeStream implements Stream {
   readyState = 0
@@ -30,15 +37,20 @@ describe('decide', () => {
   const OPEN = 1
   const CLOSED = 2
   it.each([
-    [CONNECTING, STALE_MS - 1, 'nothing'],
-    [CONNECTING, STALE_MS, 'reopen'],
-    [OPEN, STALE_MS - 1, 'nothing'],
-    [OPEN, STALE_MS, 'reopen'],
-    [CLOSED, 0, 'nothing'],
-    [CLOSED, STALE_MS, 'nothing']
-  ])('readyState %i, silent for %i ms: %s', (readyState, silence, expected) => {
-    expect(decide(readyState, 1_000, 1_000 + silence)).toBe(expected)
-  })
+    [CONNECTING, STALE_MS - 1, false, 'nothing'],
+    [CONNECTING, STALE_MS, false, 'reopen'],
+    [OPEN, STALE_MS - 1, false, 'nothing'],
+    [OPEN, STALE_MS, false, 'reopen'],
+    [CLOSED, 0, false, 'fetch'],
+    [CLOSED, STALE_MS, false, 'fetch'],
+    [CLOSED, 0, true, 'nothing'],
+    [CLOSED, STALE_MS, true, 'nothing']
+  ])(
+    'readyState %i, silent for %i ms, fetching %s: %s',
+    (readyState, silence, fetching, expected) => {
+      expect(decide(readyState, 1_000, 1_000 + silence, fetching)).toBe(expected)
+    }
+  )
 })
 
 describe('createConnection', () => {
@@ -47,7 +59,12 @@ describe('createConnection', () => {
   let overlapped: boolean[]
   let beacons: string[]
   let events: EventTarget
-  let location: { assign: Mock<(url: string | URL) => void>; reload: Mock<() => void> }
+  let location: {
+    assign: Mock<(url: string | URL) => void>
+    reload: Mock<() => void>
+    replace: Mock<(url: string | URL) => void>
+  }
+  let fetchPage: Mock<(url: string, init: RequestInit) => Promise<Response>>
   let join: Mock<(roomId: string, name: string) => Promise<JoinOutcome>>
   const connect = () =>
     createConnection({
@@ -60,6 +77,7 @@ describe('createConnection', () => {
         return s
       },
       sendBeacon: url => void beacons.push(url),
+      fetchPage,
       events,
       location
     })
@@ -74,7 +92,8 @@ describe('createConnection', () => {
     overlapped = []
     beacons = []
     events = new EventTarget()
-    location = { assign: vi.fn(), reload: vi.fn() }
+    location = { assign: vi.fn(), reload: vi.fn(), replace: vi.fn() }
+    fetchPage = vi.fn(() => Promise.resolve(new Response(null, { status: 502 })))
     join = vi.fn(() => Promise.resolve<JoinOutcome>('joined'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.useFakeTimers()
@@ -120,14 +139,13 @@ describe('createConnection', () => {
     expect(streams).toHaveLength(1)
   })
 
-  it('stores a parsed snapshot, and ignores a heartbeat and an invalid frame', () => {
+  it('stores a parsed snapshot, and ignores a heartbeat', () => {
     const c = connect()
     c.open('r')
     streams[0].message(frame)
     const stored = c.getSnapshot()
     expect(stored.snapshot?.currentIssue).toBe('PP-1')
     streams[0].message('')
-    streams[0].message('{"you":1}')
     expect(c.getSnapshot()).toBe(stored)
   })
 
@@ -144,16 +162,19 @@ describe('createConnection', () => {
     expect(c.getSnapshot()).toBe(c.getSnapshot())
   })
 
-  it('marks a retrying stream lost and a closed one fatal, and clears both on open', () => {
+  it('shows the banner on any error, and clears it on open or a valid snapshot', () => {
     const c = connect()
     c.open('r')
     streams[0].error()
     expect(c.getSnapshot()).toMatchObject({ lost: true, fatal: false })
     streams[0].open()
-    expect(c.getSnapshot()).toMatchObject({ lost: false, fatal: false })
+    expect(c.getSnapshot().lost).toBe(false)
+    streams[0].error()
+    streams[0].message(frame)
+    expect(c.getSnapshot().lost).toBe(false)
     streams[0].readyState = 2
     streams[0].error()
-    expect(c.getSnapshot()).toMatchObject({ lost: false, fatal: true })
+    expect(c.getSnapshot()).toMatchObject({ lost: true, fatal: false })
   })
 
   it('closes and detaches the stream, sends the beacon and goes to the lobby, on leave', () => {
@@ -255,5 +276,101 @@ describe('createConnection', () => {
     d.leave()
     vi.advanceTimersByTime(2 * STALE_MS)
     expect(streams).toHaveLength(2)
+  })
+
+  describe('a closed stream', () => {
+    const answer = (status: number) => Promise.resolve(new Response(null, { status }))
+    const refused = (c: ReturnType<typeof connect>, reached: boolean) => {
+      c.open('r')
+      streams[0].open()
+      if (reached) streams[0].message(frame)
+      streams[0].readyState = 2
+      streams[0].error()
+    }
+
+    it('reloads to the restart notice on a 200, having reached the room', async () => {
+      fetchPage.mockReturnValueOnce(answer(200))
+      const c = connect()
+      refused(c, true)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(fetchPage).toHaveBeenCalledWith('/r', expect.objectContaining({ redirect: 'manual' }))
+      expect(location.replace).toHaveBeenCalledWith('/r?restarted=1')
+      await vi.advanceTimersByTimeAsync(4 * TICK_MS)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+      expect(streams).toHaveLength(1)
+    })
+
+    it('shows the ended-session message instead, never having reached the room', async () => {
+      fetchPage.mockReturnValueOnce(answer(200))
+      const c = connect()
+      refused(c, false)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(location.replace).not.toHaveBeenCalled()
+      expect(c.getSnapshot()).toMatchObject({ lost: false, fatal: true })
+      await vi.advanceTimersByTimeAsync(4 * TICK_MS)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+    })
+
+    it('fetches again on each tick, without reloading, while the app is down', async () => {
+      fetchPage
+        .mockReturnValueOnce(answer(502))
+        .mockImplementationOnce(() => Promise.reject(new TypeError('Failed to fetch')))
+        .mockReturnValueOnce(Promise.resolve(Response.error()))
+      const c = connect()
+      refused(c, true)
+      await vi.advanceTimersByTimeAsync(3 * TICK_MS)
+      expect(fetchPage).toHaveBeenCalledTimes(3)
+      expect(location.replace).not.toHaveBeenCalled()
+      expect(c.getSnapshot()).toMatchObject({ lost: true, fatal: false })
+    })
+
+    it('runs one fetch at a time, and abandons a hung one after 10 s', async () => {
+      const signals: AbortSignal[] = []
+      fetchPage.mockImplementation((_url, init) => {
+        signals.push(init.signal!)
+        return new Promise((_resolve, reject) =>
+          init.signal!.addEventListener('abort', () => reject(new DOMException('', 'AbortError')))
+        )
+      })
+      refused(connect(), true)
+      await vi.advanceTimersByTimeAsync(TICK_MS + FETCH_TIMEOUT_MS - 1)
+      expect(signals).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(signals[0].aborted).toBe(true)
+      expect(signals).toHaveLength(2)
+    })
+
+    it('takes the refusal path, banner on, for a frame failing to parse or validate', async () => {
+      for (const bad of ['{"you":1}', 'not json']) {
+        fetchPage.mockReturnValueOnce(answer(200))
+        location.replace.mockClear()
+        const c = connect()
+        c.open('r')
+        streams.at(-1)!.message(frame)
+        streams.at(-1)!.message(bad)
+        expect(streams.at(-1)!.closed).toBe(true)
+        expect(c.getSnapshot().lost).toBe(true)
+        await vi.advanceTimersByTimeAsync(TICK_MS)
+        expect(location.replace).toHaveBeenCalledWith('/r?restarted=1')
+      }
+    })
+
+    it('aborts a fetch in flight on leave, and ignores its answer', async () => {
+      let answered: (response: Response) => void = () => {}
+      const signals: AbortSignal[] = []
+      fetchPage.mockImplementationOnce((_url, init) => {
+        signals.push(init.signal!)
+        return new Promise(resolve => (answered = resolve))
+      })
+      const c = connect()
+      refused(c, true)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      c.leave()
+      expect(signals[0].aborted).toBe(true)
+      answered(new Response(null, { status: 200 }))
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(location.replace).not.toHaveBeenCalled()
+      expect(location.assign).toHaveBeenCalledWith('/')
+    })
   })
 })
