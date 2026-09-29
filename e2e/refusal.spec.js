@@ -71,3 +71,30 @@ test('a page refused before it reached the room stops at the message', async ({
   expect(streams).toHaveLength(1)
   expect(await page.evaluate(() => window.sameLoad)).toBe(true)
 })
+
+test('a command refused by a different instance recovers without the stream ever closing', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const requests = []
+  alice.page.on('request', request => {
+    if (request.url().includes('/events?')) requests.push('stream')
+    else if (request.isNavigationRequest()) requests.push('page')
+  })
+  let refuseOnce = true
+  await alice.page.route(new RegExp(`/rooms/${room}/show$`), route => {
+    if (!refuseOnce) return route.continue()
+    refuseOnce = false
+    return route.fulfill({ status: 401 })
+  })
+
+  // A rolling redeploy: the stream stays pinned to the old instance, healthy throughout, while
+  // this command lands on the new one, which does not know the session and answers 401.
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+
+  await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
+  await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
+  // Only the reloaded page's own stream; a reopen before the reload would come first.
+  await expect.poll(() => requests).toEqual(['page', 'stream'])
+})

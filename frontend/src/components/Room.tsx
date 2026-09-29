@@ -9,11 +9,17 @@ import { Participants } from './Participants'
 import { Results } from './Results'
 import { RoomHeader } from './RoomHeader'
 
-type Props = { roomId: string; snapshot: RoomSnapshot; onCopied: () => void; onLeave: () => void }
+type Props = {
+  roomId: string
+  snapshot: RoomSnapshot
+  onCopied: () => void
+  onLeave: () => void
+  onRefused: () => void
+}
 
 const log = (reason: unknown) => console.log(reason)
 
-export function Room({ roomId, snapshot, onCopied, onLeave }: Props) {
+export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) {
   const [issueFocused, setIssueFocused] = useState(false)
   const [seen, setSeen] = useState(snapshot)
   const [view, setView] = useState<View>(() =>
@@ -25,10 +31,13 @@ export function Room({ roomId, snapshot, onCopied, onLeave }: Props) {
     setView(applySnapshot({ issueFocused, currentIssue: view.currentIssue }, snapshot))
   }
 
+  const run = (promise: Promise<void>) =>
+    promise.catch(reason => (api.isSessionRefusal(reason) ? onRefused() : log(reason)))
+
   const vote = (estimation: string) => {
     // The server refuses it anyway; this only spares the doomed POST.
     if (view.votesRevealed) return
-    api.vote(roomId, estimation).catch(log)
+    run(api.vote(roomId, estimation))
   }
 
   return (
@@ -41,14 +50,14 @@ export function Room({ roomId, snapshot, onCopied, onLeave }: Props) {
               issue={view.currentIssue}
               onIssue={currentIssue => setView(v => ({ ...v, currentIssue }))}
               onFocusChange={setIssueFocused}
-              onCommit={() => api.editIssue(roomId, view.currentIssue).catch(log)}
+              onCommit={() => run(api.editIssue(roomId, view.currentIssue))}
             />
             <Deck view={view} onVote={vote} />
             <Controls
               revealed={view.votesRevealed}
-              onShow={() => api.command(roomId, 'show').catch(log)}
-              onRevote={() => api.command(roomId, 'revote').catch(log)}
-              onClear={() => api.command(roomId, 'clear').catch(log)}
+              onShow={() => run(api.command(roomId, 'show'))}
+              onRevote={() => run(api.command(roomId, 'revote'))}
+              onClear={() => run(api.command(roomId, 'clear'))}
             />
             <Results view={view} />
             <Participants view={view} />

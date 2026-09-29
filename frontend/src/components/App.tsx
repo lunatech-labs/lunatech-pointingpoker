@@ -118,7 +118,13 @@ export function App({ connection }: { connection: Connection }) {
           onJoin={pathRoom ? joinHere : doJoin}
         />
       ) : (
-        <Room roomId={pathRoom} snapshot={room.snapshot} onCopied={onCopied} onLeave={doLeave} />
+        <Room
+          roomId={pathRoom}
+          snapshot={room.snapshot}
+          onCopied={onCopied}
+          onLeave={doLeave}
+          onRefused={() => connection.refused()}
+        />
       )}
     </>
   )

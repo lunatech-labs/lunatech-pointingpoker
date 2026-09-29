@@ -32,6 +32,9 @@ export type Connection = {
   join(roomId: string, name: string): Promise<JoinResult>
   open(roomId: string): void
   leave(): void
+  // A command's own 401: the instance that answered it does not know this session, which the
+  // stream itself cannot see while it stays pinned to an old instance still draining.
+  refused(): void
 }
 
 const CLOSED = 2
@@ -216,6 +219,14 @@ export function createConnection(deps: ConnectionDeps): Connection {
       stop()
       postLeave(roomId)
       deps.location.assign('/')
+    },
+
+    // Reuses check(); one already running (by either caller) answers for this too. If it fails,
+    // only a fresh snapshot or another refusal retries, since this stream may never go stale.
+    refused() {
+      if (stopped || roomId === null) return
+      update({ lost: true })
+      if (fetching === null) void check(roomId)
     }
   }
 }

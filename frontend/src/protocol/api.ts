@@ -6,8 +6,22 @@ const client = createClient<paths>()
 // A join's 404 resolves; every other failure rejects, so a component's catch is where it lands.
 export type JoinOutcome = 'joined' | 'not-a-room'
 
-const refused = (what: string, response: Response) =>
-  new Error(`${what} answered ${response.status}`)
+// Carries the status so a caller can single out a 401, the signal connection.refused() acts on.
+export class ApiError extends Error {
+  constructor(
+    what: string,
+    readonly status: number
+  ) {
+    super(`${what} answered ${status}`)
+    this.name = 'ApiError'
+  }
+}
+
+// Only a 401 says the answering instance does not know this session; a 403 or 409 is routine.
+export const isSessionRefusal = (reason: unknown) =>
+  reason instanceof ApiError && reason.status === 401
+
+const refused = (what: string, response: Response) => new ApiError(what, response.status)
 
 export async function createRoom(): Promise<string> {
   const { data, response } = await client.POST('/create-room', { parseAs: 'text' })

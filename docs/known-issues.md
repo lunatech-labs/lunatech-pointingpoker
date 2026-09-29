@@ -918,6 +918,19 @@ roadmap item instead of leaving it here as stale history.
   is longer than the longest pool word plus one) removes the cost with no
   behaviour change.
 
+### A command's 401 can leave the connection banner up until the next snapshot
+
+- **Where:** `frontend/src/room/connection.ts`, `refused`.
+- **Issue:** `refused` marks the connection lost, then runs `check`. If `check`
+  fails (the client is offline, or the app is not yet answering 200) while the
+  stream stays healthy but quiet, nothing retries: a heartbeat does not clear the
+  banner, so it clears only on the next snapshot (another member acts), or when
+  the user repeats the refused command.
+- **Resolution:** Stays open. Repeating the command retries recovery and any
+  other member's action clears the banner, so a retry timer would add a state to
+  hide a narrow case (it needs an offline or not-yet-200 app at the moment of the
+  refusal).
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
