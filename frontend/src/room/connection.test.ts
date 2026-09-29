@@ -208,11 +208,17 @@ describe('createConnection', () => {
   })
 
   it('reloads a page restored from the back/forward cache, and only that', () => {
-    connect()
+    const c = connect()
+    c.open('r')
+    streams[0].open()
     pageShow(false)
     expect(location.reload).not.toHaveBeenCalled()
     pageShow(true)
     expect(location.reload).toHaveBeenCalledTimes(1)
+    // Stopped first, so the restored page's own tick cannot reopen before it navigates away.
+    expect(streams[0].closed).toBe(true)
+    vi.advanceTimersByTime(STALE_MS)
+    expect(streams).toHaveLength(1)
   })
 
   it('notifies subscribers on a change and stops after unsubscribing', () => {

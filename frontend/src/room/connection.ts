@@ -181,7 +181,9 @@ export function createConnection(deps: ConnectionDeps): Connection {
   })
   // A restore keeps the page's script state, so a fresh load is the one way back into a room.
   deps.events.addEventListener('pageshow', event => {
-    if ((event as PageTransitionEvent).persisted) deps.location.reload()
+    if (!(event as PageTransitionEvent).persisted) return
+    stop()
+    deps.location.reload()
   })
 
   return {
