@@ -17,6 +17,10 @@ export class ApiError extends Error {
   }
 }
 
+// Only a 401 says the answering instance does not know this session; a 403 or 409 is routine.
+export const isSessionRefusal = (reason: unknown) =>
+  reason instanceof ApiError && reason.status === 401
+
 const refused = (what: string, response: Response) => new ApiError(what, response.status)
 
 export async function createRoom(): Promise<string> {

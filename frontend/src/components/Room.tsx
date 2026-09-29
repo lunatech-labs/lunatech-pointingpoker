@@ -31,12 +31,8 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
     setView(applySnapshot({ issueFocused, currentIssue: view.currentIssue }, snapshot))
   }
 
-  // A 401 means this instance does not know the session; anything else is just logged.
   const run = (promise: Promise<void>) =>
-    promise.catch(reason => {
-      if (reason instanceof api.ApiError && reason.status === 401) onRefused()
-      else log(reason)
-    })
+    promise.catch(reason => (api.isSessionRefusal(reason) ? onRefused() : log(reason)))
 
   const vote = (estimation: string) => {
     // The server refuses it anyway; this only spares the doomed POST.
