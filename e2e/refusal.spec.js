@@ -77,9 +77,10 @@ test('a command refused by a different instance recovers without the stream ever
   room
 }) => {
   const alice = await join('Alice')
-  const streams = []
+  const requests = []
   alice.page.on('request', request => {
-    if (request.url().includes('/events?')) streams.push(request.url())
+    if (request.url().includes('/events?')) requests.push('stream')
+    else if (request.isNavigationRequest()) requests.push('page')
   })
   let refuseOnce = true
   await alice.page.route(new RegExp(`/rooms/${room}/show$`), route => {
@@ -94,6 +95,6 @@ test('a command refused by a different instance recovers without the stream ever
 
   await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
-  // Only the reloaded page's own stream; a reopen before the reload would make two.
-  expect(streams).toHaveLength(1)
+  // Only the reloaded page's own stream; a reopen before the reload would come first.
+  await expect.poll(() => requests).toEqual(['page', 'stream'])
 })

@@ -931,18 +931,6 @@ roadmap item instead of leaving it here as stale history.
   hide a narrow case (it needs an offline or not-yet-200 app at the moment of the
   refusal).
 
-### The refusal e2e's stream count does not catch a premature reopen in Chromium
-
-- **Where:** `e2e/refusal.spec.js`, "a command refused by a different instance
-  recovers without the stream ever closing".
-- **Issue:** The test counts `/events?` requests and expects exactly one, the
-  reloaded page's own. With `refused()` mutated to reopen the stream before its
-  check, Firefox fails the count but Chromium still passes. The cause is
-  undiagnosed; the likely one is that the reload aborts the new stream before
-  Chromium reports its request.
-- **Resolution:** Stays open. Firefox catches the regression, and the unit tests
-  cover the refusal path with the stream never closing.
-
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
