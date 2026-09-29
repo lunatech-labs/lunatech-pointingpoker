@@ -34,7 +34,17 @@ export type Connection = {
 }
 
 const CLOSED = 2
+// Twice SSE.heartbeatInterval (15 s) plus a margin, so one late heartbeat is not silence.
+export const STALE_MS = 35_000
+// The tick only samples the clock, so a throttled background tab delays a check but never skews it.
+export const TICK_MS = 5_000
 const initial: RoomStore = { lost: false, fatal: false, snapshot: null }
+
+// The whole watchdog: a closed stream is never reopened, and a silent one is.
+export function decide(readyState: number, heardAt: number, now: number): 'reopen' | 'nothing' {
+  if (readyState === CLOSED) return 'nothing'
+  return now - heardAt >= STALE_MS ? 'reopen' : 'nothing'
+}
 
 export function createConnection(deps: ConnectionDeps): Connection {
   let store = initial
@@ -42,6 +52,9 @@ export function createConnection(deps: ConnectionDeps): Connection {
   let stream: Stream | null = null
   let stopped = false
   let joining = false
+  // Date.now rather than performance.now, which can pause while the system sleeps.
+  let heardAt = 0
+  let tick: ReturnType<typeof setInterval> | undefined
   const listeners = new Set<() => void>()
 
   // The same object between updates, since useSyncExternalStore re-renders on every new one.
@@ -54,23 +67,31 @@ export function createConnection(deps: ConnectionDeps): Connection {
   const postLeave = (id: string) =>
     deps.sendBeacon(`/rooms/${id}/leave?connectionId=${deps.connectionId}`)
 
-  // What Leave, a reload and fatal do first, so nothing is left to run against a page load.
-  const stop = () => {
-    stopped = true
+  // Detached as well as closed, so a late event from an old stream can change nothing.
+  const closeStream = () => {
     if (stream === null) return
     stream.onopen = stream.onmessage = stream.onerror = null
     stream.close()
   }
 
-  // The first open on a page load wins, so nothing can open a second stream.
-  const open = (id: string) => {
-    if (roomId !== null || stopped) return
-    roomId = id
+  // What Leave, a reload and fatal do first, so nothing is left to run against a page load.
+  const stop = () => {
+    stopped = true
+    clearInterval(tick)
+    closeStream()
+  }
+
+  const connect = (id: string) => {
     const opened = deps.openStream(`/rooms/${id}/events?connectionId=${deps.connectionId}`)
     stream = opened
+    heardAt = Date.now()
     // A successful (re)connection means any earlier banner from onerror is stale.
-    opened.onopen = () => update({ lost: false, fatal: false })
+    opened.onopen = () => {
+      heardAt = Date.now()
+      update({ lost: false, fatal: false })
+    }
     opened.onmessage = event => {
+      heardAt = Date.now()
       // Keep-alive heartbeats arrive as an event with an empty data payload.
       if (!event.data) return
       const parsed = snapshotSchema.safeParse(JSON.parse(event.data))
@@ -86,6 +107,22 @@ export function createConnection(deps: ConnectionDeps): Connection {
       else update({ lost: true, fatal: false })
       console.error('EventSource error observed:', event)
     }
+  }
+
+  // Same connection id, so the server replaces the old stream, and a Join lands for each reopen.
+  const watch = (id: string) => {
+    if (decide(stream!.readyState, heardAt, Date.now()) !== 'reopen') return
+    closeStream()
+    connect(id)
+    update({ lost: true })
+  }
+
+  // The first open on a page load wins, so nothing can open a second stream.
+  const open = (id: string) => {
+    if (roomId !== null || stopped) return
+    roomId = id
+    connect(id)
+    tick = setInterval(() => watch(id), TICK_MS)
   }
 
   // Cached or not: a restored page reloads and rejoins, so the member must go either way.

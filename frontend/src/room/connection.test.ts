@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { JoinOutcome } from '../protocol/api'
-import { createConnection, type Stream } from './connection'
+import { createConnection, decide, STALE_MS, type Stream } from './connection'
 
 class FakeStream implements Stream {
   readyState = 0
@@ -25,8 +25,26 @@ const frame = JSON.stringify({
   users: [{ id: 'a', name: 'Alice', estimation: { type: 'NoEstimation' } }]
 })
 
+describe('decide', () => {
+  const CONNECTING = 0
+  const OPEN = 1
+  const CLOSED = 2
+  it.each([
+    [CONNECTING, STALE_MS - 1, 'nothing'],
+    [CONNECTING, STALE_MS, 'reopen'],
+    [OPEN, STALE_MS - 1, 'nothing'],
+    [OPEN, STALE_MS, 'reopen'],
+    [CLOSED, 0, 'nothing'],
+    [CLOSED, STALE_MS, 'nothing']
+  ])('readyState %i, silent for %i ms: %s', (readyState, silence, expected) => {
+    expect(decide(readyState, 1_000, 1_000 + silence)).toBe(expected)
+  })
+})
+
 describe('createConnection', () => {
   let streams: FakeStream[]
+  // Whether another stream was still open as each one opened.
+  let overlapped: boolean[]
   let beacons: string[]
   let events: EventTarget
   let location: { assign: Mock<(url: string | URL) => void>; reload: Mock<() => void> }
@@ -37,6 +55,7 @@ describe('createConnection', () => {
       join,
       openStream: url => {
         const s = new FakeStream(url)
+        overlapped.push(streams.some(other => !other.closed))
         streams.push(s)
         return s
       },
@@ -52,11 +71,17 @@ describe('createConnection', () => {
 
   beforeEach(() => {
     streams = []
+    overlapped = []
     beacons = []
     events = new EventTarget()
     location = { assign: vi.fn(), reload: vi.fn() }
     join = vi.fn(() => Promise.resolve<JoinOutcome>('joined'))
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('opens the room stream under the page connection id', () => {
@@ -179,5 +204,56 @@ describe('createConnection', () => {
     unsubscribe()
     streams[0].error()
     expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('reopens a stream silent for 35 s, closing and detaching the old one first', () => {
+    const c = connect()
+    c.open('r')
+    streams[0].open()
+    streams[0].message(frame)
+    vi.advanceTimersByTime(STALE_MS - 1)
+    expect(streams).toHaveLength(1)
+    vi.advanceTimersByTime(5_000)
+    expect(streams).toHaveLength(2)
+    expect(overlapped).toEqual([false, false])
+    expect(streams[0].onmessage).toBeNull()
+    expect(streams[1].url).toBe(streams[0].url)
+    expect(c.getSnapshot().lost).toBe(true)
+    streams[1].open()
+    expect(c.getSnapshot().lost).toBe(false)
+  })
+
+  it('keeps a stream fresh past 35 s on heartbeats alone', () => {
+    const c = connect()
+    c.open('r')
+    streams[0].open()
+    for (let i = 0; i < 6; i++) {
+      vi.advanceTimersByTime(15_000)
+      streams[0].message('')
+    }
+    expect(streams).toHaveLength(1)
+  })
+
+  it('gives a reopened stream a full 35 s before judging it again', () => {
+    connect().open('r')
+    vi.advanceTimersByTime(STALE_MS)
+    expect(streams).toHaveLength(2)
+    vi.advanceTimersByTime(STALE_MS - 5_000)
+    expect(streams).toHaveLength(2)
+    vi.advanceTimersByTime(5_000)
+    expect(streams).toHaveLength(3)
+  })
+
+  it('never reopens a closed stream, nor any stream once left', () => {
+    const c = connect()
+    c.open('r')
+    streams[0].readyState = 2
+    vi.advanceTimersByTime(2 * STALE_MS)
+    expect(streams).toHaveLength(1)
+    const d = connect()
+    d.open('s')
+    d.leave()
+    vi.advanceTimersByTime(2 * STALE_MS)
+    expect(streams).toHaveLength(2)
   })
 })

@@ -494,6 +494,32 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
 })
 
+test('a stream frozen without an error is noticed and reopened on its own', async ({ join }) => {
+  // The heartbeat is fixed at 15 s, so noticing takes 35 to 40 s of silence.
+  test.setTimeout(90_000)
+  const alice = await join('Alice')
+  // Recorded as it happens, since the banner lasts only until the reopened stream's onopen.
+  const bob = await join('Bob', {
+    initScript: () =>
+      new MutationObserver(() => {
+        const alert = document.querySelector('[role="alert"]')
+        if (alert?.textContent?.includes('was lost')) window.bannerSeen = true
+      }).observe(document, { childList: true, subtree: true, characterData: true })
+  })
+
+  await bob.freeze()
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(alice.page, 'Alice'))).toHaveCount(1)
+  await expect
+    .poll(() => bob.page.evaluate(() => window.bannerSeen === true), { timeout: 45_000 })
+    .toBe(true)
+
+  // The reopened stream's first snapshot, then a frame sent after it.
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
+})
+
 test('the issue box resyncs once the editor loses focus', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')

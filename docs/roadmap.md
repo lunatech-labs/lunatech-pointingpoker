@@ -261,7 +261,7 @@ directly in the new frontend.
 
 ## Backlog: suggested, not yet prioritized
 
-- [ ] Client-side connection-liveness watchdog: reset a timer on every SSE
+- [x] Client-side connection-liveness watchdog: reset a timer on every SSE
       heartbeat/message and show the "connection lost" banner if none arrives
       within roughly 2x the heartbeat interval (~30-40s), instead of relying
       solely on `EventSource.onerror` (which only fires once the browser's
@@ -277,6 +277,8 @@ directly in the new frontend.
       an improvement the transport swap unlocked. It is also the only thing that
       would catch a page restored from the back/forward cache holding a stream
       that is dead but silent, so step 8 should arm it on `pageshow`.
+      Done in step 8a, which reopens a silent stream rather than only warning;
+      a page restored from the back/forward cache reloads instead of arming it.
 - [ ] Per-user command sequencing/idempotency to guard against HTTP POST
       reordering (see `docs/known-issues.md`). Stays here deliberately: under a
       snapshot protocol a reordering is visible rather than silently divergent,

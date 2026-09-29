@@ -99,6 +99,7 @@ export const test = base.extend({
         close: () => context.close(),
         cut: async () => stub.cut(await token()),
         restore: async () => stub.restore(await token()),
+        freeze: async () => stub.freeze(await token()),
         newTab
       }
       await page.goto(`/${room}`)

@@ -38,7 +38,7 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
     res.on('close', () => state.live.delete(entry))
     // Read once per request: a toggle affects later requests, never one already in flight.
     if (state.buffering) forwardBuffered(req, res, target, deadlineMs)
-    else forwardStreaming(req, res, target)
+    else forwardStreaming(req, res, target, entry)
   })
 
   server.listen(0, '127.0.0.1')
@@ -62,6 +62,14 @@ export async function createStub({ upstream, deadlineMs = DEADLINE_MS, buffering
       }
       state.cuts.add(match)
       for (const entry of state.live) if (entry.cookie.includes(match)) entry.res.destroy()
+    },
+    // Stands in for a link that died silently: the live streams carrying this cookie value stay
+    // open and get nothing more, while new requests pass as usual.
+    freeze(match) {
+      if (!match) {
+        throw new Error(`freeze() expected a non-empty cookie match, got ${JSON.stringify(match)}`)
+      }
+      for (const entry of state.live) if (entry.cookie.includes(match)) entry.freeze?.()
     },
     restore(match) {
       if (match === undefined) state.cuts.clear()
@@ -110,13 +118,14 @@ function isCut(state, cookie) {
   return false
 }
 
-function forwardStreaming(req, res, target) {
+function forwardStreaming(req, res, target, entry) {
   const up = openUpstream(req, target)
   up.on('response', upRes => {
     res.writeHead(upRes.statusCode, relayHeaders(upRes.headers))
     // pipe does not forward source errors, and fail502 cannot help once headers are out.
     upRes.on('error', () => res.destroy())
     upRes.pipe(res)
+    entry.freeze = () => upRes.unpipe(res)
   })
   up.on('error', () => fail502(res))
   res.on('close', () => up.destroy())
