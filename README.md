@@ -255,12 +255,15 @@ hash and the revalidated page names the new files after a deploy.
 
 **A restart ends every room, and a page that was open recovers on its own.**
 Rooms and the sessions that reach them live in the process's memory, so a
-deploy takes them with it. A page whose stream falls silent checks the app on
-the next tick, and once it answers again the page reloads itself: one that had
-reached the room comes back to "Reconnected. Please check your vote.", and one
-that never reached it shows "Your session has ended. Please reload the page to
-rejoin." instead, so a refusal every load repeats cannot loop. This is also why
-the wire format carries no version field: no session outlives the server that
-served it. A page open across a wire change meets that same refusal, since an
-unparsable snapshot closes the stream just as a 401 does.
+deploy takes them with it. A stream the new process refuses closes for
+good, and only a closed stream sends a page to check the app on the next
+tick; one that merely goes silent is reopened instead. Once the app
+answers, a page that had reached the room reloads itself and comes back
+to "Reconnected. Please check your vote.", while one that never reached
+it stays put and shows "Your session has ended. Please reload the page
+to rejoin." instead, so a refusal every load repeats cannot loop. This
+is also why the wire format carries no version field: no session
+outlives the server that served it. A page open across a wire change
+takes the same reload path, since an unparsable snapshot closes its
+stream just as a refusal does.
 
