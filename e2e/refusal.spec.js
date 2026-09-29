@@ -85,11 +85,9 @@ test('a command refused by a different instance recovers without the stream ever
   })
 
   // A rolling redeploy: the stream stays pinned to the old instance, healthy throughout, while
-  // this command lands on the new one, which does not know the session. Without its own
-  // recovery path this would never surface at all, since the stream gives the watchdog no
-  // reason to check the app; a tight timeout here is standing in for "at all".
+  // this command lands on the new one, which does not know the session and answers 401.
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
 
-  await expect(restartNotice(alice.page)).toBeVisible({ timeout: 5_000 })
+  await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
 })

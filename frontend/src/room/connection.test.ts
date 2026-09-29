@@ -376,13 +376,24 @@ describe('createConnection', () => {
       expect(streams).toHaveLength(1)
     })
 
-    it('shares the one-fetch-at-a-time rule with the watchdog', async () => {
+    it('runs at most one fetch under two back-to-back refusals', async () => {
       fetchPage.mockReturnValueOnce(answer(200))
       const c = connect()
       c.open('r')
       streams[0].open()
       streams[0].message(frame)
       c.refused()
+      c.refused()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not start a second fetch when the watchdog already has one in flight', async () => {
+      fetchPage.mockImplementation(() => new Promise(() => {}))
+      const c = connect()
+      refused(c, true)
+      await vi.advanceTimersByTimeAsync(TICK_MS)
+      expect(fetchPage).toHaveBeenCalledTimes(1)
       c.refused()
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchPage).toHaveBeenCalledTimes(1)

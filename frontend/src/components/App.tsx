@@ -120,10 +120,10 @@ export function App({ connection }: { connection: Connection }) {
       ) : (
         <Room
           roomId={pathRoom}
-          connection={connection}
           snapshot={room.snapshot}
           onCopied={onCopied}
           onLeave={doLeave}
+          onRefused={connection.refused}
         />
       )}
     </>

@@ -221,8 +221,8 @@ export function createConnection(deps: ConnectionDeps): Connection {
       deps.location.assign('/')
     },
 
-    // The stream can stay healthy on a draining instance while this lands on a newer one, so
-    // waiting on the watchdog would wait forever; a fetch already in flight is answer enough.
+    // Reuses check(); one already running (by either caller) answers for this too. If it fails,
+    // only a fresh snapshot or another refusal retries, since this stream may never go stale.
     refused() {
       if (stopped || roomId === null) return
       update({ lost: true })

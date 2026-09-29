@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import * as api from '../protocol/api'
 import type { RoomSnapshot } from '../protocol/snapshot'
-import type { Connection } from '../room/connection'
 import { applySnapshot, type View } from '../room/view'
 import { Controls } from './Controls'
 import { Deck } from './Deck'
@@ -12,15 +11,15 @@ import { RoomHeader } from './RoomHeader'
 
 type Props = {
   roomId: string
-  connection: Connection
   snapshot: RoomSnapshot
   onCopied: () => void
   onLeave: () => void
+  onRefused: () => void
 }
 
 const log = (reason: unknown) => console.log(reason)
 
-export function Room({ roomId, connection, snapshot, onCopied, onLeave }: Props) {
+export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) {
   const [issueFocused, setIssueFocused] = useState(false)
   const [seen, setSeen] = useState(snapshot)
   const [view, setView] = useState<View>(() =>
@@ -35,7 +34,7 @@ export function Room({ roomId, connection, snapshot, onCopied, onLeave }: Props)
   // A 401 means this instance does not know the session; anything else is just logged.
   const run = (promise: Promise<void>) =>
     promise.catch(reason => {
-      if (reason instanceof api.ApiError && reason.status === 401) connection.refused()
+      if (reason instanceof api.ApiError && reason.status === 401) onRefused()
       else log(reason)
     })
 
