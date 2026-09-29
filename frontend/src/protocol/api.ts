@@ -20,7 +20,7 @@ export async function join(roomId: string, name: string): Promise<JoinOutcome> {
     params: { path: { roomId } },
     body: { name }
   })
-  // Only a typed or remembered id reaches /join unchecked; joinAction decides what follows.
+  // The page route has already judged the path, so a 404 here is a room refused after load.
   if (response.status === 404) return 'not-a-room'
   if (!response.ok) throw refused('join', response)
   return 'joined'

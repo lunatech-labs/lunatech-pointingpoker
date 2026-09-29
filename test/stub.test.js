@@ -283,6 +283,41 @@ test('cut refuses an empty match rather than cutting every connection', async t 
   assert.throws(() => stub.cut(''), /non-empty cookie match/)
 })
 
+test('a freeze starves the matching live streams and lets new requests through', async t => {
+  const up = await upstream((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/event-stream' })
+    res.write('data: first\n\n')
+    setTimeout(() => res.write('data: second\n\n'), 300)
+  })
+  t.after(() => up.close())
+  const stub = await createStub({ upstream: up.url })
+  t.after(() => stub.close())
+
+  const bob = get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=bob' } })
+  const alice = get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=alice' } })
+  t.after(() => bob.req.destroy())
+  t.after(() => alice.req.destroy())
+  await opened(bob)
+  await opened(alice)
+
+  stub.freeze('bob')
+  const again = get(`${stub.baseUrl}/rooms/r/events`, { headers: { cookie: 'session=bob' } })
+  t.after(() => again.req.destroy())
+  await new Promise(resolve => setTimeout(resolve, 600))
+
+  assert.equal(Buffer.concat(bob.result.chunks).toString(), 'data: first\n\n')
+  assert.equal(bob.result.error, null, 'the frozen socket stays open')
+  assert.equal(bob.result.endedAt, null)
+  assert.match(Buffer.concat(alice.result.chunks).toString(), /second/)
+  assert.match(Buffer.concat(again.result.chunks).toString(), /second/)
+})
+
+test('freeze refuses an empty match rather than freezing every connection', async t => {
+  const stub = await createStub({ upstream: 'http://127.0.0.1:9' })
+  t.after(() => stub.close())
+  assert.throws(() => stub.freeze(''), /non-empty cookie match/)
+})
+
 test('restore lets a cut cookie through again', async t => {
   const up = await upstream((req, res) => {
     res.writeHead(200, { 'content-type': 'text/plain' })

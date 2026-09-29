@@ -1066,19 +1066,21 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         Map(user.connectionId -> user.ref, replacementId -> replacement.ref)
     }
 
-    "replace a connection's ref when the same id reconnects, and feed only the new one" in {
+    "end the replaced stream when the same id reconnects, and feed only the new one" in {
       val (user, userProbe) = createUser(UUID.randomUUID(), "user1", false, "")
       val replacementProbe  = TestProbe()(using testKit.system.classicSystem)
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)      = createRoom(aSlug(), withUsers(user))
 
-      // Same id, new ref: an EventSource retry reuses the id its page was given.
+      // Same id, new ref: a browser retry, or a reopen whose old request landed second.
       roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, replacementProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus].data
 
       data.connections(user.id) mustBe Map(user.connectionId -> replacementProbe.ref)
       expectSnapshot(replacementProbe)
+      // Left open, it would keep its heartbeats and get no snapshot: a silent freeze.
+      userProbe.expectMsg(Room.StreamCompleted)
       userProbe.expectNoMessage(300.millis)
     }
 

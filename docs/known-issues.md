@@ -36,6 +36,9 @@ roadmap item instead of leaving it here as stale history.
   outside the slug vocabulary is refused with a `404` and, where unambiguous, a
   suggested correction, so the entry narrows to a valid slug that is not live.
   The design's "Slug allocation" section owns the rules.
+  From step 8a the lobby's Join goes to the typed name's path, so a mistyped
+  name that is still a valid slug opens a new empty room there rather than an
+  error.
 
 ### HTTP command ordering is not guaranteed between a client and the server
 
@@ -280,6 +283,10 @@ roadmap item instead of leaving it here as stale history.
   another tab loading at the same moment, and the server cannot tell two
   cookieless joins apart from two different people arriving together, so neither
   side has a signal to act on.
+  Step 8a's reload on a refusal makes this race routine at every restart:
+  every tab on a room reloads within a tick of the app answering, and both
+  POST `/join` with a cookie the new process does not know, so each mints a
+  session.
 
 ### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
 
@@ -910,42 +917,6 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open. A length guard in `nearest` (skip a word once it
   is longer than the longest pool word plus one) removes the cost with no
   behaviour change.
-
-### A page left open across a deploy misreads a changed snapshot
-
-- **Where:** `frontend/src/room/connection.ts` (`onmessage`), and
-  `frontend/src/protocol/snapshot.ts`'s lenient `snapshotSchema`.
-- **Issue:** A deploy ends every session but not every page. A tab open across
-  it, in the lobby or restored from the back/forward cache, can join the new
-  server and read its frames with the old code. Step 8's estimation union did
-  this to the Vue page, which rendered the tags as text until reloaded. From
-  step 8 on, the lenient schema drops an unknown field, but a changed one, or a
-  new union tag, fails the parse: the connection drops every frame with only a
-  `console.error`, and the page stays in the lobby after a successful join,
-  with no message.
-- **Resolution:** Accepted for step 8, whose rollout reloads open tabs by
-  hand. It stays open for later wire changes: telling the user to reload when a
-  frame fails to parse is the natural fix, and it fits step 8a's connection
-  notices.
-
-### A double open can put the page back into a room the user left
-
-- **Where:** `frontend/src/room/connection.ts` (`open`, `leave`), and
-  `RoomData.connect` and the `Depart` handler in
-  `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`.
-- **Issue:** `open` does not close the previous stream, so a Join clicked while
-  the startup rejoin is in flight, or a double-clicked Join, leaves two
-  `EventSource`s on one connection id. The server holds one ref per connection
-  id and `connect` replaces it without ending the old stream, so the orphan
-  survives Leave. Whenever it reconnects, after a network blip or because the
-  server held it and `Depart` ended it, its `Join` makes the user a member again
-  for everyone, since the session survives `Depart`. The lobby first shows
-  "Connection to the room was lost", then the next frame puts the page back into
-  the room, and with `roomId` cleared, `pagehide` sends no beacon for it.
-- **Resolution:** The re-membership predates step 8: the Vue page's Leave also
-  closed only its latest stream, and its `entering` guard only kept the page
-  from showing the room again. Accepted for step 8. Step 8a's close-before-open
-  closes both halves; delete this entry there.
 
 ## Traceability note
 

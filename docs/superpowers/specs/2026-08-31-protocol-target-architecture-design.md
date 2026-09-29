@@ -3153,7 +3153,14 @@ one `estimation` union now, which closes section 2's deferral. The e2e suite
 passed with no selector change. A later fix stops a not-a-room Join retargeting to
 the path it is on: in production that is only the empty id on `/`, which now shows
 the join error rather than reloading the lobby. The React components commit, the
-frontend spec's commit 2, closed the CDN defect in the known-defect table. Steps 8a to 8c extend this paragraph.
+frontend spec's commit 2, closed the CDN defect in the known-defect table.
+Step 8a, the connection, in five commits: `Room` ends the stream a `Join`
+replaces; the path decides the page, so `/` is always the lobby and Leave keeps
+the name; the first join and the first `open` on a page load win, with
+StrictMode on; a watchdog reopens a stream silent for 35 s; and a closed stream
+gets a liveness fetch, then reloads to `?restarted=1`, or stops at the
+ended-session message on a page that never reached the room. Steps 8b and 8c
+extend this paragraph.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the

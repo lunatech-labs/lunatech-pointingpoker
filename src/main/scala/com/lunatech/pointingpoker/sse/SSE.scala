@@ -23,8 +23,8 @@ object SSE:
 
   /** Interval between SSE heartbeats. Must stay comfortably below Pekko HTTP's default
     * `pekko.http.server.idle-timeout` (60 seconds), otherwise an idle stream is killed by the
-    * server and read as the participant leaving the room. Pekko renders `ServerSentEvent.heartbeat`
-    * as an event with an empty `data` payload, which the frontend ignores.
+    * server and read as the participant leaving the room. It arrives as an empty `data` event,
+    * which the page counts as heard: `STALE_MS` in `connection.ts` is twice this plus a margin.
     */
   val heartbeatInterval = 15.seconds
 

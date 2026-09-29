@@ -70,6 +70,8 @@ test('a room remembered from before the cutover reopens under its derived name',
     }
   }, crypto.randomUUID())
   await page.goto(`${origin}/`)
+  // The lobby offers it rather than joining it: only a room's own path joins.
+  await page.getByRole('link', { name: 'Rejoin your last room as Alice' }).click()
   await expect(page).toHaveURL(ROOM_URL)
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
 })

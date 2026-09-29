@@ -6,9 +6,14 @@ type Props = {
   tab: LobbyTab
   onTab: (tab: LobbyTab) => void
   roomId: string
+  // On a room's own path, where the room is the path's and only the name is asked.
+  fixedRoom: boolean
   onRoomId: (roomId: string) => void
   name: string
   onName: (name: string) => void
+  rejoin: { href: string; label: string } | null
+  // A session that has ended: further clicks would be ignored, so the form is inert instead.
+  disabled: boolean
   onCreate: () => void
   onJoin: () => void
 }
@@ -18,7 +23,19 @@ const onEnter = (action: () => void) => (event: KeyboardEvent) => {
 }
 
 export function Lobby(props: Props) {
-  const { tab, onTab, roomId, onRoomId, name, onName, onCreate, onJoin } = props
+  const {
+    tab,
+    onTab,
+    roomId,
+    fixedRoom,
+    onRoomId,
+    name,
+    onName,
+    rejoin,
+    disabled,
+    onCreate,
+    onJoin
+  } = props
   const select = (next: LobbyTab) => (event: MouseEvent) => {
     event.preventDefault()
     onTab(next)
@@ -32,6 +49,7 @@ export function Lobby(props: Props) {
           type="text"
           className="form-control"
           value={name}
+          disabled={disabled}
           onChange={e => onName(e.target.value)}
           onKeyUp={onEnter(action)}
         />
@@ -44,7 +62,7 @@ export function Lobby(props: Props) {
         <div className="card text-center shadow-sm m-1">
           <div className="card-header">
             Pointing Poker
-            <ul className="nav nav-tabs card-header-tabs">
+            <ul className="nav nav-tabs card-header-tabs" hidden={fixedRoom}>
               <li className="nav-item">
                 <a className={tabClass('create')} href="#" onClick={select('create')}>
                   Create
@@ -57,6 +75,11 @@ export function Lobby(props: Props) {
               </li>
             </ul>
           </div>
+          {rejoin && (
+            <div className="card-body pb-0">
+              <a href={rejoin.href}>{rejoin.label}</a>
+            </div>
+          )}
           {tab === 'create' && (
             <div className="card-body">
               <h5 className="card-title">Create Room</h5>
@@ -83,6 +106,7 @@ export function Lobby(props: Props) {
                     className="form-control"
                     id="join-roomId"
                     value={roomId}
+                    readOnly={fixedRoom}
                     onChange={e => onRoomId(e.target.value)}
                   />
                 </div>
@@ -90,7 +114,12 @@ export function Lobby(props: Props) {
               {nameRow(onJoin)}
               <div className="row">
                 <div className="col-sm-3 offset-sm-9">
-                  <button type="button" className="btn btn-primary" onClick={onJoin}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={disabled}
+                    onClick={onJoin}
+                  >
                     Join
                   </button>
                 </div>

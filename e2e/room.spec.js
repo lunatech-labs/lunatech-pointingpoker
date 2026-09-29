@@ -15,7 +15,8 @@ import {
   votedMark,
   hiddenMark,
   vote,
-  ownEstimation
+  ownEstimation,
+  restartNotice
 } from './fixtures.js'
 
 test('two browsers exchange votes', async ({ join }) => {
@@ -300,8 +301,8 @@ test('a straggler reloading leaves the votes hidden', async ({ join }) => {
   // keeping the round shut until she returns.
   await stragglerDepartsWithVotesHidden(
     join,
-    // created() rejoins from localStorage, and /join resolves the cookie rather than minting,
-    // so the reload returns the same Carol instead of a second one.
+    // The room's path joins with the remembered name, and /join resolves the cookie rather than
+    // minting, so the reload returns the same Carol instead of a second one.
     async (carol, alice) => {
       await carol.page.reload()
       // Her own table is empty until the snapshot lands, so this is what proves the rejoin
@@ -465,6 +466,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
 }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
+  // A refused stream would also come back, through the reload, so this mark is what fails it.
+  await bob.page.evaluate(() => (window.sameLoad = true))
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
@@ -480,8 +483,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await expect(participantRow(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
 
   await bob.restore()
-  // Any alert, not just the transient one: a consumed session ends here on the terminal
-  // "session has ended" banner, which is also an alert and would pass a filtered assertion.
+  // Any alert, not just the banner: a page that stopped at the "session has ended" message
+  // shows an alert too, and would pass a filtered assertion.
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
   // Bob is back and not duplicated. Identity reuse is not observable here, since his row
@@ -492,6 +495,34 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
   await vote(alice.page, '5')
   await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+  expect(await bob.page.evaluate(() => window.sameLoad)).toBe(true)
+  await expect(restartNotice(bob.page)).toHaveCount(0)
+})
+
+test('a stream frozen without an error is noticed and reopened on its own', async ({ join }) => {
+  // The heartbeat is fixed at 15 s, so noticing takes 35 to 40 s of silence.
+  test.setTimeout(90_000)
+  const alice = await join('Alice')
+  // Recorded as it happens, since the banner lasts only until the reopened stream's onopen.
+  const bob = await join('Bob', {
+    initScript: () =>
+      new MutationObserver(() => {
+        const alert = document.querySelector('[role="alert"]')
+        if (alert?.textContent?.includes('was lost')) window.bannerSeen = true
+      }).observe(document, { childList: true, subtree: true, characterData: true })
+  })
+
+  await bob.freeze()
+  await vote(alice.page, '5')
+  await expect(votedMark(participantRow(alice.page, 'Alice'))).toHaveCount(1)
+  await expect
+    .poll(() => bob.page.evaluate(() => window.bannerSeen === true), { timeout: 45_000 })
+    .toBe(true)
+
+  // The reopened stream's first snapshot, then a frame sent after it.
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
 })
 
 test('the issue box resyncs once the editor loses focus', async ({ join }) => {

@@ -13,11 +13,20 @@ const guard = async (context, blocked) => {
 }
 
 export const test = base.extend({
+  // restart() keeps the port, so the worker's stub goes on pointing at the new process.
   app: [
     async ({}, use) => {
-      const app = await startApp()
-      await use(app)
-      await app.stop()
+      let current = await startApp()
+      await use({
+        baseUrl: current.baseUrl,
+        output: () => current.output(),
+        restart: async (whileDown = async () => {}) => {
+          await current.stop()
+          await whileDown()
+          current = await startApp({ port: current.port })
+        }
+      })
+      await current.stop()
     },
     { scope: 'worker' }
   ],
@@ -86,7 +95,7 @@ export const test = base.extend({
         return cookie.value
       }
       // A second page in the same context shares the room cookie, which is what makes two tabs
-      // one participant. localStorage already holds the name and room, so created() rejoins.
+      // one participant. localStorage already holds the name, so the room's path joins at once.
       const newTab = async () => {
         const tab = await context.newPage()
         await tab.goto(`/${room}`)
@@ -99,6 +108,7 @@ export const test = base.extend({
         close: () => context.close(),
         cut: async () => stub.cut(await token()),
         restore: async () => stub.restore(await token()),
+        freeze: async () => stub.freeze(await token()),
         newTab
       }
       await page.goto(`/${room}`)
@@ -153,9 +163,9 @@ export const hiddenMark = row => row.locator('td').nth(2).locator('svg, i')
 // signal a reveal landed in a room where nobody has voted and the value is empty.
 export const revealedCell = row => row.locator('td').nth(2).locator('div')
 // Any alert, for asserting a reconnect cleared the banner: filtering by text would report
-// hidden when it merely switched to the terminal "session has ended" message.
+// hidden when it merely switched to the "session has ended" message a refused page shows.
 export const connectionAlert = page => page.getByRole('alert')
-// The transient banner specifically, so a terminally dead session is not read as a blip.
+// The banner specifically, so a page that stopped at the ended-session message is not a blip.
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
 // Two renderings of one set, so a revealed round shows the same estimations in both. Compared as
@@ -190,5 +200,7 @@ export const ownEstimation = page => page.locator('.estimation-card .estimation-
 
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
+// Shown after the reload on a refusal; a status for the same reason as movedBanner.
+export const restartNotice = page => page.getByRole('status').filter({ hasText: 'Reconnected' })
 
 export { expect }
