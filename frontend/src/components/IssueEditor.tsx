@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Check, Pen, X } from 'lucide-react'
 import { useIssueEditor } from './useIssueEditor'
 
@@ -16,6 +16,10 @@ export function IssueEditor({ issue, onSave }: Props) {
     // The same input turns editable, so focusing it now lets Enter and Escape work at once.
     box.current?.focus()
   }
+  // The check was disabled while saving, which dropped focus; take it back so Enter retries.
+  useEffect(() => {
+    if (editor.failed) box.current?.focus()
+  }, [editor.failed])
   const takeTheirs = () => {
     editor.takeTheirs()
     // The link-button unmounts with the notice, which would drop focus to the page.

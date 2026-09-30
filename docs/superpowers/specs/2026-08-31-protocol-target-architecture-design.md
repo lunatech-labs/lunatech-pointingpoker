@@ -3160,12 +3160,13 @@ the name; the first join and the first `open` on a page load win, with
 StrictMode on; a watchdog reopens a stream silent for 35 s; and a closed stream
 gets a liveness fetch, then reloads to `?restarted=1`, or stops at the
 ended-session message on a page that never reached the room. Step 8b, the issue
-editor, in four commits: `api.ts` aborts a request unanswered after 10 s; the
+editor, in five commits: `api.ts` aborts a request unanswered after 10 s; the
 editor's matrix becomes a pure state machine; edit mode, not focus, guards
 the draft, with a cancel, Enter and Escape, a "Changed by someone else" notice
 with "Use theirs", and the saved text shown until a frame moves the room's
-issue; and the Enter that confirms an input method's composition, Safari's
-included, does not save. Step 8c extends this paragraph.
+issue; the Enter that confirms an input method's composition, Safari's
+included, does not save; and a failed save gives the box its focus back. Step
+8c extends this paragraph.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the

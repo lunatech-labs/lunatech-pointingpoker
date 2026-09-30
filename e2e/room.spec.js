@@ -696,8 +696,10 @@ test('a save the network drops keeps the draft and says so', async ({ join, room
   await expect(issueBox(alice.page)).toHaveValue('mine')
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 
+  // The disabled check dropped focus, so the box takes it back and Enter retries.
+  await expect(issueBox(alice.page)).toBeFocused()
   await alice.page.unroute(editIssue)
-  await issueCheck(alice.page).click()
+  await alice.page.keyboard.press('Enter')
   await expect(issueBox(bob.page)).toHaveValue('mine')
   await expect(alice.page.getByText('Could not save the issue')).toHaveCount(0)
 })
