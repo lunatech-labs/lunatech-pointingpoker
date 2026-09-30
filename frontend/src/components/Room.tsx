@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import * as api from '../protocol/api'
 import type { RoomSnapshot } from '../protocol/snapshot'
-import { applySnapshot, type View } from '../room/view'
+import { applySnapshot } from '../room/view'
 import { Controls } from './Controls'
 import { Deck } from './Deck'
 import { IssueEditor } from './IssueEditor'
@@ -20,19 +19,16 @@ type Props = {
 const log = (reason: unknown) => console.log(reason)
 
 export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) {
-  const [issueFocused, setIssueFocused] = useState(false)
-  const [seen, setSeen] = useState(snapshot)
-  const [view, setView] = useState<View>(() =>
-    applySnapshot({ issueFocused: false, currentIssue: '' }, snapshot)
-  )
-  // A new snapshot folds into the view during render, so no frame renders a stale view.
-  if (snapshot !== seen) {
-    setSeen(snapshot)
-    setView(applySnapshot({ issueFocused, currentIssue: view.currentIssue }, snapshot))
-  }
+  const view = applySnapshot(snapshot)
 
-  const run = (promise: Promise<void>) =>
-    promise.catch(reason => (api.isSessionRefusal(reason) ? onRefused() : log(reason)))
+  const report = (reason: unknown) => (api.isSessionRefusal(reason) ? onRefused() : log(reason))
+  const run = (promise: Promise<void>) => promise.catch(report)
+  // The editor shows its own failure, so the rejection goes back to it once reported.
+  const saveIssue = (issue: string) =>
+    api.editIssue(roomId, issue).catch((reason: unknown) => {
+      report(reason)
+      throw reason
+    })
 
   const vote = (estimation: string) => {
     // The server refuses it anyway; this only spares the doomed POST.
@@ -46,12 +42,7 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
         <div className="card text-center shadow-sm m-1">
           <RoomHeader roomId={roomId} onCopied={onCopied} onLeave={onLeave} />
           <div className="card-body">
-            <IssueEditor
-              issue={view.currentIssue}
-              onIssue={currentIssue => setView(v => ({ ...v, currentIssue }))}
-              onFocusChange={setIssueFocused}
-              onCommit={() => run(api.editIssue(roomId, view.currentIssue))}
-            />
+            <IssueEditor issue={view.currentIssue} onSave={saveIssue} />
             <Deck view={view} onVote={vote} />
             <Controls
               revealed={view.votesRevealed}

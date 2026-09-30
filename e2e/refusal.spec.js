@@ -2,6 +2,9 @@ import {
   test,
   expect,
   connectionLost,
+  issueBox,
+  issueCheck,
+  issuePencil,
   nameInput,
   participantRow,
   restartNotice
@@ -97,4 +100,19 @@ test('a command refused by a different instance recovers without the stream ever
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
   // Only the reloaded page's own stream; a reopen before the reload would come first.
   await expect.poll(() => requests).toEqual(['page', 'stream'])
+})
+
+test('a save refused by a different instance recovers like any command', async ({ join, room }) => {
+  const alice = await join('Alice')
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), route =>
+    route.fulfill({ status: 401 })
+  )
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueCheck(alice.page).click()
+
+  // The reload drops the draft; the failure line before it can last too briefly to assert.
+  await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
+  await expect(issueBox(alice.page)).toHaveValue('')
 })

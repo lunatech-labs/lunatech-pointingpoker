@@ -1,7 +1,7 @@
 # Frontend Rewrite (Steps 8 to 8c)
 
 Date: 2026-09-24
-Status: Steps 8 and 8a landed; steps 8b and 8c proposed
+Status: Steps 8, 8a and 8b landed; step 8c proposed
 Parent: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`, "Step 8. Frontend rewrite."
 
 ## Purpose
@@ -183,7 +183,8 @@ detaches the old stream first; the liveness fetch and the reload on a refusal,
 with an invalid snapshot taking the refusal path and the restart notice.
 
 Step 8b: the issue editor's cancel and conflict notice, with `api.ts`'s 10 s
-bound, whose one visible effect is the editor's.
+bound, whose visible effect is a hung request failing after 10 s, the editor's
+included.
 
 Existing e2e cases steps 8a and 8b change, each in the commit whose behaviour
 it pinned:
@@ -205,7 +206,11 @@ it pinned:
   activity": same setup, the final assertion now expects the draft kept. The
   comments in "an edit committed with the check button reaches the other
   browser" and "a commit that never blurred the box still lets the room resync
-  it" stop arguing from the focus guard the commit removes.
+  it" stop arguing from the focus guard the commit removes. The pencil, check
+  and cancel get the accessible names "Edit issue", "Save issue" and "Cancel
+  editing", and `e2e/fixtures.js`'s `issueButton`, whose class selector would
+  match both the check and the cancel, gives way to role-and-name locators at
+  its twelve call sites.
 
 The pass condition for step 8 is the existing e2e suite green with at most
 listed selector changes to the cases, beside the harness changes commits 1 and
@@ -214,6 +219,7 @@ commit before it.
 
 Step 8c: component library and look, light and dark theme, responsive layout,
 alphabetical participant order, the revealed-round live region, the
+editor's live regions, the
 frozen-deck tooltip step 3a declined, restyling the editor, placing the
 participants list above the results, and a "Not Alice?" way to join under
 another name than the remembered one. By default it restyles the earlier
@@ -238,7 +244,7 @@ only downward:
 components (React)     App, Lobby, RoomHeader, Alerts, IssueEditor,
         |              Deck, Results, Participants, Controls
         v
-room state (plain TS)  connection store, view derivation
+room state (plain TS)  connection store, view derivation, issue editor machine
         |
         v
 protocol (plain TS)    zod snapshot schema, generated API types, typed client
@@ -264,8 +270,9 @@ leave beacon and the `pagehide` and `pageshow` listeners. It exposes a store of
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
 something changes, since a fresh object per call makes React re-render forever.
 `view.ts` is today's `applySnapshot`: the tally, the reader's own estimation and
-whether it is confirmed. The editor commit removes its `issueFocused` input,
-leaving a pure function of the snapshot.
+whether it is confirmed. Step 8b removes its `issueFocused` input, leaving a
+pure function of the snapshot. `issueEditor.ts` is the editor's matrix as a
+pure `step`, with `shows` deriving what renders.
 
 **Components** (`frontend/src/components/`) follow today's page regions and
 read room state through one hook, `useRoom`. Purely local UI state (the lobby
@@ -621,16 +628,81 @@ because, without a cancel, a user who opened the editor and clicked away would
 silently stop receiving issue updates. A cancel and a conflict notice remove
 that objection, so step 8b guards the whole of edit mode.
 
-`useIssueEditor` holds the logic and `IssueEditor` the markup; step 8c
-rewrites only the markup. Below, the room's issue is the store's, except once
-a save succeeds: the saved text, until the store's issue differs from what it
-held when saving began.
+`issueEditor.ts` holds the logic, `useIssueEditor` holds it in React and
+`IssueEditor` the markup; step 8c rewrites only the markup. Below,
+**the room's issue** is the store's, with one
+exception: from a successful save until the store's issue differs from what it
+held when saving began, it is the saved text. "Why the saved text waits for a
+different issue" says why.
 
-| State | Shows | Transitions |
-| --- | --- | --- |
-| viewing | The room's issue, read-only, with a pencil | Pencil: to editing, with draft and starting point both set to the room's issue |
-| editing | The draft, editable. While the room's issue differs from both the starting point and the draft, also "Changed by someone else to: X" and "Use theirs" | Enter or check: to saving. Escape or cancel: to viewing, draft dropped. "Use theirs" sets draft and starting point to X; saving overwrites X knowingly |
-| saving | The draft, read-only | POST fails: to editing, draft kept, "Could not save the issue" until the next Enter, check, Escape or cancel. POST succeeds: to viewing |
+| State | Shows |
+| --- | --- |
+| viewing | The room's issue, read-only, with a pencil |
+| editing | The draft, editable, with a check and a cancel. While the room's issue differs from both the starting point and the draft, also "Changed by someone else to: X" and "Use theirs". After a failed save, "Could not save the issue" until it leaves editing |
+| saving | The draft, read-only, with the check and the cancel disabled |
+
+The look stays today's, from Bootstrap 4 classes the page already uses and no
+new CSS. Editing, with both lines showing:
+
+```
+[ PROJ-41 checkout flow                     ][ ✓ ][ ✕ ]
+Changed by someone else to: "PROJ-42 login"  Use theirs
+Could not save the issue
+```
+
+The cancel is a second `btn btn-outline-secondary` beside the check, with
+Lucide's `X` at 20px, and the three buttons get their names from `aria-label`.
+The notice is `<small className="form-text text-muted">`, X in quotes so an
+empty issue reads `""`, with "Use theirs" a `btn btn-link btn-sm p-0`; the
+failure is `<small className="form-text text-danger">`. They push the page down
+while shown, with no reserved height, since only edit mode shows them. Neither
+carries a role: `connectionAlert` is an unfiltered `getByRole('alert')`, and
+the live regions wait for step 8c as the reveal's does.
+
+Every event against every state:
+
+| Event | viewing | editing | saving |
+| --- | --- | --- | --- |
+| Pencil | To editing, draft and starting point both set to the room's issue | Cannot happen | Cannot happen |
+| Typing | Cannot happen | Updates the draft | Cannot happen, read-only |
+| Enter or check | Ignored | To saving | Ignored |
+| Escape or cancel | Ignored | To viewing, draft dropped | Ignored: an answer comes within `api.ts`'s 10 s, and an abort cannot take back a POST already applied |
+| "Use theirs" | Cannot happen | Draft and starting point set to X; saving then overwrites X knowingly | Cannot happen |
+| Snapshot, issue unchanged | Nothing | Nothing, draft kept | Nothing |
+| Snapshot, issue changed | Shows the room's issue | The notice, per the table above | Nothing shown; read from the store by the next state |
+| POST succeeds | Cannot happen | Cannot happen | To viewing |
+| POST fails, a 10 s abort included | Cannot happen | Cannot happen | To editing, draft kept, "Could not save the issue" |
+| POST answers 401 | Cannot happen | Cannot happen | As a failure, and `Room` still calls `onRefused` |
+| Restart reload, back/forward restore, Leave, tab closed | The page ends | The page ends, draft dropped | The page ends, draft dropped |
+
+`Room` stays mounted from the first snapshot on, so the banner and a reopen
+leave the editor's state alone and a reopen is only another snapshot; `fatal`
+only reaches a page that never mounted it.
+
+Accepted races:
+
+- **A 10 s abort after the room applied the save.** The page is back in
+  editing with the draft; the frame then carries the draft, so no notice shows,
+  and saving again changes nothing.
+- **A 401 while the app runs.** "Could not save the issue" shows until the
+  liveness fetch's reload replaces the page.
+- **A 401 whose body stalls for 10 s.** The bound covers the body, so the save
+  rejects as an abort and `onRefused` never sees the 401; "Could not save the
+  issue" shows until the dead stream's watchdog and liveness fetch take over.
+- **A 401 whose liveness fetch fails**, the case `docs/known-issues.md`'s "A
+  command's 401 can leave the connection banner up until the next snapshot"
+  records. The draft stays, under the banner until the next snapshot clears
+  it, and the next save's 401 runs the liveness fetch again.
+- **A draft lost to a reload.** Beside the user's own navigation, every refusal
+  reload drops it: a deploy, which waits for empty rooms, a crash, a transient
+  refusal such as a proxy error, and an idle stop, which needs the room without
+  a live member for `stop-after-idle` (2 h) and so returns to an empty room.
+- **An earlier edit's late frame.** An edit applied just before this one, whose
+  frame arrives after the response, shows briefly before this one replaces it.
+- **A page whose own frame never arrives**, lost with its stream, keeps showing
+  its text if someone then restores exactly the previous issue, until the issue
+  next changes. So does a page whose own frame and such a restore both arrive
+  before the response, since the store is back where saving began.
 
 **Why the saved text waits for a different issue.** `Room` replies `Applied` and
 publishes while handling the same message, so a completed POST means the room
@@ -639,11 +711,8 @@ after the HTTP response. Returning to snapshots at once would flash the old
 text. A frame published before the edit carries the issue as it was when saving
 began, so ignoring that value and nothing else hides every stale frame and shows
 the edit, or any later one, as soon as it arrives. The condition is read from
-the store, so a frame that beat the response ends the wait at once. Two cases
-are accepted. An edit applied just before this one, whose frame arrives
-after the response, shows briefly before this one replaces it. And a page whose
-own frame never arrives, lost with its stream, keeps showing its text if
-someone then restores exactly the previous issue, until the issue next changes.
+the store, so a frame that beat the response ends the wait at once. The last
+two accepted races above are this rule's.
 
 This also removes both narrow windows the parent design recorded for the focus
 guard, the blur landing before the commit click and the revert during the save
@@ -726,11 +795,11 @@ Each case below lands with the step whose behaviour it pins.
   stream fresh past 35 s, a reopen not repeated before another 35 s of
   silence, an invalid snapshot taking the refusal path with the banner on, no event, Leave included, handled
   once stopped, the banner hidden while `fatal`, and the reach-the-room rule; `view.ts`, including
-  name order ignoring case and accents with the id tie-break; every
-  `useIssueEditor` transition, including the saved text ignoring a stale frame,
+  name order ignoring case and accents with the id tie-break; for
+  `issueEditor.ts`, every cell of the editor's matrix that is not "Cannot
+  happen" and its accepted races, plus the saved text ignoring a stale frame,
   ending on a frame that beat the POST response and on someone else's later
-  edit, the pencil opening the saved text, and no notice after a failed save
-  the room applied; `api.ts` aborting a request after 10 s; the strict
+  edit, and the pencil opening the saved text; `api.ts` aborting a request after 10 s; the strict
   contract test. They do not overlap `node --test`'s `test/` folder, and
   CI runs both.
 - **A restart helper** in `e2e/fixtures.js` stops the worker's app and starts
@@ -795,7 +864,9 @@ holding it for them would keep a large branch open while they are specified.
    devices: a desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an
    Android phone. Safari and a real phone are what the e2e suite never runs.
    Each check names the step it judges, so a failure points to one; step 8's
-   window runs only its own checks.
+   window runs only its own checks. A phone is not guaranteed, so a phone
+   check waits for the first time one is at hand on the deployed app, and
+   `docs/known-issues.md` holds it open until then.
    - Step 8: vote, re-vote, show and clear; reload one tab repeatedly, and
      close another.
    - Step 8a: restart the app from Clever's console while in a room: every
@@ -806,7 +877,11 @@ holding it for them would keep a large branch open while they are specified.
      grace period: the other browsers never show it leaving, so no `pagehide`
      fired.
    - Step 8b: edit the issue, save and cancel; edit it in two browsers at
-     once: the second to save sees the conflict notice.
+     once: the second to save sees the conflict notice. In Safari, confirm an
+     input method's composition with Enter, Japanese for example: it does not
+     save, and a second Enter does. On a phone, Android or iPhone, the pencil
+     brings up the keyboard, and after typing a word with predictive text on,
+     the keyboard's Enter or Go saves with no trailing space.
 
 **Rollback**, if step 5 fails, reverts the failing step and those above it:
 

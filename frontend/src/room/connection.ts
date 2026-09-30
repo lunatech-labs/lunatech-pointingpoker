@@ -1,4 +1,4 @@
-import type { JoinOutcome } from '../protocol/api'
+import { REQUEST_TIMEOUT_MS, type JoinOutcome } from '../protocol/api'
 import { snapshotSchema, type RoomSnapshot } from '../protocol/snapshot'
 
 export type RoomStore = { lost: boolean; fatal: boolean; snapshot: RoomSnapshot | null }
@@ -43,7 +43,7 @@ export const STALE_MS = 35_000
 // The tick only samples the clock, so a throttled background tab delays a check but never skews it.
 export const TICK_MS = 5_000
 // Longer than a tick, so a slow link can still answer; a fetch hung on a proxy is abandoned.
-export const FETCH_TIMEOUT_MS = 10_000
+export const FETCH_TIMEOUT_MS = REQUEST_TIMEOUT_MS
 const initial: RoomStore = { lost: false, fatal: false, snapshot: null }
 
 // The whole watchdog: a closed stream is never reopened but checked, and a silent one is reopened.

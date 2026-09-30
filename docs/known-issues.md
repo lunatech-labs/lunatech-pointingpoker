@@ -12,6 +12,21 @@ roadmap item instead of leaving it here as stale history.
 
 ## Open
 
+### The issue editor's phone keyboard behaviour is unverified
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (`open` and the box's
+  `onKeyDown`).
+- **Issue:** Two behaviours only a real phone can show. On Android, the guard
+  that ignores a keydown with `keyCode` 229, which keeps Safari's composition
+  Enter from saving, may also swallow the keyboard's Enter while Gboard still
+  holds the typed word in a composition. On an iPhone, the pencil must bring up
+  the keyboard; `flushSync` makes the box editable before it takes focus, which
+  the e2e suite checks on desktop only.
+- **Resolution:** Stays open until the rollout's step 8b phone check in
+  `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` runs on the
+  deployed app, which waits for a phone to be at hand. Remove this entry if it
+  passes; if Enter is swallowed, narrow the guard then.
+
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
@@ -287,42 +302,6 @@ roadmap item instead of leaving it here as stale history.
   every tab on a room reloads within a tick of the app answering, and both
   POST `/join` with a cookie the new process does not know, so each mints a
   session.
-
-### The issue editor has no cancel, and an unfocused draft is replaced by any room activity
-
-- **Where:** `frontend/src/components/IssueEditor.tsx` (`commit`, and the
-  pencil setting `editing`), `Room.tsx`'s `issueFocused` state, and
-  `applySnapshot`'s `prev.issueFocused ? prev.currentIssue : s.currentIssue` in
-  `frontend/src/room/view.ts`.
-- **Issue:** Two halves of one trap, both observed manually on 2026-09-05.
-
-  Under snapshots every publish carries the current issue, so an in-progress
-  edit is guarded by whether the editable input holds focus. The guard works
-  while it does. But typing is local until committed, so the moment the box
-  loses focus the next publish resets it to the room's committed value. The
-  trigger is therefore any room activity at all, a vote, a clear, a re-vote or
-  a join, and not merely a second person editing the title. Switching windows
-  counts as losing focus, since browsers blur the focused element when the
-  window does, so alt-tabbing away to copy a ticket title is enough to lose the
-  draft while away. Focus was chosen over the `editing` flag deliberately: a
-  guard keyed on `editing` would last until the user pressed the commit button,
-  so opening the editor and clicking away would stop applying issue updates for
-  the rest of the session, which is worse.
-
-  The second half is the sharper one. `editing` is set true only by `showEdit`
-  and false only by `doEdit`, which posts, so there is no cancel. A user parked
-  in edit mode whose draft has been replaced by the room's value can only leave
-  edit mode by pressing the check, which re-posts that value. Approving the
-  external change is the only exit.
-- **Resolution:** Deferred, with the product owner's reasoning recorded on
-  2026-09-05: one product owner drives a ceremony, so the concurrent-edit case
-  is rare. Note the exposure is wider than that case, per the trigger above.
-  Scheduled as step 8 of
-  `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
-  the frontend rewrite, whose section 5 already assigns both an explicit cancel
-  and a "someone else changed the issue while you were editing" affordance to
-  that step. The trigger for pulling it earlier is anyone actually losing an
-  edit in a real ceremony. Remove this entry when step 8b lands.
 
 ### Tests that pass with the mechanism they name deleted, as a recurring pattern
 

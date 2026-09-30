@@ -139,11 +139,13 @@ export const test = base.extend({
 })
 
 // Step 8 revisits selectors, so these are as accessible as the page allows. The name inputs
-// and the issue buttons have no label association and no accessible name at all.
+// have no label association and no accessible name at all.
 export const nameInput = page =>
   page.locator('.form-group.row').filter({ hasText: 'User name' }).locator('input')
 export const issueBox = page => page.getByPlaceholder('Current issue')
-export const issueButton = page => page.locator('.input-group-append button')
+export const issuePencil = page => page.getByRole('button', { name: 'Edit issue' })
+export const issueCheck = page => page.getByRole('button', { name: 'Save issue' })
+export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
 export const summaryTable = page =>
   page.locator('table').filter({ has: page.getByRole('columnheader', { name: 'Number of votes' }) })
 export const participantRows = page =>
