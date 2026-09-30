@@ -861,7 +861,9 @@ holding it for them would keep a large branch open while they are specified.
    devices: a desktop, a dev VM, a Mac laptop in Safari and in Firefox, and an
    Android phone. Safari and a real phone are what the e2e suite never runs.
    Each check names the step it judges, so a failure points to one; step 8's
-   window runs only its own checks.
+   window runs only its own checks. A phone is not guaranteed, so a phone
+   check waits for the first time one is at hand on the deployed app, and
+   `docs/known-issues.md` holds it open until then.
    - Step 8: vote, re-vote, show and clear; reload one tab repeatedly, and
      close another.
    - Step 8a: restart the app from Clever's console while in a room: every
@@ -872,7 +874,11 @@ holding it for them would keep a large branch open while they are specified.
      grace period: the other browsers never show it leaving, so no `pagehide`
      fired.
    - Step 8b: edit the issue, save and cancel; edit it in two browsers at
-     once: the second to save sees the conflict notice.
+     once: the second to save sees the conflict notice. In Safari, confirm an
+     input method's composition with Enter, Japanese for example: it does not
+     save, and a second Enter does. On a phone, Android or iPhone, the pencil
+     brings up the keyboard, and after typing a word with predictive text on,
+     the keyboard's Enter or Go saves with no trailing space.
 
 **Rollback**, if step 5 fails, reverts the failing step and those above it:
 

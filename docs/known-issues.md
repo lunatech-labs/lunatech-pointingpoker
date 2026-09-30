@@ -12,6 +12,21 @@ roadmap item instead of leaving it here as stale history.
 
 ## Open
 
+### The issue editor's phone keyboard behaviour is unverified
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (`open` and the box's
+  `onKeyDown`).
+- **Issue:** Two behaviours only a real phone can show. On Android, the guard
+  that ignores a keydown with `keyCode` 229, which keeps Safari's composition
+  Enter from saving, may also swallow the keyboard's Enter while Gboard still
+  holds the typed word in a composition. On an iPhone, the pencil must bring up
+  the keyboard; `flushSync` makes the box editable before it takes focus, which
+  the e2e suite checks on desktop only.
+- **Resolution:** Stays open until the rollout's step 8b phone check in
+  `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` runs on the
+  deployed app, which waits for a phone to be at hand. Remove this entry if it
+  passes; if Enter is swallowed, narrow the guard then.
+
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
