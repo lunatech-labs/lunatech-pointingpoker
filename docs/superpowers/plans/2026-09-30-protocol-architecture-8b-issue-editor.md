@@ -12,7 +12,7 @@
 
 ## How the code in this plan was verified
 
-Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and review split the editor into its machine and its wiring; all three commits were rerun together on that version:
+Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and review split the editor into its machine and its wiring; all three commits were rerun together on that version. A last review ran Task 1's unanswered test over all five requests, after which the unit counts were rerun at each commit:
 
 - **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (82 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 4 runs it.
 - **Each commit's tests failed first.** Task 1's six bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 3, Step 7.
