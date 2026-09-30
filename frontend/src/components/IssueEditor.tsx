@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { Check, Pen, X } from 'lucide-react'
 import { useIssueEditor } from './useIssueEditor'
 
@@ -12,8 +13,8 @@ export function IssueEditor({ issue, onSave }: Props) {
   const box = useRef<HTMLInputElement>(null)
   const editing = editor.mode === 'editing'
   const open = () => {
-    editor.pencil()
-    // The same input turns editable, so focusing it now lets Enter and Escape work at once.
+    // Render editable before focusing: iOS shows no keyboard for focus on a readonly input.
+    flushSync(() => editor.pencil())
     box.current?.focus()
   }
   // The check was disabled while saving, which dropped focus; take it back so Enter retries.

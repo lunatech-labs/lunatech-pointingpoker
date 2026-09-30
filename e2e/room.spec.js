@@ -597,7 +597,14 @@ test('Enter saves and Escape cancels', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
 
+  // iOS shows no keyboard for focus that lands on a readonly input, so record readOnly then.
+  await issueBox(alice.page).evaluate(box =>
+    box.addEventListener('focus', () => (box.dataset.readOnlyAtFocus = String(box.readOnly)), {
+      once: true
+    })
+  )
   await issuePencil(alice.page).click()
+  await expect(issueBox(alice.page)).toHaveAttribute('data-read-only-at-focus', 'false')
   // The pencil focuses the box, so the keys work without clicking into it first.
   await alice.page.keyboard.type('PP-7')
   // An input method's Enter confirms its composition and must not save the draft.
