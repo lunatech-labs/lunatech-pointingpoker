@@ -35,7 +35,8 @@ export function IssueEditor({ issue, onSave }: Props) {
             onChange={e => editor.type(e.target.value)}
             onKeyDown={e => {
               // Enter also confirms an input method's composition, which is not a save.
-              if (e.nativeEvent.isComposing) return
+              // Safari ends it first, so that Enter has isComposing false and keyCode 229.
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return
               if (e.key === 'Enter') editor.submit()
               else if (e.key === 'Escape') editor.cancel()
             }}

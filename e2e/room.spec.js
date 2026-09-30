@@ -602,6 +602,8 @@ test('Enter saves and Escape cancels', async ({ join }) => {
   await alice.page.keyboard.type('PP-7')
   // An input method's Enter confirms its composition and must not save the draft.
   await issueBox(alice.page).dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+  // Safari ends the composition before that Enter's keydown, which reports keyCode 229.
+  await issueBox(alice.page).dispatchEvent('keydown', { key: 'Enter', keyCode: 229 })
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
   await alice.page.keyboard.press('Enter')
   await expect(issueBox(bob.page)).toHaveValue('PP-7')
