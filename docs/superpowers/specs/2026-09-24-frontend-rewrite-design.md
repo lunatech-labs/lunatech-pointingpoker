@@ -622,15 +622,54 @@ silently stop receiving issue updates. A cancel and a conflict notice remove
 that objection, so step 8b guards the whole of edit mode.
 
 `useIssueEditor` holds the logic and `IssueEditor` the markup; step 8c
-rewrites only the markup. Below, the room's issue is the store's, except once
-a save succeeds: the saved text, until the store's issue differs from what it
-held when saving began.
+rewrites only the markup. Below, **the room's issue** is the store's, with one
+exception: from a successful save until the store's issue differs from what it
+held when saving began, it is the saved text. "Why the saved text waits for a
+different issue" says why.
 
-| State | Shows | Transitions |
-| --- | --- | --- |
-| viewing | The room's issue, read-only, with a pencil | Pencil: to editing, with draft and starting point both set to the room's issue |
-| editing | The draft, editable. While the room's issue differs from both the starting point and the draft, also "Changed by someone else to: X" and "Use theirs" | Enter or check: to saving. Escape or cancel: to viewing, draft dropped. "Use theirs" sets draft and starting point to X; saving overwrites X knowingly |
-| saving | The draft, read-only | POST fails: to editing, draft kept, "Could not save the issue" until the next Enter, check, Escape or cancel. POST succeeds: to viewing |
+| State | Shows |
+| --- | --- |
+| viewing | The room's issue, read-only, with a pencil |
+| editing | The draft, editable, with a check and a cancel. While the room's issue differs from both the starting point and the draft, also "Changed by someone else to: X" and "Use theirs". After a failed save, "Could not save the issue" until the next Enter, check, Escape or cancel |
+| saving | The draft, read-only, with the check and the cancel disabled |
+
+Every event against every state:
+
+| Event | viewing | editing | saving |
+| --- | --- | --- | --- |
+| Pencil | To editing, draft and starting point both set to the room's issue | Cannot happen | Cannot happen |
+| Typing | Cannot happen | Updates the draft | Cannot happen, read-only |
+| Enter or check | Cannot happen | To saving | Ignored, disabled |
+| Escape or cancel | Cannot happen | To viewing, draft dropped | Ignored, disabled: an answer comes within `api.ts`'s 10 s, and an abort cannot take back a POST already applied |
+| "Use theirs" | Cannot happen | Draft and starting point set to X; saving then overwrites X knowingly | Cannot happen |
+| Snapshot, issue unchanged | Nothing | Nothing, draft kept | Nothing |
+| Snapshot, issue changed | Shows the room's issue | The notice, per the table above | Nothing shown; read from the store by the next state |
+| Banner, watchdog reopen | Nothing | Nothing, draft kept | Nothing, the POST carries on |
+| POST succeeds | Cannot happen | Cannot happen | To viewing |
+| POST fails, a 10 s abort included | Cannot happen | Cannot happen | To editing, draft kept, "Could not save the issue" |
+| POST answers 401 | Cannot happen | Cannot happen | As a failure, and `Room` still calls `onRefused` |
+| Restart reload, back/forward restore, Leave, tab closed | The page ends | The page ends, draft dropped | The page ends, draft dropped |
+| `fatal` | Cannot happen: only a page that never reached the room | Cannot happen | Cannot happen |
+
+`Room` stays mounted from the first snapshot on, so the banner and a reopen
+leave the editor's state alone and a reopen is only another snapshot.
+
+Accepted races:
+
+- **A 10 s abort after the room applied the save.** The page is back in
+  editing with the draft; the frame then carries the draft, so no notice shows,
+  and saving again changes nothing.
+- **A 401 while the app runs.** "Could not save the issue" shows until the
+  liveness fetch's reload replaces the page.
+- **A 401 while the app is down.** The draft stays under the banner, and the
+  next save's 401 runs the liveness fetch again, the retry `refused()` relies on.
+- **A draft lost to a reload.** A restart reload comes only with a deploy, which
+  waits for empty rooms, and the rest follow the user's own navigation.
+- **An earlier edit's late frame.** An edit applied just before this one, whose
+  frame arrives after the response, shows briefly before this one replaces it.
+- **A page whose own frame never arrives**, lost with its stream, keeps showing
+  its text if someone then restores exactly the previous issue, until the issue
+  next changes.
 
 **Why the saved text waits for a different issue.** `Room` replies `Applied` and
 publishes while handling the same message, so a completed POST means the room
@@ -639,11 +678,8 @@ after the HTTP response. Returning to snapshots at once would flash the old
 text. A frame published before the edit carries the issue as it was when saving
 began, so ignoring that value and nothing else hides every stale frame and shows
 the edit, or any later one, as soon as it arrives. The condition is read from
-the store, so a frame that beat the response ends the wait at once. Two cases
-are accepted. An edit applied just before this one, whose frame arrives
-after the response, shows briefly before this one replaces it. And a page whose
-own frame never arrives, lost with its stream, keeps showing its text if
-someone then restores exactly the previous issue, until the issue next changes.
+the store, so a frame that beat the response ends the wait at once. The last
+two accepted races above are this rule's.
 
 This also removes both narrow windows the parent design recorded for the focus
 guard, the blur landing before the commit click and the revert during the save
@@ -729,8 +765,9 @@ Each case below lands with the step whose behaviour it pins.
   name order ignoring case and accents with the id tie-break; every
   `useIssueEditor` transition, including the saved text ignoring a stale frame,
   ending on a frame that beat the POST response and on someone else's later
-  edit, the pencil opening the saved text, and no notice after a failed save
-  the room applied; `api.ts` aborting a request after 10 s; the strict
+  edit, the pencil opening the saved text, no notice after a failed save
+  the room applied, Enter and Escape ignored while saving, and a 401 failing
+  the save while `onRefused` still runs; `api.ts` aborting a request after 10 s; the strict
   contract test. They do not overlap `node --test`'s `test/` folder, and
   CI runs both.
 - **A restart helper** in `e2e/fixtures.js` stops the worker's app and starts
