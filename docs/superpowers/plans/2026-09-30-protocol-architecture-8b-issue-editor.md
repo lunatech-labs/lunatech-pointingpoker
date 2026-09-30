@@ -47,6 +47,7 @@ Each is implemented as written unless review changes it.
 - `REQUEST_TIMEOUT_MS = 10_000`, the liveness fetch's bound.
 - Copy, verbatim: accessible names "Edit issue", "Save issue", "Cancel editing"; `Changed by someone else to: "X"`; "Use theirs"; "Could not save the issue"; the placeholder stays "Current issue".
 - The e2e suite must never contact a host other than `127.0.0.1`.
+- The unit counts assume `target/contract/` exists from an earlier `sbt test`; without it `snapshot.contract.test.ts` fails with "run sbt test first".
 - Every commit brings a test shown failing against the commit before it.
 - Do not push or merge: 8a and 8b merge together in a window with no live rooms (spec, "Rollout").
 
@@ -1027,7 +1028,7 @@ Expected: `All matched files use Prettier code style!` and no lint output.
 
 - [ ] **Step 7: Show the e2e cases fail against the old editor**
 
-Build the old editor with the new tests, pointing the pencil and check fixtures back at the old class selector, so each case fails on behaviour rather than on a missing name:
+Build the old editor with the new tests, pointing the pencil and check fixtures back at the old class selector, so each case fails on behaviour rather than on a missing name. The stash leaves the untracked `useIssueEditor.ts` in place, which the old editor does not import:
 
 ```bash
 git stash push -- frontend
