@@ -455,6 +455,8 @@ describe('the accepted races', () => {
   it('a page whose own frame never arrives keeps its text until the issue next changes', () => {
     // Restoring exactly PP-1 changes nothing this page can see, since its store still holds it.
     expect(after(...savingMine, succeeded, frame('PP-1'))).toEqual(viewing('mine'))
+    // Its own frame and a restore of PP-1 that both beat the response leave the store as it was.
+    expect(after(...savingMine, frame('mine'), frame('PP-1'), succeeded)).toEqual(viewing('mine'))
     expect(after(...savingMine, succeeded, frame('PP-3'))).toEqual(viewing('PP-3'))
   })
 })

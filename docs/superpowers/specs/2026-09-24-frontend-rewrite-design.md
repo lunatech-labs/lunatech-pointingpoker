@@ -696,7 +696,8 @@ Accepted races:
   frame arrives after the response, shows briefly before this one replaces it.
 - **A page whose own frame never arrives**, lost with its stream, keeps showing
   its text if someone then restores exactly the previous issue, until the issue
-  next changes.
+  next changes. So does a page whose own frame and such a restore both arrive
+  before the response, since the store is back where saving began.
 
 **Why the saved text waits for a different issue.** `Room` replies `Applied` and
 publishes while handling the same message, so a completed POST means the room
