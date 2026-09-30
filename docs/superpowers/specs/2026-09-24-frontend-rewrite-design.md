@@ -686,6 +686,9 @@ Accepted races:
   and saving again changes nothing.
 - **A 401 while the app runs.** "Could not save the issue" shows until the
   liveness fetch's reload replaces the page.
+- **A 401 whose body stalls for 10 s.** The bound covers the body, so the save
+  rejects as an abort and `onRefused` never sees the 401; "Could not save the
+  issue" shows until the dead stream's watchdog and liveness fetch take over.
 - **A 401 whose liveness fetch fails**, the case `docs/known-issues.md`'s "A
   command's 401 can leave the connection banner up until the next snapshot"
   records. The draft stays, under the banner until the next snapshot clears
