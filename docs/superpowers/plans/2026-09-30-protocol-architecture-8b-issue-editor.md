@@ -4,7 +4,7 @@
 
 **Goal:** Let a draft issue survive blur and room activity: edit mode, not focus, guards it, with a cancel, Enter and Escape, a "Changed by someone else" notice with "Use theirs", and a failure line; and make every `api.ts` request fail once unanswered for 10 s.
 
-**Architecture:** The editor's states x events matrix becomes a pure `step(state, event)` in `frontend/src/room/issueEditor.ts`, with `shows(state)` deriving what renders and `roomIssue(state)` implementing the spec's "room's issue". `useIssueEditor` holds that state in React and turns the save's promise into `succeeded` or `failed`; `IssueEditor` is markup only. `api.ts` hands `openapi-fetch` a fetch bounded at `REQUEST_TIMEOUT_MS`, which `connection.ts`'s liveness fetch now shares.
+**Architecture:** The editor's states x events matrix becomes a pure `step(state, event)` in `frontend/src/room/issueEditor.ts`, with `shows(state)` deriving what renders and `roomIssue(state)` implementing the spec's "room's issue". `useIssueEditor` holds that state in React and turns the save's promise into `succeeded` or `failed`; `IssueEditor` is markup only. `api.ts` runs each request inside `timed`, which aborts the whole call, body included, at `REQUEST_TIMEOUT_MS`; `connection.ts`'s liveness fetch now shares that constant.
 
 **Tech Stack:** React 19, TypeScript 5.9, Bootstrap 4.6 classes, `lucide-react`, `openapi-fetch` 0.17, Vitest 5 with fake timers (node environment, no DOM), Playwright 1.63 against the testkit stub.
 
@@ -12,11 +12,11 @@
 
 ## How the code in this plan was verified
 
-Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`:
+Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and both tasks were rerun together on that version:
 
-- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (77 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 3 runs it.
-- **Each commit's tests failed first.** Task 1's timeout test failed with `expected [ 'pending', 'other' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 2, Step 12.
-- **Teeth, by mutation.** Two new e2e cases pass against the old editor too, since it has neither bug: "a save refused by a different instance recovers like any command" failed once `Room`'s save stopped reporting the rejection, and "a double-clicked check posts once" failed with two POSTs once both the disabled check and `submit`'s mode guard were removed. The machine's latch failed "ends on the page's own frame and follows the room after it" once made to recompute from `before` instead of clearing. The IME guard failed "Enter saves and Escape cancels" once removed. "Leaves no timer behind once answered" failed once `clearTimeout` was removed.
+- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (78 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 3 runs it.
+- **Each commit's tests failed first.** Task 1's two bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 2, Step 12.
+- **Teeth, by mutation.** Two new e2e cases pass against the old editor too, since it has neither bug: "a save refused by a different instance recovers like any command" failed once `Room`'s save stopped reporting the rejection, and "a double-clicked check posts once" failed with two POSTs once both the disabled check and `submit`'s mode guard were removed. The machine's latch failed "ends on the page's own frame and follows the room after it" once made to recompute from `before` instead of clearing. The IME guard failed "Enter saves and Escape cancels" once removed. "Leaves no timer behind once answered" failed once `clearTimeout` was removed. "Fails once its body stalls for 10 s" was the only failure against a bound on `fetch` alone, the design review replaced, whose promise settles at the headers.
 - **One flake found and fixed.** Asserting "Could not save the issue" before a 401's reload failed once in a full run: the liveness fetch can reload within milliseconds, the spec's accepted race "A 401 while the app runs". The case now asserts the reload and the dropped draft only, and passed 10 of 10 repeats; the other editor cases passed 72 of 72 over four repeats each.
 - **The look.** A throwaway Playwright screenshot of the notice and the failure line together matched the spec's mockup, centred by the card's `text-center`.
 - **Formatting.** Touched files pass `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid`, except lines Prettier already flagged before this step in `view.ts` and `view.test.ts`, which this plan leaves alone.
@@ -27,7 +27,7 @@ Each is implemented as written unless review changes it.
 
 - **P1. The matrix is a pure module, `frontend/src/room/issueEditor.ts`, and `useIssueEditor` is 20 lines of wiring.** Vitest runs in node with no DOM renderer, so the spec's unit tests "for `useIssueEditor`" run against `step` and `shows`, and the e2e cases cover the hook. The module has no React import, so it sits in the room-state layer beside `view.ts`.
 - **P2. `REQUEST_TIMEOUT_MS` is defined once, in `api.ts`.** `connection.ts`'s `FETCH_TIMEOUT_MS` becomes an alias of it, so the liveness fetch and its tests keep their names. The protocol layer cannot import from the room layer, which settles the direction.
-- **P3. The bound wraps the client's fetch, `createClient<paths>({ fetch: bounded })`,** and `bounded` reads the global `fetch` on each call. That covers every request `api.ts` makes, join and create included, as "Frontend architecture" says. Its test stubs `Request` through `vi.hoisted`, since node's `Request` refuses the page's relative paths.
+- **P3. The bound wraps the whole call, not the fetch.** Each exported function runs its `client.POST` inside `timed`, passing the signal in the call's options, which `openapi-fetch` puts on the `Request`. A bound on `fetch` alone ends at the headers, and `openapi-fetch` reads the body after that, so a stalled body would hang. That covers every request `api.ts` makes, join and create included, as "Frontend architecture" says. Its test installs a `fetch` mock and a `Request` stub through `vi.hoisted`, since `createClient` captures both at import and node's `Request` refuses the page's relative paths.
 - **P4. The pencil focuses the box,** so Enter and Escape work without a second click. Today's page leaves focus on the pencil.
 - **P5. Enter while an input method is composing does nothing,** since it confirms the composition rather than the draft.
 - **P6. `Room` derives the view on every render.** With `issueFocused` gone, `applySnapshot` is a pure function of the snapshot, so `Room`'s `seen` and `view` state and their fold go. `View.currentIssue` stays and feeds the editor as the store's issue.
@@ -65,12 +65,12 @@ The inputs most likely to bite a person that the spec leaves unsaid, most likely
 ### Task 1: `api.ts` aborts a request unanswered after 10 s
 
 **Files:**
-- Modify: `frontend/src/protocol/api.ts` (above `const client`)
+- Modify: `frontend/src/protocol/api.ts` (below `const client`, and the five exported functions)
 - Modify: `frontend/src/room/connection.ts` (the `api` import and `FETCH_TIMEOUT_MS`)
 - Test: `frontend/src/protocol/api.test.ts`
 
 **Interfaces:**
-- Produces: `export const REQUEST_TIMEOUT_MS = 10_000` in `api.ts`. Every exported `api.ts` function (`createRoom`, `join`, `command`, `vote`, `editIssue`) now rejects with an `AbortError` `DOMException` once its request has gone unanswered for `REQUEST_TIMEOUT_MS`.
+- Produces: `export const REQUEST_TIMEOUT_MS = 10_000` in `api.ts`. Every exported `api.ts` function (`createRoom`, `join`, `command`, `vote`, `editIssue`) now rejects with an `AbortError` `DOMException` once its request, body included, has gone unfinished for `REQUEST_TIMEOUT_MS`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -80,28 +80,51 @@ Replace `frontend/src/protocol/api.test.ts` with:
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, editIssue, isSessionRefusal, REQUEST_TIMEOUT_MS } from './api'
 
-// Node's Request refuses the page's relative paths, so resolve them against a stand-in origin.
-vi.hoisted(() => {
+// Installed before the import, since createClient captures fetch and Request once.
+const fetchMock = vi.hoisted(() => {
+  // Node's Request refuses the page's relative paths, so resolve them against a stand-in origin.
   const Native = globalThis.Request
   globalThis.Request = class extends Native {
     constructor(input: RequestInfo | URL, init?: RequestInit) {
       super(typeof input === 'string' ? new URL(input, 'http://page.test') : input, init)
     }
   }
+  const mock = vi.fn<(request: Request, init?: RequestInit) => Promise<Response>>()
+  vi.stubGlobal('fetch', mock)
+  return mock
 })
 
-// A fetch that never answers and rejects once its signal aborts, as a hung proxy does.
-const hung = () =>
-  vi.fn(
-    (_request: Request, init?: RequestInit) =>
-      new Promise<Response>((_, reject) =>
-        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
-      )
+// Rejects once the request aborts, as fetch does for a request or a body in flight.
+const onAbort = (signal: AbortSignal, reject: (reason: unknown) => void) =>
+  signal.addEventListener('abort', () => reject(signal.reason))
+
+// Never answers, as a hung proxy does.
+const hung = (request: Request, init?: RequestInit) =>
+  new Promise<Response>((_, reject) => onAbort(init?.signal ?? request.signal, reject))
+
+// Answers a 401's headers, then never finishes its body.
+const stalled = async (request: Request, init?: RequestInit) => {
+  const signal = init?.signal ?? request.signal
+  const body = new ReadableStream({ start: stream => onAbort(signal, e => stream.error(e)) })
+  return new Response(body, { status: 401 })
+}
+
+// How a save stands 1 ms before the bound and at it.
+async function outcome() {
+  const settled = editIssue('brave-golden-otter', 'PP-1').then(
+    () => 'resolved',
+    (reason: unknown) => (reason instanceof DOMException ? reason.name : 'other')
   )
+  const now = () => Promise.race([settled, Promise.resolve('pending')])
+  await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1)
+  const early = await now()
+  await vi.advanceTimersByTimeAsync(1)
+  return [early, await now()]
+}
 
 afterEach(() => {
   vi.useRealTimers()
-  vi.unstubAllGlobals()
+  fetchMock.mockReset()
 })
 
 describe('isSessionRefusal', () => {
@@ -117,23 +140,19 @@ describe('isSessionRefusal', () => {
 describe('a request', () => {
   it('fails once unanswered for 10 s', async () => {
     vi.useFakeTimers()
-    vi.stubGlobal('fetch', hung())
-    const outcome = editIssue('brave-golden-otter', 'PP-1').then(
-      () => 'resolved',
-      (reason: unknown) => (reason instanceof DOMException ? reason.name : 'other')
-    )
-    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1)
-    const early = await Promise.race([outcome, Promise.resolve('pending')])
-    await vi.advanceTimersByTimeAsync(1)
-    expect([early, await outcome]).toEqual(['pending', 'AbortError'])
+    fetchMock.mockImplementation(hung)
+    expect(await outcome()).toEqual(['pending', 'AbortError'])
+  })
+
+  it('fails once its body stalls for 10 s', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation(stalled)
+    expect(await outcome()).toEqual(['pending', 'AbortError'])
   })
 
   it('leaves no timer behind once answered', async () => {
     vi.useFakeTimers()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(null, { status: 204 }))
-    )
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
     await editIssue('brave-golden-otter', 'PP-1')
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -143,28 +162,80 @@ describe('a request', () => {
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `npx vitest run --root frontend src/protocol/api.test.ts`
-Expected: FAIL. "fails once unanswered for 10 s" with `expected [ 'pending', 'other' ] to deeply equal [ 'pending', 'AbortError' ]`, and "leaves no timer behind once answered" with `TypeError: fetch failed` (`getaddrinfo ENOTFOUND page.test`), because the client captured the real `fetch` at import. `page.test` is a reserved name, so nothing leaves the machine.
+Expected: FAIL. "fails once unanswered for 10 s" and "fails once its body stalls for 10 s", each with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. "leaves no timer behind once answered" passes, since no timer exists yet; Step 5 shows its teeth. `page.test` is a reserved name and the mock answers every call, so no connection is made.
 
-- [ ] **Step 3: Bound the client's fetch**
+- [ ] **Step 3: Bound every call**
 
-In `frontend/src/protocol/api.ts`, replace `const client = createClient<paths>()` with:
+In `frontend/src/protocol/api.ts`, after `const client = createClient<paths>()` and its blank line, insert:
 
 ```ts
 // The liveness fetch's bound too, so a request hung on a dead network fails rather than waits.
 export const REQUEST_TIMEOUT_MS = 10_000
 
-// Reads the global fetch per call, where createClient's default would capture it once.
-const bounded = async (request: Request) => {
+// Bounds the whole call, body included, since fetch itself settles once the headers arrive.
+async function timed<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    return await fetch(request, { signal: controller.signal })
+    return await call(controller.signal)
   } finally {
     clearTimeout(timeout)
   }
 }
+```
 
-const client = createClient<paths>({ fetch: bounded })
+and route each of the five `client.POST` calls through it, passing `signal` in its options:
+
+```ts
+export async function createRoom(): Promise<string> {
+  const { data, response } = await timed(signal =>
+    client.POST('/create-room', { parseAs: 'text', signal })
+  )
+  if (data === undefined) throw refused('create-room', response)
+  return data
+}
+
+export async function join(roomId: string, name: string): Promise<JoinOutcome> {
+  const { response } = await timed(signal =>
+    client.POST('/rooms/{roomId}/join', { params: { path: { roomId } }, body: { name }, signal })
+  )
+  // The page route has already judged the path, so a 404 here is a room refused after load.
+  if (response.status === 404) return 'not-a-room'
+  if (!response.ok) throw refused('join', response)
+  return 'joined'
+}
+
+export type Command = 'show' | 'clear' | 'revote'
+
+export async function command(roomId: string, name: Command): Promise<void> {
+  const path = `/rooms/{roomId}/${name}` as const
+  const { response } = await timed(signal =>
+    client.POST(path, { params: { path: { roomId } }, signal })
+  )
+  if (!response.ok) throw refused(name, response)
+}
+
+export async function vote(roomId: string, estimation: string): Promise<void> {
+  const { response } = await timed(signal =>
+    client.POST('/rooms/{roomId}/vote', {
+      params: { path: { roomId } },
+      body: { estimation },
+      signal
+    })
+  )
+  if (!response.ok) throw refused('vote', response)
+}
+
+export async function editIssue(roomId: string, issue: string): Promise<void> {
+  const { response } = await timed(signal =>
+    client.POST('/rooms/{roomId}/edit-issue', {
+      params: { path: { roomId } },
+      body: { issue },
+      signal
+    })
+  )
+  if (!response.ok) throw refused('edit-issue', response)
+}
 ```
 
 In `frontend/src/room/connection.ts`, change the first line to:
@@ -184,11 +255,11 @@ keeping its comment above it unchanged.
 - [ ] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:unit`
-Expected: 54 tests pass. `connection.test.ts` still imports `FETCH_TIMEOUT_MS` and is unchanged.
+Expected: 55 tests pass. `connection.test.ts` still imports `FETCH_TIMEOUT_MS` and is unchanged.
 
 - [ ] **Step 5: Show the cleanup test has teeth**
 
-Temporarily delete the `clearTimeout(timeout)` line in `bounded`.
+Temporarily delete the `clearTimeout(timeout)` line in `timed`.
 Run: `npx vitest run --root frontend src/protocol/api.test.ts`
 Expected: FAIL, "leaves no timer behind once answered" with `expected 1 to be +0`.
 Then put the line back.
@@ -202,7 +273,7 @@ Expected: no errors; `All matched files use Prettier code style!`
 
 ```bash
 git add frontend/src/protocol/api.ts frontend/src/protocol/api.test.ts frontend/src/room/connection.ts
-git commit -m "feat(frontend): abort a request unanswered after 10 s (step 8b)" -m "api.ts hands openapi-fetch a fetch bounded at REQUEST_TIMEOUT_MS, the liveness fetch's bound, which connection.ts now reads from it. A command, a join or a create hung on a dead network or a proxy now rejects with an AbortError instead of waiting forever, and each caller's existing failure path handles it."
+git commit -m "feat(frontend): abort a request unanswered after 10 s (step 8b)" -m "api.ts runs every request inside timed, which aborts the whole call, body included, at REQUEST_TIMEOUT_MS, the liveness fetch's bound, which connection.ts now reads from it. The bound covers the body because openapi-fetch reads it after fetch settles at the headers. A command, a join or a create hung on a dead network or a proxy now rejects with an AbortError instead of waiting forever, and each caller's existing failure path handles it."
 ```
 
 ---
@@ -704,7 +775,7 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
 - [ ] **Step 10: Run the unit checks**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
-Expected: no errors; 77 tests pass (54, plus the machine's 24, less the removed `view.test.ts` case).
+Expected: no errors; 78 tests pass (55, plus the machine's 24, less the removed `view.test.ts` case).
 
 - [ ] **Step 11: The e2e changes**
 
@@ -987,7 +1058,7 @@ Expected: each file `0`.
 - [ ] **Step 15: Run everything**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
-Expected: no errors; 77 tests pass.
+Expected: no errors; 78 tests pass.
 
 Run: `npm test`
 Expected: 17 pass, 0 fail (its `pretest` builds and stages).
