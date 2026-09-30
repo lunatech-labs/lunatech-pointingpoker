@@ -11,6 +11,7 @@ type Props = {
 export function IssueEditor({ issue, onSave }: Props) {
   const editor = useIssueEditor(issue, onSave)
   const box = useRef<HTMLInputElement>(null)
+  const group = useRef<HTMLDivElement>(null)
   const editing = editor.mode === 'editing'
   const open = () => {
     // Render editable before focusing: iOS shows no keyboard for focus on a readonly input.
@@ -19,7 +20,9 @@ export function IssueEditor({ issue, onSave }: Props) {
   }
   // The check was disabled while saving, which dropped focus; take it back so Enter retries.
   useEffect(() => {
-    if (editor.failed) box.current?.focus()
+    const at = document.activeElement
+    const dropped = at === null || at === document.body || group.current?.contains(at)
+    if (editor.failed && dropped) box.current?.focus()
   }, [editor.failed])
   const takeTheirs = () => {
     editor.takeTheirs()
@@ -27,7 +30,7 @@ export function IssueEditor({ issue, onSave }: Props) {
     box.current?.focus()
   }
   return (
-    <div className="form-group row">
+    <div ref={group} className="form-group row">
       <div className="col">
         <div className="input-group">
           <input

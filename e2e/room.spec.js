@@ -706,6 +706,23 @@ test('a save the network drops keeps the draft and says so', async ({ join, room
   await expect(alice.page.getByText('Could not save the issue')).toHaveCount(0)
 })
 
+test('a failed save leaves focus the user moved elsewhere', async ({ join, room }) => {
+  const alice = await join('Alice')
+  let release
+  const stalled = new Promise(resolve => (release = resolve))
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await stalled
+    await route.abort()
+  })
+
+  await setIssue(alice, 'mine')
+  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
+  await clear.focus()
+  release()
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(clear).toBeFocused()
+})
+
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
   const alice = await join('Alice')
   const selected = alice.page.locator('.estimation-button-selected')
