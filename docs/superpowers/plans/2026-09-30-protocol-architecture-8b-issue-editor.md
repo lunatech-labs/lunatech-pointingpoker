@@ -14,9 +14,9 @@
 
 Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and review split the editor into its machine and its wiring; all three commits were rerun together on that version:
 
-- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (78 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 4 runs it.
-- **Each commit's tests failed first.** Task 1's two bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 3, Step 7.
-- **Teeth, by mutation.** Two new e2e cases pass against the old editor too, since it has neither bug: "a save refused by a different instance recovers like any command" failed once `Room`'s save stopped reporting the rejection, and "a double-clicked check posts once" failed with two POSTs once both the disabled check and `submit`'s mode guard were removed. The machine's latch failed "ends on the page's own frame and follows the room after it" once made to recompute from `before` instead of clearing. The IME guard failed "Enter saves and Escape cancels" once removed. "Leaves no timer behind once answered" failed once `clearTimeout` was removed. "Fails once its body stalls for 10 s" was the only failure against a bound on `fetch` alone, the design review replaced, whose promise settles at the headers.
+- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (82 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 4 runs it.
+- **Each commit's tests failed first.** Task 1's six bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 3, Step 7.
+- **Teeth, by mutation.** Two new e2e cases pass against the old editor too, since it has neither bug: "a save refused by a different instance recovers like any command" failed once `Room`'s save stopped reporting the rejection, and "a double-clicked check posts once" failed with two POSTs once both the disabled check and `submit`'s mode guard were removed. The machine's latch failed "ends on the page's own frame and follows the room after it" once made to recompute from `before` instead of clearing. The IME guard failed "Enter saves and Escape cancels" once removed. "Leaves no timer behind once answered" failed once `clearTimeout` was removed, and "fails once unanswered for 10 s: vote" alone once `vote` dropped its `signal`. "Fails once its body stalls for 10 s" was the only failure against a bound on `fetch` alone, the design review replaced, whose promise settles at the headers.
 - **One flake found and fixed.** Asserting "Could not save the issue" before a 401's reload failed once in a full run: the liveness fetch can reload within milliseconds, the spec's accepted race "A 401 while the app runs". The case now asserts the reload and the dropped draft only, and passed 10 of 10 repeats; the other editor cases passed 72 of 72 over four repeats each.
 - **The look.** A throwaway Playwright screenshot of the notice and the failure line together matched the spec's mockup, centred by the card's `text-center`.
 - **Formatting.** Touched files pass `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid`, except lines Prettier already flagged before this step in `view.ts` and `view.test.ts`, which this plan leaves alone.
@@ -79,7 +79,16 @@ Replace `frontend/src/protocol/api.test.ts` with:
 
 ```ts
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, editIssue, isSessionRefusal, REQUEST_TIMEOUT_MS } from './api'
+import {
+  ApiError,
+  command,
+  createRoom,
+  editIssue,
+  isSessionRefusal,
+  join,
+  REQUEST_TIMEOUT_MS,
+  vote
+} from './api'
 
 // Installed before the import, since createClient captures fetch and Request once.
 const fetchMock = vi.hoisted(() => {
@@ -110,9 +119,9 @@ const stalled = async (request: Request, init?: RequestInit) => {
   return new Response(body, { status: 401 })
 }
 
-// How a save stands 1 ms before the bound and at it.
-async function outcome() {
-  const settled = editIssue('brave-golden-otter', 'PP-1').then(
+// How a request stands 1 ms before the bound and at it.
+async function outcome(call: () => Promise<unknown>) {
+  const settled = call().then(
     () => 'resolved',
     (reason: unknown) => (reason instanceof DOMException ? reason.name : 'other')
   )
@@ -138,17 +147,26 @@ describe('isSessionRefusal', () => {
   })
 })
 
+// Every exported request, so one that drops its signal fails here.
+const requests = {
+  createRoom: () => createRoom(),
+  join: () => join('brave-golden-otter', 'Alice'),
+  command: () => command('brave-golden-otter', 'show'),
+  vote: () => vote('brave-golden-otter', '3'),
+  editIssue: () => editIssue('brave-golden-otter', 'PP-1')
+}
+
 describe('a request', () => {
-  it('fails once unanswered for 10 s', async () => {
+  it.each(Object.entries(requests))('fails once unanswered for 10 s: %s', async (_, call) => {
     vi.useFakeTimers()
     fetchMock.mockImplementation(hung)
-    expect(await outcome()).toEqual(['pending', 'AbortError'])
+    expect(await outcome(call)).toEqual(['pending', 'AbortError'])
   })
 
   it('fails once its body stalls for 10 s', async () => {
     vi.useFakeTimers()
     fetchMock.mockImplementation(stalled)
-    expect(await outcome()).toEqual(['pending', 'AbortError'])
+    expect(await outcome(requests.editIssue)).toEqual(['pending', 'AbortError'])
   })
 
   it('leaves no timer behind once answered', async () => {
@@ -163,7 +181,7 @@ describe('a request', () => {
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `npx vitest run --root frontend src/protocol/api.test.ts`
-Expected: FAIL. "fails once unanswered for 10 s" and "fails once its body stalls for 10 s", each with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. "leaves no timer behind once answered" passes, since no timer exists yet; Step 5 shows its teeth. `page.test` is a reserved name and the mock answers every call, so no connection is made.
+Expected: FAIL, 6 failed and 2 passed. "fails once unanswered for 10 s" for each of the five requests and "fails once its body stalls for 10 s", each with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. "leaves no timer behind once answered" passes, since no timer exists yet; Step 5 shows its teeth. `page.test` is a reserved name and the mock answers every call, so no connection is made.
 
 - [ ] **Step 3: Bound every call**
 
@@ -256,7 +274,7 @@ keeping its comment above it unchanged.
 - [ ] **Step 4: Run the tests to see them pass**
 
 Run: `npm run test:unit`
-Expected: 55 tests pass. `connection.test.ts` still imports `FETCH_TIMEOUT_MS` and is unchanged.
+Expected: 59 tests pass. `connection.test.ts` still imports `FETCH_TIMEOUT_MS` and is unchanged.
 
 - [ ] **Step 5: Show the cleanup test has teeth**
 
@@ -552,7 +570,7 @@ Then undo both edits.
 - [ ] **Step 6: Typecheck, lint, format**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit && npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid frontend/src/room/issueEditor.ts frontend/src/room/issueEditor.test.ts`
-Expected: no errors; 79 tests pass (55, plus the machine's 24); `All matched files use Prettier code style!`
+Expected: no errors; 83 tests pass (59, plus the machine's 24); `All matched files use Prettier code style!`
 
 - [ ] **Step 7: Commit**
 
@@ -803,7 +821,7 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
 - [ ] **Step 5: Run the unit checks**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
-Expected: no errors; 78 tests pass (79, less the removed `view.test.ts` case).
+Expected: no errors; 82 tests pass (83, less the removed `view.test.ts` case).
 
 - [ ] **Step 6: The e2e changes**
 
@@ -1028,10 +1046,10 @@ Expected: `All matched files use Prettier code style!` and no lint output.
 
 - [ ] **Step 7: Show the e2e cases fail against the old editor**
 
-Build the old editor with the new tests, pointing the pencil and check fixtures back at the old class selector, so each case fails on behaviour rather than on a missing name. The stash leaves the untracked `useIssueEditor.ts` in place, which the old editor does not import:
+Build the old editor with the new tests, pointing the pencil and check fixtures back at the old class selector, so each case fails on behaviour rather than on a missing name. The stash is labelled, since every worktree shares one stash list, and leaves the untracked `useIssueEditor.ts` in place, which the old editor does not import:
 
 ```bash
-git stash push -- frontend
+git stash push -m step-8b-old-editor -- frontend
 npm run build
 cp e2e/fixtures.js /tmp/fixtures.new.js
 sed -i "s|page.getByRole('button', { name: 'Edit issue' })|page.locator('.input-group-append button')|; s|page.getByRole('button', { name: 'Save issue' })|page.locator('.input-group-append button')|" e2e/fixtures.js
@@ -1044,7 +1062,7 @@ Then restore:
 
 ```bash
 cp /tmp/fixtures.new.js e2e/fixtures.js
-git stash pop
+git stash pop "$(git stash list | grep -m1 step-8b-old-editor | cut -d: -f1)"
 npm run build
 ```
 
@@ -1089,7 +1107,7 @@ Expected: each file `0`.
 - [ ] **Step 10: Run everything**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
-Expected: no errors; 78 tests pass.
+Expected: no errors; 82 tests pass.
 
 Run: `npm test`
 Expected: 17 pass, 0 fail (its `pretest` builds and stages).
