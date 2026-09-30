@@ -284,7 +284,7 @@ git commit -m "feat(frontend): abort a request unanswered after 10 s (step 8b)" 
 - Create: `frontend/src/room/issueEditor.ts`, `frontend/src/room/issueEditor.test.ts`
 
 **Interfaces:**
-- Produces: `frontend/src/room/issueEditor.ts`: `type Mode = 'viewing' | 'editing' | 'saving'`; `type EditorState`; `type EditorEvent`; `initial(issue: string): EditorState`; `roomIssue(s: EditorState): string`; `step(s: EditorState, e: EditorEvent): EditorState`; `type EditorView = { mode: Mode; text: string; notice: string | null; failed: boolean }`; `shows(s: EditorState): EditorView`. Nothing imports it until Task 3.
+- Produces: `frontend/src/room/issueEditor.ts`: `type Mode = 'viewing' | 'editing' | 'saving'`; `type EditorState`; `type EditorEvent`; `initial(issue: string): EditorState`; `step(s: EditorState, e: EditorEvent): EditorState`; `type EditorView = { mode: Mode; text: string; notice: string | null; failed: boolean }`; `shows(s: EditorState): EditorView`. Nothing imports it until Task 3.
 
 How the matrix maps onto `step`: the events are `pencil`, `typed`, `save` (Enter or the check), `cancel` (Escape or the cancel), `theirs`, `snapshot`, `succeeded` and `failed` (any rejection, a 401 or an abort included). An event outside the state that handles it returns the state unchanged, which is both the matrix's "Ignored" and its "Cannot happen". The spec's "room's issue" is `roomIssue`: `saved`, the saved text, while non-null, else `store`. `saved` is set on `succeeded` only if the store still holds `before`, its value when saving began, and cleared by the first `snapshot` whose issue differs from `before`, so it never comes back.
 
@@ -499,7 +499,7 @@ export const initial = (issue: string): EditorState => ({
 })
 
 // The spec's "room's issue": the store's, or the saved text while it waits.
-export const roomIssue = (s: EditorState) => s.saved ?? s.store
+const roomIssue = (s: EditorState) => s.saved ?? s.store
 
 // Every event outside its state is ignored, which covers the matrix's "Cannot happen" cells too.
 export function step(s: EditorState, e: EditorEvent): EditorState {
