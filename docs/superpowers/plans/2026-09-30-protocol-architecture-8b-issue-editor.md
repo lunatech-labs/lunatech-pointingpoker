@@ -4,7 +4,7 @@
 
 **Goal:** Let a draft issue survive blur and room activity: edit mode, not focus, guards it, with a cancel, Enter and Escape, a "Changed by someone else" notice with "Use theirs", and a failure line; and make every `api.ts` request fail once unanswered for 10 s.
 
-**Architecture:** The editor's states x events matrix becomes a pure `step(state, event)` in `frontend/src/room/issueEditor.ts`, with `shows(state)` deriving what renders and `roomIssue(state)` implementing the spec's "room's issue". `useIssueEditor` holds that state in React and turns the save's promise into `succeeded` or `failed`; `IssueEditor` is markup only. `api.ts` runs each request inside `timed`, which aborts the whole call, body included, at `REQUEST_TIMEOUT_MS`; `connection.ts`'s liveness fetch now shares that constant.
+**Architecture:** The editor's states x events matrix becomes a pure `step(state, event)` in `frontend/src/room/issueEditor.ts`, with `shows(state)` deriving what renders and `roomIssue(state)` implementing the spec's "room's issue". `useIssueEditor` holds that state in React through `useReducer(step, issue, initial)` and turns the save's promise into `succeeded` or `failed`; `IssueEditor` is markup only. `api.ts` runs each request inside `timed`, which aborts the whole call, body included, at `REQUEST_TIMEOUT_MS`; `connection.ts`'s liveness fetch now shares that constant.
 
 **Tech Stack:** React 19, TypeScript 5.9, Bootstrap 4.6 classes, `lucide-react`, `openapi-fetch` 0.17, Vitest 5 with fake timers (node environment, no DOM), Playwright 1.63 against the testkit stub.
 
@@ -571,7 +571,7 @@ git commit -m "feat(frontend): add the issue editor's matrix as a pure state mac
 - Modify: `docs/known-issues.md`, `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` (status line), `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` (step 8's "Landed" paragraph)
 
 **Interfaces:**
-- Consumes: Task 2's `initial`, `step`, `shows` and `EditorEvent`; `api.editIssue(roomId: string, issue: string): Promise<void>` and `api.isSessionRefusal(reason: unknown): boolean` from `frontend/src/protocol/api.ts`.
+- Consumes: Task 2's `initial`, `step` and `shows`; `api.editIssue(roomId: string, issue: string): Promise<void>` and `api.isSessionRefusal(reason: unknown): boolean` from `frontend/src/protocol/api.ts`.
 - Produces:
   - `frontend/src/components/useIssueEditor.ts`: `useIssueEditor(issue: string, save: (issue: string) => Promise<void>)` returning `EditorView & { pencil(): void; type(text: string): void; submit(): void; cancel(): void; takeTheirs(): void }`.
   - `IssueEditor` props become `{ issue: string; onSave: (issue: string) => Promise<void> }`.
@@ -607,15 +607,14 @@ In `frontend/src/room/view.test.ts`, delete `const idle = { issueFocused: false,
 Create `frontend/src/components/useIssueEditor.ts`:
 
 ```ts
-import { useState } from 'react'
-import { initial, shows, step, type EditorEvent } from '../room/issueEditor'
+import { useReducer } from 'react'
+import { initial, shows, step } from '../room/issueEditor'
 
 // The editor's state machine held in React; the save's promise answers it with success or failure.
 export function useIssueEditor(issue: string, save: (issue: string) => Promise<void>) {
-  const [state, setState] = useState(() => initial(issue))
+  const [state, dispatch] = useReducer(step, issue, initial)
   // Folded in during render rather than in an effect, so no frame shows the old issue.
-  if (issue !== state.store) setState(step(state, { type: 'snapshot', issue }))
-  const dispatch = (event: EditorEvent) => setState(s => step(s, event))
+  if (issue !== state.store) dispatch({ type: 'snapshot', issue })
 
   const submit = () => {
     if (state.mode !== 'editing') return
