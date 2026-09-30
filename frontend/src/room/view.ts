@@ -30,10 +30,7 @@ export type View = {
   votesSummary: [string, number][]
 }
 
-// prev carries only what the next view depends on; step 8b removes issueFocused.
-export type Previous = { issueFocused: boolean; currentIssue: string }
-
-export function applySnapshot(prev: Previous, s: RoomSnapshot): View {
+export function applySnapshot(s: RoomSnapshot): View {
   const users = s.users.map(toRow)
   const me = users.find(u => u.id === s.you)
   const tally: Record<string, number> = {}
@@ -45,8 +42,7 @@ export function applySnapshot(prev: Previous, s: RoomSnapshot): View {
   return {
     users,
     votesRevealed: s.votesRevealed,
-    // Do not clobber the issue input while the user is typing in it.
-    currentIssue: prev.issueFocused ? prev.currentIssue : s.currentIssue,
+    currentIssue: s.currentIssue,
     userEstimation: me ? me.estimation : '',
     ownVoteConfirmed: !me || me.voted || !me.estimation,
     votesSummary: Object.entries(tally).sort((a, b) => b[1] - a[1])

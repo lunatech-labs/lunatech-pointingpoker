@@ -11,7 +11,9 @@ import {
   revealedCell,
   summaryTable,
   issueBox,
-  issueButton,
+  issueCancel,
+  issueCheck,
+  issuePencil,
   votedMark,
   hiddenMark,
   vote,
@@ -106,7 +108,7 @@ test('the issue box is readonly until the pencil is pressed', async ({ join }) =
   const alice = await join('Alice')
 
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
-  await issueButton(alice.page).click()
+  await issuePencil(alice.page).click()
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 })
 
@@ -266,9 +268,9 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   // Two commits stand in for the heartbeat 15s away: a dead stream shows only on a failed
   // write. Edits, not votes, since a vote after the prune could reveal the round legitimately.
   for (const issue of ['PP-1', 'PP-2']) {
-    await issueButton(alice.page).click()
+    await issuePencil(alice.page).click()
     await issueBox(alice.page).fill(issue)
-    await issueButton(alice.page).click()
+    await issueCheck(alice.page).click()
     // Bob's box is the proof the publish went out, and therefore that Carol was written to.
     await expect(issueBox(bob.page)).toHaveValue(issue)
   }
@@ -525,11 +527,11 @@ test('a stream frozen without an error is noticed and reopened on its own', asyn
   await expect(votedMark(participantRow(bob.page, 'Alice'))).toHaveCount(0)
 })
 
-test('the issue box resyncs once the editor loses focus', async ({ join }) => {
+test('a draft survives blur and room activity', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
 
-  await issueButton(alice.page).click()
+  await issuePencil(alice.page).click()
   await issueBox(alice.page).fill('Alice is still typing')
 
   // Any publish carries the issue, so a vote by anyone would clobber an unguarded box.
@@ -538,29 +540,29 @@ test('the issue box resyncs once the editor loses focus', async ({ join }) => {
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 
+  // Edit mode, not focus, guards the draft, so alt-tabbing away to copy a title loses nothing.
   await issueBox(alice.page).blur()
-  await vote(bob.page, '3')
-  await expect(issueBox(alice.page)).toHaveValue('')
+  await bob.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(0)
+  await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 })
 
 test('an edit committed with the check button reaches the other browser', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
 
-  await issueButton(alice.page).click()
+  await issuePencil(alice.page).click()
   await issueBox(alice.page).fill('PP-42')
-  // The guard keys on focus, and pressing the button blurs first: a guard scoped to
-  // `editing` instead would tear out this button on that very blur.
-  await issueButton(alice.page).click()
+  await issueCheck(alice.page).click()
 
   await expect(issueBox(bob.page)).toHaveValue('PP-42')
   await expect(issueBox(alice.page)).toHaveValue('PP-42')
 
-  // Alice's own typed value cannot distinguish an applied snapshot from a blocked one, so
+  // Alice's own saved text cannot distinguish an applied snapshot from a blocked one, so
   // move the room past it and require her to follow.
-  await issueButton(bob.page).click()
+  await issuePencil(bob.page).click()
   await issueBox(bob.page).fill('PP-43')
-  await issueButton(bob.page).click()
+  await issueCheck(bob.page).click()
   await expect(issueBox(alice.page)).toHaveValue('PP-43')
 })
 
@@ -568,18 +570,134 @@ test('a commit that never blurred the box still lets the room resync it', async 
   const alice = await join('Alice')
   const bob = await join('Bob')
 
-  await issueButton(alice.page).click()
+  await issuePencil(alice.page).click()
   await issueBox(alice.page).fill('PP-42')
   // Stands in for macOS, where clicking a button moves no focus: dispatchEvent carries no
-  // mousedown, so no blur precedes the commit. A real click blurs first and masks a stuck guard.
-  await issueButton(alice.page).dispatchEvent('click')
-  // Proves the commit posted, so a failure below is the guard and not a dead synthetic click.
+  // mousedown, so the box keeps focus through the save, which must not hold the room off.
+  await issueCheck(alice.page).dispatchEvent('click')
+  // Proves the commit posted, so a failure below is the editor and not a dead synthetic click.
   await expect(issueBox(bob.page)).toHaveValue('PP-42')
 
-  await issueButton(bob.page).click()
+  await issuePencil(bob.page).click()
   await issueBox(bob.page).fill('PP-43')
-  await issueButton(bob.page).click()
+  await issueCheck(bob.page).click()
   await expect(issueBox(alice.page)).toHaveValue('PP-43')
+})
+
+// Sets the room's issue from one browser; the caller waits for whatever proves it landed.
+async function setIssue(member, issue) {
+  await issuePencil(member.page).click()
+  await issueBox(member.page).fill(issue)
+  await issueCheck(member.page).click()
+}
+
+const conflictNotice = page => page.getByText('Changed by someone else to:')
+
+test('Enter saves and Escape cancels', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issuePencil(alice.page).click()
+  // The pencil focuses the box, so the keys work without clicking into it first.
+  await alice.page.keyboard.type('PP-7')
+  // An input method's Enter confirms its composition and must not save the draft.
+  await issueBox(alice.page).dispatchEvent('keydown', { key: 'Enter', isComposing: true })
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  await alice.page.keyboard.press('Enter')
+  await expect(issueBox(bob.page)).toHaveValue('PP-7')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('scrapped')
+  await alice.page.keyboard.press('Escape')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+  await expect(issueBox(alice.page)).toHaveValue('PP-7')
+})
+
+test("cancel drops the draft for the room's issue", async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  await setIssue(bob, 'PP-1')
+  await expect(issueBox(alice.page)).toHaveValue('PP-1')
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('scrapped')
+  await setIssue(bob, 'PP-2')
+  await expect(conflictNotice(alice.page)).toBeVisible()
+  await issueCancel(alice.page).click()
+
+  await expect(issueBox(alice.page)).toHaveValue('PP-2')
+  await expect(issuePencil(alice.page)).toBeVisible()
+})
+
+test('a concurrent change shows the notice, and Use theirs takes it', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await setIssue(bob, 'PP-2')
+
+  await expect(conflictNotice(alice.page)).toHaveText(/Changed by someone else to: "PP-2"/)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await alice.page.getByRole('button', { name: 'Use theirs' }).click()
+  await expect(issueBox(alice.page)).toHaveValue('PP-2')
+  await expect(conflictNotice(alice.page)).toHaveCount(0)
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  // The link-button leaves with the notice, so the box takes focus back for Enter and Escape.
+  await expect(issueBox(alice.page)).toBeFocused()
+})
+
+test('saving over a concurrent change replaces it', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await setIssue(bob, 'PP-2')
+  await expect(conflictNotice(alice.page)).toBeVisible()
+
+  await issueCheck(alice.page).click()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(conflictNotice(alice.page)).toHaveCount(0)
+})
+
+test('a double-clicked check posts once', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const posts = []
+  alice.page.on('request', request => {
+    if (request.url().endsWith(`/rooms/${room}/edit-issue`)) posts.push(request.postData())
+  })
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueCheck(alice.page).dblclick()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  // A second POST would follow the first within a round trip; Bob's vote is a later frame.
+  await vote(bob.page, '5')
+  await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(1)
+  expect(posts).toHaveLength(1)
+})
+
+test('a save the network drops keeps the draft and says so', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const editIssue = new RegExp(`/rooms/${room}/edit-issue$`)
+  await alice.page.route(editIssue, route => route.abort())
+
+  await issuePencil(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueCheck(alice.page).click()
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+
+  await alice.page.unroute(editIssue)
+  await issueCheck(alice.page).click()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await expect(alice.page.getByText('Could not save the issue')).toHaveCount(0)
 })
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
