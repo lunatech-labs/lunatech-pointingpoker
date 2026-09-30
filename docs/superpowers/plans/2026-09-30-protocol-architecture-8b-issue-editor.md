@@ -28,7 +28,7 @@ Each is implemented as written unless review changes it.
 - **P1. The matrix is a pure module, `frontend/src/room/issueEditor.ts`, and `useIssueEditor` is 20 lines of wiring.** Vitest runs in node with no DOM renderer, so the spec's unit tests "for `useIssueEditor`" run against `step` and `shows`, and the e2e cases cover the hook. The module has no React import, so it sits in the room-state layer beside `view.ts`.
 - **P2. `REQUEST_TIMEOUT_MS` is defined once, in `api.ts`.** `connection.ts`'s `FETCH_TIMEOUT_MS` becomes an alias of it, so the liveness fetch and its tests keep their names. The protocol layer cannot import from the room layer, which settles the direction.
 - **P3. The bound wraps the whole call, not the fetch.** Each exported function runs its `client.POST` inside `timed`, passing the signal in the call's options, which `openapi-fetch` puts on the `Request`. A bound on `fetch` alone ends at the headers, and `openapi-fetch` reads the body after that, so a stalled body would hang. That covers every request `api.ts` makes, join and create included, as "Frontend architecture" says. Its test installs a `fetch` mock and a `Request` stub through `vi.hoisted`, since `createClient` captures both at import and node's `Request` refuses the page's relative paths.
-- **P4. The pencil focuses the box,** so Enter and Escape work without a second click. Today's page leaves focus on the pencil.
+- **P4. The pencil and "Use theirs" focus the box,** so Enter and Escape work without a second click. Today's page leaves focus on the pencil, and "Use theirs" unmounts with the notice, which would drop focus to the page.
 - **P5. Enter while an input method is composing does nothing,** since it confirms the composition rather than the draft.
 - **P6. `Room` derives the view on every render.** With `issueFocused` gone, `applySnapshot` is a pure function of the snapshot, so `Room`'s `seen` and `view` state and their fold go. `View.currentIssue` stays and feeds the editor as the store's issue.
 - **P7. `Room`'s save reports its rejection, then rethrows it.** `report` is today's `run` handler: a 401 calls `onRefused` and anything else is logged. The rethrow reaches `useIssueEditor` as `failed`.
@@ -659,6 +659,11 @@ export function IssueEditor({ issue, onSave }: Props) {
     // The same input turns editable, so focusing it now lets Enter and Escape work at once.
     box.current?.focus()
   }
+  const takeTheirs = () => {
+    editor.takeTheirs()
+    // The link-button unmounts with the notice, which would drop focus to the page.
+    box.current?.focus()
+  }
   return (
     <div className="form-group row">
       <div className="col">
@@ -715,7 +720,7 @@ export function IssueEditor({ issue, onSave }: Props) {
         {editor.notice !== null && (
           <small className="form-text text-muted">
             Changed by someone else to: "{editor.notice}"{' '}
-            <button type="button" className="btn btn-link btn-sm p-0" onClick={editor.takeTheirs}>
+            <button type="button" className="btn btn-link btn-sm p-0" onClick={takeTheirs}>
               Use theirs
             </button>
           </small>
@@ -941,6 +946,8 @@ test('a concurrent change shows the notice, and Use theirs takes it', async ({ j
   await expect(issueBox(alice.page)).toHaveValue('PP-2')
   await expect(conflictNotice(alice.page)).toHaveCount(0)
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  // The link-button leaves with the notice, so the box takes focus back for Enter and Escape.
+  await expect(issueBox(alice.page)).toBeFocused()
 })
 
 test('saving over a concurrent change replaces it', async ({ join }) => {
