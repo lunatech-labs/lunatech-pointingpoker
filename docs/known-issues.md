@@ -931,6 +931,35 @@ roadmap item instead of leaving it here as stale history.
   hide a narrow case (it needs an offline or not-yet-200 app at the moment of the
   refusal).
 
+### An idle member stays in the old room for the length of a deploy's drain
+
+- **Where:** Clever Cloud's rolling deploy, as seen by
+  `frontend/src/room/connection.ts` (`refused` and the watchdog's `STALE_MS`).
+- **Issue:** After a deploy, Clever keeps the old instance running for about
+  two minutes and still routes some requests to it. A page whose stream is on
+  the old instance keeps showing the old room: members who came back on the new
+  instance do not appear, and nothing says the room has ended. A member who acts
+  recovers at once, since the new instance's 401 on the command runs `refused`.
+  One who does not act waits for the old instance to stop. Its streams then end
+  at the proxy, but the browser may not see the close, so the watchdog notices
+  the silence within `STALE_MS` (35 s), reopens, gets the 401 and reloads.
+- **Measured on 2026-09-29** from Clever's access logs:
+  - A Console redeploy of `98f698c`: the new instance was up at 17:46:35Z, the
+    old instance's streams all ended at 17:48:37Z, and the two idle pages had
+    reloaded by 17:49:17Z, about 2.5 minutes in all.
+  - The deploy of #417, whose old instance still served the frontend from
+    before step 8a, which has no watchdog: the streams ended at 13:02:19Z, but
+    the idle page only reconnected at 13:05:21Z, about 5 minutes after the new
+    instance was up at 13:00:19Z.
+- **Resolution:** Stays open. The drain is Clever's, not the app's. Ending
+  streams on SIGTERM would save at most the watchdog's 35 s, since Clever still
+  routed requests to the old instance a minute into the drain.
+- **To measure again:** `clever accesslogs --app <app> --since <t> --until <t>
+  -F json` writes a stream's line when the stream ends, so the old instance's
+  `/events` lines all ending together mark its stop. `clever logs` with
+  `-F json-stream` gives each line's `instanceId`. Both commands keep running
+  past `--until`, so run them under `timeout`.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
