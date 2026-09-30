@@ -800,15 +800,16 @@ roadmap item instead of leaving it here as stale history.
   appeared. That notice now toggles `visibility` and holds its line at all
   times, pinned by "the reveal notice claims its space before the reveal" in
   `e2e/room.spec.js`.
-- **Resolution:** Left to step 8's rewrite, and deliberately not fixed the same
-  way. Reserving the summary block's space would put an empty card and an empty
-  table on the page for the whole pre-reveal round, which is a worse page than
-  one that grows when there is something to show: unlike the notice, this block
-  is real content arriving, and the movement is honest feedback that the reveal
-  landed. What the rewrite should carry over is that the shift is the block's
-  position rather than its existence, so placing the participants list above the
-  results would settle it without hiding anything. Remove this entry when step
-  8c lands or decides otherwise.
+- **Resolution:** Left to the UI refresh's step 4, and deliberately not fixed
+  the same way. Reserving the summary block's space would put an empty card and
+  an empty table on the page for the whole pre-reveal round, which is a worse
+  page than one that grows when there is something to show: unlike the notice,
+  this block is real content arriving, and the movement is honest feedback that
+  the reveal landed. What step 4 should carry over is that the shift is the
+  block's position rather than its existence, so placing the participants list
+  above the results would settle it without hiding anything. Remove this entry
+  when step 4 of `docs/superpowers/specs/2026-09-30-ui-refresh-design.md` lands
+  or decides otherwise.
 
 ### Only a real e2e failure exercises the artifact upload path
 
@@ -938,6 +939,21 @@ roadmap item instead of leaving it here as stale history.
   `/events` lines all ending together mark its stop. `clever logs` with
   `-F json-stream` gives each line's `instanceId`. Both commands keep running
   past `--until`, so run them under `timeout`.
+
+### A screen reader hears the connection lost, but never that it came back
+
+- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+  `frontend/src/components/App.tsx` (`connectionMessage`).
+- **Issue:** "Connection to the room was lost" shows in a `role="alert"`, so a
+  screen reader announces it. When the connection recovers in place, the
+  message is removed, and a removal is not announced, so the user is left
+  believing the room is gone until they look. A recovery through a reload is no
+  better: "Reconnected. Please check your vote." is on the page when it loads,
+  so it is found in reading order rather than announced.
+- **Resolution:** Stays open, as a step 5+ candidate of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, "Announce a
+  recovered connection". Announcing it is a behaviour change with its own
+  decisions, such as the wording and whether a short flap is announced.
 
 ## Traceability note
 
