@@ -244,7 +244,7 @@ only downward:
 components (React)     App, Lobby, RoomHeader, Alerts, IssueEditor,
         |              Deck, Results, Participants, Controls
         v
-room state (plain TS)  connection store, view derivation
+room state (plain TS)  connection store, view derivation, issue editor machine
         |
         v
 protocol (plain TS)    zod snapshot schema, generated API types, typed client
@@ -270,8 +270,9 @@ leave beacon and the `pagehide` and `pageshow` listeners. It exposes a store of
 `getSnapshot`, the shape `useSyncExternalStore` consumes. `getSnapshot` returns the same object until
 something changes, since a fresh object per call makes React re-render forever.
 `view.ts` is today's `applySnapshot`: the tally, the reader's own estimation and
-whether it is confirmed. The editor commit removes its `issueFocused` input,
-leaving a pure function of the snapshot.
+whether it is confirmed. Step 8b removes its `issueFocused` input, leaving a
+pure function of the snapshot. `issueEditor.ts` is the editor's matrix as a
+pure `step`, with `shows` deriving what renders.
 
 **Components** (`frontend/src/components/`) follow today's page regions and
 read room state through one hook, `useRoom`. Purely local UI state (the lobby
@@ -627,8 +628,9 @@ because, without a cancel, a user who opened the editor and clicked away would
 silently stop receiving issue updates. A cancel and a conflict notice remove
 that objection, so step 8b guards the whole of edit mode.
 
-`useIssueEditor` holds the logic and `IssueEditor` the markup; step 8c
-rewrites only the markup. Below, **the room's issue** is the store's, with one
+`issueEditor.ts` holds the logic, `useIssueEditor` holds it in React and
+`IssueEditor` the markup; step 8c rewrites only the markup. Below,
+**the room's issue** is the store's, with one
 exception: from a successful save until the store's issue differs from what it
 held when saving began, it is the saved text. "Why the saved text waits for a
 different issue" says why.
@@ -791,7 +793,7 @@ Each case below lands with the step whose behaviour it pins.
   silence, an invalid snapshot taking the refusal path with the banner on, no event, Leave included, handled
   once stopped, the banner hidden while `fatal`, and the reach-the-room rule; `view.ts`, including
   name order ignoring case and accents with the id tie-break; for
-  `useIssueEditor`, every cell of the editor's matrix that is not "Cannot
+  `issueEditor.ts`, every cell of the editor's matrix that is not "Cannot
   happen" and its accepted races, plus the saved text ignoring a stale frame,
   ending on a frame that beat the POST response and on someone else's later
   edit, and the pencil opening the saved text; `api.ts` aborting a request after 10 s; the strict
