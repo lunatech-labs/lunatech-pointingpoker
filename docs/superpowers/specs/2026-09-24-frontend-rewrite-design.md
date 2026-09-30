@@ -210,7 +210,7 @@ it pinned:
   and cancel get the accessible names "Edit issue", "Save issue" and "Cancel
   editing", and `e2e/fixtures.js`'s `issueButton`, whose class selector would
   match both the check and the cancel, gives way to role-and-name locators at
-  its nine call sites.
+  its twelve call sites.
 
 The pass condition for step 8 is the existing e2e suite green with at most
 listed selector changes to the cases, beside the harness changes commits 1 and
