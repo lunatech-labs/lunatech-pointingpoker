@@ -640,16 +640,22 @@ different issue" says why.
 | saving | The draft, read-only, with the check and the cancel disabled |
 
 The look stays today's, from Bootstrap 4 classes the page already uses and no
-new CSS. The cancel is a second `btn btn-outline-secondary` in the check's
-`input-group-append`, with Lucide's `X` at 20px; the three buttons get their
-names from `aria-label`. The notice is a `<small className="form-text
-text-muted">` line under the input group, X in quotes so an empty issue reads
-`""`, with "Use theirs" as a `btn btn-link btn-sm p-0` inside it. The failure
-is a `<small className="form-text text-danger">` line below, and both can show
-at once. They push the page down while shown, with no reserved height, since
-only edit mode shows them. Neither carries a role: `connectionAlert` is an
-unfiltered `getByRole('alert')`, and the live regions wait for step 8c as the
-reveal's does.
+new CSS. Editing, with both lines showing:
+
+```
+[ PROJ-41 checkout flow                     ][ ✓ ][ ✕ ]
+Changed by someone else to: "PROJ-42 login"  Use theirs
+Could not save the issue
+```
+
+The cancel is a second `btn btn-outline-secondary` beside the check, with
+Lucide's `X` at 20px, and the three buttons get their names from `aria-label`.
+The notice is `<small className="form-text text-muted">`, X in quotes so an
+empty issue reads `""`, with "Use theirs" a `btn btn-link btn-sm p-0`; the
+failure is `<small className="form-text text-danger">`. They push the page down
+while shown, with no reserved height, since only edit mode shows them. Neither
+carries a role: `connectionAlert` is an unfiltered `getByRole('alert')`, and
+the live regions wait for step 8c as the reveal's does.
 
 Every event against every state:
 
