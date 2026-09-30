@@ -219,6 +219,7 @@ commit before it.
 
 Step 8c: component library and look, light and dark theme, responsive layout,
 alphabetical participant order, the revealed-round live region, the
+editor's live regions, the
 frozen-deck tooltip step 3a declined, restyling the editor, placing the
 participants list above the results, and a "Not Alice?" way to join under
 another name than the remembered one. By default it restyles the earlier
@@ -637,6 +638,18 @@ different issue" says why.
 | viewing | The room's issue, read-only, with a pencil |
 | editing | The draft, editable, with a check and a cancel. While the room's issue differs from both the starting point and the draft, also "Changed by someone else to: X" and "Use theirs". After a failed save, "Could not save the issue" until it leaves editing |
 | saving | The draft, read-only, with the check and the cancel disabled |
+
+The look stays today's, from Bootstrap 4 classes the page already uses and no
+new CSS. The cancel is a second `btn btn-outline-secondary` in the check's
+`input-group-append`, with Lucide's `X` at 20px; the three buttons get their
+names from `aria-label`. The notice is a `<small className="form-text
+text-muted">` line under the input group, X in quotes so an empty issue reads
+`""`, with "Use theirs" as a `btn btn-link btn-sm p-0` inside it. The failure
+is a `<small className="form-text text-danger">` line below, and both can show
+at once. They push the page down while shown, with no reserved height, since
+only edit mode shows them. Neither carries a role: `connectionAlert` is an
+unfiltered `getByRole('alert')`, and the live regions wait for step 8c as the
+reveal's does.
 
 Every event against every state:
 
