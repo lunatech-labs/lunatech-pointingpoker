@@ -268,9 +268,7 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   // Two commits stand in for the heartbeat 15s away: a dead stream shows only on a failed
   // write. Edits, not votes, since a vote after the prune could reveal the round legitimately.
   for (const issue of ['PP-1', 'PP-2']) {
-    await issuePencil(alice.page).click()
-    await issueBox(alice.page).fill(issue)
-    await issueCheck(alice.page).click()
+    await setIssue(alice, issue)
     // Bob's box is the proof the publish went out, and therefore that Carol was written to.
     await expect(issueBox(bob.page)).toHaveValue(issue)
   }
@@ -542,6 +540,7 @@ test('a draft survives blur and room activity', async ({ join }) => {
 
   // Edit mode, not focus, guards the draft, so alt-tabbing away to copy a title loses nothing.
   await issueBox(alice.page).blur()
+  // Clear, not a re-vote: Bob's mark only disappears once the frame lands.
   await bob.page.getByRole('button', { name: 'Clear votes' }).click()
   await expect(votedMark(participantRow(alice.page, 'Bob'))).toHaveCount(0)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
@@ -560,9 +559,7 @@ test('an edit committed with the check button reaches the other browser', async 
 
   // Alice's own saved text cannot distinguish an applied snapshot from a blocked one, so
   // move the room past it and require her to follow.
-  await issuePencil(bob.page).click()
-  await issueBox(bob.page).fill('PP-43')
-  await issueCheck(bob.page).click()
+  await setIssue(bob, 'PP-43')
   await expect(issueBox(alice.page)).toHaveValue('PP-43')
 })
 
@@ -578,9 +575,7 @@ test('a commit that never blurred the box still lets the room resync it', async 
   // Proves the commit posted, so a failure below is the editor and not a dead synthetic click.
   await expect(issueBox(bob.page)).toHaveValue('PP-42')
 
-  await issuePencil(bob.page).click()
-  await issueBox(bob.page).fill('PP-43')
-  await issueCheck(bob.page).click()
+  await setIssue(bob, 'PP-43')
   await expect(issueBox(alice.page)).toHaveValue('PP-43')
 })
 

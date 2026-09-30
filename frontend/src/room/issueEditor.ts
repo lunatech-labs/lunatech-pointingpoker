@@ -49,13 +49,13 @@ export function step(s: EditorState, e: EditorEvent): EditorState {
     case 'save':
       return s.mode === 'editing' ? { ...s, mode: 'saving', failed: false, before: s.store } : s
     case 'cancel':
-      return s.mode === 'editing' ? { ...s, mode: 'viewing', draft: '', failed: false } : s
+      return s.mode === 'editing' ? { ...s, mode: 'viewing' } : s
     case 'theirs':
       return s.mode === 'editing' ? { ...s, draft: roomIssue(s), start: roomIssue(s) } : s
     case 'succeeded':
       if (s.mode !== 'saving') return s
       // A frame that beat the response has already moved the store, so nothing is left to wait for.
-      return { ...s, mode: 'viewing', saved: s.store === s.before ? s.draft : null, draft: '' }
+      return { ...s, mode: 'viewing', saved: s.store === s.before ? s.draft : null }
     case 'failed':
       return s.mode === 'saving' ? { ...s, mode: 'editing', failed: true } : s
   }
