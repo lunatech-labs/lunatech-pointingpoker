@@ -12,10 +12,10 @@
 
 ## How the code in this plan was verified
 
-Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and both tasks were rerun together on that version:
+Every patch below was applied and run in a scratch worktree on 2026-09-30, one commit at a time, on this branch at `5d47c1d`. Review then moved Task 1's bound from `fetch` to the whole call, and review split the editor into its machine and its wiring; all three commits were rerun together on that version:
 
-- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (78 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 3 runs it.
-- **Each commit's tests failed first.** Task 1's two bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 2, Step 12.
+- **Green at the end.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (78 tests), `node --test "test/**/*.test.js"` (17 tests), and the whole e2e suite, 102 of 102 in Chromium and Firefox. No Scala changes, so `sbt test` was not rerun; Task 4 runs it.
+- **Each commit's tests failed first.** Task 1's two bound tests failed with `expected [ 'pending', 'pending' ] to deeply equal [ 'pending', 'AbortError' ]`. Task 2's machine tests failed on the missing module. Against the old editor, with the fixtures pointed back at its class selector so that behaviour and not a missing name decides, six of the new or inverted e2e cases failed on a behaviour assertion; the failures are quoted in Task 3, Step 7.
 - **Teeth, by mutation.** Two new e2e cases pass against the old editor too, since it has neither bug: "a save refused by a different instance recovers like any command" failed once `Room`'s save stopped reporting the rejection, and "a double-clicked check posts once" failed with two POSTs once both the disabled check and `submit`'s mode guard were removed. The machine's latch failed "ends on the page's own frame and follows the room after it" once made to recompute from `before` instead of clearing. The IME guard failed "Enter saves and Escape cancels" once removed. "Leaves no timer behind once answered" failed once `clearTimeout` was removed. "Fails once its body stalls for 10 s" was the only failure against a bound on `fetch` alone, the design review replaced, whose promise settles at the headers.
 - **One flake found and fixed.** Asserting "Could not save the issue" before a 401's reload failed once in a full run: the liveness fetch can reload within milliseconds, the spec's accepted race "A 401 while the app runs". The case now asserts the reload and the dropped draft only, and passed 10 of 10 repeats; the other editor cases passed 72 of 72 over four repeats each.
 - **The look.** A throwaway Playwright screenshot of the notice and the failure line together matched the spec's mockup, centred by the card's `text-center`.
@@ -34,7 +34,7 @@ Each is implemented as written unless review changes it.
 - **P7. `Room`'s save reports its rejection, then rethrows it.** `report` is today's `run` handler: a 401 calls `onRefused` and anything else is logged. The rethrow reaches `useIssueEditor` as `failed`.
 - **P8. Three e2e cases beyond the spec's list:** "a double-clicked check posts once", "a save the network drops keeps the draft and says so", and, in `refusal.spec.js`, "a save refused by a different instance recovers like any command". They pin the saving state's disabled check, the failure cell and the 401 cell.
 - **P9. The spec's count of `issueButton`'s call sites is corrected from nine to twelve** in the commit that adds this plan: three outside the editor cases (the read-only case and `departureWhileCut`) and nine inside them.
-- **P10. Two commits.** The 10 s bound is judged by its own unit test and has an effect beyond the editor, so it lands first. The editor commit carries its docs: the known-issues entry removed, the spec's status line and the parent design's "Landed" paragraph.
+- **P10. Three commits.** The 10 s bound is judged by its own unit test and has an effect beyond the editor, so it lands first. The editor's machine is judged by its unit cases alone and holds the matrix's hard logic, so it lands second, before anything imports it. The wiring commit carries the docs: the known-issues entry removed, the spec's status line and the parent design's "Landed" paragraph.
 
 ## Global Constraints
 
@@ -52,13 +52,13 @@ Each is implemented as written unless review changes it.
 
 ## Review Focus
 
-The inputs most likely to bite a person that the spec leaves unsaid, most likely first. Each has its test in Task 2.
+The inputs most likely to bite a person that the spec leaves unsaid, most likely first. Each has its test in Task 2 or Task 3.
 
 1. **Enter pressed to confirm an input method's composition** (Japanese, Chinese, Korean). Expected: the composition confirms and nothing is saved. Pinned in "Enter saves and Escape cancels" with a composing `keydown`.
 2. **A double-clicked check, or Enter held down.** Expected: one POST. Pinned by "a double-clicked check posts once".
 3. **Someone empties the issue while you edit.** Expected: the notice reads `Changed by someone else to: ""`, not a line ending at the colon. Pinned by the unit case "names an issue someone emptied".
 4. **Safari on macOS, where clicking a button moves no focus.** Expected: the save still posts and the room still resyncs. Pinned by the kept case "a commit that never blurred the box still lets the room resync it".
-5. **A phone's on-screen keyboard.** Expected: its Enter or Go key saves. The e2e suite runs no phone, so the rollout's hand test on the Android phone ("Step 8b: edit the issue, save and cancel") covers it; Task 3 lists it in the hand-over.
+5. **A phone's on-screen keyboard.** Expected: its Enter or Go key saves. The e2e suite runs no phone, so the rollout's hand test on the Android phone ("Step 8b: edit the issue, save and cancel") covers it; Task 4 lists it in the hand-over.
 
 ---
 
@@ -278,22 +278,13 @@ git commit -m "feat(frontend): abort a request unanswered after 10 s (step 8b)" 
 
 ---
 
-### Task 2: Edit mode guards the draft, with a cancel and a conflict notice
+### Task 2: The editor's matrix as a pure state machine
 
 **Files:**
-- Create: `frontend/src/room/issueEditor.ts`, `frontend/src/room/issueEditor.test.ts`, `frontend/src/components/useIssueEditor.ts`
-- Modify: `frontend/src/components/IssueEditor.tsx` (whole file), `frontend/src/components/Room.tsx`, `frontend/src/room/view.ts`, `frontend/src/room/view.test.ts`
-- Modify: `e2e/fixtures.js` (`issueButton` and the comment above `nameInput`), `e2e/room.spec.js` (the import list, three call sites, and the block from "the issue box resyncs once the editor loses focus" up to "a re-vote leaves the caster shown as selected but unconfirmed"), `e2e/refusal.spec.js` (the import list and one new case at the end)
-- Modify: `docs/known-issues.md`, `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` (status line), `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` (step 8's "Landed" paragraph)
+- Create: `frontend/src/room/issueEditor.ts`, `frontend/src/room/issueEditor.test.ts`
 
 **Interfaces:**
-- Consumes: `api.editIssue(roomId: string, issue: string): Promise<void>` and `api.isSessionRefusal(reason: unknown): boolean` from `frontend/src/protocol/api.ts`.
-- Produces:
-  - `frontend/src/room/issueEditor.ts`: `type Mode = 'viewing' | 'editing' | 'saving'`; `type EditorState`; `type EditorEvent`; `initial(issue: string): EditorState`; `roomIssue(s: EditorState): string`; `step(s: EditorState, e: EditorEvent): EditorState`; `type EditorView = { mode: Mode; text: string; notice: string | null; failed: boolean }`; `shows(s: EditorState): EditorView`.
-  - `frontend/src/components/useIssueEditor.ts`: `useIssueEditor(issue: string, save: (issue: string) => Promise<void>)` returning `EditorView & { pencil(): void; type(text: string): void; submit(): void; cancel(): void; takeTheirs(): void }`.
-  - `IssueEditor` props become `{ issue: string; onSave: (issue: string) => Promise<void> }`.
-  - `applySnapshot(s: RoomSnapshot): View`, with `Previous` deleted.
-  - `e2e/fixtures.js`: `issuePencil`, `issueCheck`, `issueCancel` replace `issueButton`.
+- Produces: `frontend/src/room/issueEditor.ts`: `type Mode = 'viewing' | 'editing' | 'saving'`; `type EditorState`; `type EditorEvent`; `initial(issue: string): EditorState`; `roomIssue(s: EditorState): string`; `step(s: EditorState, e: EditorEvent): EditorState`; `type EditorView = { mode: Mode; text: string; notice: string | null; failed: boolean }`; `shows(s: EditorState): EditorView`. Nothing imports it until Task 3.
 
 How the matrix maps onto `step`: the events are `pencil`, `typed`, `save` (Enter or the check), `cancel` (Escape or the cancel), `theirs`, `snapshot`, `succeeded` and `failed` (any rejection, a 401 or an abort included). An event outside the state that handles it returns the state unchanged, which is both the matrix's "Ignored" and its "Cannot happen". The spec's "room's issue" is `roomIssue`: `saved`, the saved text, while non-null, else `store`. `saved` is set on `succeeded` only if the store still holds `before`, its value when saving began, and cleared by the first `snapshot` whose issue differs from `before`, so it never comes back.
 
@@ -557,7 +548,37 @@ Run: `npx vitest run --root frontend src/room/issueEditor.test.ts`
 Expected: FAIL, exactly "the saved text > ends on the page's own frame and follows the room after it": a room that moves on and then back to the old issue would show the saved text again.
 Then undo both edits.
 
-- [ ] **Step 6: Make `applySnapshot` a pure function of the snapshot**
+- [ ] **Step 6: Typecheck, lint, format**
+
+Run: `npm run typecheck && npm run lint && npm run test:unit && npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid frontend/src/room/issueEditor.ts frontend/src/room/issueEditor.test.ts`
+Expected: no errors; 79 tests pass (55, plus the machine's 24); `All matched files use Prettier code style!`
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add frontend/src/room/issueEditor.ts frontend/src/room/issueEditor.test.ts
+git commit -m "feat(frontend): add the issue editor's matrix as a pure state machine (step 8b)" -m "room/issueEditor.ts holds the spec's states x events matrix as step(), with shows() deriving what renders and roomIssue() the room's issue, the saved text while it waits for the store to leave its value from when saving began. Nothing imports it yet; the next commit wires it into the editor."
+```
+
+---
+
+### Task 3: Edit mode guards the draft, with a cancel and a conflict notice
+
+**Files:**
+- Create: `frontend/src/components/useIssueEditor.ts`
+- Modify: `frontend/src/components/IssueEditor.tsx` (whole file), `frontend/src/components/Room.tsx`, `frontend/src/room/view.ts`, `frontend/src/room/view.test.ts`
+- Modify: `e2e/fixtures.js` (`issueButton` and the comment above `nameInput`), `e2e/room.spec.js` (the import list, three call sites, and the block from "the issue box resyncs once the editor loses focus" up to "a re-vote leaves the caster shown as selected but unconfirmed"), `e2e/refusal.spec.js` (the import list and one new case at the end)
+- Modify: `docs/known-issues.md`, `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` (status line), `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md` (step 8's "Landed" paragraph)
+
+**Interfaces:**
+- Consumes: Task 2's `initial`, `step`, `shows` and `EditorEvent`; `api.editIssue(roomId: string, issue: string): Promise<void>` and `api.isSessionRefusal(reason: unknown): boolean` from `frontend/src/protocol/api.ts`.
+- Produces:
+  - `frontend/src/components/useIssueEditor.ts`: `useIssueEditor(issue: string, save: (issue: string) => Promise<void>)` returning `EditorView & { pencil(): void; type(text: string): void; submit(): void; cancel(): void; takeTheirs(): void }`.
+  - `IssueEditor` props become `{ issue: string; onSave: (issue: string) => Promise<void> }`.
+  - `applySnapshot(s: RoomSnapshot): View`, with `Previous` deleted.
+  - `e2e/fixtures.js`: `issuePencil`, `issueCheck`, `issueCancel` replace `issueButton`.
+
+- [ ] **Step 1: Make `applySnapshot` a pure function of the snapshot**
 
 In `frontend/src/room/view.ts`, delete the two lines
 
@@ -581,7 +602,7 @@ with
 
 In `frontend/src/room/view.test.ts`, delete `const idle = { issueFocused: false, currentIssue: '' }` and the blank line after it, replace every `applySnapshot(idle, ` with `applySnapshot(`, and delete the whole case `it("keeps the typed issue while the input is focused, and takes the room's otherwise", ...)`, whose behaviour the machine now owns.
 
-- [ ] **Step 7: Write the hook**
+- [ ] **Step 2: Write the hook**
 
 Create `frontend/src/components/useIssueEditor.ts`:
 
@@ -616,7 +637,7 @@ export function useIssueEditor(issue: string, save: (issue: string) => Promise<v
 }
 ```
 
-- [ ] **Step 8: Write the markup**
+- [ ] **Step 3: Write the markup**
 
 Replace `frontend/src/components/IssueEditor.tsx` with:
 
@@ -707,7 +728,7 @@ export function IssueEditor({ issue, onSave }: Props) {
 }
 ```
 
-- [ ] **Step 9: Wire it into `Room`**
+- [ ] **Step 4: Wire it into `Room`**
 
 Replace `frontend/src/components/Room.tsx` with:
 
@@ -774,12 +795,12 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
 }
 ```
 
-- [ ] **Step 10: Run the unit checks**
+- [ ] **Step 5: Run the unit checks**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
-Expected: no errors; 78 tests pass (55, plus the machine's 24, less the removed `view.test.ts` case).
+Expected: no errors; 78 tests pass (79, less the removed `view.test.ts` case).
 
-- [ ] **Step 11: The e2e changes**
+- [ ] **Step 6: The e2e changes**
 
 In `e2e/fixtures.js`, change the comment above `nameInput` to:
 
@@ -998,7 +1019,7 @@ test('a save refused by a different instance recovers like any command', async (
 Run: `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid e2e/fixtures.js e2e/room.spec.js e2e/refusal.spec.js && npx eslint e2e`
 Expected: `All matched files use Prettier code style!` and no lint output.
 
-- [ ] **Step 12: Show the e2e cases fail against the old editor**
+- [ ] **Step 7: Show the e2e cases fail against the old editor**
 
 Build the old editor with the new tests, pointing the pencil and check fixtures back at the old class selector, so each case fails on behaviour rather than on a missing name:
 
@@ -1010,7 +1031,7 @@ sed -i "s|page.getByRole('button', { name: 'Edit issue' })|page.locator('.input-
 npx playwright test e2e/room.spec.js e2e/refusal.spec.js --project=chromium -g "issue|draft|Enter|cancel|concurrent|save|commit|edit|double"
 ```
 
-Expected: 6 failed, 5 passed. The failures: "a draft survives blur and room activity" (`Expected: "Alice is still typing"`, `Received: ""`, at the final `toHaveValue`); "Enter saves and Escape cancels" (Bob's box `Expected: "PP-7"`, `Received: ""`); "cancel drops the draft for the room's issue", "a concurrent change shows the notice, and Use theirs takes it", "saving over a concurrent change replaces it" (no notice); and "a save the network drops keeps the draft and says so" (no failure line). The passes: the read-only case and the two kept commit cases, which judge unchanged behaviour, and the refused-save and double-click cases, which Step 13 shows have teeth.
+Expected: 6 failed, 5 passed. The failures: "a draft survives blur and room activity" (`Expected: "Alice is still typing"`, `Received: ""`, at the final `toHaveValue`); "Enter saves and Escape cancels" (Bob's box `Expected: "PP-7"`, `Received: ""`); "cancel drops the draft for the room's issue", "a concurrent change shows the notice, and Use theirs takes it", "saving over a concurrent change replaces it" (no notice); and "a save the network drops keeps the draft and says so" (no failure line). The passes: the read-only case and the two kept commit cases, which judge unchanged behaviour, and the refused-save and double-click cases, which Step 8 shows have teeth.
 
 Then restore:
 
@@ -1020,7 +1041,7 @@ git stash pop
 npm run build
 ```
 
-- [ ] **Step 13: Show the three guards have teeth**
+- [ ] **Step 8: Show the three guards have teeth**
 
 Each mutation below is applied alone, built with `npm run build`, run with the command given, and undone by hand before the next. `git checkout` would lose the uncommitted work.
 
@@ -1034,7 +1055,7 @@ Each mutation below is applied alone, built with `npm run build`, run with the c
    Run: `npx playwright test e2e/room.spec.js -g "double-clicked" --project=chromium`
    Expected: FAIL with `Expected length: 1`, `Received length: 2`.
 
-- [ ] **Step 14: Docs**
+- [ ] **Step 9: Docs**
 
 In `docs/known-issues.md`, delete the whole entry "The issue editor has no cancel, and an unfocused draft is replaced by any room activity", from its `###` heading up to, not including, `### Tests that pass with the mechanism they name deleted, as a recurring pattern`. No roadmap item tracks it.
 
@@ -1047,17 +1068,18 @@ Status: Steps 8, 8a and 8b landed; step 8c proposed
 In `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`, step 8's "Landed." paragraph, replace its closing `ended-session message on a page that never reached the room. Steps 8b and 8c` / `extend this paragraph.` with:
 
 ```markdown
-ended-session message on a page that never reached the room. Step 8b, the
-issue editor, in two commits: `api.ts` aborts a request unanswered after 10 s;
-and edit mode, not focus, guards the draft, with a cancel, Enter and Escape, a
-"Changed by someone else" notice with "Use theirs", and the saved text shown
-until a frame moves the room's issue. Step 8c extends this paragraph.
+ended-session message on a page that never reached the room. Step 8b, the issue
+editor, in three commits: `api.ts` aborts a request unanswered after 10 s; the
+editor's matrix becomes a pure state machine; and edit mode, not focus, guards
+the draft, with a cancel, Enter and Escape, a "Changed by someone else" notice
+with "Use theirs", and the saved text shown until a frame moves the room's
+issue. Step 8c extends this paragraph.
 ```
 
 Run: `grep -c $'\u2014' docs/known-issues.md docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`
 Expected: each file `0`.
 
-- [ ] **Step 15: Run everything**
+- [ ] **Step 10: Run everything**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
 Expected: no errors; 78 tests pass.
@@ -1068,20 +1090,20 @@ Expected: 17 pass, 0 fail (its `pretest` builds and stages).
 Run: `npx playwright test`
 Expected: 102 passed.
 
-- [ ] **Step 16: Check the look by hand**
+- [ ] **Step 11: Check the look by hand**
 
 Run `sbt run` and `npm run dev`, open one room in two browsers, start an edit in one and save a different issue from the other. Expected: under the input, the muted notice `Changed by someone else to: "..."` with a "Use theirs" link-button, as in the spec's mockup; the page below moves down while it shows.
 
-- [ ] **Step 17: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add frontend/src e2e docs
-git commit -m "feat(frontend): guard the whole of edit mode, with a cancel and a conflict notice (step 8b)" -m "The editor's matrix is a pure step() in room/issueEditor.ts, which useIssueEditor holds in React. A draft now survives blur and room activity until saved or cancelled; Escape and a new cancel drop it, Enter saves it, and a change by someone else shows beside it with Use theirs. A failed save keeps the draft and says so; a 401 still reaches onRefused. The saved text shows until a frame moves the room's issue, so a stale frame cannot flash the old one. applySnapshot loses issueFocused, and the e2e fixtures find the editor's buttons by their new accessible names."
+git commit -m "feat(frontend): guard the whole of edit mode, with a cancel and a conflict notice (step 8b)" -m "useIssueEditor holds the previous commit's step() in React. A draft now survives blur and room activity until saved or cancelled; Escape and a new cancel drop it, Enter saves it, and a change by someone else shows beside it with Use theirs. A failed save keeps the draft and says so; a 401 still reaches onRefused. The saved text shows until a frame moves the room's issue, so a stale frame cannot flash the old one. applySnapshot loses issueFocused, and the e2e fixtures find the editor's buttons by their new accessible names."
 ```
 
 ---
 
-### Task 3: The whole branch
+### Task 4: The whole branch
 
 - [ ] **Step 1: The spec's "Done when" for 8b**
 
