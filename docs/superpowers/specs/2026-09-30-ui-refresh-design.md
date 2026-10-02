@@ -226,6 +226,13 @@ element lists step 3's layouts give:
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
 and the phase line get test ids, and the moved copy hint becomes a
 `role="status"` region, all listed as contract changes (principle 9).
+Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
+Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
+chosen library may or may not ship one. The deck as a `<fieldset>` with a
+`<legend>`: the same `group` role and name step 1 gives its `div`, so no case
+changes, and `<fieldset disabled>` freezes every card at once. Step 1 keeps
+the `div` because a fieldset's default border, padding and
+`min-inline-size: min-content` would change the look, which a reset clears.
 Appendix C holds what this design's reviews found about writing these cases.
 
 **Step 4a. The round's live region.** Announces a reveal and a reopened round,
@@ -359,7 +366,8 @@ These deserve their reason:
   Appendix A proposes removing the large card, which would otherwise force a
   contract change in step 4.
 - The revealed value keeps a test id because it is the one signal a reveal
-  landed where nobody voted, whose value is empty; `revealedCell` relies on it.
+  landed where nobody voted, whose value is empty; `revealedEstimation`
+  relies on it.
 - An unconfirmed card is not pressed. After a Re-vote the page drops the
   selected styling today, the vote is not cast, and pressing the card casts
   it, so "pressed" would misinform a screen reader. It also keeps the re-vote
