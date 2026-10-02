@@ -744,3 +744,39 @@ test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ j
   await alice.page.getByRole('button', { name: 'Clear votes' }).click()
   await expect(unconfirmed).toHaveCount(0)
 })
+
+// The server's re-vote has no guard, so one click during voting would unconfirm every vote.
+test('Re-vote is offered only while the round is revealed', async ({ join }) => {
+  const alice = await join('Alice')
+  await join('Bob')
+  const reVote = alice.page.getByRole('button', { name: 'Re-vote' })
+
+  await vote(alice.page, '5')
+  await expect(ownEstimation(alice.page)).toHaveText('5')
+  await expect(reVote).toHaveCount(0)
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(reVote).toBeVisible()
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(reVote).toHaveCount(0)
+})
+
+test('the copy hint lasts 2 s from the first copy, not the last', async ({ join }) => {
+  const alice = await join('Alice')
+  const page = alice.page
+  const copy = page.getByRole('link', { name: 'Copy link' })
+  // By its text, so step 4's move to a status region breaks no lookup.
+  const hint = page.getByText('Link copied to clipboard')
+  // Paused just after real time: the tick's heartbeat was heard on the real clock.
+  await page.clock.install()
+  await page.clock.pauseAt(Date.now() + 2000)
+
+  await copy.click()
+  await expect(hint).toBeVisible()
+  await page.clock.runFor(1500)
+  await copy.click()
+  await expect(hint).toBeVisible()
+  await page.clock.runFor(490)
+  await expect(hint).toBeVisible()
+  await page.clock.runFor(10)
+  await expect(hint).toBeHidden()
+})
