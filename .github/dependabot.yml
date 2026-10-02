@@ -20,7 +20,7 @@ updates:
       # openapi-typescript needs TypeScript 5, and typescript-eslint stops before 6.1.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-      # Bootstrap 5 would break the frozen look; step 8c decides the library.
+      # Bootstrap 5 would break the frozen look; the UI refresh's step 4 decides the library.
       - dependency-name: "bootstrap"
         update-types: ["version-update:semver-major"]
     # @playwright/test is a devDependency, so it takes the -dev prefix.

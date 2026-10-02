@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Lock } from 'lucide-react'
 import type { View } from '../room/view'
 
@@ -6,6 +7,8 @@ const estimationValues = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34',
 type Props = { view: View; onVote: (estimation: string) => void }
 
 export function Deck({ view, onVote }: Props) {
+  const noteId = useId()
+  const unconfirmed = (e: string) => e === view.userEstimation && !view.ownVoteConfirmed
   const cardClass = (e: string) => {
     if (e !== view.userEstimation) return 'btn estimation-button m-1'
     return view.ownVoteConfirmed
@@ -29,17 +32,24 @@ export function Deck({ view, onVote }: Props) {
         </div>
       </div>
       <div className="col">
-        <div className="row">
+        <div className="row" role="group" aria-label="Estimation cards">
           {estimationValues.map(e => (
             <div className="col" key={e}>
               <button
                 type="button"
                 className={cardClass(e)}
+                aria-pressed={e === view.userEstimation && view.ownVoteConfirmed}
+                aria-describedby={unconfirmed(e) ? noteId : undefined}
                 disabled={view.votesRevealed}
                 onClick={() => onVote(e)}
               >
                 {e}
               </button>
+              {unconfirmed(e) && (
+                <span id={noteId} hidden>
+                  Previous vote, not confirmed
+                </span>
+              )}
             </div>
           ))}
         </div>

@@ -82,8 +82,10 @@ debugged at the same time.
 
 - [x] Migrate off Vue 2, to React (step 8).
 - [x] Component structure, TypeScript, build tooling, automated tests.
-- [ ] Appearance: light/dark theme (default to system preference), responsive/mobile
-      layout. (step 8c)
+- [ ] Appearance: brand, layout, responsive/mobile. Step 8c moved to
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`,
+      a design of its own, which drops the light/dark theme for now since
+      lunatech.com has one theme.
 
 ## Phase 4: Voting workflow features
 
@@ -91,7 +93,11 @@ Backend logic can start earlier, but the UI is most efficient to build once,
 directly in the new frontend.
 
 - [ ] Roles: voting participant vs. observer, self-service switching, excluding
-      observers from vote counts and status indicators.
+      observers from vote counts and status indicators. **Becomes step 2 of**
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`:
+      product owners who facilitate and never vote keep auto-reveal from ever
+      firing. It builds the non-voting role as that design's "facilitator", who
+      keeps the controls, so there is no read-only observer.
 - [ ] Show how many participants have voted, so a facilitator reads abstention
       instead of counting check-circles. Comes out of step 3, which took the
       non-voter out of the tally as a non-value: a count beside the distribution is
@@ -99,6 +105,8 @@ directly in the new frontend.
       want to be readable before the reveal, since revealing to find out costs a
       Re-vote. No protocol change, since `voted` is unredacted, so it is the new
       frontend's to render. Depends on the roles item above for its denominator.
+      A step 5+ candidate of
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
       Which proportion means "unclear" is left to the facilitator on purpose: show
       the number and stop there.
 - [x] Server-authoritative auto-reveal. Today "everyone voted" is computed
@@ -155,6 +163,8 @@ directly in the new frontend.
       is a stub.
 - [ ] Results display polish: pin `?`/`Infinity`, highlight lowest/highest
       estimate, group participants by estimate, tap-to-highlight interaction.
+      A step 5+ candidate of
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
 - [ ] A facilitator-recorded round outcome: teams often resolve a split by
       talking it out rather than re-voting, and the app has no concept of a
       settled estimate at all. A command plus a snapshot field. New here, and
@@ -289,8 +299,12 @@ directly in the new frontend.
       reordering (see `docs/known-issues.md`). Stays here deliberately: under a
       snapshot protocol a reordering is visible rather than silently divergent,
       and one has never been observed. The trigger is someone seeing one.
-- [ ] Presentation/TV-mode read-only view for screen sharing.
-- [ ] Keyboard shortcuts for voting.
+- [ ] Presentation/TV-mode read-only view for screen sharing. Addressed by the
+      facilitator's page in steps 2 and 4 of
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`,
+      which keeps its controls, so the read-only half is not taken.
+- [ ] Keyboard shortcuts for voting. A step 5+ candidate of
+      `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
 - [ ] Per-session auto-reveal toggle (some teams may want manual-only reveal).
 - [ ] Undo/re-hide after an accidental reveal. Pairs with what remains of Phase
       4's latched reveal. The accidental un-reveal that exists today closes at
