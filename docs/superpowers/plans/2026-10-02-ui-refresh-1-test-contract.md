@@ -14,27 +14,29 @@
 
 Every patch below was applied and run in a scratch worktree on 2026-10-02, one commit at a time, on this branch at `7f15d96`:
 
-- **Green at each commit.** After Task 1, `npm run typecheck`, `npm run lint`, `npm run test:unit` (83 tests) and the whole e2e suite with no test changed, 104 of 104 in Chromium and Firefox. After Task 2, 104 of 104. After Task 3, the two new cases passed 20 of 20 over `--repeat-each 5` in both browsers.
-- **The greps.** After Task 2, the first grep's only hits are `hit.closest('[role="status"]')` in `slug.spec.js` and `document.querySelector('[role="alert"]')` in `room.spec.js`, both role attribute selectors. The second grep finds nothing.
-- **Every attribute bites.** Each attribute Task 1 adds was removed in turn and Chromium's suite run with `--max-failures=1`. The first failing case per removal is recorded in Task 4, Step 3. With the issue box's placeholder removed instead, all 54 Chromium cases passed.
-- **Teeth for Task 3.** "Re-vote is offered only while the round is revealed" failed with `Expected: 0, Received: 1` once Re-vote was always rendered. "The copy hint lasts 2 s from the first copy" failed at its final `toBeHidden` once the timer was reset on each copy, and at the 1.99 s `toBeVisible` once the timeout was cut to 1.9 s. The reset mutation failing also shows the fake clock took over the already loaded page: with real timers the hint would have hidden within `toBeHidden`'s 5 s retry.
-- **The look.** The throwaway script in Task 4, Step 1 took 16 screenshots on `7f15d96` (four states, two viewports, two browsers), matched itself on a second run, and then matched the spike branch's pixels exactly. With the note's `hidden` removed, the re-vote screenshots failed at both viewports (1280 by 764 against 720, 390 by 1196 against 1172), which is the spec's evidence for the note's `hidden`.
+- **Green at each commit.** After Task 1, `npm run typecheck`, `npm run lint`, `npm run test:unit` (83 tests) and the whole e2e suite with no test changed, 104 of 104 in Chromium and Firefox. After Task 3, 104 of 104. After Task 4, the two new cases passed 20 of 20 over `--repeat-each 5` in both browsers.
+- **The greps.** After Task 3, the first grep's only hits are `hit.closest('[role="status"]')` in `slug.spec.js` and `document.querySelector('[role="alert"]')` in `room.spec.js`, both role attribute selectors. The second grep finds nothing.
+- **Every attribute bites.** Each attribute Task 1 adds was removed in turn and Chromium's suite run with `--max-failures=1`. A failing case per removal is recorded in Task 5, Step 2; with parallel workers it is not always the same one. With the issue box's placeholder removed instead, all 54 Chromium cases passed.
+- **Teeth for Task 4.** "Re-vote is offered only while the round is revealed" failed with `Expected: 0, Received: 1` once Re-vote was always rendered. "The copy hint lasts 2 s from the first copy" failed at its final `toBeHidden` once the timer was reset on each copy, and at the 1.99 s `toBeVisible` once the timeout was cut to 1.9 s. The reset mutation failing also shows the fake clock took over the already loaded page: with real timers the hint would have hidden within `toBeHidden`'s 5 s retry.
+- **The look.** The throwaway script in Task 1, Steps 1 and 6 took 16 screenshots on `7f15d96` (four states, two viewports, two browsers), matched itself on a second run, and then matched the spike branch's pixels exactly. With the note's `hidden` removed, the re-vote screenshots failed at both viewports (1280 by 764 against 720, 390 by 1196 against 1172), which is the spec's evidence for the note's `hidden`.
+- **After review, rerun on 2026-10-02 at `4adff61`.** Task 2 on its own gave 104 of 104, with Prettier clean, and Task 3 then 104 of 104. Task 3, Step 4's mutation failed at the `toHaveCount(0)` just after the vote, and Task 4's latch mutation failed only at the `toHaveCount(0)` after Clear, both `Expected: 0`, `Received: 1`. Task 1's in-place look check reproduced the baseline, the match and the `hidden` failure above. Task 3, Step 7's greps print the same with GNU `grep -r`.
 - **Formatting.** Touched files pass `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid`, except `Deck.tsx`'s `<Lock size={20} />{' '}` line, which Prettier flagged before this step and this plan leaves alone.
 
 ## Decisions this plan takes that the spec does not settle
 
 Each is implemented as written unless review changes it.
 
-- **P1. Roles go on the existing `div`s** (`role="region"`, `role="group"`), not on new `section` or `fieldset` tags. A `fieldset` brings a border, padding and a min-width, and keeping every tag keeps "nothing looks different" literally true.
+- **P1. Roles go on the existing `div`s** (`role="region"`, `role="group"`), not on new `section` or `fieldset` tags, as the spec's "Considered and not taken" says for the deck; the regions follow suit so no tag changes.
 - **P2. Ids come from React's `useId`,** for the name label in `Lobby` and the unconfirmed note in `Deck`. Only one name field and one note render at a time.
 - **P3. The unconfirmed note is a `<span hidden>` after the button, inside the card's `col`.** It is outside the button as the spec requires, so it stays out of the card's name, and it is rendered only while the card is unconfirmed.
-- **P4. Helper names.** `summaryTable` becomes `results`, and `summaryTable(page).locator('tbody tr')` becomes `tallyEntries(page)`. `mostVoted`, `deck`, `roomIdInput` and `unconfirmedCard` are new. `participantRows` and `participantRow` become `participantEntries` and `participantEntry`, matching `tallyEntries`: after this step they return test-id entries, not table rows, and step 4 may drop the table. The shorter `participant` would shadow the local of that name in the `join` fixture and in "two browsers exchange votes". `votedMark`, `hiddenMark` and `revealedCell` take `entry` for the same reason. `expectSummaryMatchesTable` becomes `expectSummaryMatchesParticipants`, and the 17 comment phrases that say "row" or "table" for an entry or the list say "entry" or "list". The comment on the deck's two layout rows keeps "row", which stays true whatever step 4 does to the tables. `issuePencil` and `issueCheck` become `issueEdit` and `issueSave`, named by action like `issueCancel` rather than by an icon a restyle may swap, and the three test titles and two comments that say "pencil" or "check" say "Edit issue" or "Save issue". `revealedCell` becomes `revealedEstimation`, after its test id, and "...tallies the estimations on the table" becomes "...tallies the estimations it shows". Older plans and the delivered rewrite spec cite the old titles; they stay as written, since they record what was true then. `card` and `vote` stay unscoped, as the spec keeps a card's lookup as it is.
+- **P4. Helper names.** `summaryTable` becomes `results`, and `summaryTable(page).locator('tbody tr')` becomes `tallyEntries(page)`. `mostVoted`, `deck`, `roomIdInput` and `unconfirmedCard` are new. `participantRows` and `participantRow` become `participantEntries` and `participantEntry`, matching `tallyEntries`: after this step they return test-id entries, not table rows, and step 4 may drop the table. The shorter `participant` would shadow the local of that name in the `join` fixture and in "two browsers exchange votes". `votedMark`, `hiddenMark` and `revealedCell` take `entry` for the same reason. `expectSummaryMatchesTable` becomes `expectSummaryMatchesParticipants`, and the 18 comment phrases that say "row" or "table" for an entry or the list say "entry" or "list". The comment on the deck's two layout rows keeps "row", which stays true whatever step 4 does to the tables. `issuePencil` and `issueCheck` become `issueEdit` and `issueSave`, named by action like `issueCancel` rather than by an icon a restyle may swap, and the three test titles and two comments that say "pencil" or "check" say "Edit issue" or "Save issue". `revealedCell` becomes `revealedEstimation`, after its test id, and "...tallies the estimations on the table" becomes "...tallies the estimations it shows". Older plans and the delivered rewrite spec cite the old titles; they stay as written, since they record what was true then. `card` and `vote` stay unscoped, as the spec keeps a card's lookup as it is.
 - **P5. The "takes no more votes" comment on `frozenNotice` is reworded,** since `votedMark` and `hiddenMark` now have names and no longer "lack" text to key on.
-- **P6. Task 3's cases go at the end of `room.spec.js`.** The Re-vote case joins two participants, since a lone vote completes the round and auto-reveals. It also checks Re-vote is gone again after Clear, which the same mutation catches.
+- **P6. Task 4's cases go at the end of `room.spec.js`.** The Re-vote case joins two participants, since a lone vote completes the round and auto-reveals. It also checks Re-vote is gone again after Clear, which a mutation keeping Re-vote once revealed catches.
 - **P7. The clock is paused at `Date.now() + 2000`,** two seconds past the test runner's real time, which stays far below `STALE_MS` (35 s).
-- **P8. Commit subjects end with "(ui refresh step 1)",** as step 8b's ended with "(step 8b)".
-- **P9. This plan lands in its own `docs` commit,** first on the branch after the design commit, as the 8b plan did.
+- **P8. The code commits' subjects end with "(ui refresh step 1)",** as step 8b's ended with "(step 8b)".
+- **P9. The plan and its review land as `docs` commits before Task 1.** The branch then reads: the design, the step 4 amendment, this plan, the review's revisions, and the spec's step 1 commits 2 to 6.
 - **P10. The spec's status line becomes `Status: landed. Branch: ...`** in the last commit, matching the rewrite spec's "landed".
+- **P11. The renames get their own `refactor(e2e)` commit (Task 2), before the contract commit (Task 3),** as the spec's commit 3. `summaryTable` is renamed in Task 3, since its meaning changes there.
 
 ## Global Constraints
 
@@ -45,7 +47,7 @@ Each is implemented as written unless review changes it.
 - Nothing looks different: no class, tag, style or CSS changes in product code.
 - Copy, verbatim: "User name", "Room id", "Current issue", "Estimation cards", "Previous vote, not confirmed", "Voted", "Vote hidden", "Participants", "Results".
 - Test ids, verbatim: `participant`, `participant-estimation`, `tally-entry`, `tally-value`, `tally-count`, `most-voted`.
-- Tasks 2 and 3 change no product code.
+- Tasks 2 to 4 change no product code.
 - The e2e suite must never contact a host other than `127.0.0.1`.
 - The unit counts assume `target/contract/` exists from an earlier `sbt test`; without it `snapshot.contract.test.ts` fails with "run sbt test first".
 - Frontend-only changes need `npm run build` before `npx playwright test`; `npm run e2e` builds and stages everything.
@@ -55,19 +57,19 @@ Each is implemented as written unless review changes it.
 
 The inputs most likely to bite a person that the spec leaves unsaid, most likely first.
 
-1. **A screen reader on the deck.** Expected: a card reads "5, toggle button, pressed" once confirmed, "not pressed" otherwise, and the unconfirmed card adds "Previous vote, not confirmed" once, not twice. No automated test can hear it. Task 4, Step 4 checks the accessibility tree in Firefox's Accessibility inspector or Chromium's Accessibility pane, and the PR says which.
-2. **The phone viewport.** Expected: the named regions and the hidden note change nothing at 390 px. Pinned by the look check's phone screenshots in Task 4, Step 1.
-3. **Firefox's accessible-name computation.** Expected: `getByRole` with `description` and `pressed` behaves as in Chromium. Pinned by running the whole suite in both projects in Tasks 2 and 3.
+1. **A screen reader on the deck.** Expected: a card reads "5, toggle button, pressed" once confirmed, "not pressed" otherwise, and the unconfirmed card adds "Previous vote, not confirmed" once, not twice. No automated test can hear it. Task 5, Step 3 checks the accessibility tree in Firefox's Accessibility inspector or Chromium's Accessibility pane, and the PR says which.
+2. **The phone viewport.** Expected: the named regions and the hidden note change nothing at 390 px. Pinned by the look check's phone screenshots in Task 1, Step 6.
+3. **Firefox's accessible-name computation.** Expected: `getByRole` with `description` and `pressed` behaves as in Chromium. Pinned by running the whole suite in both projects in Tasks 2 to 4.
 4. **A participant whose name contains "Voted" or "Vote hidden".** Expected: the marks are still told apart, since they are read by the icon's role and name, not the entry's text. No case needed: `getByRole('img', ...)` never matches the name cell's text.
 5. **The lobby's two tabs.** Expected: `getByLabel('User name')` finds one field on either tab, since only one tab's body renders. Pinned by `lobby.spec.js`, which runs both the Create and Join paths.
 
 ---
 
-### Before Task 1: commit this plan
+### Before Task 1: commit the review's revisions
 
 ```bash
-git add docs/superpowers/plans/2026-10-02-ui-refresh-1-test-contract.md
-git commit -m "docs: plan ui refresh step 1"
+git add docs/superpowers/plans/2026-10-02-ui-refresh-1-test-contract.md docs/superpowers/specs/2026-09-30-ui-refresh-design.md
+git commit -m "docs: revise the ui refresh step 1 plan after review" -m "One review wave: the pass-condition greps recurse, the renames get their own commit, the look check runs inside Task 1, and the two new assertions are each shown failing. The spec's step 1 commit list gains the refactor commit. A targeted pass then corrected why the deck stays a div (Reboot already clears a fieldset; the legend is the cost) and staged the app before the look baseline. So the contract commit's diff is reviewable alone, and each new check is shown able to fail."
 ```
 
 ### Task 1: The markup carries the contract's names
@@ -78,13 +80,60 @@ git commit -m "docs: plan ui refresh step 1"
 - Modify: `frontend/src/components/Results.tsx`
 - Modify: `frontend/src/components/Lobby.tsx`
 - Modify: `frontend/src/components/IssueEditor.tsx`
+- Throwaway, never committed: `e2e/look.spec.js` and `e2e/look.spec.js-snapshots/`
 
 **Interfaces:**
-- Produces, for Task 2: a `role="group"` named "Estimation cards" around the cards; every card with `aria-pressed` `"true"` or `"false"`; the unconfirmed card with the description "Previous vote, not confirmed"; `role="region"` named "Participants" with `participant` entries, `img`s named "Voted" and "Vote hidden", and `participant-estimation`; `role="region"` named "Results" with `tally-entry`, `tally-value`, `tally-count` and `most-voted`; the name input labelled "User name"; the issue box named "Current issue".
+- Produces, for Task 3: a `role="group"` named "Estimation cards" around the cards; every card with `aria-pressed` `"true"` or `"false"`; the unconfirmed card with the description "Previous vote, not confirmed"; `role="region"` named "Participants" with `participant` entries, `img`s named "Voted" and "Vote hidden", and `participant-estimation`; `role="region"` named "Results" with `tally-entry`, `tally-value`, `tally-count` and `most-voted`; the name input labelled "User name"; the issue box named "Current issue".
 
-This task adds no test: the spec judges it by the existing suite staying green unchanged, which shows the markup alone changes nothing the suite checks. Task 2 reads every attribute, and Task 4 shows each one bites.
+This task adds no test: the spec judges it by the existing suite staying green unchanged, which shows the markup alone changes nothing the suite checks. Task 3 reads every attribute, and Task 5 shows each one bites.
 
-- [ ] **Step 1: Name the deck, its pressed card and the unconfirmed note**
+- [ ] **Step 1: Take the look's baseline screenshots**
+
+Run: `git diff --stat main -- frontend`
+Expected: nothing, so the screenshots taken now are main's look, as the spec's look check asks.
+
+Write `e2e/look.spec.js`:
+
+```js
+// Throwaway, never committed: four states at two viewports, before and after the markup.
+import { test, expect } from './fixtures.js'
+
+const sizes = { default: null, phone: { width: 390, height: 844 } }
+// The room id is random per run, so it is masked wherever it shows.
+const shot = (page, size, name) =>
+  expect(page).toHaveScreenshot(`${size}-${name}.png`, {
+    fullPage: true,
+    mask: [page.getByRole('heading', { level: 5 }), page.getByLabel('Room id')]
+  })
+
+// One participant, since two would sort by random id: a lone vote reveals, which shows the
+// voted mark, and the Re-vote then shows the hidden-vote mark and the unconfirmed card.
+for (const [size, viewport] of Object.entries(sizes)) {
+  test(`look at ${size}`, async ({ page, origin, join }) => {
+    if (viewport) await page.setViewportSize(viewport)
+    await page.goto(`${origin}/`)
+    await expect(page.getByRole('button', { name: 'Create' })).toBeVisible({ timeout: 15_000 })
+    await shot(page, size, 'lobby')
+
+    const alice = await join('Alice')
+    const p = alice.page
+    if (viewport) await p.setViewportSize(viewport)
+    await shot(p, size, 'before-reveal')
+    await p.getByRole('button', { name: '5', exact: true }).click()
+    await expect(p.getByRole('button', { name: 'Re-vote' })).toBeVisible()
+    await shot(p, size, 'after-reveal')
+    await p.getByRole('button', { name: 'Re-vote' }).click()
+    await expect(p.locator('.estimation-button-uncomfirmed')).toHaveText('5')
+    await shot(p, size, 're-vote')
+  })
+}
+```
+It reads classes because it must run unchanged before and after the markup, and it is never committed. Task 1 leaves `e2e/fixtures.js` alone, so the same `join` fixture runs on both sides.
+
+Run: `npm run stage && npm run build && npx playwright test e2e/look.spec.js --update-snapshots && npx playwright test e2e/look.spec.js`
+Expected: 16 screenshots written, then 4 passed, so the baseline is stable.
+
+- [ ] **Step 2: Name the deck, its pressed card and the unconfirmed note**
 
 In `frontend/src/components/Deck.tsx`, add the import above the `lucide-react` one:
 
@@ -127,7 +176,7 @@ Replace the cards' row and button with:
 
 React renders `aria-pressed={false}` as `aria-pressed="false"`, which the spec requires on every other card.
 
-- [ ] **Step 2: Name the participants and their marks**
+- [ ] **Step 3: Name the participants and their marks**
 
 In `frontend/src/components/Participants.tsx`, the outer `div` becomes:
 
@@ -154,7 +203,7 @@ and the body row becomes:
 
 lucide-react sets `aria-hidden="true"` only on an icon with no `aria-*`, `role` or `title` prop, so these two are exposed.
 
-- [ ] **Step 3: Name the results and their fields**
+- [ ] **Step 4: Name the results and their fields**
 
 In `frontend/src/components/Results.tsx`, the outer `div` becomes:
 
@@ -179,7 +228,7 @@ and the tally row becomes:
               </tr>
 ```
 
-- [ ] **Step 4: Label the name field and name the issue box**
+- [ ] **Step 5: Label the name field and name the issue box**
 
 In `frontend/src/components/Lobby.tsx`, the import becomes:
 
@@ -211,7 +260,32 @@ In `frontend/src/components/IssueEditor.tsx`, below `placeholder="Current issue"
             aria-label="Current issue"
 ```
 
-- [ ] **Step 5: Run the checks and the unchanged suite**
+- [ ] **Step 6: Check the look is unchanged, and that it guards the note's `hidden`**
+
+Run: `npm run build && npx playwright test e2e/look.spec.js`
+Expected: 4 passed, matching the baseline at both viewports in both browsers.
+
+Then drop the note's `hidden`, run the screenshots, and put it back:
+
+```bash
+sed -i 's/<span id={noteId} hidden>/<span id={noteId}>/' frontend/src/components/Deck.tsx
+npm run build && npx playwright test e2e/look.spec.js
+sed -i 's/<span id={noteId}>/<span id={noteId} hidden>/' frontend/src/components/Deck.tsx
+grep -c "<span id={noteId} hidden>" frontend/src/components/Deck.tsx
+```
+
+Expected: FAIL on the re-vote screenshots at both viewports, the page taller by the note's line, then `1`.
+
+Then remove the throwaway files:
+
+```bash
+rm -rf e2e/look.spec.js e2e/look.spec.js-snapshots test-results
+git status --short
+```
+
+Expected: only the five components under "Files" are modified, and nothing is untracked.
+
+- [ ] **Step 7: Run the checks and the unchanged suite**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit`
 Expected: no errors, 83 tests pass.
@@ -219,24 +293,126 @@ Expected: no errors, 83 tests pass.
 Run: `npm run e2e`
 Expected: 104 passed, with no file under `e2e/` changed.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add frontend/src/components
-git commit -m "feat(frontend): name the page's controls and regions for the test contract (ui refresh step 1)"
+git commit -m "feat(frontend): name the page's controls and regions for the test contract (ui refresh step 1)" -m "Labels, ARIA names, aria-pressed, a hidden description for the unconfirmed card and test ids, all on existing elements. The suite passes unchanged and the screenshots match main, so the markup alone changes nothing it checks or shows."
 ```
 
 ---
 
-### Task 2: The suite reads only the contract
+### Task 2: The suite's names describe what they find, not the table
+
+**Files:**
+- Modify: `e2e/fixtures.js`, `e2e/room.spec.js`, `e2e/session.spec.js`, `e2e/refusal.spec.js`, `e2e/smoke.spec.js`
+- Modify: `docs/known-issues.md` (the artifact probe's snippet imports `participantRow`)
+
+**Interfaces:**
+- Produces, in `e2e/fixtures.js`: `participantEntries`, `participantEntry`, `issueEdit`, `issueSave`, `revealedEstimation` and `expectSummaryMatchesParticipants`, with today's bodies. `summaryTable` keeps its name here, since Task 3 changes what it finds.
+
+This task changes names, comments and titles only, so it is judged by the suite staying green unchanged. Task 3's diff is then only the selector changes the PR gives reasons for.
+
+- [ ] **Step 1: Rename the participant helpers**
+
+Run:
+
+```bash
+perl -pi -e 's/\bparticipantRows\b/participantEntries/g; s/\bparticipantRow\b/participantEntry/g' e2e/*.js docs/known-issues.md
+grep -c "participantEntries(" e2e/room.spec.js e2e/session.spec.js
+grep -c "participantEntry(" e2e/room.spec.js e2e/session.spec.js e2e/refusal.spec.js e2e/smoke.spec.js
+```
+
+Expected: `participantEntries(` on 17 lines in `room.spec.js` and 1 in `session.spec.js`; `participantEntry(` on 45, 6, 2 and 1 lines (`grep -c` counts lines, and the import lines carry no parenthesis). `grep -rnE "participantRows?\b" e2e/ docs/known-issues.md` finds nothing. The probe in "Only a real e2e failure exercises the artifact upload path" is copied verbatim, so it must import a name `fixtures.js` still exports.
+
+- [ ] **Step 2: Rename the summary check, the issue buttons and `revealedCell`, and reword the comments and titles**
+
+The script fails on any phrase it does not find exactly once:
+
+```bash
+perl -pi -e 's/\bexpectSummaryMatchesTable\b/expectSummaryMatchesParticipants/g' e2e/*.js
+python3 - <<'PY'
+import sys
+subs = {
+ 'e2e/fixtures.js': [
+  ('so a row assertion', 'so an entry assertion'),
+ ],
+ 'e2e/session.spec.js': [
+  ('counts rows first', 'counts entries first'),
+  ('where the table and the summary', 'where the list and the summary'),
+  ('the cleared table proves', 'the cleared list proves'),
+  ('One row and one row only', 'One entry and one entry only'),
+  ('a stale table.', 'stale results.'),
+ ],
+ 'e2e/room.spec.js': [
+  ('the row still has one', 'the entry still has one'),
+  ("Carol's row proves", "Carol's entry proves"),
+  ('passes on a row that', 'passes on an entry that'),
+  ('Her own table is empty', 'Her own list is empty'),
+  ('render four rows here', 'render four entries here'),
+  ('was a row of its own', 'was an entry of its own'),
+  ('so the table shows both', 'so the list shows both'),
+  ('beside that table', 'beside that list'),
+  ('so her row for', 'so her entry for'),
+  ("on Alice's row,", "on Alice's entry,"),
+  ("Bob's own row going", "Bob's own entry going"),
+  ('since his row', 'since his entry'),
+ ],
+}
+for f, pairs in subs.items():
+    s = open(f).read()
+    for a, b in pairs:
+        n = s.count(a)
+        if n != 1: sys.exit(f'{f}: {a!r} found {n} times')
+        s = s.replace(a, b)
+    open(f, 'w').write(s)
+PY
+perl -pi -e 's/\bissuePencil\b/issueEdit/g; s/\bissueCheck\b/issueSave/g; s/\brevealedCell\b/revealedEstimation/g; s/still tallies the estimations on the table/still tallies the estimations it shows/' e2e/*.js
+python3 - <<'PY'
+import sys
+pairs = [
+ ('readonly until the pencil is pressed', 'readonly until Edit issue is pressed'),
+ ('committed with the check button reaches', 'committed with the Save issue button reaches'),
+ ('// The pencil focuses the box', '// Edit issue focuses the box'),
+ ('a double-clicked check posts once', 'a double-clicked Save issue posts once'),
+ ('// The disabled check dropped focus', '// The disabled Save issue dropped focus'),
+]
+f = 'e2e/room.spec.js'
+s = open(f).read()
+for a, b in pairs:
+    n = s.count(a)
+    if n != 1: sys.exit(f'{f}: {a!r} found {n} times')
+    s = s.replace(a, b)
+open(f, 'w').write(s)
+PY
+```
+
+- [ ] **Step 3: Check nothing still uses an old name, and run the suite**
+
+Run: `grep -rnE "participantRows?\b|expectSummaryMatchesTable|issuePencil|issueCheck|revealedCell" e2e/ docs/known-issues.md`
+Expected: nothing.
+
+Run: `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid e2e/*.js && npx playwright test`
+Expected: clean, then 104 passed.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add e2e docs/known-issues.md
+git commit -m "refactor(e2e): name the helpers for what they find, not the table (ui refresh step 1)" -m "Names, comments and titles only, so the contract commit's diff holds just the selector changes. summaryTable is left to that commit, whose selectors change its meaning."
+```
+
+---
+
+### Task 3: The suite reads only the contract
 
 **Files:**
 - Modify: `e2e/fixtures.js` (the helpers below `export const test`)
 - Modify: `e2e/room.spec.js`, `e2e/session.spec.js`, `e2e/lobby.spec.js`, `e2e/slug.spec.js`
 
 **Interfaces:**
-- Consumes: Task 1's names and test ids.
-- Produces, in `e2e/fixtures.js`: `nameInput(page)`, `roomIdInput(page)`, `issueBox(page)`, `issueEdit(page)`, `issueSave(page)`, `results(page)`, `tallyEntries(page)`, `mostVoted(page)`, `participantEntries(page)`, `participantEntry(page, name)`, `votedMark(entry)`, `hiddenMark(entry)`, `revealedEstimation(entry)`, `deck(page)`, `ownEstimation(page)`, `unconfirmedCard(page)`, and `expectSummaryMatchesParticipants(page)`, each returning a Playwright `Locator` except the last. `summaryTable`, `issuePencil`, `issueCheck` and `revealedCell` are removed. Task 3 uses `vote` and `ownEstimation`.
+- Consumes: Task 1's names and test ids, and Task 2's helper names.
+- Produces, in `e2e/fixtures.js`: `nameInput(page)`, `roomIdInput(page)`, `issueBox(page)`, `issueEdit(page)`, `issueSave(page)`, `results(page)`, `tallyEntries(page)`, `mostVoted(page)`, `participantEntries(page)`, `participantEntry(page, name)`, `votedMark(entry)`, `hiddenMark(entry)`, `revealedEstimation(entry)`, `deck(page)`, `ownEstimation(page)`, `unconfirmedCard(page)`, and `expectSummaryMatchesParticipants(page)`, each returning a Playwright `Locator` except the last. `summaryTable` is removed. Task 4 uses `vote` and `ownEstimation`.
 
 - [ ] **Step 1: Rewrite the fixture helpers**
 
@@ -302,9 +478,9 @@ export const unconfirmedCard = page =>
   deck(page).getByRole('button', { description: 'Previous vote, not confirmed' })
 ```
 
-`movedBanner`, `restartNotice` and `export { expect }` below stay as they are. The third-column guard in what was `expectSummaryMatchesTable` is dropped as the spec says: a new field would need a test id, which is a contract change.
+`movedBanner`, `restartNotice` and `export { expect }` below stay as they are. The third-column guard in `expectSummaryMatchesParticipants` is dropped as the spec says: a new field would need a test id, which is a contract change.
 
-- [ ] **Step 2: Rename the results and participant helpers in the spec files**
+- [ ] **Step 2: Rename the results helper in the spec files**
 
 Run:
 
@@ -314,78 +490,7 @@ grep -c "tallyEntries(" e2e/room.spec.js e2e/session.spec.js
 grep -c "results(" e2e/room.spec.js e2e/session.spec.js
 ```
 
-Expected: `tallyEntries(` 4 in `room.spec.js` and 7 in `session.spec.js`; `results(` 18 and 10. `grep -n summaryTable e2e/` finds nothing.
-
-Then run:
-
-```bash
-perl -pi -e 's/\bparticipantRows\b/participantEntries/g; s/\bparticipantRow\b/participantEntry/g' e2e/*.spec.js
-grep -c "participantEntries(" e2e/room.spec.js e2e/session.spec.js
-grep -c "participantEntry(" e2e/room.spec.js e2e/session.spec.js e2e/refusal.spec.js e2e/smoke.spec.js
-```
-
-Expected: `participantEntries(` on 17 lines in `room.spec.js` and 1 in `session.spec.js`; `participantEntry(` on 45, 6, 2 and 1 lines (`grep -c` counts lines, and the import lines carry no parenthesis). `grep -rnE "participantRows?\b" e2e/` finds nothing.
-
-Then rename the summary check and reword the comments. The script fails on any phrase it does not find exactly once:
-
-```bash
-perl -pi -e 's/\bexpectSummaryMatchesTable\b/expectSummaryMatchesParticipants/g' e2e/*.spec.js
-python3 - <<'PY'
-import sys
-subs = {
- 'e2e/session.spec.js': [
-  ('counts rows first', 'counts entries first'),
-  ('where the table and the summary', 'where the list and the summary'),
-  ('the cleared table proves', 'the cleared list proves'),
-  ('One row and one row only', 'One entry and one entry only'),
-  ('a stale table.', 'a stale list.'),
- ],
- 'e2e/room.spec.js': [
-  ('the row still has one', 'the entry still has one'),
-  ("Carol's row proves", "Carol's entry proves"),
-  ('passes on a row that', 'passes on an entry that'),
-  ('Her own table is empty', 'Her own list is empty'),
-  ('render four rows here', 'render four entries here'),
-  ('was a row of its own', 'was an entry of its own'),
-  ('so the table shows both', 'so the list shows both'),
-  ('beside that table', 'beside that list'),
-  ('so her row for', 'so her entry for'),
-  ("on Alice's row,", "on Alice's entry,"),
-  ("Bob's own row going", "Bob's own entry going"),
-  ('since his row', 'since his entry'),
- ],
-}
-for f, pairs in subs.items():
-    s = open(f).read()
-    for a, b in pairs:
-        n = s.count(a)
-        if n != 1: sys.exit(f'{f}: {a!r} found {n} times')
-        s = s.replace(a, b)
-    open(f, 'w').write(s)
-PY
-perl -pi -e 's/\bissuePencil\b/issueEdit/g; s/\bissueCheck\b/issueSave/g; s/\brevealedCell\b/revealedEstimation/g; s/still tallies the estimations on the table/still tallies the estimations it shows/' e2e/*.spec.js
-python3 - <<'PY'
-import sys
-pairs = [
- ('readonly until the pencil is pressed', 'readonly until Edit issue is pressed'),
- ('committed with the check button reaches', 'committed with the Save issue button reaches'),
- ('// The pencil focuses the box', '// Edit issue focuses the box'),
- ('a double-clicked check posts once', 'a double-clicked Save issue posts once'),
- ('// The disabled check dropped focus', '// The disabled Save issue dropped focus'),
-]
-f = 'e2e/room.spec.js'
-s = open(f).read()
-for a, b in pairs:
-    n = s.count(a)
-    if n != 1: sys.exit(f'{f}: {a!r} found {n} times')
-    s = s.replace(a, b)
-open(f, 'w').write(s)
-PY
-grep -rniE "//.*\b(rows?|tables?)\b" e2e/
-grep -rniE "pencil|\bcheck (button|posts|dropped)|\bcells?\b|on the table" e2e/
-```
-
-Expected: the `rows?|tables?` grep prints only `room.spec.js`'s two lines in "the reveal notice claims its space before the reveal" ("Two rows, since a reveal adds the notice..." and "...the notice's row also sizes the estimation card"), which mean layout rows. The `pencil|check` grep prints nothing. `grep -rnE "expectSummaryMatchesTable|issuePencil|issueCheck|revealedCell" e2e/` finds nothing.
+Expected: `tallyEntries(` 4 in `room.spec.js` and 7 in `session.spec.js`; `results(` 18 and 10. `grep -rn summaryTable e2e/` finds nothing.
 
 - [ ] **Step 3: Read the most voted value by its test id**
 
@@ -403,6 +508,15 @@ with:
 ```
 
 and add `mostVoted,` to its import list, above `results,`.
+
+Then run:
+
+```bash
+grep -rniE "//.*\b(rows?|tables?)\b" e2e/
+grep -rniE "pencil|\bcheck (button|posts|dropped)|\bcells?\b|on the table" e2e/
+```
+
+Expected: the `rows?|tables?` grep prints only `room.spec.js`'s two lines in "the reveal notice claims its space before the reveal" ("Two rows, since a reveal adds the notice..." and "...the notice's row also sizes the estimation card"), which mean layout rows. The `pencil|check` grep prints nothing.
 
 - [ ] **Step 4: Read the re-vote case's cards by state, and check the confirmed state**
 
@@ -429,7 +543,16 @@ with:
   await expect(card(alice.page, '3')).toHaveAttribute('aria-pressed', 'false')
 ```
 
-The rest of the case is unchanged. Change the import list's last entry from `  restartNotice` to `  restartNotice,` followed by `  unconfirmedCard`.
+In the comment under the Re-vote click, change "this styling means" to "this description means", since the case now reads a description, not a class. The rest of the case is unchanged. Change the import list's last entry from `  restartNotice` to `  restartNotice,` followed by `  unconfirmedCard`.
+
+Show the new confirmed-state check can fail: in `frontend/src/components/Deck.tsx`, make the note ignore confirmation.
+
+```bash
+sed -i 's/ && !view.ownVoteConfirmed$//' frontend/src/components/Deck.tsx
+npm run build && npx playwright test e2e/room.spec.js --project chromium -g "a re-vote leaves the caster"; git checkout frontend && npm run build
+```
+
+Expected: FAIL at the `toHaveCount(0)` just after the vote, with `Expected: 0` and `Received: 1`. Record it in the PR body.
 
 - [ ] **Step 5: Read the room id field by its label**
 
@@ -478,16 +601,16 @@ The callback body is unchanged; its `hit.closest('[role="status"]')` is a role a
 Run:
 
 ```bash
-grep -nE "locator\(|\\\$eval|\\\$\\\$eval|querySelector|closest\(" e2e/
-grep -nE "'(table|rowgroup|row|columnheader|cell)'" e2e/
+grep -rnE "locator\(|\\\$eval|\\\$\\\$eval|querySelector|closest\(" e2e/
+grep -rnE "'(table|rowgroup|row|columnheader|cell)'" e2e/
 ```
 
 Expected: the first prints exactly `slug.spec.js`'s `hit.closest('[role="status"]')` and `room.spec.js`'s `document.querySelector('[role="alert"]')`; the second prints nothing. Paste both outputs into the PR body.
 
 - [ ] **Step 8: Format, lint and run the suite**
 
-Run: `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid e2e/*.js && npx eslint e2e`
-Expected: clean.
+Run: `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid e2e/*.js`
+Expected: clean. `eslint.config.js` covers only `frontend/`, so ESLint has nothing to check here.
 
 Run: `npx playwright test`
 Expected: 104 passed.
@@ -496,18 +619,18 @@ Expected: 104 passed.
 
 ```bash
 git add e2e
-git commit -m "test(e2e): read the page through the test contract only (ui refresh step 1)"
+git commit -m "test(e2e): read the page through the test contract only (ui refresh step 1)" -m "The fixtures and inline selectors read roles, names, text and test ids, so step 4 can restyle without touching a case. The banner hit test counts its 13 cards first, and the re-vote case checks the confirmed state."
 ```
 
 ---
 
-### Task 3: Re-vote and the copy hint are pinned
+### Task 4: Re-vote and the copy hint are pinned
 
 **Files:**
 - Modify: `e2e/room.spec.js` (two cases appended at the end)
 
 **Interfaces:**
-- Consumes: `vote` and `ownEstimation` from Task 2's `e2e/fixtures.js`, both already imported in `room.spec.js`.
+- Consumes: `vote` and `ownEstimation` from Task 3's `e2e/fixtures.js`, both already imported in `room.spec.js`.
 
 - [ ] **Step 1: Write the two cases**
 
@@ -568,6 +691,18 @@ Re-vote always rendered: in `frontend/src/components/Controls.tsx`, change `{rev
 Run: `npm run build && npx playwright test e2e/room.spec.js --project chromium -g "Re-vote is offered"; git checkout frontend`
 Expected: FAIL at the first `toHaveCount(0)` with `Expected: 0` and `Received: 1`.
 
+Re-vote kept once a round was revealed, so the first check passes and only the after-Clear one can catch it: in `frontend/src/components/Controls.tsx`, add `import { useRef } from 'react'` at the top, add at the top of `Controls`:
+
+```tsx
+  const wasRevealed = useRef(false)
+  if (revealed) wasRevealed.current = true
+```
+
+and change `{revealed && (` to `{wasRevealed.current && (`.
+
+Run: `npm run build && npx playwright test e2e/room.spec.js --project chromium -g "Re-vote is offered"; git checkout frontend`
+Expected: FAIL at the last `toHaveCount(0)`, after Clear, with `Expected: 0` and `Received: 1`.
+
 The timer reset on each copy: in `frontend/src/components/App.tsx`'s `onCopied`, replace the `window.setTimeout(...)` line with:
 
 ```tsx
@@ -583,7 +718,7 @@ An early clear: change `2000` to `1900` in the same `setTimeout`.
 Run the same command.
 Expected: FAIL at the 1.99 s `toBeVisible` with `element(s) not found`.
 
-Then run `npm run build` once more so `frontend/dist` matches the branch. Record the three failures in the PR body.
+Then run `npm run build` once more so `frontend/dist` matches the branch. Record the four failures in the PR body.
 
 - [ ] **Step 4: Run the whole suite**
 
@@ -594,94 +729,26 @@ Expected: 108 passed.
 
 ```bash
 git add e2e/room.spec.js
-git commit -m "test(e2e): pin Re-vote to a revealed round and the copy hint to its first copy (ui refresh step 1)"
+git commit -m "test(e2e): pin Re-vote to a revealed round and the copy hint to its first copy (ui refresh step 1)" -m "Principle 8 behaviour a restyle breaks easily. Each case was shown failing against its mutations: Re-vote always rendered or kept once a round was revealed, the hint timer reset on each copy, and an early clear."
 ```
 
 ---
 
-### Task 4: The look, the bites, and the status line
+### Task 5: The look, the bites, and the status line
 
 **Files:**
-- Throwaway, never committed: `e2e/look.spec.js` and `e2e/look.spec.js-snapshots/`, in a worktree of the base commit and on the branch
 - Modify: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md` (step 1's status line only)
 
-- [ ] **Step 1: Check the look against the base commit**
+- [ ] **Step 1: Show the look cannot have changed since Task 1**
 
-Create a worktree of the design commit, sharing the branch's staged app:
+Task 1, Step 6 compared the look before and after the markup. Run: `git diff --stat <Task 1's commit>..HEAD -- frontend`
+Expected: nothing, so no later commit touched what the screenshots saw.
 
-```bash
-git worktree add --detach ../pp-base 7f15d96
-ln -s "$PWD/node_modules" ../pp-base/node_modules
-ln -s "$PWD/target" ../pp-base/target
-```
+- [ ] **Step 2: Show every attribute bites**
 
-Write `../pp-base/e2e/look.spec.js`:
+For each row, remove the attribute from the branch tip, `npm run build`, run `npx playwright test --project chromium --max-failures=1`, record a failing case, and `git checkout frontend`. Workers run in parallel, so which case fails first can differ from the spike's; any failure is the evidence, and the PR records the executor's own. The spike's results, as a guide:
 
-```js
-// Throwaway, never committed: the four states at two viewports, compared main against branch.
-import { test, expect } from './fixtures.js'
-
-const sizes = { default: null, phone: { width: 390, height: 844 } }
-// The room id is random per run, so it is masked wherever it shows.
-const shot = (page, size, name) =>
-  expect(page).toHaveScreenshot(`${size}-${name}.png`, {
-    fullPage: true,
-    mask: [page.getByRole('heading', { level: 5 }), page.getByLabel('Room id')]
-  })
-
-// One participant, since two would sort by random id: a lone vote reveals, which shows the
-// voted mark, and the Re-vote then shows the hidden-vote mark and the unconfirmed card.
-for (const [size, viewport] of Object.entries(sizes)) {
-  test(`look at ${size}`, async ({ page, origin, join }) => {
-    if (viewport) await page.setViewportSize(viewport)
-    await page.goto(`${origin}/`)
-    await expect(page.getByRole('button', { name: 'Create' })).toBeVisible({ timeout: 15_000 })
-    await shot(page, size, 'lobby')
-
-    const alice = await join('Alice')
-    const p = alice.page
-    if (viewport) await p.setViewportSize(viewport)
-    await shot(p, size, 'before-reveal')
-    await p.getByRole('button', { name: '5', exact: true }).click()
-    await expect(p.getByRole('button', { name: 'Re-vote' })).toBeVisible()
-    await shot(p, size, 'after-reveal')
-    await p.getByRole('button', { name: 'Re-vote' }).click()
-    await expect(p.locator('.estimation-button-uncomfirmed')).toHaveText('5')
-    await shot(p, size, 're-vote')
-  })
-}
-```
-
-It reads classes because it must run unchanged on the base commit, and it is never committed.
-
-Run, in `../pp-base`: `npm run build && npx playwright test e2e/look.spec.js --update-snapshots && npx playwright test e2e/look.spec.js`
-Expected: 16 screenshots written, then 4 passed, so the baseline is stable.
-
-Run, on the branch: `npm run build && cp ../pp-base/e2e/look.spec.js e2e/ && cp -r ../pp-base/e2e/look.spec.js-snapshots e2e/ && npx playwright test e2e/look.spec.js`
-Expected: 4 passed, pixel-identical at both viewports in both browsers.
-
-- [ ] **Step 2: Show the re-vote screenshot guards the note's `hidden`**
-
-In `frontend/src/components/Deck.tsx`, change `<span id={noteId} hidden>` to `<span id={noteId}>`.
-
-Run: `npm run build && npx playwright test e2e/look.spec.js; git checkout frontend && npm run build`
-Expected: FAIL on the re-vote screenshots at both viewports, the page taller by the note's line.
-
-Then remove the throwaway files and the worktree:
-
-```bash
-rm -rf e2e/look.spec.js e2e/look.spec.js-snapshots test-results
-git worktree remove --force ../pp-base
-git status --short
-```
-
-Expected: `git status` shows nothing.
-
-- [ ] **Step 3: Show every attribute bites**
-
-For each row, remove the attribute from the branch tip, `npm run build`, run `npx playwright test --project chromium --max-failures=1`, record the first failing case, and `git checkout frontend`. The spike's results, for the PR body:
-
-| Removed | First failing case |
+| Removed | A failing case |
 | --- | --- |
 | `htmlFor` on the name label | `refusal.spec.js` "a session ended by a restart rejoins under its name, with the restart notice" |
 | `id` on the name input | the same |
@@ -705,9 +772,9 @@ For each row, remove the attribute from the branch tip, `npm run build`, run `np
 | `tally-count` | the same |
 | `most-voted` | `session.spec.js` "a session of rounds keeps the summary honest across them" |
 
-The note's `hidden` is shown by Step 2 instead, since no locator reads it. Then `npm run build` so `frontend/dist` matches the branch.
+The note's `hidden` is shown by Task 1, Step 6 instead, since no locator reads it. Then `npm run build` so `frontend/dist` matches the branch.
 
-- [ ] **Step 4: Check the accessibility tree by hand**
+- [ ] **Step 3: Check the accessibility tree by hand**
 
 Run `npm run build`, then `SECURE_COOKIES=false sbt run`, as the README's "Running locally" says, and open a room in Firefox's Accessibility inspector, or Chromium's DevTools Accessibility pane. Check:
 - a confirmed card is a toggle button, pressed, and every other card not pressed;
@@ -716,12 +783,12 @@ Run `npm run build`, then `SECURE_COOKIES=false sbt run`, as the README's "Runni
 
 Record which browser was checked in the PR body. A screen reader is not required.
 
-- [ ] **Step 5: Run everything once more**
+- [ ] **Step 4: Run everything once more**
 
 Run: `npm run typecheck && npm run lint && npm run test:unit && npm run e2e`
 Expected: no errors, 83 unit tests, 108 e2e cases passed.
 
-- [ ] **Step 6: Mark the step landed, as the PR's last commit**
+- [ ] **Step 5: Mark the step landed, as the PR's last commit**
 
 In `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, under "## Step 1. Test contract and accessibility", change:
 
@@ -737,9 +804,9 @@ Status: landed. Branch: `20260930.ui_refresh_1_test_contract`.
 
 ```bash
 git add docs/superpowers/specs/2026-09-30-ui-refresh-design.md
-git commit -m "docs: mark ui refresh step 1 landed"
+git commit -m "docs: mark ui refresh step 1 landed" -m "The last commit before merge, as the rewrite spec's steps did."
 ```
 
-- [ ] **Step 7: Hand over**
+- [ ] **Step 6: Hand over**
 
-Do not push. Report to the user: the commits, the two greps' output, each selector change with its reason (Task 2's helpers and steps), the bite table, the three Task 3 mutations, the look check, and the hand check's browser. The user opens the PR and merges steps 1, 1a and 1b in one window with no live rooms.
+Do not push. Report to the user: the commits, the two greps' output, each selector change with its reason (Task 3's helpers and steps), the bite table, Task 3 Step 4's mutation, the four Task 4 mutations, the look check, and the hand check's browser. The user opens the PR and merges steps 1, 1a and 1b in one window with no live rooms.

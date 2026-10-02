@@ -231,8 +231,9 @@ Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
 chosen library may or may not ship one. The deck as a `<fieldset>` with a
 `<legend>`: the same `group` role and name step 1 gives its `div`, so no case
 changes, and `<fieldset disabled>` freezes every card at once. Step 1 keeps
-the `div` because a fieldset's default border, padding and
-`min-inline-size: min-content` would change the look, which a reset clears.
+the `div` for the look (its "Considered and not taken"). Without Bootstrap, a
+reset must clear the fieldset's defaults, and the legend still needs a visually
+hidden style.
 Appendix C holds what this design's reviews found about writing these cases.
 
 **Step 4a. The round's live region.** Announces a reveal and a reopened round,
@@ -326,7 +327,8 @@ looks different. The live regions are steps 1a's and 4a's.
   the one removed, since Playwright already treats an `svg` as an image and
   lucide-react hides an icon only while it has no `role`, `aria-*` or `title`
   prop and no children; and the unconfirmed note's `hidden` is shown by the
-  re-vote screenshot, since no locator reads it.
+  re-vote screenshot in the markup commit, since no locator reads it, and the
+  frontend is unchanged after that commit.
 
 ### The test contract
 
@@ -397,6 +399,10 @@ Considered and not taken:
   is still an ARIA 1.3 draft.
 - `aria-pressed="mixed"` for the unconfirmed card: to a screen reader it means
   partly pressed, which misdescribes the state.
+- The deck as a `<fieldset>` with a `<legend>`. Reboot already clears a
+  fieldset's border, padding and min-width, but the `<legend>` would show as a
+  1.5rem heading unless a class hides it, so step 1 keeps the `div`; step 4
+  weighs it again.
 
 ### Commits
 
@@ -407,19 +413,25 @@ Considered and not taken:
    Results regions with their test ids, and `most-voted`. The existing suite is
    untouched and still green, which shows the markup alone changes nothing it
    checks.
-3. `test(e2e)`: the existing suite moves onto the contract, in `e2e/fixtures.js`
+3. `refactor(e2e)`: the helpers, comments and titles that name a row, a table,
+   a cell or an icon are renamed for what they find; `summaryTable` is left to
+   commit 4, whose selectors change its meaning. Judged by the suite staying
+   green unchanged, so commit 4's diff holds only the selector changes.
+4. `test(e2e)`: the existing suite moves onto the contract, in `e2e/fixtures.js`
    and in the spec files' inline selectors, and `fixtures.js` loses its "Step 8
    revisits selectors" comment; the "banner covers no card" case gains its
    count of 13, and the re-vote case its check while the vote is confirmed,
    which also reads `aria-pressed="false"` on a card other than the pressed one
-   with `toHaveAttribute`. No product code changes; judged by step 1's pass
+   with `toHaveAttribute`; that check is shown failing against a note that
+   ignores confirmation. No product code changes; judged by step 1's pass
    condition.
-4. `test(e2e)`: two cases for principle 8, behaviour a restyle breaks easily.
-   Re-vote is absent before a reveal. The copy hint shows right after a second
-   copy at 1.5 s and still at 1.99 s, and is gone at 2 s, which catches both a
-   timer reset on each copy and an early clear. The PR shows each failing
-   against a mutation: Re-vote always rendered, and the timer reset on each
-   copy. No product code changes.
+5. `test(e2e)`: two cases for principle 8, behaviour a restyle breaks easily.
+   Re-vote is absent before a reveal and after a Clear. The copy hint shows
+   right after a second copy at 1.5 s and still at 1.99 s, and is gone at 2 s,
+   which catches both a timer reset on each copy and an early clear. The PR
+   shows each failing against a mutation: Re-vote always rendered, Re-vote
+   kept once a round was revealed, the timer reset on each copy, and an early
+   clear. No product code changes.
    - The hint is found by its text, not by `getByRole('alert')`, so step 4's
      move to a `status` region adds a lookup and breaks none.
    - `page.clock.install` alone lets time run on; pause it with `pauseAt`
@@ -429,7 +441,7 @@ Considered and not taken:
      at a fixed date: the tick compares the paused `Date.now` with a heartbeat
      heard on the real clock, and a gap of `STALE_MS` reconnects and shows the
      lost banner mid-check.
-5. `docs`: this step's status line, as the PR's last commit before merge.
+6. `docs`: this step's status line, as the PR's last commit before merge.
 
 ### Accepted costs
 
