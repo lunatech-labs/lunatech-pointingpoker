@@ -298,7 +298,7 @@ every merge to main restarts the server.
 
 ## Step 1. Test contract and accessibility
 
-Status: proposed. Branch: `20260930.ui_refresh_1_test_contract`.
+Status: landed. Branch: `20260930.ui_refresh_1_test_contract`.
 
 ### Scope
 
