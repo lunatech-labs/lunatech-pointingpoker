@@ -9,7 +9,8 @@ import {
   expectSummaryMatchesParticipants,
   frozenNotice,
   revealedEstimation,
-  summaryTable,
+  results,
+  tallyEntries,
   issueBox,
   issueCancel,
   issueSave,
@@ -18,7 +19,8 @@ import {
   hiddenMark,
   vote,
   ownEstimation,
-  restartNotice
+  restartNotice,
+  unconfirmedCard
 } from './fixtures.js'
 
 test('two browsers exchange votes', async ({ join }) => {
@@ -35,7 +37,7 @@ test('two browsers exchange votes', async ({ join }) => {
   await vote(bob.page, '3')
   // Everyone having voted reveals the round with nobody pressing Show.
   for (const participant of [alice, bob]) {
-    await expect(summaryTable(participant.page)).toBeVisible()
+    await expect(results(participant.page)).toBeVisible()
     await expect(participantEntry(participant.page, 'Alice')).toContainText('5')
     await expect(participantEntry(participant.page, 'Bob')).toContainText('3')
   }
@@ -47,10 +49,10 @@ test('a straggler keeps the votes hidden until Show is pressed', async ({ join }
 
   await vote(alice.page, '5')
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
-  await expect(summaryTable(bob.page)).toBeHidden()
+  await expect(results(bob.page)).toBeHidden()
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(summaryTable(bob.page)).toBeVisible()
+  await expect(results(bob.page)).toBeVisible()
   await expect(participantEntry(bob.page, 'Alice')).toContainText('5')
 })
 
@@ -147,12 +149,12 @@ test('a Show survives someone joining', async ({ join }) => {
 
   await vote(alice.page, '5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   await join('Carol')
   // Carol's entry proves the join was processed, and the un-reveal happens in the same handler.
   await expect(participantEntry(alice.page, 'Carol')).toHaveCount(1)
-  await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
+  await expect(results(alice.page)).toBeVisible({ timeout: 2000 })
 })
 
 test('an auto-revealed round stays revealed when a straggler arrives', async ({ join }) => {
@@ -161,11 +163,11 @@ test('an auto-revealed round stays revealed when a straggler arrives', async ({ 
 
   await vote(alice.page, '5')
   await vote(bob.page, '3')
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   await join('Carol')
   await expect(participantEntry(alice.page, 'Carol')).toHaveCount(1)
-  await expect(summaryTable(alice.page)).toBeVisible({ timeout: 2000 })
+  await expect(results(alice.page)).toBeVisible({ timeout: 2000 })
 })
 
 test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
@@ -174,7 +176,7 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
 
   await vote(alice.page, '5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   // Bob never voted, so this covers a first vote as well as Alice changing hers.
   await expect(card(alice.page, '5')).toBeDisabled()
@@ -218,20 +220,20 @@ async function resetReArmsTheAutoReveal(join, reset) {
   await vote(alice.page, '5')
   await vote(bob.page, '3')
   // The latch firing on a fresh round, which is the state the reset below undoes.
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   await reset(alice)
-  await expect(summaryTable(bob.page)).toBeHidden()
+  await expect(results(bob.page)).toBeHidden()
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
 
   await vote(alice.page, '8')
   // Half the room: still hidden, so the reveal below is the latch and not a stale summary.
-  await expect(summaryTable(bob.page)).toBeHidden()
+  await expect(results(bob.page)).toBeHidden()
   await vote(bob.page, '8')
 
   // No Show anywhere in this case: the last vote is what reveals the round.
-  await expect(summaryTable(alice.page)).toBeVisible()
-  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1)
+  await expect(results(alice.page)).toBeVisible()
+  await expect(tallyEntries(alice.page)).toHaveCount(1)
   await expectSummaryMatchesParticipants(alice.page)
 }
 
@@ -261,7 +263,7 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
 
   await vote(alice.page, '5')
   await vote(bob.page, '3')
-  await expect(summaryTable(alice.page)).toBeHidden()
+  await expect(results(alice.page)).toBeHidden()
 
   await depart(carol, alice)
 
@@ -279,7 +281,7 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   // Both remaining members have voted, reached by a departure rather than by a vote, so the
   // latch must leave the room hidden.
   for (const page of [alice.page, bob.page]) {
-    await expect(summaryTable(page)).toBeHidden()
+    await expect(results(page)).toBeHidden()
   }
   await expect(participantEntry(alice.page, 'Bob')).not.toContainText('3')
   await expect(participantEntry(bob.page, 'Alice')).not.toContainText('5')
@@ -356,10 +358,10 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   await vote(alice.page, '5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   // Before step 3 Bob's empty estimation was an entry of its own, and could out-count a real one.
-  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expect(tallyEntries(alice.page)).toHaveCount(1, { timeout: 2000 })
   await expectSummaryMatchesParticipants(alice.page)
 })
 
@@ -369,17 +371,17 @@ test('a Show during a re-vote still tallies the estimations it shows', async ({ 
 
   await vote(alice.page, '3')
   await vote(bob.page, '5')
-  await expect(summaryTable(alice.page)).toBeVisible()
+  await expect(results(alice.page)).toBeVisible()
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // Hidden again is the proof the re-vote landed before the Show below.
-  await expect(summaryTable(alice.page)).toBeHidden()
+  await expect(results(alice.page)).toBeHidden()
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   // A re-vote keeps the estimations and only clears confirmation, so the list shows both.
   // The summary sits beside that list and has to count what it displays.
   await expect(participantEntry(alice.page, 'Bob')).toContainText('5')
-  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(2)
+  await expect(tallyEntries(alice.page)).toHaveCount(2)
   await expectSummaryMatchesParticipants(alice.page)
 })
 
@@ -400,7 +402,7 @@ test('an empty estimation posted directly is refused, not stored as an empty vot
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
-  await expect(summaryTable(alice.page).locator('tbody tr')).toHaveCount(1, { timeout: 2000 })
+  await expect(tallyEntries(alice.page)).toHaveCount(1, { timeout: 2000 })
   await expectSummaryMatchesParticipants(alice.page)
 })
 
@@ -412,7 +414,7 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
   // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
   // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
-  await expect(summaryTable(alice.page)).toBeHidden()
+  await expect(results(alice.page)).toBeHidden()
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -725,14 +727,17 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
   const alice = await join('Alice')
-  const selected = alice.page.locator('.estimation-button-selected')
-  const unconfirmed = alice.page.locator('.estimation-button-uncomfirmed')
+  const selected = ownEstimation(alice.page)
+  const unconfirmed = unconfirmedCard(alice.page)
 
   await vote(alice.page, '5')
   await expect(selected).toHaveText('5')
+  await expect(unconfirmed).toHaveCount(0)
+  // The role filter pressed: false would also match a card with no aria-pressed at all.
+  await expect(card(alice.page, '3')).toHaveAttribute('aria-pressed', 'false')
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
-  // reVote clears voted and keeps estimation, which is the only state this styling means.
+  // reVote clears voted and keeps estimation, which is the only state this description means.
   await expect(unconfirmed).toHaveText('5')
   await expect(selected).toHaveCount(0)
 

@@ -138,32 +138,26 @@ export const test = base.extend({
   ]
 })
 
-// Step 8 revisits selectors, so these are as accessible as the page allows. The name inputs
-// have no label association and no accessible name at all.
-export const nameInput = page =>
-  page.locator('.form-group.row').filter({ hasText: 'User name' }).locator('input')
-export const issueBox = page => page.getByPlaceholder('Current issue')
+// The test contract: roles, names, text and test ids only (ui refresh design, step 1).
+export const nameInput = page => page.getByLabel('User name')
+export const roomIdInput = page => page.getByLabel('Room id')
+export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
-export const summaryTable = page =>
-  page.locator('table').filter({ has: page.getByRole('columnheader', { name: 'Number of votes' }) })
+export const results = page => page.getByRole('region', { name: 'Results' })
+export const tallyEntries = page => results(page).getByTestId('tally-entry')
+export const mostVoted = page => results(page).getByTestId('most-voted')
 export const participantEntries = page =>
-  page
-    .locator('table')
-    .filter({ has: page.getByRole('columnheader', { name: 'Voted' }) })
-    .locator('tbody tr')
+  page.getByRole('region', { name: 'Participants' }).getByTestId('participant')
 // not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
 // strict mode violation, so an entry assertion cannot pass vacuously and needs no existence pin.
 export const participantEntry = (page, name) => participantEntries(page).filter({ hasText: name })
-// An empty <i> has no size, so count it rather than asking whether it is visible.
-export const votedMark = row => row.locator('td').first().locator('svg, i')
-// The withheld-value icon in the estimation cell, counted rather than asked about for the
-// same reason as votedMark: an empty <i> has no size.
-export const hiddenMark = row => row.locator('td').nth(2).locator('svg, i')
-// The estimation cell's value div exists only while the round is revealed, so it is the one
-// signal a reveal landed in a room where nobody has voted and the value is empty.
-export const revealedEstimation = row => row.locator('td').nth(2).locator('div')
+export const votedMark = entry => entry.getByRole('img', { name: 'Voted' })
+export const hiddenMark = entry => entry.getByRole('img', { name: 'Vote hidden' })
+// Rendered only while the round is revealed, so it is the one signal a reveal landed in a room
+// where nobody has voted and the value is empty.
+export const revealedEstimation = entry => entry.getByTestId('participant-estimation')
 // Any alert, for asserting a reconnect cleared the banner: filtering by text would report
 // hidden when it merely switched to the "session has ended" message a refused page shows.
 export const connectionAlert = page => page.getByRole('alert')
@@ -175,30 +169,32 @@ export const connectionLost = page =>
 export const expectSummaryMatchesParticipants = async page => {
   // Two empty renderings agree trivially, so this gate is what makes the comparison mean
   // anything, and being retrying it also settles the DOM before the reads below, which are not.
-  await expect(summaryTable(page).locator('tbody tr')).not.toHaveCount(0)
+  await expect(tallyEntries(page)).not.toHaveCount(0)
   const tally = {}
-  for (const row of await participantEntries(page).all()) {
-    const estimation = (await row.locator('td').nth(2).innerText()).trim()
+  for (const entry of await participantEntries(page).all()) {
+    const estimation = (await revealedEstimation(entry).innerText()).trim()
     if (estimation !== '') tally[estimation] = (tally[estimation] || 0) + 1
   }
   const summary = []
-  for (const row of await summaryTable(page).locator('tbody tr').all()) {
-    const cells = await row.locator('td').allInnerTexts()
-    // A third column would otherwise be dropped rather than compared.
-    expect(cells).toHaveLength(2)
-    const [value, count] = cells
+  for (const entry of await tallyEntries(page).all()) {
+    const value = await entry.getByTestId('tally-value').innerText()
+    const count = await entry.getByTestId('tally-count').innerText()
     summary.push([value.trim(), Number(count.trim())])
   }
   expect(summary.sort()).toEqual(Object.entries(tally).sort())
 }
 // A card by its face value, for asserting its state rather than pressing it.
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
+export const deck = page => page.getByRole('group', { name: 'Estimation cards' })
 export const vote = (page, value) => card(page, value).click()
-// The line under the deck that says why the cards are frozen, keyed on its text rather than its
-// lock: it has text to key on, which is what votedMark and hiddenMark lack rather than share.
+// The line under the deck that says why the cards are frozen, keyed on its text rather than
+// its lock icon.
 export const frozenNotice = page => page.getByText('The round is revealed')
-// The recipient's own estimation, which is on the wire for them before any reveal.
-export const ownEstimation = page => page.locator('.estimation-card .estimation-text')
+// The recipient's own confirmed estimation, read as the pressed card rather than the large one.
+export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
+// After a Re-vote the cast card is not pressed but keeps this description.
+export const unconfirmedCard = page =>
+  deck(page).getByRole('button', { description: 'Previous vote, not confirmed' })
 
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })

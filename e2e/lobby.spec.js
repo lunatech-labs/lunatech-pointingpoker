@@ -1,4 +1,4 @@
-import { test, expect, nameInput } from './fixtures.js'
+import { test, expect, nameInput, roomIdInput } from './fixtures.js'
 
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 
@@ -17,7 +17,7 @@ test('a room name pasted with spaces into the Join form still joins', async ({
 }) => {
   await page.goto(`${origin}/`)
   await page.getByRole('link', { name: 'Join' }).click()
-  await page.locator('#join-roomId').fill(`  ${room} `)
+  await roomIdInput(page).fill(`  ${room} `)
   await nameInput(page).fill('Alice')
   await nameInput(page).press('Enter')
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
@@ -51,7 +51,7 @@ test('Create, Leave and Join change the address, and Leave keeps the name', asyn
   await expect(nameInput(page)).toHaveValue('Alice')
 
   await page.getByRole('link', { name: 'Join' }).click()
-  await page.locator('#join-roomId').fill(room)
+  await roomIdInput(page).fill(room)
   await page.getByRole('button', { name: 'Join' }).click()
   await expect(page).toHaveURL(`${origin}/${room}`)
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
