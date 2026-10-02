@@ -3,10 +3,10 @@ import {
   expect,
   connectionLost,
   issueBox,
-  issueCheck,
-  issuePencil,
+  issueSave,
+  issueEdit,
   nameInput,
-  participantRow,
+  participantEntry,
   restartNotice
 } from './fixtures.js'
 
@@ -24,8 +24,8 @@ test('a session ended by a restart rejoins under its name, with the restart noti
 
   await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
-  await expect(participantRow(alice.page, 'Alice')).toHaveCount(1)
-  await expect(participantRow(alice.page, 'Bob')).toHaveCount(1, { timeout: 20_000 })
+  await expect(participantEntry(alice.page, 'Alice')).toHaveCount(1)
+  await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1, { timeout: 20_000 })
   await restartNotice(alice.page).getByRole('button', { name: 'Dismiss' }).click()
   await expect(restartNotice(alice.page)).toBeHidden()
 })
@@ -108,9 +108,9 @@ test('a save refused by a different instance recovers like any command', async (
     route.fulfill({ status: 401 })
   )
 
-  await issuePencil(alice.page).click()
+  await issueEdit(alice.page).click()
   await issueBox(alice.page).fill('mine')
-  await issueCheck(alice.page).click()
+  await issueSave(alice.page).click()
 
   // The reload drops the draft; the failure line before it can last too briefly to assert.
   await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })

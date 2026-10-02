@@ -1,4 +1,4 @@
-import { test, expect, nameInput, participantRow } from './fixtures.js'
+import { test, expect, nameInput, participantEntry } from './fixtures.js'
 
 test('create a room through the stub and reach the room view', async ({ page, origin }) => {
   await page.goto(`${origin}/`)
@@ -8,5 +8,5 @@ test('create a room through the stub and reach the room view', async ({ page, or
   // The room renders on the first SSE message, so this proves the whole path: a POST through the
   // stub, then a stream through it.
   await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
-  await expect(participantRow(page, 'Alice')).toHaveCount(1)
+  await expect(participantEntry(page, 'Alice')).toHaveCount(1)
 })

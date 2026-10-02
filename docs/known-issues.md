@@ -843,15 +843,15 @@ roadmap item instead of leaving it here as stale history.
 
   ```js
   // e2e/artifact-probe.spec.js
-  import { test, expect, nameInput, participantRow } from './fixtures.js'
+  import { test, expect, nameInput, participantEntry } from './fixtures.js'
 
   test('deliberate failure that leaves a trace behind', async ({ page, origin }) => {
     await page.goto(`${origin}/`)
     await nameInput(page).fill('Alice')
     await page.getByRole('button', { name: 'Create' }).click()
 
-    await expect(participantRow(page, 'Alice')).toHaveCount(1)
-    await expect(participantRow(page, 'Alice')).toHaveCount(2)
+    await expect(participantEntry(page, 'Alice')).toHaveCount(1)
+    await expect(participantEntry(page, 'Alice')).toHaveCount(2)
   })
   ```
 

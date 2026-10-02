@@ -143,19 +143,19 @@ export const test = base.extend({
 export const nameInput = page =>
   page.locator('.form-group.row').filter({ hasText: 'User name' }).locator('input')
 export const issueBox = page => page.getByPlaceholder('Current issue')
-export const issuePencil = page => page.getByRole('button', { name: 'Edit issue' })
-export const issueCheck = page => page.getByRole('button', { name: 'Save issue' })
+export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
+export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
 export const summaryTable = page =>
   page.locator('table').filter({ has: page.getByRole('columnheader', { name: 'Number of votes' }) })
-export const participantRows = page =>
+export const participantEntries = page =>
   page
     .locator('table')
     .filter({ has: page.getByRole('columnheader', { name: 'Voted' }) })
     .locator('tbody tr')
 // not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
-// strict mode violation, so a row assertion cannot pass vacuously and needs no existence pin.
-export const participantRow = (page, name) => participantRows(page).filter({ hasText: name })
+// strict mode violation, so an entry assertion cannot pass vacuously and needs no existence pin.
+export const participantEntry = (page, name) => participantEntries(page).filter({ hasText: name })
 // An empty <i> has no size, so count it rather than asking whether it is visible.
 export const votedMark = row => row.locator('td').first().locator('svg, i')
 // The withheld-value icon in the estimation cell, counted rather than asked about for the
@@ -163,7 +163,7 @@ export const votedMark = row => row.locator('td').first().locator('svg, i')
 export const hiddenMark = row => row.locator('td').nth(2).locator('svg, i')
 // The estimation cell's value div exists only while the round is revealed, so it is the one
 // signal a reveal landed in a room where nobody has voted and the value is empty.
-export const revealedCell = row => row.locator('td').nth(2).locator('div')
+export const revealedEstimation = row => row.locator('td').nth(2).locator('div')
 // Any alert, for asserting a reconnect cleared the banner: filtering by text would report
 // hidden when it merely switched to the "session has ended" message a refused page shows.
 export const connectionAlert = page => page.getByRole('alert')
@@ -172,12 +172,12 @@ export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
 // Two renderings of one set, so a revealed round shows the same estimations in both. Compared as
 // multisets: the order of a tie is undecided, and pinning it here would choose a rule nobody has.
-export const expectSummaryMatchesTable = async page => {
+export const expectSummaryMatchesParticipants = async page => {
   // Two empty renderings agree trivially, so this gate is what makes the comparison mean
   // anything, and being retrying it also settles the DOM before the reads below, which are not.
   await expect(summaryTable(page).locator('tbody tr')).not.toHaveCount(0)
   const tally = {}
-  for (const row of await participantRows(page).all()) {
+  for (const row of await participantEntries(page).all()) {
     const estimation = (await row.locator('td').nth(2).innerText()).trim()
     if (estimation !== '') tally[estimation] = (tally[estimation] || 0) + 1
   }
