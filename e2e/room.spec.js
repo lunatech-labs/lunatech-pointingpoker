@@ -99,6 +99,17 @@ test('the participant list follows a join and a leave', async ({ join }) => {
   await expect(participantEntries(alice.page)).toHaveCount(1)
 })
 
+// Ids are random, so without the sort four names come out in this order one run in 24.
+// The names need the accent, case and numeric rules, so each browser's collator is exercised.
+test('participants are listed in name order', async ({ join }) => {
+  const first = await join('Dev 10')
+  await join('Dev 2')
+  await join('bob')
+  await join('Ålice')
+  // An array checks the count as well, so this cannot read before Ålice arrives.
+  await expect(participantEntries(first.page)).toHaveText([/Ålice/, /bob/, /Dev 2/, /Dev 10/])
+})
+
 // Plain HTTP off localhost is not a secure context, and randomUUID is undefined there.
 test('a page without crypto.randomUUID still joins and leaves', async ({ join }) => {
   const alice = await join('Alice')
