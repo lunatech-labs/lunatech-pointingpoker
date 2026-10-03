@@ -266,11 +266,11 @@ commitment:
   meeting.
 - A notice to whoever shares a name with another row: "Another Alice is in the
   room", near the user's own name. It is derived from each snapshot, comparing
-  names trimmed and case-insensitively as step 1b orders them, so it needs no
-  state and clears itself when the other row leaves. A `#1`, `#2` suffix was
-  rejected: it tells the room the rows differ but not who is who, needs a join
-  order the snapshot does not carry, and outlives the row it was told apart
-  from.
+  names trimmed and at base sensitivity without `numeric` (ignoring case and
+  accents, but "Dev 02" and "Dev 2" differ), so it needs no state and clears
+  itself when the other row leaves. A `#1`, `#2` suffix was rejected: it tells
+  the room the rows differ but not who is who, needs a join order the snapshot
+  does not carry, and outlives the row it was told apart from.
 - Renaming oneself during the meeting, a new server command that rebroadcasts
   the snapshot. It lets two people sharing a name tell themselves apart, and
   also fixes a typo or a blank name. Close to "Not Alice?", which changes the
@@ -605,15 +605,16 @@ table included.
 
 `view.ts` sorts the participants it returns by their trimmed name with `new
 Intl.Collator('en', { numeric: true })`, and breaks ties by user id, compared by
-code unit (`a.id < b.id`). The base letter decides first, so case and accents order only names
-that are otherwise equal, "alice" before "Alice", and "Dev 2" comes before
-"Dev 10". Trimming applies to the sort only: the name shows as typed, and a
-blank name sorts first. The locale is pinned: without one each browser collates
-by its own, Swedish putting "Ä" after "Z" for example, and the screen-sharer's
-order would differ from everyone else's. This replaces the frontend rewrite
-spec's unpinned `localeCompare` at base sensitivity; its reasons for name order
-carry over. Ordering by revealed value is left to the step 5+ candidate
-"Results that show the spread and the lowest and highest voters".
+code unit (`a.id < b.id`). The base letter decides first, so case and accents
+order only names that are otherwise equal, "alice" before "Alice", and "Dev 2"
+comes before "Dev 10". Trimming applies to the sort only: the name shows as
+typed, and a blank name sorts first. The locale is pinned: without one each
+browser collates by its own, Swedish putting "Ä" after "Z" for example, and the
+screen-sharer's order would differ from everyone else's. This replaces the
+frontend rewrite spec's unpinned `localeCompare` at base sensitivity; its
+reasons for name order carry over. Ordering by revealed value is left to the
+step 5+ candidate "Results that show the spread and the lowest and highest
+voters".
 
 The tie-break is explicit rather than left to the snapshot's UUID order and a
 stable sort: that order is not a guarantee of the snapshot, and a change to it
@@ -643,13 +644,16 @@ entries, and no other order, is part of the contract (principle 9).
 ### Commits
 
 1. `feat(frontend)`: the sort. `view.test.ts` cases for case ("alice" and
-   "Bob"; "alice" before "Alice", added after review), an accented name among its base letter ("Ålice" and "Bob"), two equal
+   "Bob"), an accented name among its base letter ("Ålice" and "Bob"), two equal
    names fed in descending id order, a name with leading spaces ("  Zed" and
    "Bob"), numbered names ("Dev 10" and "Dev 2"), and a blank name. Case, in
    `room.spec.js`: four participants' order, read with a retrying
-   `expect(participantEntries(page)).toHaveText([/Alice/, /Bob/, /Carol/, /Dave/])`,
-   so it cannot read before the fourth arrives.
-2. `docs`: this step's status line, as the PR's last commit before merge.
+   `expect(participantEntries(page)).toHaveText([/Ålice/, /bob/, /Dev 2/, /Dev 10/])`,
+   so it cannot read before the fourth arrives. The names make each browser's
+   collator apply the accent, case and numeric rules.
+2. `test(frontend)`, added after review: a `view.test.ts` case for "alice"
+   before "Alice", so the collator's case rule bites on its own.
+3. `docs`: this step's status line, as the PR's last commit before merge.
 
 ### Accepted costs
 
