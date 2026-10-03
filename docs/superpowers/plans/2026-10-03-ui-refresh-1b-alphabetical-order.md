@@ -166,7 +166,7 @@ In `applySnapshot`'s returned object, replace:
 with:
 
 ```ts
-    // A sorted copy: the tally above keeps the snapshot's order, so tied values stay as they were.
+    // Sorted after the tally, which reads the snapshot's order, so tied values stay as they were.
     users: [...users].sort(byName),
 ```
 
@@ -221,8 +221,8 @@ Apply each mutation alone to the committed `view.ts`, run `npx vitest run --root
 | No trim | `a.name.trim(), b.name.trim()` becomes `a.name, b.name` | leading spaces only |
 | Plain `<` | `collator.compare(a.name.trim(), b.name.trim())` becomes `(a.name.trim() < b.name.trim() ? -1 : a.name.trim() > b.name.trim() ? 1 : 0)` | lowercase, lowercase before capitalised, accented, Dev 2 |
 | No `numeric` | `{ numeric: true }` becomes `{}` | Dev 2 only |
-| `sensitivity: 'base'` | `{ numeric: true }` becomes `{ numeric: true, sensitivity: 'base' }` | lowercase before capitalised only |
 | No tie-break | delete ` \|\| (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)` | tie only |
+| `sensitivity: 'base'` | `{ numeric: true }` becomes `{ numeric: true, sensitivity: 'base' }` | lowercase before capitalised only |
 | Sort before the tally | `const users = s.users.map(toRow)` becomes `const users = s.users.map(toRow).sort(byName)` | none in `view.test.ts`; see below |
 
 The first four rows are the spec's "each rule's case is also shown failing against the sort without that rule", and the fifth was added after review; in the table, `\|\|` is a plain `||`. The last row is the Review Focus's tally check: with it applied, add this case temporarily at the end of the nested `describe`, run it, and expect it to fail with `['?', 1]` first, then delete it:
