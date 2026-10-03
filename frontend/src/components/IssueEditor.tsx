@@ -84,15 +84,20 @@ export function IssueEditor({ issue, onSave }: Props) {
             )}
           </div>
         </div>
-        {editor.notice !== null && (
-          <small className="form-text text-muted">
-            Changed by someone else to: "{editor.notice}"{' '}
-            <button type="button" className="btn btn-link btn-sm p-0" onClick={takeTheirs}>
-              Use theirs
-            </button>
-          </small>
-        )}
-        {editor.failed && <small className="form-text text-danger">Could not save the issue</small>}
+        {/* Always rendered: a screen reader announces changes to a region, not one appearing. */}
+        <div role="status" data-testid="issue-status">
+          {editor.notice !== null && (
+            <small className="form-text text-muted">
+              Changed by someone else to: "{editor.notice}"{' '}
+              <button type="button" className="btn btn-link btn-sm p-0" onClick={takeTheirs}>
+                Use theirs
+              </button>
+            </small>
+          )}
+          {editor.failed && (
+            <small className="form-text text-danger">Could not save the issue</small>
+          )}
+        </div>
       </div>
     </div>
   )
