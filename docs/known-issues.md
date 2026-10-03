@@ -940,6 +940,29 @@ roadmap item instead of leaving it here as stale history.
   `-F json-stream` gives each line's `instanceId`. Both commands keep running
   past `--until`, so run them under `timeout`.
 
+### A screen reader hears the editor's conflict notice, but not its "Use theirs" button
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (the `issue-status` region).
+- **Issue:** When another player saves the issue under an open editor, Orca with
+  Firefox speaks "Changed by someone else to: ...", but not the "Use theirs"
+  button inside the same region. A screen reader user learns of the conflict, but
+  not that there is a button to take the other text, until they Tab to it.
+- **Resolution:** Stays open until a user asks for it. If it is worth fixing, put
+  the button outside the live region, or add its name to the notice's text.
+
+### A screen reader does not hear a failed save from the Save issue button
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (the Save issue button's
+  `disabled`, and the effect on `editor.failed`).
+- **Issue:** Save issue is disabled while saving, which drops focus, so the
+  editor moves focus back to the box. In Orca with Firefox, reading the box cuts
+  off the polite "Could not save the issue". This hits anyone who activates the
+  button, by mouse or by Space or Enter on it; only Enter in the box is heard.
+- **Resolution:** Stays open, as a later step with its own short spec: keep Save
+  focusable while saving (`aria-disabled` and a guard in `submit`), so focus
+  never moves. It changes the button's contract and look, so it is not part of
+  step 1a.
+
 ### A screen reader hears the connection lost, but never that it came back
 
 - **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
