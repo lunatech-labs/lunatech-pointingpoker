@@ -582,7 +582,7 @@ table included.
 - The suite is green.
 - The unit cases, fed deliberately mis-ordered input, are shown failing against
   step 1a.
-- Each unit case is also shown failing against the sort without its own rule:
+- Each rule's case is also shown failing against the sort without that rule:
   no trim, plain `<` in place of the collator, no `numeric`, and no tie-break.
 - The e2e case is a regression guard only: ids are random UUIDs, so step 1a's
   order is alphabetical in one run of twenty-four.
