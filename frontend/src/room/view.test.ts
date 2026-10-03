@@ -51,4 +51,36 @@ describe('applySnapshot', () => {
     const absent = applySnapshot(snap([row('b', confirmed('5'))]))
     expect(absent).toMatchObject({ userEstimation: '', ownVoteConfirmed: true })
   })
+
+  // Each pair is fed in the wrong order, so a missing sort fails every case.
+  describe('lists participants in name order', () => {
+    const named = (id: string, name: string) => ({ id, name, estimation: none })
+    const order = (...users: RoomSnapshot['users']) =>
+      applySnapshot(snap(users)).users.map(u => u.name)
+
+    it('puts a lowercase name among its letter, not after every capital', () => {
+      expect(order(named('a', 'Bob'), named('b', 'alice'))).toEqual(['alice', 'Bob'])
+    })
+
+    it('puts an accented name among its base letter', () => {
+      expect(order(named('a', 'Bob'), named('b', 'Ålice'))).toEqual(['Ålice', 'Bob'])
+    })
+
+    it('breaks a tie on name by user id', () => {
+      const s = snap([named('b', 'Sam'), named('a', 'Sam')])
+      expect(applySnapshot(s).users.map(u => u.id)).toEqual(['a', 'b'])
+    })
+
+    it('ignores leading spaces, and shows the name as typed', () => {
+      expect(order(named('a', '  Zed'), named('b', 'Bob'))).toEqual(['Bob', '  Zed'])
+    })
+
+    it('puts Dev 2 before Dev 10', () => {
+      expect(order(named('a', 'Dev 10'), named('b', 'Dev 2'))).toEqual(['Dev 2', 'Dev 10'])
+    })
+
+    it('puts a blank name first', () => {
+      expect(order(named('a', 'Bob'), named('b', '   '))).toEqual(['   ', 'Bob'])
+    })
+  })
 })
