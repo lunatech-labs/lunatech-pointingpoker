@@ -529,9 +529,10 @@ both notices show, a change to either reads both. One going is a removal, which
   the region hidden.
 - The region helper, in `e2e/fixtures.js`, guards the announcement itself. It
   marks the region in the browser before a change
-  (`region.evaluate(el => (el.__probe = 1))`) and asserts the mark is still there after it. React leaves such
-  properties alone, so the mark is lost only if the element was re-created,
-  which a restyle could do unnoticed. Step 4a reuses the helper.
+  (`region.evaluate(el => (el.__probe = 1))`) and asserts the mark is still
+  there after it. React leaves such properties alone, so the mark is lost only
+  if the element was re-created, which a restyle could do unnoticed. Step 4a
+  reuses the helper.
 - The region helper also checks the region is not silenced: `aria-live`,
   `aria-atomic`, `aria-relevant` and `aria-busy` are each absent or equal to
   their value under `status` (`polite`, `true`, `additions text`, `false`),
@@ -559,10 +560,10 @@ both notices show, a change to either reads both. One going is a removal, which
   page up and back.
 - With both notices shown, some screen readers reread the remaining one when
   the other goes, since the region is atomic.
-- A failed save from the Save issue button (by mouse, or Space or Enter on the
-  button) goes unheard in Orca with Firefox: Save is disabled while saving, so
-  the editor moves focus back to the box, and reading the box cuts off the
-  polite line. The line stays on screen, and Enter in the box keeps focus. See
+- A failed save by mouse on the Save issue button goes unheard in Orca with
+  Firefox, and Space or Enter on the button is expected to behave the same: Save
+  is disabled while saving, so the editor moves focus back to the box, and
+  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. See
   `docs/known-issues.md`.
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
