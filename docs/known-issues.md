@@ -956,8 +956,9 @@ roadmap item instead of leaving it here as stale history.
   `disabled`, and the effect on `editor.failed`).
 - **Issue:** Save issue is disabled while saving, which drops focus, so the
   editor moves focus back to the box. In Orca with Firefox, reading the box cuts
-  off the polite "Could not save the issue". This hits anyone who activates the
-  button, by mouse or by Space or Enter on it; only Enter in the box is heard.
+  off the polite "Could not save the issue". This was heard with a mouse click
+  on the button, and Space or Enter on it is expected to behave the same, since
+  the same `disabled` drops focus; only Enter in the box is heard.
 - **Resolution:** Stays open, as a later step with its own short spec: keep Save
   focusable while saving (`aria-disabled` and a guard in `submit`), so focus
   never moves. It changes the button's contract and look, so it is not part of
