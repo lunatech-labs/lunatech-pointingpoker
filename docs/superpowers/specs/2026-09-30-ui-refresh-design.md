@@ -258,9 +258,23 @@ commitment:
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
   which nobody can refer to. To decide: trimming at join, a remembered empty
-  name, a maximum length, and duplicate names. The server-side check belongs
-  with `docs/known-issues.md`, "No request payload is validated on any endpoint
-  that takes one".
+  name, and a maximum length. The server-side check belongs with
+  `docs/known-issues.md`, "No request payload is validated on any endpoint that
+  takes one". Duplicate names stay allowed. Refusing them would lock out someone
+  whose laptop died and who rejoins from a phone without the cookie: their old
+  row holds the name until its grace period ends, often the last votes of the
+  meeting.
+- A notice to whoever shares a name with another row: "Another Alice is in the
+  room", near the user's own name. It is derived from each snapshot, comparing
+  names trimmed and case-insensitively as step 1b orders them, so it needs no
+  state and clears itself when the other row leaves. A `#1`, `#2` suffix was
+  rejected: it tells the room the rows differ but not who is who, needs a join
+  order the snapshot does not carry, and outlives the row it was told apart
+  from.
+- Renaming oneself during the meeting, a new server command that rebroadcasts
+  the snapshot. It lets two people sharing a name tell themselves apart, and
+  also fixes a typo or a blank name. Close to "Not Alice?", which changes the
+  name before joining rather than after.
 - Keyboard shortcuts for voting.
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
