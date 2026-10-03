@@ -62,6 +62,10 @@ describe('applySnapshot', () => {
       expect(order(named('a', 'Bob'), named('b', 'alice'))).toEqual(['alice', 'Bob'])
     })
 
+    it('puts a lowercase name before the same name capitalised', () => {
+      expect(order(named('a', 'Alice'), named('b', 'alice'))).toEqual(['alice', 'Alice'])
+    })
+
     it('puts an accented name among its base letter', () => {
       expect(order(named('a', 'Bob'), named('b', 'Ålice'))).toEqual(['Ålice', 'Bob'])
     })
