@@ -583,7 +583,7 @@ both notices show, a change to either reads both. One going is a removal, which
 
 ## Step 1b. Alphabetical participants
 
-Status: proposed. Branch: `20260930.ui_refresh_1b_alphabetical_order`, stacked
+Status: landed. Branch: `20260930.ui_refresh_1b_alphabetical_order`, stacked
 on step 1a.
 
 ### Scope
