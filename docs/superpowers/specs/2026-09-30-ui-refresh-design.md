@@ -643,7 +643,7 @@ entries, and no other order, is part of the contract (principle 9).
 ### Commits
 
 1. `feat(frontend)`: the sort. `view.test.ts` cases for case ("alice" and
-   "Bob"), an accented name among its base letter ("Ålice" and "Bob"), two equal
+   "Bob"; "alice" before "Alice", added after review), an accented name among its base letter ("Ålice" and "Bob"), two equal
    names fed in descending id order, a name with leading spaces ("  Zed" and
    "Bob"), numbered names ("Dev 10" and "Dev 2"), and a blank name. Case, in
    `room.spec.js`: four participants' order, read with a retrying
