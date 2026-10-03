@@ -979,6 +979,25 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
+### The frontend's type check stops at ES2022 APIs
+
+- **Where:** `frontend/tsconfig.json`, `target` and `lib`.
+- **Issue:** `lib` is `ES2022`, so `tsc` rejects APIs newer browsers all ship:
+  `toSorted` and `findLast` (ES2023), `Object.groupBy`, `Map.groupBy` and
+  `Promise.withResolvers` (ES2024). Step 1b of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md` writes
+  `[...users].sort(byName)` where `users.toSorted(byName)` would do. Neither
+  `tsc` (it runs with `noEmit`) nor Vite polyfills, so `lib` is a promise about
+  the users' browsers: raised past them, the code still compiles and fails at
+  runtime.
+- **Resolution:** Stays open, since nothing needs it yet. Users are on managed
+  corporate laptops whose browsers stay current, so requiring a 2024 or 2025
+  browser is acceptable. Raise `target` and `lib` to `ES2024` with the first
+  change that wants one of these APIs, and set Vite's `build.target` to match so
+  the two claims agree. ES2024 is the ceiling today: the installed TypeScript
+  5.9 ships no ES2025 lib, which would bring Set operations and iterator
+  helpers.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
