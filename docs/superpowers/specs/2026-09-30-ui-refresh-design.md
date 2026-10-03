@@ -459,7 +459,7 @@ Considered and not taken:
 
 ## Step 1a. The editor's live region
 
-Status: proposed. Branch: `20260930.ui_refresh_1a_editor_live_region`, stacked
+Status: landed. Branch: `20260930.ui_refresh_1a_editor_live_region`, stacked
 on step 1.
 
 ### Scope
@@ -509,10 +509,12 @@ page does not move; the notices push the page down while shown, as today
 
 The region announces a notice when it appears, again when its text changes
 while shown, and is silent when the last notice goes, whether the user acted or
-the room's issue caught up. The conflict notice's announcement includes its "Use
-theirs" button. `role="status"` implies `aria-atomic="true"`, so the region is
-read whole: while both notices show, a change to either reads both. One going is
-a removal, which `status` does not announce (but see Accepted costs).
+the room's issue caught up. The conflict notice's announcement should include its
+"Use theirs" button (not in Orca with Firefox, the only pair checked; see
+`docs/known-issues.md`).
+`role="status"` implies `aria-atomic="true"`, so the region is read whole: while
+both notices show, a change to either reads both. One going is a removal, which
+`status` does not announce (but see Accepted costs).
 
 ### The contract
 
@@ -557,9 +559,11 @@ a removal, which `status` does not announce (but see Accepted costs).
   page up and back.
 - With both notices shown, some screen readers reread the remaining one when
   the other goes, since the region is atomic.
-- A failed save by mouse may go unheard: Save is disabled while saving, so the
-  editor moves focus back to the box, and reading the box can cut off the
-  polite line. The hand check records whether it does; Enter keeps focus.
+- A failed save from the Save issue button (by mouse, or Space or Enter on the
+  button) goes unheard in Orca with Firefox: Save is disabled while saving, so
+  the editor moves focus back to the box, and reading the box cuts off the
+  polite line. The line stays on screen, and Enter in the box keeps focus. See
+  `docs/known-issues.md`.
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
 ## Step 1b. Alphabetical participants
