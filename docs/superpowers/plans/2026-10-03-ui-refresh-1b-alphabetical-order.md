@@ -4,7 +4,7 @@
 
 **Goal:** List participants in name order, the same on every screen, with nothing else changing, the results table included.
 
-**Architecture:** `applySnapshot` in `frontend/src/room/view.ts` returns a sorted copy of its rows, compared by a module-level `Intl.Collator('en', { numeric: true })` over the trimmed name, with ties broken by user id in code-unit order. The tally and the reader's own row keep reading the snapshot's order. Six `view.test.ts` cases prove the sort, and each rule has a case that fails without it. One `room.spec.js` case checks that the order reaches the screen.
+**Architecture:** `applySnapshot` in `frontend/src/room/view.ts` returns a sorted copy of its rows, compared by a module-level `Intl.Collator('en', { numeric: true })` over the trimmed name, with ties broken by user id in code-unit order. The tally and the reader's own row keep reading the snapshot's order. Seven `view.test.ts` cases prove the sort, and each rule has a case that fails without it. One `room.spec.js` case checks that the order reaches the screen.
 
 **Tech Stack:** React 19, TypeScript, Vitest, Playwright 1.63 (Chromium and Firefox) against the testkit stub.
 
@@ -14,8 +14,8 @@
 
 Every patch below was applied and run in a scratch worktree on 2026-10-03, on this branch at `a2e1a56`:
 
-- **The cases fail first.** Against step 1a's product code, all six new unit cases failed and the three existing ones passed.
-- **Green after.** With the sort, `npm run test:unit` passed 89 tests, and the whole e2e suite passed, 112 cases. `npm run typecheck` and `npm run lint` were clean.
+- **The cases fail first.** Against step 1a's product code, all seven new unit cases failed and the three existing ones passed.
+- **Green after.** With the sort, `npm run test:unit` passed 90 tests, and the whole e2e suite passed, 112 cases. `npm run typecheck` and `npm run lint` were clean.
 - **The bites.** Each mutation in Task 2, Step 1 was applied alone to the finished `view.ts`; each failed exactly the cases its row names. The temporary tally case passed without its mutation and failed with it, `expected [ '?', 1 ] to deeply equal [ '0.5', 1 ]`.
 - **The e2e case.** It passed 10 of 10 with `--repeat-each 5` in both browsers, and failed 20 of 20 with `--repeat-each 10` against an unsorted list.
 - **Formatting.** The new lines pass `npx prettier --check --single-quote --no-semi --print-width 100 --trailing-comma none --arrow-parens avoid`. `view.ts` and `view.test.ts` already fail that check on `main` for lines this step does not touch; leave them alone (see Task 1, Step 6).
@@ -28,7 +28,7 @@ Each is implemented as written unless review changes it.
 - **P2. The unit cases sit in a nested `describe('lists participants in name order')`** inside the existing `describe('applySnapshot')`, with two local helpers: `named(id, name)` builds a row with no estimation, and `order(...users)` returns the rendered names.
 - **P3. Each case feeds two rows in the wrong order.** The tie case reads ids instead of names, since the names are equal.
 - **P4. The blank-name case has no rule of its own.** A blank name sorts first with or without the trim, so it fails only against step 1a. It guards a comparator change that would push blank names last.
-- **P5. The e2e case joins Dave, Carol, Bob, then Alice and reads Dave's page,** so the page under test is the one that saw every later join arrive. Join order does not set the order, since the server orders by id; reversing it only keeps a join-order regression from passing. It sits after "the participant list follows a join and a leave".
+- **P5. The e2e case joins `Dev 10`, `Dev 2`, `bob`, then `Ålice` and reads the first joiner's page,** so the page under test is the one that saw every later join arrive. The names need the accent, case and numeric rules, so a plain compare or a collator without `numeric` fails the case in both browsers. Join order does not set the order, since the server orders by id; reversing it only keeps a join-order regression from passing. It sits after "the participant list follows a join and a leave".
 - **P6. Commit subjects follow steps 1 and 1a:** the code commit ends with "(ui refresh step 1b)", this plan lands as a `docs` commit before Task 1, and the last commit sets `Status: landed.`
 
 ## Global Constraints
@@ -93,6 +93,10 @@ In `frontend/src/room/view.test.ts`, inside `describe('applySnapshot', ...)`, af
       expect(order(named('a', 'Bob'), named('b', 'alice'))).toEqual(['alice', 'Bob'])
     })
 
+    it('puts a lowercase name before the same name capitalised', () => {
+      expect(order(named('a', 'Alice'), named('b', 'alice'))).toEqual(['alice', 'Alice'])
+    })
+
     it('puts an accented name among its base letter', () => {
       expect(order(named('a', 'Bob'), named('b', 'Ålice'))).toEqual(['Ålice', 'Bob'])
     })
@@ -119,7 +123,7 @@ In `frontend/src/room/view.test.ts`, inside `describe('applySnapshot', ...)`, af
 - [ ] **Step 2: Run them to see them fail against step 1a**
 
 Run: `npx vitest run --root frontend src/room/view.test.ts`
-Expected: `Tests  6 failed | 3 passed (9)`, the six new cases failing on their `toEqual`. Record this for the PR's bite table.
+Expected: `Tests  7 failed | 3 passed (10)`, the seven new cases failing on their `toEqual`. Record this for the PR's bite table.
 
 - [ ] **Step 3: Write the e2e case**
 
@@ -127,13 +131,14 @@ In `e2e/room.spec.js`, directly before the comment `// Plain HTTP off localhost 
 
 ```js
 // Ids are random, so without the sort four names come out in this order one run in 24.
+// The names need the accent, case and numeric rules, so each browser's collator is exercised.
 test('participants are listed in name order', async ({ join }) => {
-  const dave = await join('Dave')
-  await join('Carol')
-  await join('Bob')
-  await join('Alice')
-  // An array checks the count as well, so this cannot read before Alice arrives.
-  await expect(participantEntries(dave.page)).toHaveText([/Alice/, /Bob/, /Carol/, /Dave/])
+  const first = await join('Dev 10')
+  await join('Dev 2')
+  await join('bob')
+  await join('Ålice')
+  // An array checks the count as well, so this cannot read before Ålice arrives.
+  await expect(participantEntries(first.page)).toHaveText([/Ålice/, /bob/, /Dev 2/, /Dev 10/])
 })
 
 ```
@@ -170,7 +175,7 @@ Leave `const users = s.users.map(toRow)`, `me` and the tally as they are.
 - [ ] **Step 5: Run the unit cases and the e2e case to see them pass**
 
 Run: `npx vitest run --root frontend src/room/view.test.ts`
-Expected: `Tests  9 passed (9)`.
+Expected: `Tests  10 passed (10)`.
 
 Run: `npm run build && npx playwright test e2e/room.spec.js -g "name order" --repeat-each 5`
 Expected: 10 passed.
@@ -189,7 +194,7 @@ Expected: no errors.
 - [ ] **Step 7: Run everything**
 
 Run: `npm run test:unit && npx playwright test`
-Expected: 89 unit tests and 112 e2e cases passed.
+Expected: 90 unit tests and 112 e2e cases passed.
 
 Run: `git status --short`
 Expected: exactly the three modified files.
@@ -214,12 +219,13 @@ Apply each mutation alone to the committed `view.ts`, run `npx vitest run --root
 | Mutation | Edit | Expected failures |
 | --- | --- | --- |
 | No trim | `a.name.trim(), b.name.trim()` becomes `a.name, b.name` | leading spaces only |
-| Plain `<` | `collator.compare(a.name.trim(), b.name.trim())` becomes `(a.name.trim() < b.name.trim() ? -1 : a.name.trim() > b.name.trim() ? 1 : 0)` | lowercase, accented, Dev 2 |
+| Plain `<` | `collator.compare(a.name.trim(), b.name.trim())` becomes `(a.name.trim() < b.name.trim() ? -1 : a.name.trim() > b.name.trim() ? 1 : 0)` | lowercase, lowercase before capitalised, accented, Dev 2 |
 | No `numeric` | `{ numeric: true }` becomes `{}` | Dev 2 only |
+| `sensitivity: 'base'` | `{ numeric: true }` becomes `{ numeric: true, sensitivity: 'base' }` | lowercase before capitalised only |
 | No tie-break | delete ` \|\| (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)` | tie only |
 | Sort before the tally | `const users = s.users.map(toRow)` becomes `const users = s.users.map(toRow).sort(byName)` | none in `view.test.ts`; see below |
 
-The first four rows are the spec's "each rule's case is also shown failing against the sort without that rule"; in the table, `\|\|` is a plain `||`. The last row is the Review Focus's tally check: with it applied, add this case temporarily at the end of the nested `describe`, run it, and expect it to fail with `['?', 1]` first, then delete it:
+The first four rows are the spec's "each rule's case is also shown failing against the sort without that rule", and the fifth was added after review; in the table, `\|\|` is a plain `||`. The last row is the Review Focus's tally check: with it applied, add this case temporarily at the end of the nested `describe`, run it, and expect it to fail with `['?', 1]` first, then delete it:
 
 ```ts
     it('leaves a tied Most voted in snapshot order', () => {
