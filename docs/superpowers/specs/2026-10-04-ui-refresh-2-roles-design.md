@@ -61,11 +61,12 @@ This section settles the parent's "Voter" and "Facilitator".
 6. **The browser remembers the role per room.** The server forgets a room after
    two hours without connections, and the session cookie ends with the browser,
    so a weekly meeting usually starts with a new identity. The page keeps
-   `role:<roomId>`, mirrored from the snapshot, and `lastRole`, written only by
+   `role:<roomId>`, kept equal to the room's seat ("Remembering the role" in 2c), and `lastRole`, written only by
    the lobby. A one-off switch in one room changes neither another room's role
    nor the default for a new room.
 7. **With no remembered role, the lobby comes first.** A room's own path joins
-   at once only when a name and a role are remembered. Otherwise the lobby
+   at once only when a name and a role are remembered, a remembered role being
+   `role:<roomId>`, else `lastRole`. Otherwise the lobby
    shows, with Voter pre-selected, so every role is confirmed by a person once.
    This is also where every existing user meets the feature.
 
@@ -90,6 +91,12 @@ Considered and not taken:
   flashing once per meeting.
 - One stored role for the whole site: a reload in one room would replay a role
   chosen in another, dropping an estimate and possibly revealing.
+- Passing the lobby's choice as `?role` in the URL: both redirects would have to
+  keep the query, and a crafted link would switch a seat and drop a vote.
+- Writing `role:<id>` from a typed id lowercased: a client copy of the server's
+  rewrite rules, which a typed legacy id already escapes.
+- A server endpoint that normalises a typed id: an endpoint and a request for
+  what an exact match against the stored, canonical keys already gives.
 
 ## Step 2a. Seats, no behaviour change
 
@@ -145,8 +152,9 @@ Nothing visible changes: the page parses the new shape and always sends
   `Voter` from `Facilitator` gives `Voter(None)`, and the same role changes
   nothing.
 - The latch step, one private step on `RoomData`: if the round is open and
-  complete, set `revealed`. `vote` and the `/role` command run it; a join never
-  does.
+  complete, set `revealed`. An applied vote and a `/role` that changes the seat
+  run it. A refused vote, a same-role `/role` and a join never do, so none of
+  them reveals a round a departure left complete.
 - `vote` refuses a facilitator with a new `VoteRefusal.NotAVoter`, after the
   existing checks: a facilitator's vote in a revealed round gets
   `RoundRevealed`, and a blank one `BlankEstimation`. Like every refusal, it
@@ -196,7 +204,7 @@ removes A first.
 | Anyone presses Re-vote | unchanged | unconfirmed | unchanged | unchanged |
 | A departs, by beacon or grace expiry | seat kept; never reveals | seat kept; never reveals | seat kept; never reveals | seat kept |
 | A's stream reconnects in place | seat unchanged | seat unchanged | seat unchanged | seat unchanged |
-| Another identity's vote or `/role` switch completes the round | cannot happen while A is present: A is waited on | revealed | cannot happen while A is present: A is not confirmed | revealed |
+| Another identity's vote or `/role` switch completes the round | cannot happen while A is present: A is waited on; A absent is the reload-gap race | revealed | as `Voter(None)`: A is not confirmed | revealed |
 | The server restarts | all lost; the rejoin creates the seat from the role sent | likewise | likewise | likewise |
 
 **Revealed round.**
@@ -210,6 +218,8 @@ removes A first.
 | Anyone presses Clear | `Voter(None)`, round open | `Voter(None)`, round open | `Voter(None)`, round open | unchanged, round open |
 | Anyone presses Re-vote | unchanged, round open | unconfirmed, round open | unchanged, round open | unchanged, round open |
 | A departs or reconnects | as in an open round | likewise | likewise | likewise |
+| Another identity votes or switches | nothing reveals: already revealed | likewise | likewise | likewise |
+| The server restarts | as in an open round | likewise | likewise | likewise |
 
 An unconfirmed voter in a revealed round is reachable: a Re-vote, then a Show
 before everyone confirms again.
@@ -231,7 +241,8 @@ before everyone confirms again.
 ### Pass condition
 
 - The matrix is written first, as table-driven `RoomSpec` scenarios, and shown
-  failing before the transitions exist.
+  failing before the transitions exist. They include a same-role `/role` and a
+  refused vote on a round a departure left complete, both leaving it hidden.
 - `SnapshotContractSpec` and `snapshot.contract.test.ts` pin the new shape.
 - `APISpec` covers `POST /role` for both values, its 401, 403 and 400, and the
   vote's 409 `NotAVoter`.
@@ -245,28 +256,38 @@ before everyone confirms again.
 ### Remembering the role
 
 - `role:<roomId>` is written from the page's own seat in each snapshot, so it
-  converges on the server's seat whatever happened to a request's response, and
-  a switch made in another tab is stored by every tab.
-- `lastRole` is written on lobby submit only, so a switch in the room never
-  changes the default for a new room.
-- A lobby submit also writes `role:<roomId>` for the room it goes to, so a
-  choice made in the lobby for a known room is the one the join sends. Create
-  writes it once the new room's id is known, before navigating.
-- The role a join sends is `role:<roomId>`, else `lastRole`.
+  converges on the server's seat and a switch made in another tab is stored by
+  every tab. A 204 from `/role` also writes it, so a switch survives a reload
+  while the stream is stalled and no snapshot has come.
+- `lastRole` is written on every lobby submit, and nowhere else, so neither a
+  switch in the room nor an auto-join changes the default for a new room.
+- A lobby submit also writes `role:<id>` when the trimmed id equals a room the
+  browser already remembers, so a choice made for a known room is the one the
+  join sends. The stored keys are the ids pages loaded, so an exact match needs
+  none of the server's rewrite rules. Create writes `role:<id>` for the id the
+  server returns.
+- A remembered role is `role:<roomId>`, else `lastRole` (decision 7). It is
+  what a join sends, except on the room's own lobby, which sends its radio.
 
 ### The lobby
 
 Both the Create and the Join forms get a "Join as" choice under the name: a
-`fieldset` with that legend and two radio buttons, Voter and Facilitator,
-pre-selected from `role:<roomId>`, else `lastRole`, else Voter. Enter still
-submits from the name field only (principle 8).
+`fieldset` with that legend and two radio buttons, Voter and Facilitator.
+Enter still submits from the name field only (principle 8). The radio is
+pre-selected:
 
-`doCreate` and `doJoin` store the name and the role and navigate; the join
-itself is `joinHere`, run on the room's path, and `Connection.join` gains the
-role. A room's own path joins at once when a name and a role are remembered
-(decision 7); otherwise its lobby shows. The root lobby's "Rejoin …" link is
-navigation, not a submit: it joins with that room's remembered role, and the
-radio applies to Create and Join only.
+- on a room's own path, from its remembered role, else Voter;
+- on the root Join tab, from `role:<typed id>` when the trimmed id equals a
+  remembered room, else `lastRole`, else Voter;
+- on the root Create tab, from `lastRole`, else Voter.
+
+On the root tabs, `doCreate` and `doJoin` store the name and the role and
+navigate, and the room's page then joins with its remembered role. On a room's
+own path, the lobby's Join is `joinHere` in place, sending the radio's role and
+storing it as above; `Connection.join` gains the role. The auto-join writes
+neither key. The root lobby's "Rejoin …" link is navigation, not a submit: the
+room's path joins at once with its remembered role, or shows its lobby when
+there is none.
 
 ### The switch
 
@@ -303,8 +324,11 @@ Additions, each a decision under the parent's principle 9:
 | A facilitator's page has no deck | `deck(page)` has count 0 |
 
 `revealedEstimation` and `expectSummaryMatchesParticipants` are unchanged. The
-`join` fixture gains a `{ role }` option, defaulting to Voter, so the existing
-cases do not change.
+`join` fixture gains a `{ role }` option, defaulting to Voter. One existing
+case changes: `slug.spec.js`, "a room remembered from before the cutover reopens
+under its derived name", also seeds `lastRole`, so it keeps testing the legacy
+redirect and the rejoin; a remembered name with no role has its own case below.
+The others do not change.
 
 ### Pass condition
 
@@ -315,8 +339,10 @@ New e2e cases, each shown failing against 2b:
 - a switch to facilitator drops the vote from the results;
 - a facilitator stays one across a reload;
 - a facilitator's page has no deck, and keeps Show, Re-vote and Clear;
-- a room's path with a remembered name and no remembered role shows the lobby,
-  Voter pre-selected;
+- a regular user from before roles, with a remembered name and no remembered
+  role, gets the room's lobby on its path, Voter pre-selected;
+- a lobby choice for a room already remembered is the role the join sends;
+- a switch survives a reload while the stream is frozen;
 - a switch in one room changes neither another room's role nor the lobby's
   default for a new room.
 
@@ -334,9 +360,12 @@ New e2e cases, each shown failing against 2b:
   it waiting for a Show or another vote (decision 1).
 - A product owner who switches to voter for one question and forgets to switch
   back stays a voter in that room, one click to undo.
-- A switch the server applied, followed by a reload before its snapshot
-  arrived, is undone by that reload's join, which sends the earlier role. It
-  needs the connection to fail within one round trip of the click.
+- A switch whose 204 is lost while the stream is also stalled, followed by a
+  reload, is undone by that reload's join, which sends the earlier role.
+- A known room typed in the lobby with another case, or as its legacy id, does
+  not match its stored key, so the join sends that room's remembered role, not
+  the lobby's choice. Nothing switches, the switch line shows the role, and one
+  click changes it.
 - Switching moves the switcher's own page, since the deck appears or
   disappears. Step 3 lays out both pages.
 - A facilitator loses the "The round is revealed" line with the deck until step
