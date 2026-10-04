@@ -67,8 +67,9 @@ This section settles the parent's "Voter" and "Facilitator".
    role nor the default for a new room.
 7. **With no remembered role, the lobby comes first.** A room's own path joins
    at once only when a name and a role are remembered, a remembered role being
-   `role:<roomId>`, else `lastRole`. Otherwise the lobby
-   shows, with Voter pre-selected, so every role is confirmed by a person once.
+   `role:<roomId>`, else `lastRole`. Otherwise the lobby shows, with the
+   remembered role pre-selected, else Voter, so every role is confirmed by a
+   person once.
    This is also where every existing user meets the feature.
 
 Considered and not taken:
@@ -267,10 +268,13 @@ before everyone confirms again.
   neither a switch, an auto-join nor a choice for a known room changes the
   default for a new room.
 - A `role:<id>` key exists only for a room the page reached: only a snapshot
-  creates one. A lobby submit overwrites `role:<trimmed id>` with its radio when
-  that key exists, and otherwise writes `lastRole`, so a choice made for a
-  known room is the one the join sends, and a typo or an unreachable room
-  leaves no key. The keys are the ids pages loaded, so an exact match needs
+  creates one, and a 204 from `/role` writes one only after a snapshot showed
+  the switch. A lobby submit overwrites the room's key with its radio when that
+  key exists (`role:<roomId>` on a room's path, `role:<trimmed id>` at the
+  root), and otherwise writes `lastRole`, so a choice made for a known room is
+  the one the join sends, and a typo the server refuses leaves no key. A typo
+  that is a valid slug creates and reaches an empty room, whose key the
+  snapshot stores. The keys are the ids pages loaded, so an exact match needs
   none of the server's rewrite rules. Create removes any key under the id it
   gets, since a minted room is new and an old key under a reused slug belongs
   to another room; the page then joins with `lastRole`, which the same submit
@@ -285,17 +289,16 @@ before everyone confirms again.
 
 Both the Create and the Join forms get a "Join as" choice under the name: a
 `fieldset` with that legend and two radio buttons, Voter and Facilitator.
-Enter still submits from the name field only (principle 8). The radio is
-pre-selected:
+Enter still submits from the name field only (principle 8). The radio shows
+the user's pick once they make one, shared by both tabs, so typing or pasting
+an id never overrides it. Until then it shows a value derived from where the
+lobby is:
 
-- on a room's own path, from its remembered role, else Voter;
-- on the root Join tab, from `role:<trimmed id>` when that key exists, else
-  `lastRole`, else Voter;
-- on the root Create tab, from `lastRole`, else Voter.
-
-The two tabs share one radio. On the root Join tab it follows the typed id
-until the user picks a role, and then keeps that choice, so typing or pasting
-an id never overrides one.
+- on a room's own path, its remembered role;
+- on the root Join tab, `role:<trimmed id>` when that key exists, else
+  `lastRole`;
+- on the root Create tab, `lastRole`;
+- else Voter.
 
 On the root tabs, `doCreate` and `doJoin` store the name and the role and
 navigate, and the room's page then joins with its remembered role. On a room's
