@@ -278,9 +278,9 @@ commitment:
   also fixes a typo or a blank name. Close to "Not Alice?", which changes the
   name before joining rather than after.
 - Keyboard shortcuts for voting.
-- Completion of known rooms in the lobby's Join form, from the rooms the
-  browser remembers a role for (step 2c), so a known room is picked rather than
-  typed. To decide: ordering, how many, and removal.
+- Completion of known rooms in the lobby's Join form, from the `role:<id>`
+  keys, which exist only for rooms the page reached (step 2c), so a known room
+  is picked rather than typed. To decide: ordering, how many, and removal.
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
