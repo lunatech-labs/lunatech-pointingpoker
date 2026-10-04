@@ -271,8 +271,10 @@ before everyone confirms again.
   that key exists, and otherwise writes `lastRole`, so a choice made for a
   known room is the one the join sends, and a typo or an unreachable room
   leaves no key. The keys are the ids pages loaded, so an exact match needs
-  none of the server's rewrite rules. Create writes no key: a new room's page
-  joins with `lastRole`, which the same submit has just set.
+  none of the server's rewrite rules. Create removes any key under the id it
+  gets, since a minted room is new and an old key under a reused slug belongs
+  to another room; the page then joins with `lastRole`, which the same submit
+  has just set.
 - A remembered role is `role:<roomId>`, else `lastRole` (decision 7). It is
   what a join sends, except on the room's own lobby, which sends its radio.
   Every read decodes the stored string, so a value other than the two roles
@@ -384,6 +386,9 @@ New e2e cases, each shown failing against 2b:
   back stays a voter in that room, one click to undo.
 - A switch whose 204 is lost while the stream is also stalled, followed by a
   reload, is undone by that reload's join, which sends the earlier role.
+- A link to a new room whose slug this browser visited before joins with that
+  old room's role, since stored keys are never pruned. The switch line shows
+  it, and one click changes it.
 - A known room typed in the lobby with another case, or as its legacy id, does
   not match its stored key, so the join sends that room's remembered role, not
   the lobby's choice. Nothing switches, the switch line shows the role, and one
