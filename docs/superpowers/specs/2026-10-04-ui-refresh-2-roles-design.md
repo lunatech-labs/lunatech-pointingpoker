@@ -159,10 +159,15 @@ Nothing visible changes: the page parses the new shape and always sends
   complete, set `revealed`. An applied vote and a `/role` that changes the seat
   run it. A refused vote, a same-role `/role` and a join never do, so none of
   them reveals a round a departure left complete.
-- `vote` refuses a facilitator with a new `VoteRefusal.NotAVoter`, after the
-  existing checks: a facilitator's vote in a revealed round gets
-  `RoundRevealed`, and a blank one `BlankEstimation`. Like every vote refusal,
-  it still publishes.
+- `vote` refuses a facilitator with a new `VoteRefusal.NotAVoter`, checked
+  after the existing two, which keep precedence. Like every vote refusal, it
+  still publishes. A facilitator's vote gets:
+
+  | Round | Estimation | Refusal | Status |
+  | --- | --- | --- | --- |
+  | revealed | any | `RoundRevealed` | 409 |
+  | open | blank | `BlankEstimation` | 400 |
+  | open | non-blank | `NotAVoter` | 409 |
 - Completion's non-empty clause becomes a live case: when the last voter
   switches to facilitator, nothing reveals.
 
