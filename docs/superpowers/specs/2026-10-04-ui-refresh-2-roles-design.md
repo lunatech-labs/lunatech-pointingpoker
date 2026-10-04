@@ -61,8 +61,8 @@ This section settles the parent's "Voter" and "Facilitator".
 6. **The browser remembers the role per room.** The server forgets a room after
    two hours without connections, and the session cookie ends with the browser,
    so a weekly meeting usually starts with a new identity. The page keeps
-   `role:<roomId>`, kept equal to the room's seat ("Remembering the role" in 2c), and `lastRole`, written only by
-   the lobby. A one-off switch in one room changes neither another room's role
+   `role:<roomId>` in step with the room's seat ("Remembering the role" in 2c),
+   and `lastRole`, written only by the lobby. A one-off switch in one room changes neither another room's role
    nor the default for a new room.
 7. **With no remembered role, the lobby comes first.** A room's own path joins
    at once only when a name and a role are remembered, a remembered role being
