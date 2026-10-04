@@ -21,6 +21,11 @@ const toRow = ({ id, name, estimation }: RoomSnapshot['users'][number]): Partici
   estimation: shown(estimation)
 })
 
+// Pinned to one locale so every browser lists the room in the same order.
+const collator = new Intl.Collator('en', { numeric: true })
+const byName = (a: ParticipantRow, b: ParticipantRow) =>
+  collator.compare(a.name.trim(), b.name.trim()) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
 export type View = {
   users: ParticipantRow[]
   votesRevealed: boolean
@@ -40,7 +45,8 @@ export function applySnapshot(s: RoomSnapshot): View {
     if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1
   })
   return {
-    users,
+    // Sorted after the tally, which reads the snapshot's order, so tied values stay as they were.
+    users: [...users].sort(byName),
     votesRevealed: s.votesRevealed,
     currentIssue: s.currentIssue,
     userEstimation: me ? me.estimation : '',
