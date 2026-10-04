@@ -257,9 +257,9 @@ before everyone confirms again.
 
 ### Remembering the role
 
-- `role:<roomId>` is written from the page's own seat in each snapshot, so it
-  converges on the server's seat and a switch made in another tab is stored by
-  every tab. A 204 from `/role` also writes it, so a switch survives a reload
+- `role:<roomId>` is written from the page's own seat in each snapshot that
+  holds it, so it converges on the server's seat and a switch made in another
+  tab is stored by every tab. A 204 from `/role` also writes it, so a switch survives a reload
   while the stream is stalled and no snapshot has come.
 - `lastRole` is written on every lobby submit, and nowhere else, so neither a
   switch in the room nor an auto-join changes the default for a new room.
@@ -272,6 +272,9 @@ before everyone confirms again.
   joins with `lastRole`, which the same submit has just set.
 - A remembered role is `role:<roomId>`, else `lastRole` (decision 7). It is
   what a join sends, except on the room's own lobby, which sends its radio.
+  Every read decodes the stored string, so a value other than the two roles
+  counts as none, and a renamed or rolled-back role reaches the lobby rather
+  than a refused join.
 
 ### The lobby
 
@@ -339,6 +342,9 @@ redirect and the rejoin; a remembered name with no role has its own case below.
 The others do not change.
 
 ### Pass condition
+
+A new unit case in `frontend/` decodes a stored role: a value other than the
+two roles reads as none.
 
 New e2e cases, each shown failing against 2b:
 
