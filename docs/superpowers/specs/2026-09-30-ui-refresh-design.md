@@ -44,6 +44,8 @@ document as a whole stays in discussion.
   principle 4 requires.
 - **Test contract**: defined in step 1, under "The test contract"; steps 1a,
   1b, 4 and 4a each add to it in their own sections.
+- **Live region**: an element the browser watches, so text added or changed
+  inside it is spoken without its user moving there.
 
 ## Principles
 
@@ -457,17 +459,13 @@ Considered and not taken:
 
 ## Step 1a. The editor's live region
 
-Status: proposed. Branch: `20260930.ui_refresh_1a_editor_live_region`, stacked
+Status: landed. Branch: `20260930.ui_refresh_1a_editor_live_region`, stacked
 on step 1.
 
 ### Scope
 
-A screen reader reads what its user moves to, and does not notice the page
-changing by itself. A live region is an element the browser watches: text
-added or changed inside it is spoken without the user moving there. This step
-adds one, so a screen reader user hears the issue editor's notices. Nothing
-looks different. The round's reveal and reopening are announced from step 4a,
-on a visible line step 3 designs.
+This step adds a live region, so a screen reader user hears the issue
+editor's notices. Nothing looks different.
 
 **Pass condition.**
 
@@ -475,13 +473,21 @@ on a visible line step 3 designs.
 - The look is unchanged, checked as in step 1 at the same two viewports, against
   step 1's branch, with two more states: the conflict notice and "Could not save
   the issue".
-- The new case is shown failing against step 1's product code, and against two
-  variants: one with the test id but no role, and one that re-creates the
-  region instead of changing its text.
+- The new case is shown failing against step 1's product code, and against
+  three variants: one with the test id but no role, one with
+  `aria-live="off"`, and one that re-creates the region through `key={text}`.
+  The region helper is also run by hand against `aria-atomic="false"` and an
+  ancestor with `aria-busy="true"`, recorded in the PR's bite table.
+- A screen reader check by hand, not a merge gate: Orca with Firefox or
+  Chromium, through the conflict notice, a failed save by mouse and by Enter
+  (`/edit-issue` blocked in DevTools), a retry, and "Use theirs" while both
+  notices show. The PR names the browser. Commit 2 updates the mouse-save
+  accepted cost with what was heard; anything else this section does not promise
+  goes to `docs/known-issues.md`.
 
 ### The region
 
-One always-rendered, unstyled and not visually hidden `issue-status` container
+One always-rendered, unstyled and not visually hidden `issue-status` region
 below the issue box, with `role="status"`, holds the conflict notice and the
 "Could not save the issue" line while the editor's `notice` or `failed` is set.
 It adds no state: it renders from those two. Empty, it has no height, so the
@@ -501,45 +507,64 @@ page does not move; the notices push the page down while shown, as today
   case in `slug.spec.js`, which hit-tests every card for any `status` element,
   never finds it over a card.
 
-The container announces a notice when it appears, again when its text changes
+The region announces a notice when it appears, again when its text changes
 while shown, and is silent when the last notice goes, whether the user acted or
-the room's issue caught up. The conflict notice's announcement includes its "Use
-theirs" button. The region is read whole, so while both notices show, a change
-to either reads both; one going is a removal, which is not announced.
+the room's issue caught up. The conflict notice's announcement should include its
+"Use theirs" button (not in Orca with Firefox, the only pair checked; see
+`docs/known-issues.md`).
+`role="status"` implies `aria-atomic="true"`, so the region is read whole: while
+both notices show, a change to either reads both. One going is a removal, which
+`status` does not announce (but see Accepted costs).
 
 ### The contract
 
 | What the suite reads | Contract | Today |
 | --- | --- | --- |
-| The editor's notices, announced | `page.getByRole('status').and(page.getByTestId('issue-status'))` | new; the text lookups inside it are unchanged |
+| The editor's notices, announced | `page.getByRole('status').and(page.getByTestId('issue-status'))` | new; the existing text lookups stay page-wide and unchanged |
 
 - The region is found by role and test id together. A role lookup skips
   anything a screen reader cannot reach (`aria-hidden`, `display:none`,
   `visibility:hidden`), so one locator checks the role, that the region is
   reachable, and its text. A test id alone would pass with the role missing or
   the region hidden.
-- A same-element check guards the announcement itself: a fixture helper marks
-  the region in the browser before a change (`region.evaluate(el => (el.__probe
-  = 1))`) and asserts the mark is still there after it. React leaves such
-  properties alone, so the mark is lost only if the element was re-created,
-  which a restyle could do unnoticed. Step 4a reuses the helper.
+- The region helper, in `e2e/fixtures.js`, guards the announcement itself. It
+  marks the region in the browser before a change
+  (`region.evaluate(el => (el.__probe = 1))`) and asserts the mark is still
+  there after it. React leaves such properties alone, so the mark is lost only
+  if the element was re-created, which a restyle could do unnoticed. Step 4a
+  reuses the helper.
+- The region helper also checks the region is not silenced: `aria-live`,
+  `aria-atomic`, `aria-relevant` and `aria-busy` are each absent or equal to
+  their value under `status` (`polite`, `true`, `additions text`, `false`),
+  trimmed and lowercased, `aria-relevant` as a token set; and no ancestor has
+  `aria-busy="true"`. No browser exposes what is spoken; that is the hand
+  check's part.
 - The suite checks the region with `toBeAttached`, `toBeEmpty` and
-  `toHaveText`, never visibility, since it has no height while empty.
+  `toHaveText`, never visibility, which an empty region lacks (The region).
 
 ### Commits
 
-1. `feat(frontend)`: the region, and the same-element helper in
-   `e2e/fixtures.js`. Case: the container is empty, then holds each notice in
-   turn, in the same element throughout.
-2. `docs`: this step's status line, as the PR's last commit before merge.
+1. `feat(frontend)`: the region, and the region helper. Case, in
+   `room.spec.js`: the region is empty, then holds each notice in turn, in the
+   same element throughout.
+2. `docs`: this step's status line, and the mouse-save accepted cost updated
+   from the hand check, as the PR's last commit before merge.
 
 ### Accepted costs
 
-- The region is announced again on each failed retry, since saving clears the
-  line and the failure brings it back.
+- The region is announced again on each failed retry: saving clears both
+  notices, and a failure brings back the line, with the conflict notice if it
+  still applies.
 - The conflict notice can be announced again mid-typing: it goes while the draft
   equals the other user's text, and comes back on the next keystroke, moving the
   page up and back.
+- With both notices shown, some screen readers reread the remaining one when
+  the other goes, since the region is atomic.
+- A failed save by mouse on the Save issue button goes unheard in Orca with
+  Firefox, and Space or Enter on the button is expected to behave the same: Save
+  is disabled while saving, so the editor moves focus back to the box, and
+  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. See
+  `docs/known-issues.md`.
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
 ## Step 1b. Alphabetical participants
@@ -725,7 +750,7 @@ What step 1a's first design learned about announcing the round, kept for step
 
 - One element, step 3's phase line, with `role="status"`: rendered from the
   room's mount and the same element for the room's life, checked with step 1a's
-  helper, since text already there when an element appears is not announced.
+  region helper, since text already there when an element appears is not announced.
 - Never `role="alert"`: a phase change, often from someone else's Show, is
   routine news that should not cut off what the screen reader is saying.
 - Never empty: it holds the open text while the round is open, so a reopened
@@ -776,7 +801,7 @@ spec. Provisional, like the plan.
   320 px, where "beside" may not fit.
 - The copy hint becomes a `role="status"` region beside "Copy link": always
   rendered, empty until a copy, holding "Link copied to clipboard" for the 2 s,
-  and checked with step 1a's same-element helper. Swapping today's `alert` role
+  and checked with step 1a's region helper. Swapping today's `alert` role
   alone would silence it, since a status that appears with its text is not
   announced. A second copy within the 2 s changes no text and is not announced
   again, which is accepted.

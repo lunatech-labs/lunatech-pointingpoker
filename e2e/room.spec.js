@@ -14,6 +14,9 @@ import {
   issueBox,
   issueCancel,
   issueSave,
+  issueStatus,
+  markRegion,
+  expectLiveRegion,
   issueEdit,
   votedMark,
   hiddenMark,
@@ -723,6 +726,40 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
   await expect(clear).toBeFocused()
+})
+
+// Read by its own text throughout, since a region's text is announced as a whole.
+test("the editor's notices are announced from one live region", async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const status = issueStatus(alice.page)
+  const conflict = 'Changed by someone else to: "PP-2" Use theirs'
+  const failure = 'Could not save the issue'
+  await expect(status).toBeAttached()
+  await expect(status).toBeEmpty()
+  await markRegion(status)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await setIssue(bob, 'PP-2')
+  await expect(status).toHaveText(conflict)
+  await expectLiveRegion(status)
+
+  const editIssue = new RegExp(`/rooms/${room}/edit-issue$`)
+  await alice.page.route(editIssue, route => route.abort())
+  await issueSave(alice.page).click()
+  await expect(status).toHaveText(conflict + failure)
+  await expectLiveRegion(status)
+
+  await alice.page.getByRole('button', { name: 'Use theirs' }).click()
+  await expect(status).toHaveText(failure)
+  await expectLiveRegion(status)
+
+  await alice.page.unroute(editIssue)
+  await alice.page.keyboard.press('Enter')
+  await expect(issueEdit(alice.page)).toBeVisible()
+  await expect(status).toBeEmpty()
+  await expectLiveRegion(status)
 })
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
