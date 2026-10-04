@@ -281,8 +281,8 @@ commitment:
 - Known rooms in the lobby's Join form: completion from the `role:<id>` keys,
   which exist only for rooms the page reached (step 2c), showing each room's
   last role, so a known room is picked rather than typed. To decide: ordering,
-  how many, removal (keys are never pruned, so a reused slug finds an old
-  key), and how the role is shown.
+  how many, removal (only Create removes a key, so a link to a reused slug
+  finds an old one), and how the role is shown.
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
@@ -823,7 +823,7 @@ What step 1a's first design learned about announcing the round, kept for step
 | Show, or auto-reveal | becomes revealed: announced | Show: unchanged; auto-reveal: cannot happen, a revealed round takes no vote |
 | Re-vote | unchanged: not announced | becomes open: announced |
 | Clear | unchanged: not announced | becomes open: announced |
-| A switch to facilitator that completes the round (step 2b) | becomes revealed: announced | unchanged |
+| A `/role` switch to facilitator that completes the round (step 2b) | becomes revealed: announced | unchanged |
 | Any other snapshot (a vote that does not complete the round, a join or leave, an issue edit) | unchanged | unchanged |
 | Stream lost, or an invalid snapshot dropped, before a reconnect | unchanged | unchanged |
 | In-place reconnect, the round changed meanwhile | becomes revealed: announced | becomes open: announced |
