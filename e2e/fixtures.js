@@ -201,4 +201,31 @@ export const movedBanner = page => page.getByRole('status').filter({ hasText: 'o
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.
 export const restartNotice = page => page.getByRole('status').filter({ hasText: 'Reconnected' })
 
+// The issue editor's notices as a screen reader hears them: a role lookup skips a hidden region.
+export const issueStatus = page => page.getByRole('status').and(page.getByTestId('issue-status'))
+
+// A live region announces changes only to the element it is, so markRegion tags that element
+// and expectLiveRegion fails once a re-render has replaced it or something silences it.
+export const markRegion = region => region.evaluate(el => (el.__probe = 1))
+// The values role="status" implies; each attribute may also be absent.
+const implied = { 'aria-live': 'polite', 'aria-atomic': 'true', 'aria-busy': 'false' }
+export const expectLiveRegion = async region => {
+  const problems = await region.evaluate((el, implied) => {
+    const read = (node, name) => node.getAttribute(name)?.trim().toLowerCase() ?? null
+    const found = el.__probe === 1 ? [] : ['re-created since markRegion']
+    for (const [name, value] of Object.entries(implied)) {
+      if (![null, value].includes(read(el, name))) found.push(`${name}="${read(el, name)}"`)
+    }
+    const relevant = read(el, 'aria-relevant')
+    const tokens = new Set(relevant?.split(/\s+/))
+    if (relevant !== null && !(tokens.size === 2 && tokens.has('additions') && tokens.has('text')))
+      found.push(`aria-relevant="${relevant}"`)
+    for (let up = el.parentElement; up; up = up.parentElement) {
+      if (read(up, 'aria-busy') === 'true') found.push(`aria-busy on <${up.localName}>`)
+    }
+    return found
+  }, implied)
+  expect(problems, 'what keeps the region from announcing').toEqual([])
+}
+
 export { expect }

@@ -940,6 +940,30 @@ roadmap item instead of leaving it here as stale history.
   `-F json-stream` gives each line's `instanceId`. Both commands keep running
   past `--until`, so run them under `timeout`.
 
+### A screen reader hears the editor's conflict notice, but not its "Use theirs" button
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (the `issue-status` region).
+- **Issue:** When another player saves the issue under an open editor, Orca with
+  Firefox speaks "Changed by someone else to: ...", but not the "Use theirs"
+  button inside the same region. A screen reader user learns of the conflict, but
+  not that there is a button to take the other text, until they Tab to it.
+- **Resolution:** Stays open until a user asks for it. If it is worth fixing, put
+  the button outside the live region, or add its name to the notice's text.
+
+### A screen reader does not hear a failed save from the Save issue button
+
+- **Where:** `frontend/src/components/IssueEditor.tsx` (the Save issue button's
+  `disabled`, and the effect on `editor.failed`).
+- **Issue:** Save issue is disabled while saving, which drops focus, so the
+  editor moves focus back to the box. In Orca with Firefox, reading the box cuts
+  off the polite "Could not save the issue". This was heard with a mouse click
+  on the button, and Space or Enter on it is expected to behave the same, since
+  the same `disabled` drops focus; only Enter in the box is heard.
+- **Resolution:** Stays open, as a later step with its own short spec: keep Save
+  focusable while saving (`aria-disabled` and a guard in `submit`), so focus
+  never moves. It changes the button's contract and look, so it is not part of
+  step 1a.
+
 ### A screen reader hears the connection lost, but never that it came back
 
 - **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
@@ -954,6 +978,25 @@ roadmap item instead of leaving it here as stale history.
   `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, "Announce a
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
+
+### The frontend's type check stops at ES2022 APIs
+
+- **Where:** `frontend/tsconfig.json`, `target` and `lib`.
+- **Issue:** `lib` is `ES2022`, so `tsc` rejects APIs newer browsers all ship:
+  `toSorted` and `findLast` (ES2023), `Object.groupBy`, `Map.groupBy` and
+  `Promise.withResolvers` (ES2024). Step 1b of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md` writes
+  `[...users].sort(byName)` where `users.toSorted(byName)` would do. Neither
+  `tsc` (it runs with `noEmit`) nor Vite polyfills, so `lib` is a promise about
+  the users' browsers: raised past them, the code still compiles and fails at
+  runtime.
+- **Resolution:** Stays open, since nothing needs it yet. Users are on managed
+  corporate laptops whose browsers stay current, so requiring a 2024 or 2025
+  browser is acceptable. Raise `target` and `lib` to `ES2024` with the first
+  change that wants one of these APIs, and set Vite's `build.target` to match so
+  the two claims agree. ES2024 is the ceiling today: the installed TypeScript
+  5.9 ships no ES2025 lib, which would bring Set operations and iterator
+  helpers.
 
 ## Traceability note
 
