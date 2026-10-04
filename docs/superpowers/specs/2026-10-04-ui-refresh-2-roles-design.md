@@ -285,6 +285,10 @@ pre-selected:
   `lastRole`, else Voter;
 - on the root Create tab, from `lastRole`, else Voter.
 
+The two tabs share one radio. On the root Join tab it follows the typed id
+until the user picks a role, and then keeps that choice, so typing or pasting
+an id never overrides one.
+
 On the root tabs, `doCreate` and `doJoin` store the name and the role and
 navigate, and the room's page then joins with its remembered role. On a room's
 own path, the lobby's Join is `joinHere` in place, sending the radio's role and
@@ -346,6 +350,8 @@ New e2e cases, each shown failing against 2b:
 - a regular user from before roles, with a remembered name and no remembered
   role, gets the room's lobby on its path, Voter pre-selected;
 - a lobby choice for a known room, after Leave, is the role the join sends;
+- at the root, typing a known room's id pre-selects its role, and a role picked
+  before typing the id stays picked and is the one the join sends;
 - a switch survives a reload while the stream is frozen;
 - a switch in one room changes neither another room's role nor the lobby's
   default for a new room.
