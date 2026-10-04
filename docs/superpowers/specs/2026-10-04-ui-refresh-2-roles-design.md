@@ -67,10 +67,9 @@ This section settles the parent's "Voter" and "Facilitator".
    role nor the default for a new room.
 7. **With no remembered role, the lobby comes first.** A room's own path joins
    at once only when a name and a role are remembered, a remembered role being
-   `role:<roomId>`, else `lastRole`. Otherwise the lobby shows, with the
-   remembered role pre-selected, else Voter, so every role is confirmed by a
-   person once.
-   This is also where every existing user meets the feature.
+   `role:<roomId>`, else `lastRole`. Otherwise the lobby shows, pre-selected as
+   "The lobby" in 2c says, so every role is confirmed by a person once. This is
+   also where every existing user meets the feature.
 
 Considered and not taken:
 
@@ -275,10 +274,10 @@ before everyone confirms again.
   the one the join sends, and a typo the server refuses leaves no key. A typo
   that is a valid slug creates and reaches an empty room, whose key the
   snapshot stores. The keys are the ids pages loaded, so an exact match needs
-  none of the server's rewrite rules. Create removes any key under the id it
-  gets, since a minted room is new and an old key under a reused slug belongs
-  to another room; the page then joins with `lastRole`, which the same submit
-  has just set.
+  none of the server's rewrite rules. Once `createRoom()` succeeds, Create
+  removes any key under the id it gets and writes `lastRole`, since a minted
+  room is new and an old key under a reused slug belongs to another room; the
+  page then joins with `lastRole`. A failed create changes nothing.
 - A remembered role is `role:<roomId>`, else `lastRole` (decision 7). It is
   what a join sends, except on the room's own lobby, which sends its radio.
   Every read decodes the stored string, so a value other than the two roles
@@ -303,11 +302,10 @@ lobby is:
 On the root tabs, `doCreate` and `doJoin` store the name and the role and
 navigate, and the room's page then joins with its remembered role. On a room's
 own path, the lobby's Join is `joinHere` in place, sending the radio's role and
-storing it as above; `Connection.join` gains the role. The auto-join writes
-neither key: it shares the join with that submit, not the submit's writes.
-The root lobby's "Rejoin …" link is navigation, not a submit: the room's path
-joins at once with its remembered role, or shows its lobby when
-there is none.
+storing it as above; `Connection.join` gains the role. The auto-join sends
+the remembered role and writes no role key. The root lobby's "Rejoin …" link
+is navigation, not a submit: the room's path joins at once with its remembered
+role, or shows its lobby when there is none.
 
 ### The switch
 
@@ -364,11 +362,16 @@ New e2e cases, each shown failing against 2b:
 - a facilitator's page has no deck, and keeps Show, Re-vote and Clear;
 - a regular user from before roles, with a remembered name and no remembered
   role, gets the room's lobby on its path, Voter pre-selected;
-- a lobby choice for a known room, after Leave, is the role the join sends;
-- a known room submitted at the root with its pre-selected role leaves the
-  default for a new room unchanged;
+- a lobby choice for a known room, after Leave, differing from its key, is the
+  role the join sends;
+- a known room submitted at the root with its pre-selected role leaves
+  `lastRole`, seeded to the other role, unchanged;
 - at the root, typing a known room's id pre-selects its role, and a role picked
-  before typing the id stays picked and is the one the join sends;
+  before typing the id, differing from that room's key, stays picked and is the
+  one the join sends;
+- a role picked on one root tab is still picked on the other;
+- Create, with `/create-room` routed to a slug whose key holds the other role,
+  joins with the radio's role;
 - a switch survives a reload while the stream is frozen;
 - a switch in one room, then a reload of that room, changes neither another
   room's role nor the lobby's default for a new room.
@@ -394,8 +397,8 @@ New e2e cases, each shown failing against 2b:
   it, and one click changes it.
 - A known room typed in the lobby with another case, or as its legacy id, does
   not match its stored key, so the join sends that room's remembered role, not
-  the lobby's choice. Nothing switches, the switch line shows the role, and one
-  click changes it.
+  the lobby's choice, and the submit sets `lastRole` as for a new room. Nothing
+  switches, the switch line shows the role, and one click changes it.
 - Switching moves the switcher's own page, since the deck appears or
   disappears. Step 3 lays out both pages.
 - A facilitator loses the "The round is revealed" line with the deck until step
