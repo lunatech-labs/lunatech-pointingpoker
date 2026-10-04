@@ -258,9 +258,23 @@ commitment:
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
   which nobody can refer to. To decide: trimming at join, a remembered empty
-  name, a maximum length, and duplicate names. The server-side check belongs
-  with `docs/known-issues.md`, "No request payload is validated on any endpoint
-  that takes one".
+  name, and a maximum length. The server-side check belongs with
+  `docs/known-issues.md`, "No request payload is validated on any endpoint that
+  takes one". Duplicate names stay allowed. Refusing them would lock out someone
+  whose laptop died and who rejoins from a phone without the cookie: their old
+  row holds the name until its grace period ends, often the last votes of the
+  meeting.
+- A notice to whoever shares a name with another row: "Another Alice is in the
+  room", near the user's own name. It is derived from each snapshot, comparing
+  names trimmed and at base sensitivity without `numeric` (ignoring case and
+  accents, but "Dev 02" and "Dev 2" differ), so it needs no state and clears
+  itself when the other row leaves. A `#1`, `#2` suffix was rejected: it tells
+  the room the rows differ but not who is who, needs a join order the snapshot
+  does not carry, and outlives the row it was told apart from.
+- Renaming oneself during the meeting, a new server command that rebroadcasts
+  the snapshot. It lets two people sharing a name tell themselves apart, and
+  also fixes a typo or a blank name. Close to "Not Alice?", which changes the
+  name before joining rather than after.
 - Keyboard shortcuts for voting.
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
@@ -569,21 +583,48 @@ both notices show, a change to either reads both. One going is a removal, which
 
 ## Step 1b. Alphabetical participants
 
-Status: proposed. Branch: `20260930.ui_refresh_1b_alphabetical_order`, stacked
+Status: landed. Branch: `20260930.ui_refresh_1b_alphabetical_order`, stacked
 on step 1a.
 
-`view.ts` sorts participants by their trimmed name with `new Intl.Collator('en',
-{ sensitivity: 'base', numeric: true })`, ignoring case and accents and putting
-"Dev 2" before "Dev 10", and breaks ties by user id. Trimming applies to the
-sort only; the name shows as typed, and an empty name sorts first. The locale
-is pinned: without one each browser collates by its own, Swedish putting "Ä"
-after "Z" for example, and the screen-sharer's order would differ from everyone
-else's. This replaces the rewrite spec's unpinned `localeCompare`; the rest is
-carried over: a table sorted by id reads as random, and "yourself first" was
-declined because a screen-sharer's table would differ from everyone else's.
-Ordering participants by their revealed value, lowest to highest, is left to
-the step 5+ candidate "Results that show the spread and the lowest and highest
+### Scope
+
+This step lists participants in name order. Nothing else changes, the results
+table included.
+
+**Pass condition.**
+
+- The suite is green.
+- The unit cases, fed deliberately mis-ordered input, are shown failing against
+  step 1a.
+- Each rule's case is also shown failing against the sort without that rule:
+  no trim, plain `<` in place of the collator, no `numeric`, and no tie-break.
+- The e2e case is a regression guard only: ids are random UUIDs, so step 1a's
+  order is alphabetical in one run of twenty-four.
+
+### The order
+
+`view.ts` sorts the participants it returns by their trimmed name with `new
+Intl.Collator('en', { numeric: true })`, and breaks ties by user id, compared by
+code unit (`a.id < b.id`). The base letter decides first, so case and accents
+order only names that are otherwise equal, "alice" before "Alice", and "Dev 2"
+comes before "Dev 10". Trimming applies to the sort only: the name shows as
+typed, and a blank name sorts first. The locale is pinned: without one each
+browser collates by its own, Swedish putting "Ä" after "Z" for example, and the
+screen-sharer's order would differ from everyone else's. This replaces the
+frontend rewrite spec's unpinned `localeCompare` at base sensitivity; its
+reasons for name order carry over. Ordering by revealed value is left to the
+step 5+ candidate "Results that show the spread and the lowest and highest
 voters".
+
+The tie-break is explicit rather than left to the snapshot's UUID order and a
+stable sort: that order is not a guarantee of the snapshot, and a change to it
+would order equal names differently on different screens with no test noticing.
+
+The tally keeps reading the snapshot's order, and only the list
+`Participants.tsx` renders is sorted. Sorting before the tally would move a tie
+between two values that are not integer-like, `0.5` and `?` today, from id order
+to name order, which is no less arbitrary. The tie rule stays with
+`docs/known-issues.md`, "A tied vote is broken by JavaScript key order".
 
 Sorting on the server, as a guaranteed order in the snapshot, was considered
 and not taken. The order is a view: it may differ by phase or page, and each
@@ -591,31 +632,36 @@ such change would become a protocol change. All clients run the same `view.ts`,
 so a pinned collator gives one order without the server, and the JVM's collator
 would differ from the browsers' anyway.
 
-The contract gains one item, per principle 9: participant entries are in name
-order.
+### The contract
 
-**Accepted costs.** `applySnapshot` sorts the participants before it tallies,
-and `votesSummary` then sorts by count, stably. Integer-like values enumerate
-numerically ahead of the rest, but `0.5` and `?` keep insertion order, so on a
-tie between `0.5` and `?` the "Most voted" pick moves from id order to name
-order. It stays arbitrary, and identical for every viewer on current browsers.
-Who chooses the rule is recorded in `docs/known-issues.md`, "A tied vote is
-broken by JavaScript key order".
+| What the suite reads | Contract | Today |
+| --- | --- | --- |
+| Participant order | `participantEntries(page)` read with `toHaveText([...])`, in name order | new; entries are read one at a time, by name |
 
-**Commits.** One `feat(frontend)` commit, with `view.test.ts` cases for case,
-an accented name sorting among its base letter, a tie on name, a name with
-leading spaces, numbered names, and an empty name, and one e2e case reading
-three participants' order with a retrying
-`expect(entries).toHaveText([/Alice/, /Bob/, /Carol/])`, so it cannot read
-before the third arrives. The same commit updates that known-issues entry: a
-`0.5` and `?` tie is decided by participant order, alphabetical since this
-step. Then a `docs` commit for this step's status line, as the PR's last commit
-before merge.
+This widens step 1's definition by one exception: the order of participant
+entries, and no other order, is part of the contract (principle 9).
 
-**Pass condition.** The unit cases, fed deliberately mis-ordered input, are the
-ones shown failing against step 1a. The e2e case is a regression guard only:
-ids are random UUIDs, so step 1a's order is alphabetical in one run of six. The
-suite is green.
+### Commits
+
+1. `feat(frontend)`: the sort. `view.test.ts` cases for case ("alice" and
+   "Bob"), an accented name among its base letter ("Ålice" and "Bob"), two equal
+   names fed in descending id order, a name with leading spaces ("  Zed" and
+   "Bob"), numbered names ("Dev 10" and "Dev 2"), and a blank name. Case, in
+   `room.spec.js`: four participants' order, read with a retrying
+   `expect(participantEntries(page)).toHaveText([/Ålice/, /bob/, /Dev 2/, /Dev 10/])`,
+   so it cannot read before the fourth arrives. The names make each browser's
+   collator apply the accent, case and numeric rules.
+2. `test(frontend)`, added after review: a `view.test.ts` case for "alice"
+   before "Alice", so the collator's case rule bites on its own.
+3. `docs`: this step's status line, as the PR's last commit before merge.
+
+### Accepted costs
+
+- Names the collator holds equal, such as "Dev 02" and "Dev 2", are ordered by
+  id: arbitrary per room, but the same for every viewer.
+- The e2e case passes against an unsorted list in one run of twenty-four.
+- The pinned locale has no failing case: a test runner in English collates the
+  same without it.
 
 ## Appendix A. Review of the current page (2026-09-30)
 
