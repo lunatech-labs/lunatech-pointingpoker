@@ -293,7 +293,7 @@ On the root tabs, `doCreate` and `doJoin` store the name and the role and
 navigate, and the room's page then joins with its remembered role. On a room's
 own path, the lobby's Join is `joinHere` in place, sending the radio's role and
 storing it as above; `Connection.join` gains the role. The auto-join writes
-neither key. The root lobby's "Rejoin …" link is navigation, not a submit: the
+neither key: it shares the join with that submit, not the submit's writes. The root lobby's "Rejoin …" link is navigation, not a submit: the
 room's path joins at once with its remembered role, or shows its lobby when
 there is none.
 
@@ -353,8 +353,8 @@ New e2e cases, each shown failing against 2b:
 - at the root, typing a known room's id pre-selects its role, and a role picked
   before typing the id stays picked and is the one the join sends;
 - a switch survives a reload while the stream is frozen;
-- a switch in one room changes neither another room's role nor the lobby's
-  default for a new room.
+- a switch in one room, then a reload of that room, changes neither another
+  room's role nor the lobby's default for a new room.
 
 ## Accepted costs
 
