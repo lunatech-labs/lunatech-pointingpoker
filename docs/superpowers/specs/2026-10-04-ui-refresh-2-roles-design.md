@@ -62,8 +62,9 @@ This section settles the parent's "Voter" and "Facilitator".
    two hours without connections, and the session cookie ends with the browser,
    so a weekly meeting usually starts with a new identity. The page keeps
    `role:<roomId>` in step with the room's seat ("Remembering the role" in 2c),
-   and `lastRole`, written only by the lobby. A one-off switch in one room
-   changes neither another room's role nor the default for a new room.
+   and `lastRole`, the role last chosen in the lobby for a room with no key. A
+   one-off switch, or a choice for a known room, changes neither another room's
+   role nor the default for a new room.
 7. **With no remembered role, the lobby comes first.** A room's own path joins
    at once only when a name and a role are remembered, a remembered role being
    `role:<roomId>`, else `lastRole`. Otherwise the lobby
@@ -259,13 +260,15 @@ before everyone confirms again.
 
 - `role:<roomId>` is written from the page's own seat in each snapshot that
   holds it, so it converges on the server's seat and a switch made in another
-  tab is stored by every tab. A 204 from `/role` also writes it, so a switch survives a reload
-  while the stream is stalled and no snapshot has come.
-- `lastRole` is written on every lobby submit, and nowhere else, so neither a
-  switch in the room nor an auto-join changes the default for a new room.
+  tab is stored by every tab. A 204 from `/role` also writes it, so a switch
+  survives a reload while the stream is stalled and no snapshot has come.
+- A lobby submit writes either the room's key or `lastRole`, never both. Only
+  a submit for a room with no key writes `lastRole`, and nothing else does, so
+  neither a switch, an auto-join nor a choice for a known room changes the
+  default for a new room.
 - A `role:<id>` key exists only for a room the page reached: only a snapshot
   creates one. A lobby submit overwrites `role:<trimmed id>` with its radio when
-  that key exists, and otherwise writes only `lastRole`, so a choice made for a
+  that key exists, and otherwise writes `lastRole`, so a choice made for a
   known room is the one the join sends, and a typo or an unreachable room
   leaves no key. The keys are the ids pages loaded, so an exact match needs
   none of the server's rewrite rules. Create writes no key: a new room's page
@@ -296,8 +299,9 @@ On the root tabs, `doCreate` and `doJoin` store the name and the role and
 navigate, and the room's page then joins with its remembered role. On a room's
 own path, the lobby's Join is `joinHere` in place, sending the radio's role and
 storing it as above; `Connection.join` gains the role. The auto-join writes
-neither key: it shares the join with that submit, not the submit's writes. The root lobby's "Rejoin …" link is navigation, not a submit: the
-room's path joins at once with its remembered role, or shows its lobby when
+neither key: it shares the join with that submit, not the submit's writes.
+The root lobby's "Rejoin …" link is navigation, not a submit: the room's path
+joins at once with its remembered role, or shows its lobby when
 there is none.
 
 ### The switch
@@ -356,6 +360,8 @@ New e2e cases, each shown failing against 2b:
 - a regular user from before roles, with a remembered name and no remembered
   role, gets the room's lobby on its path, Voter pre-selected;
 - a lobby choice for a known room, after Leave, is the role the join sends;
+- a known room submitted at the root with its pre-selected role leaves the
+  default for a new room unchanged;
 - at the root, typing a known room's id pre-selects its role, and a role picked
   before typing the id stays picked and is the one the join sends;
 - a switch survives a reload while the stream is frozen;
