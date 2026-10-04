@@ -43,7 +43,7 @@ document as a whole stays in discussion.
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
 - **Test contract**: defined in step 1, under "The test contract"; steps 1a,
-  1b, 4 and 4a each add to it in their own sections.
+  1b, 2c, 4 and 4a each add to it in their own sections.
 - **Live region**: an element the browser watches, so text added or changed
   inside it is spoken without its user moving there.
 
