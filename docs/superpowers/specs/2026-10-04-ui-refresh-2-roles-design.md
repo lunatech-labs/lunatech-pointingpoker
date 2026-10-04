@@ -248,7 +248,8 @@ before everyone confirms again.
   refused vote on a round a departure left complete, both leaving it hidden.
 - `SnapshotContractSpec` and `snapshot.contract.test.ts` pin the new shape.
 - `APISpec` covers `POST /role` for both values, its 401, 403 and 400, and the
-  vote's 409 `NotAVoter`.
+  vote's 409 `NotAVoter`. It also covers a `/join` without `role`, and one
+  with another value, both answering 400 (decision 5).
 - `test/reproduction.test.js` sends `role` in its join body.
 - The e2e suite passes unchanged.
 - `docs/known-issues.md`, "No request payload is validated on any endpoint that
