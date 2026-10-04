@@ -1,4 +1,13 @@
-import { test, expect, movedBanner, nameInput, ownEstimation, vote } from './fixtures.js'
+import {
+  test,
+  expect,
+  deck,
+  movedBanner,
+  nameInput,
+  ownEstimation,
+  roomIdInput,
+  vote
+} from './fixtures.js'
 
 // No query string: the page removes moved=1 before anyone can copy the address.
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
@@ -20,7 +29,10 @@ test('an old UUID link opens its derived room under a banner that covers no card
   await expect(movedBanner(page)).toBeVisible()
   await joinAs(page, 'Alice')
 
-  const covered = await page.$$eval('.estimation-button', buttons =>
+  const cards = deck(page).getByRole('button')
+  // Counted first, so the hit test below cannot pass on no cards at all.
+  await expect(cards).toHaveCount(13)
+  const covered = await cards.evaluateAll(buttons =>
     buttons
       .filter(b => {
         const r = b.getBoundingClientRect()
@@ -51,7 +63,7 @@ test('a mistyped room name is refused with a suggestion that reaches the room', 
 test('a name typed into the Join form is checked by the page route', async ({ page, origin }) => {
   await page.goto(`${origin}/`)
   await page.getByRole('link', { name: 'Join' }).click()
-  await page.locator('#join-roomId').fill('brave-golden-oter')
+  await roomIdInput(page).fill('brave-golden-oter')
   await nameInput(page).fill('Alice')
   await page.getByRole('button', { name: 'Join' }).click()
   await expect(page).toHaveURL(`${origin}/brave-golden-oter`)

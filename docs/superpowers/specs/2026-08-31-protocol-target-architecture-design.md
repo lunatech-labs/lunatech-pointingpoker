@@ -3168,7 +3168,9 @@ issue; the Enter that confirms an input method's composition, Safari's
 included, does not save; a failed save gives the box back the focus the
 disabled check dropped, and leaves focus the user moved elsewhere; and the
 pencil makes the box editable before focusing it, so a phone shows its
-keyboard. Step 8c extends this paragraph.
+keyboard. Step 8c moved to
+`docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, which drops the
+frozen-deck tooltip above.
 
 **Step 9. Recorded value and round history.** The facilitator command that
 records what the room settled on, its snapshot field, `RoomState.history` and the

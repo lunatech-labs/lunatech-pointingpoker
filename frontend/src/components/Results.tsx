@@ -4,7 +4,7 @@ export function Results({ view }: { view: View }) {
   // The length guard is not defensive: the tally is empty after a Show where nobody voted.
   if (!view.votesRevealed || view.votesSummary.length === 0) return null
   return (
-    <div className="row mt-4">
+    <div className="row mt-4" role="region" aria-label="Results">
       <div className="col">
         <div className="summary-card">
           <div className="row">
@@ -14,7 +14,9 @@ export function Results({ view }: { view: View }) {
           </div>
           <div className="row">
             <div className="col">
-              <div className="estimation-text">{view.votesSummary[0][0]}</div>
+              <div className="estimation-text" data-testid="most-voted">
+                {view.votesSummary[0][0]}
+              </div>
             </div>
           </div>
         </div>
@@ -29,9 +31,9 @@ export function Results({ view }: { view: View }) {
           </thead>
           <tbody>
             {view.votesSummary.map(([estimation, count]) => (
-              <tr key={estimation}>
-                <td>{estimation}</td>
-                <td>{count}</td>
+              <tr key={estimation} data-testid="tally-entry">
+                <td data-testid="tally-value">{estimation}</td>
+                <td data-testid="tally-count">{count}</td>
               </tr>
             ))}
           </tbody>

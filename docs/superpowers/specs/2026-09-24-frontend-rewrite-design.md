@@ -1,7 +1,7 @@
 # Frontend Rewrite (Steps 8 to 8c)
 
 Date: 2026-09-24
-Status: Steps 8, 8a and 8b landed; step 8c proposed
+Status: Steps 8, 8a and 8b landed; step 8c moved to `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`
 Parent: `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`, "Step 8. Frontend rewrite."
 
 ## Purpose

@@ -37,6 +37,7 @@ export function IssueEditor({ issue, onSave }: Props) {
             ref={box}
             type="text"
             placeholder="Current issue"
+            aria-label="Current issue"
             className="form-control"
             value={editor.text}
             readOnly={!editing}

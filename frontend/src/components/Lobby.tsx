@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent } from 'react'
+import { useId, type KeyboardEvent, type MouseEvent } from 'react'
 
 export type LobbyTab = 'create' | 'join'
 
@@ -36,6 +36,7 @@ export function Lobby(props: Props) {
     onCreate,
     onJoin
   } = props
+  const nameId = useId()
   const select = (next: LobbyTab) => (event: MouseEvent) => {
     event.preventDefault()
     onTab(next)
@@ -43,9 +44,12 @@ export function Lobby(props: Props) {
   const tabClass = (which: LobbyTab) => (tab === which ? 'nav-link active' : 'nav-link')
   const nameRow = (action: () => void) => (
     <div className="form-group row">
-      <label className="col-sm-3 col-form-label">User name</label>
+      <label htmlFor={nameId} className="col-sm-3 col-form-label">
+        User name
+      </label>
       <div className="col-sm-9">
         <input
+          id={nameId}
           type="text"
           className="form-control"
           value={name}
