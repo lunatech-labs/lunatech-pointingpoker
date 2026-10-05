@@ -94,11 +94,9 @@ object RoomSnapshot:
         .sortWith((a, b) => a._1.compareTo(b._1) < 0)
         .map { (id, member) =>
           val disclose = round.revealed || id == forUser
-          // A member with no seat breaks an invariant, and reads as a voter, as complete counts it.
-          val seat = data.state.seats.get(id) match
-            case Some(Room.Seat.Voter(e))    => Seat.Voter(Estimation.of(e, disclose))
-            case Some(Room.Seat.Facilitator) => Seat.Facilitator
-            case None                        => Seat.Voter(Estimation.NoEstimation)
+          val seat     = data.seatOf(id) match
+            case Room.Seat.Voter(e)    => Seat.Voter(Estimation.of(e, disclose))
+            case Room.Seat.Facilitator => Seat.Facilitator
           Participant(id, member.name, seat)
         }
     )

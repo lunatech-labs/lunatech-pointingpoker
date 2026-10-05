@@ -206,20 +206,24 @@ object Room:
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
+    // The one reading of a seat: of requires one per session, and a missing one reads as fresh.
+    private[actors] def seatOf(userId: UUID): Seat =
+      this.state.seats.getOrElse(userId, Seat.Voter(None))
+
     def vote(userId: UUID, estimation: String): (RoomData, Applied.type | VoteRefusal) =
       if this.state.round.revealed then (this, RoundRevealed)
       else if estimation.isBlank then (this, BlankEstimation)
       else
-        this.state.seats.get(userId) match
-          case Some(Seat.Voter(_)) =>
+        seatOf(userId) match
+          case Seat.Voter(_) =>
             val seats = this.state.seats + (userId -> Seat.Voter(Some(Estimate.of(estimation))))
             (withState(this.state.round, seats).latched, Applied)
-          case Some(Seat.Facilitator) | None => (this, NotAVoter)
+          case Seat.Facilitator => (this, NotAVoter)
 
     // Only a change of seat latches, so a same-role switch never reveals a round left complete.
     def switchRole(userId: UUID, role: Role): RoomData =
-      if this.state.seats.get(userId).forall(_.role == role) then this
-      else switched(userId, role).latched
+      val next = switched(userId, role)
+      if next.seatOf(userId) == seatOf(userId) then this else next.latched
 
     def show(): RoomData  = withState(this.state.round.copy(revealed = true), this.state.seats)
     def clear(): RoomData = withState(Round.fresh, this.state.seats.view.mapValues(_.cleared).toMap)
@@ -236,22 +240,21 @@ object Room:
       this.copy(state = this.state.copy(round = round, seats = seats))
 
     private def switched(userId: UUID, role: Role): RoomData =
-      withState(this.state.round, this.state.seats.updatedWith(userId)(_.map(_.switchedTo(role))))
+      withState(this.state.round, this.state.seats + (userId -> seatOf(userId).switchedTo(role)))
 
     // The latch step: only a deliberate act by someone present runs it (decision 1).
     private def latched: RoomData =
       if this.state.round.revealed || !complete then this
       else withState(this.state.round.copy(revealed = true), this.state.seats)
 
-    // The Terms' "Complete". A member with no seat breaks an invariant, so it holds the round open.
+    // The Terms' "Complete".
     private def complete: Boolean =
-      val voters = this.members.keys.toList.flatMap(id =>
-        this.state.seats.get(id) match
-          case Some(Seat.Voter(estimate)) => Some(estimate.exists(_.confirmed))
-          case Some(Seat.Facilitator)     => None
-          case None                       => Some(false)
+      val confirmations = this.members.keys.toList.flatMap(id =>
+        seatOf(id) match
+          case Seat.Voter(estimate) => Some(estimate.exists(_.confirmed))
+          case Seat.Facilitator     => None
       )
-      voters.nonEmpty && voters.forall(identity)
+      confirmations.nonEmpty && confirmations.forall(identity)
   end RoomData
 
   object RoomData:
