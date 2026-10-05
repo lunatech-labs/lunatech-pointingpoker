@@ -433,6 +433,12 @@ have A present, but a facilitator's reload joins while A is not present (the
 reload gap). `rename` never checks presence, so the risk is low; 2c's plan
 should add that cell to the matrix, or say why it does not.
 
+Step 2b made one server table name a role on the wire (`RoomSnapshot.Seat.tag`),
+so a seat's `type` is what `role` sends back. The client still spells the tags
+twice, in `snapshot.ts`'s `z.literal`s and the generated `Role`; 2c's plan should
+type the remembered role as `components['schemas']['Role']` and make
+`Seat['type']` assignable to it, so `gen:api` and the typecheck catch drift.
+
 ## Accepted costs
 
 - A tab loaded before the deploy that adds the required `role` gets a 400 on

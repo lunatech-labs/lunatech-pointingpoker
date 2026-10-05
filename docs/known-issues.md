@@ -117,10 +117,12 @@ roadmap item instead of leaving it here as stale history.
 ### No request payload is validated on any endpoint that takes one
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/Requests.scala`
-  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`), the `join`, `vote` and
-  `editIssue` endpoints in `src/main/scala/com/lunatech/pointingpoker/Endpoints.scala`
-  that consume them, and their server logic in `API.scala`. `create-room` takes no body.
-- **Issue:** Every request body is a bare `String` with no constraint on it.
+  (`JoinRequest`, `VoteRequest`, `EditIssueRequest`, `RoleRequest`), the `join`,
+  `vote`, `editIssue` and `role` endpoints in
+  `src/main/scala/com/lunatech/pointingpoker/Endpoints.scala` that consume them, and
+  their server logic in `API.scala`. `create-room` takes no body.
+- **Issue:** Every free-text field is a bare `String` with no constraint on it; `role`
+  alone is a closed set.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
   text, and that one is room-wide rather than confined to the sender's own row.
@@ -158,8 +160,8 @@ roadmap item instead of leaving it here as stale history.
   piece of work rather than a patch per endpoint.
 
   UI refresh step 2b added `role` to `/join` and a `/role` endpoint taking only
-  `role`. The body decoder rejects any value but `Voter` or
-  `Facilitator`, or none, so the request answers `400` before the ask reaches the manager.
+  `role`. The body decoder rejects a missing `role` and any value but `Voter` or
+  `Facilitator`, so the request answers `400` before the ask reaches the manager.
 
 ### The grace period does not start until a heartbeat write to the dead connection fails
 
