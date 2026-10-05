@@ -97,6 +97,7 @@ object Endpoints:
   val clear     = command("clear")
   val revote    = command("revote")
   val editIssue = command("edit-issue").in(jsonBody[EditIssueRequest])
+  val role      = command("role").in(jsonBody[RoleRequest])
 
   val leave = endpoint.post
     .in(roomPath / "leave")
@@ -106,5 +107,5 @@ object Endpoints:
     .errorOut(commandErrors)
 
   val all: List[AnyEndpoint] =
-    List(createRoom, join, events, vote, show, clear, revote, editIssue, leave)
+    List(createRoom, join, events, vote, show, clear, revote, editIssue, role, leave)
 end Endpoints

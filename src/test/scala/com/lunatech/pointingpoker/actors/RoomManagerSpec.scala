@@ -351,6 +351,12 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.Revote(roomId, Some(token), replyProbe.ref)
       managerRef ! RoomManager.EditIssue(roomId, Some(token), "issue name", replyProbe.ref)
       managerRef ! RoomManager.Depart(roomId, Some(token), connectionId, replyProbe.ref)
+      managerRef ! RoomManager.SwitchRole(
+        roomId,
+        Some(token),
+        Room.Role.Facilitator,
+        replyProbe.ref
+      )
 
       roomProbe.expectMessage(Room.Vote(token, "5", replyProbe.ref))
       roomProbe.expectMessage(Room.ShowVotes(token, replyProbe.ref))
@@ -358,6 +364,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       roomProbe.expectMessage(Room.ReVote(token, replyProbe.ref))
       roomProbe.expectMessage(Room.EditIssue(token, "issue name", replyProbe.ref))
       roomProbe.expectMessage(Room.Depart(token, connectionId, replyProbe.ref))
+      roomProbe.expectMessage(Room.SwitchRole(token, Room.Role.Facilitator, replyProbe.ref))
     }
 
     "no-op typed per-command messages for an unknown room" in {

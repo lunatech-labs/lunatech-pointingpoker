@@ -157,6 +157,10 @@ roadmap item instead of leaving it here as stale history.
   above, the underlying gap is broader than any one symptom and wants its own
   piece of work rather than a patch per endpoint.
 
+  UI refresh step 2b added `role` to `/join` and a `/role` endpoint taking only
+  `role`. That field is validated by the schema: any value but `Voter` or
+  `Facilitator`, or none, answers `400` before the ask reaches the manager.
+
 ### The grace period does not start until a heartbeat write to the dead connection fails
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/sse/SSE.scala`

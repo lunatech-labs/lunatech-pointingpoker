@@ -26,7 +26,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
-import com.lunatech.pointingpoker.{EditIssueRequest, VoteRequest}
+import com.lunatech.pointingpoker.{EditIssueRequest, RoleRequest, VoteRequest}
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
@@ -70,13 +70,17 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
   val createReply: java.util.concurrent.atomic.AtomicReference[RoomManager.Response] =
     new java.util.concurrent.atomic.AtomicReference(RoomManager.RoomId(roomId))
+  // The role the last join carried, kept off commandProbe so joins cannot leak into its cases.
+  val joinedRole: java.util.concurrent.atomic.AtomicReference[Option[Room.Role]] =
+    new java.util.concurrent.atomic.AtomicReference(None)
 
   val roomManager: ActorRef[RoomManager.Command] =
     testKit.spawn(Behaviors.receiveMessagePartial[RoomManager.Command] {
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! createReply.get()
         Behaviors.same
-      case RoomManager.RequestSession(_, _, _, existing, replyTo) =>
+      case RoomManager.RequestSession(_, _, role, existing, replyTo) =>
+        joinedRole.set(Some(role))
         replyTo ! Room.SessionMinted(UUID.randomUUID(), existing.getOrElse(validToken))
         Behaviors.same
       case RoomManager.ValidateToken(_, token, replyTo) =>
@@ -86,13 +90,14 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case other =>
         commandProbe.ref ! other
         other match
-          case RoomManager.Vote(_, _, _, replyTo)      => replyTo ! voteReply.get()
-          case RoomManager.Show(_, _, replyTo)         => replyTo ! commandReply.get()
-          case RoomManager.Clear(_, _, replyTo)        => replyTo ! commandReply.get()
-          case RoomManager.Revote(_, _, replyTo)       => replyTo ! commandReply.get()
-          case RoomManager.EditIssue(_, _, _, replyTo) => replyTo ! commandReply.get()
-          case RoomManager.Depart(_, _, _, replyTo)    => replyTo ! commandReply.get()
-          case _                                       => ()
+          case RoomManager.Vote(_, _, _, replyTo)       => replyTo ! voteReply.get()
+          case RoomManager.Show(_, _, replyTo)          => replyTo ! commandReply.get()
+          case RoomManager.Clear(_, _, replyTo)         => replyTo ! commandReply.get()
+          case RoomManager.Revote(_, _, replyTo)        => replyTo ! commandReply.get()
+          case RoomManager.EditIssue(_, _, _, replyTo)  => replyTo ! commandReply.get()
+          case RoomManager.Depart(_, _, _, replyTo)     => replyTo ! commandReply.get()
+          case RoomManager.SwitchRole(_, _, _, replyTo) => replyTo ! commandReply.get()
+          case _                                        => ()
         Behaviors.same
     })
   given typedSystem: ActorSystem[SpawnProtocol.Command] =
@@ -249,7 +254,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       finally createReply.set(RoomManager.RoomId(roomId))
     }
     "join a room and set a session cookie" in
-      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+      Post(
+        s"/rooms/$roomId/join",
+        json(JoinRequest("Alice", Room.Role.Voter))
+      ) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
 
         val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
@@ -261,7 +269,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         cookieHeader.cookie.maxAge mustBe None
       }
     "resume the session its cookie already names rather than minting over it" in
-      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> addHeader(
+      Post(s"/rooms/$roomId/join", json(JoinRequest("Alice", Room.Role.Voter))) ~> addHeader(
         Cookie("session", validToken.raw)
       ) ~> apiRoute ~> check {
         status mustBe StatusCodes.NoContent
@@ -270,7 +278,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       }
     "set the same session token on /join that /events later accepts" in {
       val cookieValue =
-        Post(s"/rooms/$roomId/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+        Post(
+          s"/rooms/$roomId/join",
+          json(JoinRequest("Alice", Room.Role.Voter))
+        ) ~> apiRoute ~> check {
           status.isSuccess() mustBe true
           val cookieHeader = header[`Set-Cookie`].getOrElse(fail("expected a Set-Cookie header"))
           cookieHeader.cookie.value
@@ -284,6 +295,29 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         mediaType.toString mustBe "text/event-stream"
       }
     }
+    "pass the join's role to the manager" in {
+      Post(
+        s"/rooms/$roomId/join",
+        json(JoinRequest("Alice", Room.Role.Facilitator))
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
+      }
+      joinedRole.get() mustBe Some(Room.Role.Facilitator)
+    }
+
+    // Decision 5: a join states a role, as it states a name, so a missing one is not a default.
+    "answer 400 for a join with no role or another value, without asking the manager" in {
+      joinedRole.set(None)
+      for body <- List("""{"name": "Alice"}""", """{"name": "Alice", "role": "Observer"}""") do
+        Post(
+          s"/rooms/$roomId/join",
+          HttpEntity(ContentTypes.`application/json`, body)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.BadRequest
+        }
+      joinedRole.get() mustBe None
+    }
+
     "reject malformed JSON on join endpoint with 400" in
       Post(
         s"/rooms/$roomId/join",
@@ -432,6 +466,60 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       commandProbe.expectMessageType[RoomManager.Vote]
     }
 
+    "answer 409 for a vote from a facilitator" in {
+      voteReply.set(Room.NotAVoter)
+      try
+        Post(s"/rooms/$roomId/vote", json(VoteRequest("5"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Conflict
+        }
+      finally voteReply.set(Room.Applied)
+      // Drains the dispatched Vote so it cannot leak into a later expectNoMessage.
+      commandProbe.expectMessageType[RoomManager.Vote]
+    }
+
+    "dispatch a role switch for each role" in {
+      val token = Room.SessionToken.mint()
+      for role <- Room.Role.values do
+        Post(s"/rooms/$roomId/role", json(RoleRequest(role))) ~> addHeader(
+          Cookie("session", token.raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.NoContent
+        }
+        commandProbe.expectMessageType[RoomManager.SwitchRole] match
+          case RoomManager.SwitchRole(id, tok, switchedTo, _) =>
+            (id, tok, switchedTo) mustBe (roomId, Some(token), role)
+    }
+
+    "answer 401 and 403 for a role switch, as for Show and Clear" in {
+      for (refusal, expected) <- List(
+          Room.NoSession  -> StatusCodes.Unauthorized,
+          Room.NotAMember -> StatusCodes.Forbidden
+        )
+      do
+        commandReply.set(refusal)
+        try
+          Post(s"/rooms/$roomId/role", json(RoleRequest(Room.Role.Facilitator))) ~> addHeader(
+            Cookie("session", Room.SessionToken.mint().raw)
+          ) ~> apiRoute ~> check {
+            status mustBe expected
+          }
+        finally commandReply.set(Room.Applied)
+        commandProbe.expectMessageType[RoomManager.SwitchRole]
+    }
+
+    "answer 400 for a role switch to any other value, without asking the room" in {
+      for body <- List("""{"role": "Observer"}""", """{"role": "voter"}""", "{}") do
+        Post(
+          s"/rooms/$roomId/role",
+          HttpEntity(ContentTypes.`application/json`, body)
+        ) ~> addHeader(Cookie("session", Room.SessionToken.mint().raw)) ~> apiRoute ~> check {
+          status mustBe StatusCodes.BadRequest
+        }
+      commandProbe.expectNoMessage(300.millis)
+    }
+
     "answer 400 for a blank estimation without asking the room" in {
       Post(s"/rooms/$roomId/vote", json(VoteRequest("   "))) ~> addHeader(
         Cookie("session", Room.SessionToken.mint().raw)
@@ -480,7 +568,10 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
     // The page route lowercases a mixed-case name; the API has no reason to see one.
     "answer 404 for a join on a name in mixed case" in
-      Post("/rooms/Brave-Golden-Otter/join", json(JoinRequest("Alice"))) ~> apiRoute ~> check {
+      Post(
+        "/rooms/Brave-Golden-Otter/join",
+        json(JoinRequest("Alice", Room.Role.Voter))
+      ) ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
       }
     // Only the page route knows UUIDs.
