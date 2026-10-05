@@ -116,7 +116,7 @@ object RoomDataFixtures:
           throw IllegalStateException(s"${user.name} is a facilitator, who holds no estimate")
   end extension
 
-  // The pre-union wire's three fields, rebuilt so behaviour specs need not name every tag.
+  // Reads a row's estimation through its seat, so behaviour specs need not name every tag.
   extension (participant: RoomSnapshot.Participant)
     // Throws on a facilitator's row, so a spec about votes cannot read one as "no estimation".
     def estimation: Estimation = participant.seat match

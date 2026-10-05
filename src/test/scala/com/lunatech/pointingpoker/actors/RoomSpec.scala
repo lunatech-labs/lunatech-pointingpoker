@@ -1622,6 +1622,7 @@ object RoomSpec:
   private def row(phase: Phase, name: String, event: SeatEvent, bSeat: Room.Seat = bConfirmed)(
       outcomes: Outcome*
   ): List[SeatCell] =
+    require(outcomes.size == 4, s"$name: expected 4 outcomes, got ${outcomes.size}")
     List(noVote, confirmed, unconfirmed, facilitator)
       .zip(outcomes)
       .map((aSeat, outcome) => SeatCell(phase, name, event, bSeat, aSeat, outcome))
