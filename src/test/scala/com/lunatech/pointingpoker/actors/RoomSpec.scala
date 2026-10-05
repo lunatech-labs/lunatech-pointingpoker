@@ -1509,7 +1509,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         val data = dataProbe.expectMessageType[Room.DataStatus].data
         data.state.seats(a.id) mustBe cell.outcome.seat
         data.state.round.revealed mustBe cell.outcome.revealed
-        // One reply at most: a second, or one to a reconnect, would be a stray.
+        // One reply at most: a second would be a stray.
         replyProbe.expectNoMessage(20.millis)
       }
     end for

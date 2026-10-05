@@ -41,12 +41,13 @@ seat's tag and a request's `role` cannot differ. The table moves into `actors`, 
 snapshot, because `Requests.scala` already imports `actors` and `actors` imports no tapir.
 This reopens the 2b plan's P4 for this one pair; `Estimation` keeps its own table.
 
-**Why D reverses the 2b plan's "fail closed".** The 2b plan's Consequences read a seatless
+**Why D reverses "fail closed".** 2a's P2 and the 2b plan's Consequences read a seatless
 member four ways, and the snapshot then showed a voter whose vote was refused. `seatOf` reads
-a missing seat as a fresh voter's, the role every identity had before 2b. So `vote` now
-accepts such a member's vote and writes the seat, and `switched` writes the switched seat,
-which repairs the state. `RoomData.of` still `require`s a seat per session, so no test can
-build the state, and none can pin this reading.
+a missing seat as a new voter's, the role every identity had before 2b. So `vote` now
+accepts such a member's vote, and `vote` and a seat-changing `switched` write the seat, which
+repairs the state; a same-role `/role` leaves it missing, which reads the same. `RoomData.of`
+still `require`s a seat per session, so no test can build the state, and none can pin this
+reading.
 
 ## Global Constraints
 
@@ -123,12 +124,13 @@ object RoleWire:
 
 ### Task 2: Read a member's seat one way, and latch on a change of it
 
-**Judged by:** the existing tests passing unchanged, plus two mutations.
+**Judged by:** the existing tests passing unchanged, one new no-stray-reply assertion, and two
+mutations.
 
 - [ ] **Step 1.** In `Room.scala`, add the reading after `holdsConnection`:
 
 ```scala
-    // The one reading of a seat: of requires one per session, and a missing one reads as fresh.
+    // The one reading of a seat: of requires one per session; a missing one is a new voter's.
     private[actors] def seatOf(userId: UUID): Seat =
       this.state.seats.getOrElse(userId, Seat.Voter(None))
 ```
@@ -151,7 +153,7 @@ object RoleWire:
 - [ ] **Step 3.** In `RoomSpec`'s `"A seat" should` loop, after the `revealed` assertion:
 
 ```scala
-        // One reply at most: a second, or one to a reconnect, would be a stray.
+        // One reply at most: a second would be a stray.
         replyProbe.expectNoMessage(20.millis)
 ```
 

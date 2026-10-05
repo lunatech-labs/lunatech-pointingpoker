@@ -126,7 +126,7 @@ roadmap item instead of leaving it here as stale history.
   `/vote` accepts an estimation outside the card scale, or an empty one; `/join`
   accepts an empty or arbitrarily long name; `/edit-issue` accepts any issue
   text, and that one is room-wide rather than confined to the sender's own row.
-  `/vote` and `/edit-issue` require a session token resolving to a member of the
+  `/vote`, `/edit-issue` and `/role` require a session token resolving to a member of the
   room; `/join` requires only a room id, open joining being the intended
   behaviour, so there the room URL is the capability. Nothing escapes into HTML
   either: the page renders all three as React text or input values and uses no

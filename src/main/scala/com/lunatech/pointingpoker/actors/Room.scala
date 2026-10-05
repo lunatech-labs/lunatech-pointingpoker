@@ -175,7 +175,7 @@ object Room:
         name: String,
         role: Role
     ): RoomData =
-      // The only place a session is created, so the only place a seat is.
+      // The only place a session is created, and it seats every one it creates.
       this.copy(
         sessions = this.sessions + (token -> Session(userId, name)),
         state = this.state.copy(seats = this.state.seats + (userId -> Seat.of(role)))
@@ -206,7 +206,7 @@ object Room:
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
-    // The one reading of a seat: of requires one per session, and a missing one reads as fresh.
+    // The one reading of a seat: of requires one per session; a missing one is a new voter's.
     private[actors] def seatOf(userId: UUID): Seat =
       this.state.seats.getOrElse(userId, Seat.Voter(None))
 
