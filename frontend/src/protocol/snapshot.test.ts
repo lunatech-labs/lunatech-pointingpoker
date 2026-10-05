@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { snapshotSchema, strictSnapshotSchema } from './snapshot'
 
-const withEstimation = (estimation: object) => ({
+const withSeat = (seat: object) => ({
   you: 'a',
   currentIssue: '',
   votesRevealed: false,
-  users: [{ id: 'a', name: 'A', estimation }]
+  users: [{ id: 'a', name: 'A', seat }]
 })
+const withEstimation = (estimation: object) => withSeat({ type: 'Voter', estimation })
 const base = withEstimation({ type: 'NoEstimation' })
 
 describe('the snapshot schemas', () => {
@@ -29,5 +30,13 @@ describe('the snapshot schemas', () => {
     expect(snapshotSchema.safeParse(withEstimation({ type: 'Bogus' })).success).toBe(false)
     const leaked = withEstimation({ type: 'ConfirmedHidden', value: '5' })
     expect(strictSnapshotSchema.safeParse(leaked).success).toBe(false)
+  })
+
+  it('accept a facilitator seat only with no estimation, and a voter seat only with one', () => {
+    expect(strictSnapshotSchema.safeParse(withSeat({ type: 'Facilitator' })).success).toBe(true)
+    const holding = withSeat({ type: 'Facilitator', estimation: { type: 'NoEstimation' } })
+    expect(strictSnapshotSchema.safeParse(holding).success).toBe(false)
+    expect(snapshotSchema.safeParse(withSeat({ type: 'Voter' })).success).toBe(false)
+    expect(snapshotSchema.safeParse(withSeat({ type: 'Observer' })).success).toBe(false)
   })
 })

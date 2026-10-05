@@ -36,7 +36,7 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
     val id = UUID.fromString(f"00000000-0000-0000-0000-${ids(name)}%012d")
     Attendee(id, name, voted, estimation, TestProbe().ref, Room.SessionToken.mint())
 
-  // tag, when set, must appear as some participant's estimation type, so a name cannot lie.
+  // tag, when set, must be some participant's seat or estimation type, so a name cannot lie.
   final private case class ContractState(
       name: String,
       snapshot: () => RoomSnapshot,
@@ -94,19 +94,24 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
       "estimation-unconfirmed",
       "Unconfirmed",
       (alice, _) => withUsers(alice.copy(estimation = "5"))
+    ),
+    tagState(
+      "seat-facilitator",
+      "Facilitator",
+      (alice, bob) => withUsers(alice, bob).withSeat(bob, Room.Seat.Facilitator)
     )
   )
 
   "The snapshot contract" should {
     for state <- states do
       s"write a representative snapshot for ${state.name}" in {
-        val json = state.snapshot().asJson
-        val tags = json.hcursor
-          .downField("users")
-          .values
-          .toList
-          .flatten
-          .flatMap(_.hcursor.downField("estimation").get[String]("type").toOption)
+        val json  = state.snapshot().asJson
+        val seats =
+          json.hcursor.downField("users").values.toList.flatten.map(_.hcursor.downField("seat"))
+        val tags = seats.flatMap(seat =>
+          List(seat.get[String]("type"), seat.downField("estimation").get[String]("type"))
+            .flatMap(_.toOption)
+        )
         state.tag.foreach(tag => tags must contain(tag))
         Files.writeString(contractDir.resolve(s"${state.name}.json"), json.spaces2)
       }

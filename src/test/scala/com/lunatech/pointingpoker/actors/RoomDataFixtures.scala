@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import org.apache.pekko.actor.ActorRef as UntypedRef
 
 import com.lunatech.pointingpoker.actors.Room.RoomData
-import com.lunatech.pointingpoker.actors.RoomSnapshot.Estimation
+import com.lunatech.pointingpoker.actors.RoomSnapshot.{Estimation, Seat}
 
 object RoomDataFixtures:
 
@@ -118,6 +118,12 @@ object RoomDataFixtures:
 
   // The pre-union wire's three fields, rebuilt so behaviour specs need not name every tag.
   extension (participant: RoomSnapshot.Participant)
+    // Throws on a facilitator's row, so a spec about votes cannot read one as "no estimation".
+    def estimation: Estimation = participant.seat match
+      case Seat.Voter(estimation) => estimation
+      case Seat.Facilitator       =>
+        throw IllegalStateException(s"${participant.name} is a facilitator, with no estimation")
+
     def voted: Boolean = participant.estimation match
       case Estimation.Confirmed(_) | Estimation.ConfirmedHidden => true
       case _                                                    => false

@@ -85,11 +85,31 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       )
       // history is step 9; a field with no consumer must not travel.
       json.hcursor.downField("users").downArray.keys.map(_.toList) mustBe Some(
-        List("id", "name", "estimation")
+        List("id", "name", "seat")
       )
-      json.hcursor.downField("users").downArray.downField("estimation").focus mustBe Some(
-        Json.obj("type" -> Json.fromString("Confirmed"), "value" -> Json.fromString("5"))
+      json.hcursor.downField("users").downArray.downField("seat").focus mustBe Some(
+        Json.obj(
+          "type"       -> Json.fromString("Voter"),
+          "estimation" -> Json.obj(
+            "type"  -> Json.fromString("Confirmed"),
+            "value" -> Json.fromString("5")
+          )
+        )
       )
+    }
+
+    "put a facilitator on the wire as a seat with no estimation, before and after the reveal" in {
+      val alice = user(UUID.randomUUID(), "Alice", true, "5")
+      val bob   = user(UUID.randomUUID(), "Bob", false, "")
+      val data  = withUsers(alice, bob).withSeat(bob, Room.Seat.Facilitator)
+
+      for state <- List(data, data.withRevealed()) do
+        val rows    = RoomSnapshot.of(state, alice.id).asJson.hcursor.downField("users").values
+        val bobsRow = rows.toList.flatten.find(_.hcursor.get[UUID]("id").toOption.contains(bob.id))
+        // The whole object, so no estimation key can travel with a facilitator.
+        bobsRow.flatMap(_.hcursor.downField("seat").focus) mustBe Some(
+          Json.obj("type" -> Json.fromString("Facilitator"))
+        )
     }
 
     "withhold another participant's estimation until the room reveals" in {
@@ -115,12 +135,12 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       // The property is about the wire, not the projection: devtools is the threat.
       (json.noSpaces must not).include("\"13\"")
       val rows = json.hcursor.downField("users").values.toList.flatten
-      // The key stays, as a tag with no value: the wire keeps estimation always present.
-      rows.flatMap(_.asObject.map(_.keys.toList)) mustBe List.fill(2)(
-        List("id", "name", "estimation")
+      // The key stays, as a tag with no value: a voter's seat keeps estimation always present.
+      rows.flatMap(_.hcursor.downField("seat").keys.map(_.toList)) mustBe List.fill(2)(
+        List("type", "estimation")
       )
       val bobsRow = rows.find(_.hcursor.get[UUID]("id").toOption.contains(bob.id))
-      bobsRow.flatMap(_.hcursor.downField("estimation").focus) mustBe Some(
+      bobsRow.flatMap(_.hcursor.downField("seat").downField("estimation").focus) mustBe Some(
         Json.obj("type" -> Json.fromString("ConfirmedHidden"))
       )
     }

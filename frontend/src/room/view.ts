@@ -1,4 +1,4 @@
-import type { Estimation, RoomSnapshot } from '../protocol/snapshot'
+import type { Estimation, Participant, RoomSnapshot, Seat } from '../protocol/snapshot'
 
 // What the table renders per participant, read off the union in one place.
 export type ParticipantRow = {
@@ -13,13 +13,20 @@ const confirmed = (e: Estimation) => e.type === 'Confirmed' || e.type === 'Confi
 const shown = (e: Estimation) =>
   e.type === 'Confirmed' || e.type === 'Unconfirmed' ? e.value : ''
 
-const toRow = ({ id, name, estimation }: RoomSnapshot['users'][number]): ParticipantRow => ({
-  id,
-  name,
-  voted: confirmed(estimation),
-  hasEstimation: estimation.type !== 'NoEstimation',
-  estimation: shown(estimation)
-})
+// A facilitator's row has no estimation, so the tally leaves them out without a rule of its own.
+const estimationOf = (seat: Seat): Estimation =>
+  seat.type === 'Voter' ? seat.estimation : { type: 'NoEstimation' }
+
+const toRow = ({ id, name, seat }: Participant): ParticipantRow => {
+  const estimation = estimationOf(seat)
+  return {
+    id,
+    name,
+    voted: confirmed(estimation),
+    hasEstimation: estimation.type !== 'NoEstimation',
+    estimation: shown(estimation)
+  }
+}
 
 // Pinned to one locale so every browser lists the room in the same order.
 const collator = new Intl.Collator('en', { numeric: true })
