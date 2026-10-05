@@ -1148,7 +1148,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
       val (departed, _) = createUser(UUID.randomUUID(), "user2", true, "8")
 
-      // Problem A's guarantee: the estimate is keyed by id and outlives membership.
+      // Problem A's guarantee: the seat is keyed by id, so its estimate outlives membership.
       val data = withUsers(user).withMemberlessSession(departed).withEstimate(departed)
 
       data.estimateFor(departed) mustBe Some(("8", true))
@@ -1313,7 +1313,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         )
       }
 
-      thrown.getMessage must include("resolves to no session")
+      thrown.getMessage must include(s"the connection for $stranger resolves to no session")
     }
 
     "allow a connection whose member has gone, which nothing now produces" in {
