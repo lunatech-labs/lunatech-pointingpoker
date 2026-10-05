@@ -538,9 +538,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.data.sessions.get(minted.token) mustBe Some(
         Room.Session(minted.userId, "Alice")
       )
-      // Invariant 5: only ConnectToRoom creates a member, or everyMemberHasVoted is
+      // Invariant 5: only ConnectToRoom creates a member, or completion is
       // unsatisfiable for a member who never connects and never votes.
       data.data.members mustBe empty
+      // Transitions use copy, not of, so only this case sees a session minted without a seat.
+      data.data.state.seats mustBe Map(minted.userId -> Room.Seat.Voter(None))
     }
 
     "resolve a session minted for a tab that has not connected" in {
@@ -862,7 +864,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (_, roomRef) = createRoom(aSlug(), withUsers(user))
 
       // A reconnect Joins the same identity and connection id under a new ref; the estimate
-      // is keyed by id in the round, so the rejoin never touches it.
+      // is in a seat keyed by id, so the rejoin never touches it.
       val newRefProbe = TestProbe()(using testKit.system.classicSystem)
       roomRef ! Room.Join(user.id, user.name, user.token, user.connectionId, newRefProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
@@ -981,11 +983,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         user2.token -> Room.Session(user2.id, user2.name)
       )
 
-      val data = RoomData.of(members = members, sessions = sessions)
+      val data = RoomData.of(state = stateFor(user, user2), members = members, sessions = sessions)
 
       data.members mustBe members
       data.sessions mustBe sessions
-      data.state mustBe Room.RoomState.empty
+      data.state mustBe stateFor(user, user2)
     }
 
     "refuse a RoomData whose member has no session at all" in {
@@ -1003,6 +1005,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       val thrown = intercept[IllegalArgumentException] {
         RoomData.of(
+          state = stateFor(user),
           members = Map(user.id -> Room.Member(user.name)),
           sessions = Map(user.token -> Room.Session(user.id, "someone else"))
         )
@@ -1019,7 +1022,11 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         departed.token -> Room.Session(departed.id, departed.name)
       )
 
-      val data = RoomData.of(members = Map(user.id -> Room.Member(user.name)), sessions = sessions)
+      val data = RoomData.of(
+        state = stateFor(user, departed),
+        members = Map(user.id -> Room.Member(user.name)),
+        sessions = sessions
+      )
 
       data.members.keySet mustBe Set(user.id)
       data.sessions.keySet mustBe Set(user.token, departed.token)
@@ -1057,7 +1064,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Absence is structural now, so a blank value would enter the tally as its own bucket.
       val data = dataProbe.expectMessageType[Room.DataStatus].data
-      data.state.round.estimates mustBe empty
+      List(user, user2).map(data.estimateFor) mustBe List(None, None)
       data.state.round.revealed mustBe false
     }
 
@@ -1103,20 +1110,38 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
     }
 
-    "refuse a RoomData whose estimate resolves to no session" in {
-      val (user, _) = createUser(UUID.randomUUID(), "user1", false, "")
-      val stranger  = UUID.randomUUID()
-      val state     = Room.RoomState("", Room.Round(Map(stranger -> Room.Estimate.of("5")), false))
+    "refuse a RoomData whose seat resolves to no session" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (stranger, _) = createUser(UUID.randomUUID(), "user2", true, "5")
 
       val thrown = intercept[IllegalArgumentException] {
         RoomData.of(
-          state = state,
+          state = stateFor(user, stranger),
           members = Map(user.id -> Room.Member(user.name)),
           sessions = Map(user.token -> Room.Session(user.id, user.name))
         )
       }
 
-      thrown.getMessage must include("resolves to no session")
+      thrown.getMessage must include(s"the seat for ${stranger.id} resolves to no session")
+    }
+
+    "refuse a RoomData whose session has no seat" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", false, "")
+      val (unseated, _) = createUser(UUID.randomUUID(), "user2", false, "")
+
+      // Retention keeps a departed identity's session, so its seat must outlive membership too.
+      val thrown = intercept[IllegalArgumentException] {
+        RoomData.of(
+          state = stateFor(user),
+          members = Map(user.id -> Room.Member(user.name)),
+          sessions = Map(
+            user.token     -> Room.Session(user.id, user.name),
+            unseated.token -> Room.Session(unseated.id, unseated.name)
+          )
+        )
+      }
+
+      thrown.getMessage must include(s"the session for user2 (${unseated.id}) has no seat")
     }
 
     "allow an estimate whose member has gone, which is what a departure produces" in {
@@ -1282,6 +1307,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       val thrown = intercept[IllegalArgumentException] {
         RoomData.of(
+          state = stateFor(user),
           sessions = Map(user.token -> Room.Session(user.id, user.name)),
           connections = Map(stranger -> Map(newConnectionId() -> user.ref))
         )

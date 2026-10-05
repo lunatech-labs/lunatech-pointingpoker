@@ -87,15 +87,27 @@ object Room:
       require(!value.isBlank, "an estimate needs a value")
       Estimate(value, confirmed)
 
-  final case class Round(estimates: Map[UUID, Estimate], revealed: Boolean)
+  // A role plus that role's state: the role outlives the round, the estimate does not.
+  enum Seat:
+    case Voter(estimate: Option[Estimate])
+
+    def cleared: Seat = this match
+      case Voter(_) => Voter(None)
+
+    def unconfirmed: Seat = this match
+      case Voter(estimate) => Voter(estimate.map(_.unconfirmed))
+  end Seat
+
+  // Only what clear replaces whole, so fresh stays a constant.
+  final case class Round(revealed: Boolean)
 
   object Round:
-    val fresh: Round = Round(Map.empty[UUID, Estimate], revealed = false)
+    val fresh: Round = Round(revealed = false)
 
-  final case class RoomState(currentIssue: String, round: Round)
+  final case class RoomState(currentIssue: String, round: Round, seats: Map[UUID, Seat])
 
   object RoomState:
-    val empty: RoomState = RoomState("", Round.fresh)
+    val empty: RoomState = RoomState("", Round.fresh, Map.empty)
 
   final case class Session(userId: UUID, name: String)
 
@@ -133,11 +145,15 @@ object Room:
       )
 
     private[Room] def removeMember(userId: UUID): RoomData =
-      // Estimates are keyed by id and survive a departure; only clear or the round ends one.
+      // Seats are keyed by id and survive a departure; only clear ends an estimate.
       this.copy(members = this.members - userId)
 
     private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
-      this.copy(sessions = this.sessions + (token -> Session(userId, name)))
+      // The only place a session is created, so the only place a seat is.
+      this.copy(
+        sessions = this.sessions + (token -> Session(userId, name)),
+        state = this.state.copy(seats = this.state.seats + (userId -> Seat.Voter(None)))
+      )
 
     private[Room] def rename(token: SessionToken, userId: UUID, name: String): RoomData =
       // Both sides or neither: of requires a member's name to equal its session's.
@@ -161,25 +177,29 @@ object Room:
       if this.state.round.revealed then (this, RoundRevealed)
       else if estimation.isBlank then (this, BlankEstimation)
       else
-        val estimates = this.state.round.estimates + (userId -> Estimate.of(estimation))
-        (withRound(Round(estimates, everyMemberHasVoted(estimates))), Applied)
+        val seats = this.state.seats + (userId -> Seat.Voter(Some(Estimate.of(estimation))))
+        (withState(this.state.round.copy(revealed = complete(seats)), seats), Applied)
 
-    def show(): RoomData   = withRound(this.state.round.copy(revealed = true))
-    def clear(): RoomData  = withRound(Round.fresh)
+    def show(): RoomData  = withState(this.state.round.copy(revealed = true), this.state.seats)
+    def clear(): RoomData = withState(Round.fresh, this.state.seats.view.mapValues(_.cleared).toMap)
     def reVote(): RoomData =
-      withRound(
-        Round(this.state.round.estimates.view.mapValues(_.unconfirmed).toMap, revealed = false)
+      withState(
+        this.state.round.copy(revealed = false),
+        this.state.seats.view.mapValues(_.unconfirmed).toMap
       )
 
     def editIssue(issue: String): RoomData =
       this.copy(state = this.state.copy(currentIssue = issue))
 
-    private def withRound(round: Round): RoomData =
-      this.copy(state = this.state.copy(round = round))
+    private def withState(round: Round, seats: Map[UUID, Seat]): RoomData =
+      this.copy(state = this.state.copy(round = round, seats = seats))
 
-    private def everyMemberHasVoted(estimates: Map[UUID, Estimate]): Boolean =
+    private def complete(seats: Map[UUID, Seat]): Boolean =
       // nonEmpty is insurance rather than a live case: only a Vote ever runs this.
-      this.members.nonEmpty && this.members.keys.forall(id => estimates.get(id).exists(_.confirmed))
+      // A member with no seat breaks an invariant, so it holds the round open.
+      this.members.nonEmpty && this.members.keys.forall(id =>
+        seats.get(id).exists { case Seat.Voter(estimate) => estimate.exists(_.confirmed) }
+      )
   end RoomData
 
   object RoomData:
@@ -192,7 +212,7 @@ object Room:
         connections: Map[UUID, Map[ConnectionId, UntypedRef]] = Map.empty
     ): RoomData =
       // Every id resolves to a session, which is conspicuously not "every id is a member":
-      // a connection or an estimate outliving its member is a state this design requires.
+      // a connection or a seat outliving its member is a state this design requires.
       val identities = sessions.values.map(s => s.userId -> s).toMap
       members.foreach { (id, member) =>
         require(identities.contains(id), s"member ${member.name} ($id) has no session")
@@ -204,8 +224,11 @@ object Room:
       connections.keys.foreach(id =>
         require(identities.contains(id), s"the connection for $id resolves to no session")
       )
-      state.round.estimates.keys.foreach(id =>
-        require(identities.contains(id), s"the estimate for $id resolves to no session")
+      identities.foreach((id, session) =>
+        require(state.seats.contains(id), s"the session for ${session.name} ($id) has no seat")
+      )
+      state.seats.keys.foreach(id =>
+        require(identities.contains(id), s"the seat for $id resolves to no session")
       )
       RoomData(state, members, sessions, connections)
     end of
