@@ -159,10 +159,11 @@ Nothing visible changes: the page parses the new shape and always sends
 ### Server
 
 - `Seat.Facilitator` is added. Step 2a left every match on `Seat` exhaustive, so
-  `-Werror` fails the build at `complete`, `RoomSnapshot.of` and the
-  `estimateFor` fixture until each decides what a facilitator means there.
-- `complete` replaces its `members.nonEmpty` guard with the Terms' "at least one
-  present `Voter` seat".
+  `-Werror` fails the build at `Seat.cleared`, `Seat.unconfirmed`, `complete`,
+  `RoomSnapshot.of` and the `estimateFor` fixture until each decides what a
+  facilitator means there.
+- `complete` replaces its `members.nonEmpty` guard with Terms' "Complete", so
+  when the last voter switches to facilitator, nothing reveals.
 - `Role` is `Voter` or `Facilitator`, one type shared by both requests below.
 - `registerSession` creates the seat from the join's role. `rename` writes the
   join's role to the seat by the switch transition, without the latch step.
@@ -183,8 +184,6 @@ Nothing visible changes: the page parses the new shape and always sends
   | revealed | any | `RoundRevealed` | 409 |
   | open | blank | `BlankEstimation` | 400 |
   | open | non-blank | `NotAVoter` | 409 |
-- Completion's non-empty clause becomes a live case: when the last voter
-  switches to facilitator, nothing reveals.
 
 ### Wire
 
