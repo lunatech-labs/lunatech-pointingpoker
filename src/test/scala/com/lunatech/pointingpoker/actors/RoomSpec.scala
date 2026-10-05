@@ -872,6 +872,106 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.connections(user.id) mustBe Map(user.connectionId -> newRefProbe.ref)
     }
 
+    "keep the vote through a rejoin that resolves the existing session" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "5")
+      val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(aSlug(), withUsers(user))
+
+      // A reload's join: the cookie resolves the session, so rename runs under the same name.
+      roomRef ! Room.RequestSession(user.name, Some(user.token), replyProbe.ref)
+      replyProbe.expectMessage(Room.SessionMinted(user.id, user.token))
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.estimateFor(user) mustBe Some(("5", true))
+    }
+
+    "leave the round hidden when a departure by the beacon leaves everyone present voted" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(aSlug(), withUsers(user, user2))
+
+      roomRef ! Room.Depart(user2.token, user2.connectionId, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // A departure changes presence, which is no deliberate act, so it never reveals.
+      val snapshot = expectSnapshot(userProbe)
+      snapshot.users.map(_.id) mustBe List(user.id)
+      snapshot.votesRevealed mustBe false
+      dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
+    }
+
+    "leave the round hidden when a departure at grace expiry leaves everyone present voted" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)        = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)      = createRoom(aSlug(), withUsers(user, user2), gracePeriod = 50.millis)
+
+      roomRef ! Room.Leave(user2.id, user2.ref)
+
+      // ConfirmLeave's publish, one grace period later.
+      val snapshot = expectSnapshot(userProbe)
+      snapshot.users.map(_.id) mustBe List(user.id)
+      snapshot.votesRevealed mustBe false
+      roomRef ! Room.GetData(dataProbe.ref)
+      dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
+    }
+
+    "leave the round hidden when a rejoin leaves everyone present voted" in {
+      val (user, userProbe) = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (departed, _)     = createUser(UUID.randomUUID(), "user2", true, "8")
+      val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
+      // The state a departure leaves: everyone present has voted, and the round is hidden.
+      val (_, roomRef) = createRoom(
+        aSlug(),
+        withUsers(user).withMemberlessSession(departed).withEstimate(departed)
+      )
+
+      roomRef ! departed.joinMessage
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // A join changes presence too, so it never reveals either.
+      val snapshot = expectSnapshot(userProbe)
+      snapshot.users.map(_.id).toSet mustBe Set(user.id, departed.id)
+      snapshot.votesRevealed mustBe false
+      dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe false
+    }
+
+    "clear the estimate of an identity who is not present" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (departed, _) = createUser(UUID.randomUUID(), "user2", true, "8")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)  = createRoom(
+        aSlug(),
+        withUsers(user).withMemberlessSession(departed).withEstimate(departed).withRevealed()
+      )
+
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // Otherwise a rejoin would bring the last round's estimate into the new one.
+      dataProbe.expectMessageType[Room.DataStatus].data.estimateFor(departed) mustBe None
+    }
+
+    "unconfirm on a re-vote the estimate of an identity who is not present" in {
+      val (user, _)     = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (departed, _) = createUser(UUID.randomUUID(), "user2", true, "8")
+      val dataProbe     = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef)  = createRoom(
+        aSlug(),
+        withUsers(user).withMemberlessSession(departed).withEstimate(departed).withRevealed()
+      )
+
+      roomRef ! Room.ReVote(user.token, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      // Otherwise a rejoin would count the previous round's confirmation as a vote in this one.
+      dataProbe.expectMessageType[Room.DataStatus].data.estimateFor(departed) mustBe Some(
+        ("8", false)
+      )
+    }
+
     "build a RoomData when every member has a matching session" in {
       val (user, _)  = createUser(UUID.randomUUID(), "user1", false, "")
       val (user2, _) = createUser(UUID.randomUUID(), "user2", true, "5")
