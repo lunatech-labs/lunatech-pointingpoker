@@ -25,13 +25,24 @@ object RoomSnapshot:
     case Voter(estimation: Estimation)
     case Facilitator
 
+    def role: Room.Role = this match
+      case Voter(_)    => Room.Role.Voter
+      case Facilitator => Room.Role.Facilitator
+
   object Seat:
-    // Explicit tags, as Estimation's are.
-    given Encoder[Seat] = Encoder.instance {
-      case Voter(estimation) =>
-        tagged("Voter", "estimation" -> Encoder[Estimation].apply(estimation))
-      case Facilitator => tagged("Facilitator")
-    }
+    // The one table of a role's wire name, so a seat's tag is what a request's role sends back.
+    // Explicit rather than toString: renaming a case must not silently rename the wire.
+    def tag(role: Room.Role): String = role match
+      case Room.Role.Voter       => "Voter"
+      case Room.Role.Facilitator => "Facilitator"
+
+    given Encoder[Seat] = Encoder.instance(seat =>
+      val fields = seat match
+        case Voter(estimation) => List("estimation" -> Encoder[Estimation].apply(estimation))
+        case Facilitator       => Nil
+      tagged(tag(seat.role), fields*)
+    )
+  end Seat
 
   private def tagged(tag: String, fields: (String, Json)*): Json =
     Json.obj(("type" -> Json.fromString(tag)) +: fields*)

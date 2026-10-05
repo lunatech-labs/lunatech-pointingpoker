@@ -4,15 +4,12 @@ import io.circe.{Decoder, Encoder}
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import sttp.tapir.{Schema, ValidationResult, Validator}
 
-import com.lunatech.pointingpoker.actors.Room
+import com.lunatech.pointingpoker.actors.{Room, RoomSnapshot}
 import com.lunatech.pointingpoker.RoleWire.given
 
-// The wire's names for a role, for both requests that carry one.
+// The role's codecs, for both requests that carry one, named by the snapshot seat's tag.
 object RoleWire:
-  // Explicit tags rather than toString: renaming a case must not silently rename the wire.
-  private def tag(role: Room.Role): String = role match
-    case Room.Role.Voter       => "Voter"
-    case Room.Role.Facilitator => "Facilitator"
+  private def tag(role: Room.Role): String = RoomSnapshot.Seat.tag(role)
 
   given Encoder[Room.Role] = Encoder.encodeString.contramap(tag)
   // Any other value fails to decode, which tapir answers with 400.
