@@ -12,13 +12,13 @@
 
 ## How the code in this plan was verified
 
-Every patch below was applied and run in a scratch worktree on 2026-10-05, on this branch at `d4f93c7`, as two commits in task order:
+Every patch below was applied and run in a scratch worktree on 2026-10-05, on this branch at `29347b7` (the code of `d4f93c7`), as two commits in task order:
 
 - **Task 1 passes on today's code.** All six new cases pass. The actor suites go from 120 to 126 tests, and `scalafmtCheckAll` is clean.
 - **Task 1's cases bite on today's code.** Each mutation in Task 1, Step 3 was applied alone. Each failed exactly the cases its row names and nothing else, so no existing case pinned any of the five transitions.
-- **Task 2 passes.** The actor suites give 128 tests: 126, plus the two invariant cases and the seat case, less the replaced estimate case. `sbt qa styleCheck` passed 228 tests at 93.91% statement coverage.
-- **Task 2's cases bite on the new code.** Each mutation in Task 2, Step 7 was applied alone and failed exactly the cases its row names. The seat-creation mutation (row 7) passed all 226 tests until "give a minted session a voter's seat with no estimate" was added, which is why that case exists.
-- **Nothing visible changed.** The eight files in `target/contract/` from `SnapshotContractSpec` were byte-identical to those written at `d4f93c7` (`diff -r`). `sbt genOpenApi` and `npm run gen:api` left `frontend/src/protocol/generated/` unchanged. `npm run typecheck` and `npm run lint` were clean. `npm run test:unit` passed 90 tests, `node --test` 17, and `npm run e2e` 112 of 112 in Chromium and Firefox, in 3.5 min.
+- **Task 2 passes.** The actor suites give 127 tests: 126, plus the two invariant cases, less the replaced estimate case. `sbt qa styleCheck` passed 227 tests at 93.90% statement coverage.
+- **Task 2's cases bite on the new code.** Each of the nine mutations in Task 2, Step 7 was applied alone and failed exactly the cases its row names and nothing else. The seat-creation mutation (row 7) passed every other case, which is why the mint case asserts the seat. The `clear` mutation (row 9) passed all of `RoomSpec` with a fixture that reads a missing seat as "no estimate", which is why `estimateFor` throws.
+- **Nothing visible changed.** The eight files in `target/contract/` from `SnapshotContractSpec` were byte-identical to those written at `29347b7` (`diff -r`). `sbt genOpenApi` and `npm run gen:api` left `frontend/src/protocol/generated/` unchanged. `npm run typecheck` and `npm run lint` were clean. `npm run test:unit` passed 90 tests, `node --test` 17, and `npm run e2e` 112 of 112 in Chromium and Firefox, in 3.2 min.
 - **Noise to ignore.** sbt prints `[error] WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release` from the forked JVM's stderr. It is not a failure.
 
 ## Decisions this plan takes that the spec does not settle
@@ -26,12 +26,12 @@ Every patch below was applied and run in a scratch worktree on 2026-10-05, on th
 Each is implemented as written unless review changes it.
 
 - **P1. `Seat` is a Scala 3 `enum` in `object Room`, after `Estimate`,** with the two round transitions on the type, `cleared` and `unconfirmed`, as `Estimate.unconfirmed` already is. Step 2b adds `case Facilitator` and one line to each match.
-- **P2. `everyMemberHasVoted` becomes `complete(seats)`,** after the Terms' word. It collects the present seats' estimates with `collect { case Seat.Voter(e) => e }`, so 2b's facilitators drop out without touching it. Its "insurance rather than a live case" comment stays, since 2b is what makes that clause live.
+- **P2. `everyMemberHasVoted` becomes `complete(seats)`,** after the Terms' word. It fails closed: a present member with no seat counts as not voted, so a missed seat holds the round open instead of revealing it, since in production only convention keeps the invariant (`RoomData.of` builds only `RoomData.empty`, and transitions use `copy`). Its match on `Seat` is exhaustive, so `-Werror` makes 2b decide what `Facilitator` means here, beside 2b's own "at least one present voter" clause. Its "insurance rather than a live case" comment stays, since 2b is what makes that clause live.
 - **P3. `withRound(round)` becomes `withState(round, seats)`.** `vote` and `reVote` copy the round rather than build a new one, so a later per-round field survives them. `clear` takes `Round.fresh`, which is the spec's "`clear` replaces whole".
 - **P4. The new invariant is two `require`s after the existing rules,** worded "the session for <name> (<id>) has no seat" and "the seat for <id> resolves to no session". They replace the rule "the estimate for <id> resolves to no session".
-- **P5. The fixtures keep every public name.** `estimatesFor` becomes the private `seatsFor` (a seat per attendee, `Voter(None)` for a blank estimation). `withMemberlessSession` adds a `Voter(None)` seat, the state `registerSession` produces. `withEstimate` overwrites it with the attendee's own seat. The one new public fixture is `stateFor(users*)`, for the cases that call `RoomData.of` by hand. `SnapshotContractSpec`, `RoomSnapshotSpec` and `RoomManagerSpec` need no edit.
+- **P5. The fixtures keep every public name.** `estimatesFor` becomes the private `seatsFor` (a seat per attendee, `Voter(None)` for a blank estimation). `withMemberlessSession` adds a `Voter(None)` seat, the state `registerSession` produces. `withEstimate` overwrites it with the attendee's own seat. `estimateFor` throws on a missing seat, so its existing callers also assert that the seat exists, and Task 1's "clear" case can tell a cleared seat from a deleted one (Task 2, Step 7, row 9). The one new public fixture is `stateFor(users*)`, for the cases that call `RoomData.of` by hand. `SnapshotContractSpec`, `RoomSnapshotSpec` and `RoomManagerSpec` need no edit.
 - **P6. Each hand-built `RoomData.of` case gains `state = stateFor(...)`,** so a refusal case trips only the rule it names and not the new seat rule.
-- **P7. Two cases beyond the spec's list.** "leave the round hidden when a rejoin leaves everyone present voted" pins decision 1's "a join never sets it": a latching `connect` passed every existing case. "give a minted session a voter's seat with no estimate" pins "a seat is created in `registerSession`": transitions use `copy`, not `of`, so a seatless `registerSession` passed all 226 other cases.
+- **P7. A case and an assertion beyond the spec's list.** "leave the round hidden when a rejoin leaves everyone present voted" pins decision 1's "a join never sets it": a latching `connect` passed every existing case. The seat assertion added to "mint a session and store it on RequestSession" pins "a seat is created in `registerSession`": transitions use `copy`, not `of`, so a seatless `registerSession` passed every other case.
 - **P8. The order is a `test` commit then a `refactor` commit,** each subject ending "(ui refresh step 2a)", as step 1's ended "(ui refresh step 1)". This plan lands first as a `docs` commit. The last commit sets the spec's status line.
 
 ## Global Constraints
@@ -42,7 +42,7 @@ Each is implemented as written unless review changes it.
 - Scala formatting is scalafmt's: run `sbt scalafmtAll` before each commit, and `sbt styleCheck` must pass.
 - The build has `-Werror`: any new compiler warning fails the build.
 - Cite symbols, not line numbers, in comments and commit messages.
-- Must not change: anything under `e2e/`, `frontend/`, `test/` or `testkit/`; `SnapshotContractSpec.scala`; `RoomSnapshotSpec.scala`; `RoomManagerSpec.scala`; `API.scala`, `Endpoints.scala` and `Requests.scala`. The whole step touches exactly four files: `Room.scala`, `RoomSnapshot.scala`, `RoomDataFixtures.scala` and `RoomSpec.scala`.
+- Must not change: anything under `e2e/`, `frontend/`, `test/` or `testkit/`; `SnapshotContractSpec.scala`; `RoomSnapshotSpec.scala`; `RoomManagerSpec.scala`; `API.scala`, `Endpoints.scala` and `Requests.scala`. The two code commits touch exactly four files: `Room.scala`, `RoomSnapshot.scala`, `RoomDataFixtures.scala` and `RoomSpec.scala`. Task 3 edits only the spec's status line.
 - Do not push or merge: 2a, 2b and 2c are stacked and merge in one window (spec, "Branches and commits"), and every merge to `main` restarts the server and ends every live room.
 
 ## Review Focus
@@ -53,16 +53,13 @@ The inputs most likely to bite a person, most likely first. The spec's list name
 2. **A rejoin that makes everyone present voted.** Expected: the round stays hidden until someone votes or presses Show (decision 1). Pinned by Task 1's "leave the round hidden when a rejoin leaves everyone present voted".
 3. **The last unvoted participant closing the tab or sleeping the laptop.** Expected: the round stays hidden, by the beacon and at grace expiry alike. Pinned by Task 1's two "departure" cases.
 4. **A voter who left before Clear or Re-vote, then comes back.** Expected: after Clear they return with no estimate. After Re-vote their old value returns unconfirmed and must be confirmed again. Pinned by Task 1's "clear the estimate..." and "unconfirm on a re-vote..." cases.
-5. **A tab that mints a session and closes before its stream opens.** Expected: it holds a seat but is not present, so it never holds up completion. Pinned by Task 2's "give a minted session a voter's seat with no estimate", with the existing "not create a member on a join, whatever the name".
+5. **A tab that mints a session and closes before its stream opens.** Expected: it holds a seat but is not present, so it never holds up completion. Pinned by the seat assertion Task 2 adds to "mint a session and store it on RequestSession", with the existing "not create a member on a join, whatever the name".
 
 ---
 
-### Before Task 1: commit this plan
+### Before Task 1: check the plan is committed
 
-```bash
-git add docs/superpowers/plans/2026-10-05-ui-refresh-2a-seats.md
-git commit -m "docs: plan ui refresh step 2a" -m "Every code block was run in a scratch worktree first: the net's cases pass on today's code and bite on it, and after the seat refactor the suite, the contract files, the OpenAPI document and the e2e suite are unchanged."
-```
+Already done: `29347b7` committed this plan, and its review edits are committed after it. Check that `git status --short` prints nothing before starting.
 
 ### Task 1: Pin the round transitions the refactor must keep
 
@@ -255,15 +252,17 @@ git commit -m "test: pin the round transitions the seat refactor must keep (ui r
   - in `RoomData`, the private `complete(seats: Map[UUID, Seat]): Boolean` and `withState(round: Round, seats: Map[UUID, Seat]): RoomData`;
   - the fixture `RoomDataFixtures.stateFor(users: Attendee*): Room.RoomState`.
 
-- [ ] **Step 1: Write the three new cases**
+- [ ] **Step 1: Write the seat assertion and the two invariant cases**
 
 These fail at first because `Room.Seat`, `RoomState.seats` and `stateFor` do not exist yet.
 
-In `RoomSpec.scala`, in the case "mint a session and store it on RequestSession", replace the comment that names `everyMemberHasVoted`:
+In `RoomSpec.scala`, at the end of the case "mint a session and store it on RequestSession", replace:
 
 ```scala
       // Invariant 5: only ConnectToRoom creates a member, or everyMemberHasVoted is
       // unsatisfiable for a member who never connects and never votes.
+      data.data.members mustBe empty
+    }
 ```
 
 with:
@@ -271,24 +270,9 @@ with:
 ```scala
       // Invariant 5: only ConnectToRoom creates a member, or completion is
       // unsatisfiable for a member who never connects and never votes.
-```
-
-Right after that case, before "resolve a session minted for a tab that has not connected", add:
-
-```scala
-    "give a minted session a voter's seat with no estimate" in {
-      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
-      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-      val (_, roomRef) = createRoom(aSlug(), RoomData.empty)
-
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
-      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
-      roomRef ! Room.GetData(dataProbe.ref)
-
+      data.data.members mustBe empty
       // Transitions use copy, not of, so only this case sees a session minted without a seat.
-      dataProbe.expectMessageType[Room.DataStatus].data.state.seats mustBe Map(
-        minted.userId -> Room.Seat.Voter(None)
-      )
+      data.data.state.seats mustBe Map(minted.userId -> Room.Seat.Voter(None))
     }
 ```
 
@@ -354,7 +338,7 @@ with these two cases:
 
 Run: `sbt -batch "Test/compile"`
 
-Expected: FAIL to compile with `value seats is not a member of com.lunatech.pointingpoker.actors.Room.RoomState`. The compiler stops at that first error, so `stateFor` and `Seat` are not reported yet.
+Expected: FAIL to compile, with `value seats is not a member of com.lunatech.pointingpoker.actors.Room.RoomState` in the mint case and `Not found: stateFor` in each of the two refusal cases. `Seat` is not reported, since it sits inside the expression that already failed.
 
 - [ ] **Step 3: Add the seat to the model**
 
@@ -477,9 +461,11 @@ with:
       this.copy(state = this.state.copy(round = round, seats = seats))
 
     private def complete(seats: Map[UUID, Seat]): Boolean =
-      val voters = this.members.keys.toList.flatMap(seats.get).collect { case Seat.Voter(e) => e }
       // nonEmpty is insurance rather than a live case: only a Vote ever runs this.
-      voters.nonEmpty && voters.forall(_.exists(_.confirmed))
+      // A member with no seat breaks an invariant, so it holds the round open.
+      this.members.nonEmpty && this.members.keys.forall(id =>
+        seats.get(id).exists { case Seat.Voter(estimate) => estimate.exists(_.confirmed) }
+      )
 ```
 
 In `RoomData.of`, replace the comment line:
@@ -599,11 +585,10 @@ Replace `estimateFor`:
 with:
 
 ```scala
+    // Throws on a missing seat, so a transition that deletes one never reads as "no estimate".
     def estimateFor(user: Attendee): Option[(String, Boolean)] =
-      data.state.seats
-        .get(user.id)
-        .flatMap { case Room.Seat.Voter(e) => e }
-        .map(e => (e.value, e.confirmed))
+      data.state.seats(user.id) match
+        case Room.Seat.Voter(estimate) => estimate.map(e => (e.value, e.confirmed))
 ```
 
 Replace the private `withRound` helper:
@@ -616,7 +601,7 @@ Replace the private `withRound` helper:
 with:
 
 ```scala
-  // A seat per user, for the cases that build a RoomData by hand.
+  // A seat per user and a fresh round, for withUsers and the cases that build a RoomData by hand.
   def stateFor(users: Attendee*): Room.RoomState =
     Room.RoomState("", Room.Round.fresh, seatsFor(users*))
 
@@ -759,7 +744,7 @@ Expected: no output.
 
 Run: `sbt -batch scalafmtAll "testOnly com.lunatech.pointingpoker.actors.*"`
 
-Expected: `Tests: succeeded 128, failed 0`.
+Expected: `Tests: succeeded 127, failed 0`.
 
 - [ ] **Step 7: Show each case fails against a broken transition**
 
@@ -779,8 +764,9 @@ Then, as in Task 1, Step 3, apply each mutation on its own and run `sbt -batch "
 | 4 | In `reVote`, replace `this.state.seats.view.mapValues(_.unconfirmed).toMap` with `this.state.seats.map((id, s) => id -> (if isMember(id) then s.unconfirmed else s))` | "unconfirm on a re-vote the estimate of an identity who is not present" |
 | 5 | In `RoomData.of`, replace the `require(state.seats.contains(id), ...)` call with `()` | "refuse a RoomData whose session has no seat" |
 | 6 | In `RoomData.of`, replace the `require(identities.contains(id), s"the seat for $id ...")` call with `()` | "refuse a RoomData whose seat resolves to no session" |
-| 7 | In `registerSession`, delete the `state = ...` argument and the comma before it | "give a minted session a voter's seat with no estimate" |
+| 7 | In `registerSession`, delete the `state = ...` argument and the comma before it | "mint a session and store it on RequestSession" |
 | 8 | In `connect`, append `.latched` to the closing `)` of its `this.copy(...)`, and add the method below after `connect` | "leave the round hidden when a rejoin leaves everyone present voted" |
+| 9 | In `clear`, replace `this.state.seats.view.mapValues(_.cleared).toMap` with `this.state.seats.filter((id, _) => isMember(id)).view.mapValues(_.cleared).toMap` (a clear that deletes the seats of those not present) | "clear the estimate of an identity who is not present" |
 
 Mutation 1:
 
@@ -799,7 +785,7 @@ Mutation 8's method:
       withState(state.round.copy(revealed = state.round.revealed || complete(state.seats)), state.seats)
 ```
 
-Expected after the last restore: `sbt -batch "testOnly com.lunatech.pointingpoker.actors.*"` gives `Tests: succeeded 128, failed 0` again.
+Expected after the last restore: `sbt -batch "testOnly com.lunatech.pointingpoker.actors.*"` gives `Tests: succeeded 127, failed 0` again.
 
 - [ ] **Step 8: Commit**
 
@@ -824,7 +810,16 @@ sbt -batch qa styleCheck
 diff -r "${TMPDIR:-/tmp}/contract-before" target/contract && echo CONTRACT-IDENTICAL
 ```
 
-Expected: `Tests: succeeded 228, failed 0`, then `CONTRACT-IDENTICAL`. A diff here means the wire changed: stop and find out why, do not regenerate.
+If `contract-before` is missing (another session, or a reboot), rebuild it from the commit before Task 1 first, then run the `diff` again:
+
+```bash
+git worktree add "${TMPDIR:-/tmp}/wt-before" HEAD~2
+(cd "${TMPDIR:-/tmp}/wt-before" && sbt -batch "testOnly com.lunatech.pointingpoker.actors.SnapshotContractSpec")
+rm -rf "${TMPDIR:-/tmp}/contract-before" && cp -r "${TMPDIR:-/tmp}/wt-before/target/contract" "${TMPDIR:-/tmp}/contract-before"
+git worktree remove --force "${TMPDIR:-/tmp}/wt-before"
+```
+
+Expected: `Tests: succeeded 227, failed 0`, then `CONTRACT-IDENTICAL`. A diff here means the wire changed: stop and find out why, do not regenerate.
 
 - [ ] **Step 2: Check the generated API is unchanged**
 
