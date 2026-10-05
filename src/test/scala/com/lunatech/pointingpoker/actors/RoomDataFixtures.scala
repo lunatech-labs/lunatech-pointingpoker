@@ -99,10 +99,21 @@ object RoomDataFixtures:
     def withDeparted(user: Attendee): RoomData =
       RoomData.of(data.state, data.members - user.id, data.sessions, data.connections)
 
-    // Throws on a missing seat, so a transition that deletes one never reads as "no estimate".
+    // Voted and estimation cannot say "facilitator", so the seat is set whole.
+    def withSeat(user: Attendee, seat: Room.Seat): RoomData =
+      RoomData.of(
+        withSeats(data, _ + (user.id -> seat)),
+        data.members,
+        data.sessions,
+        data.connections
+      )
+
+    // Throws on a missing seat or a facilitator's, so neither ever reads as "no estimate".
     def estimateFor(user: Attendee): Option[(String, Boolean)] =
       data.state.seats(user.id) match
         case Room.Seat.Voter(estimate) => estimate.map(e => (e.value, e.confirmed))
+        case Room.Seat.Facilitator     =>
+          throw IllegalStateException(s"${user.name} is a facilitator, who holds no estimate")
   end extension
 
   // The pre-union wire's three fields, rebuilt so behaviour specs need not name every tag.

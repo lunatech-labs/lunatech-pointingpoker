@@ -76,7 +76,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case RoomManager.CreateRoom(replyTo) =>
         replyTo ! createReply.get()
         Behaviors.same
-      case RoomManager.RequestSession(_, _, existing, replyTo) =>
+      case RoomManager.RequestSession(_, _, _, existing, replyTo) =>
         replyTo ! Room.SessionMinted(UUID.randomUUID(), existing.getOrElse(validToken))
         Behaviors.same
       case RoomManager.ValidateToken(_, token, replyTo) =>

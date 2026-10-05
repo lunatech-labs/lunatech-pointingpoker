@@ -61,6 +61,7 @@ object RoomManager:
   case class RequestSession(
       roomId: Slug,
       name: String,
+      role: Room.Role,
       existing: Option[Room.SessionToken],
       replyTo: ActorRef[Room.SessionMinted]
   ) extends Command
@@ -125,17 +126,17 @@ object RoomManager:
               .get(roomId)
               .foreach(room => room ! Room.Join(userId, name, token, connectionId, ref))
             Behaviors.same
-          case RequestSession(roomId, name, existing, replyTo) =>
+          case RequestSession(roomId, name, role, existing, replyTo) =>
             data.rooms
               .get(roomId)
               .fold {
                 val roomActor = createRoom(roomId, context, gracePeriod, stopAfterIdle)
                 context.watch(roomActor)
                 val newData = data.addRoom(roomId, roomActor)
-                roomActor ! Room.RequestSession(name, existing, replyTo)
+                roomActor ! Room.RequestSession(name, role, existing, replyTo)
                 receiveBehaviour(newData, gracePeriod, stopAfterIdle, random)
               } { room =>
-                room ! Room.RequestSession(name, existing, replyTo)
+                room ! Room.RequestSession(name, role, existing, replyTo)
                 Behaviors.same
               }
           case ValidateToken(roomId, token, replyTo) =>

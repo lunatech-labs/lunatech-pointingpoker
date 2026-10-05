@@ -69,6 +69,7 @@ object Endpoints:
     case Room.NoSession       => StatusCode.Unauthorized
     case Room.NotAMember      => StatusCode.Forbidden
     case Room.RoundRevealed   => StatusCode.Conflict
+    case Room.NotAVoter       => StatusCode.Conflict
     case Room.BlankEstimation => StatusCode.BadRequest
 
   // Built from the enums' values, so a new refusal cannot be left without a variant.

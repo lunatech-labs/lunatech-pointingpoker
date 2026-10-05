@@ -70,7 +70,10 @@ object RoomSnapshot:
         .sortWith((a, b) => a._1.compareTo(b._1) < 0)
         .map { (id, member) =>
           val disclose = round.revealed || id == forUser
-          val estimate = data.state.seats.get(id).flatMap { case Room.Seat.Voter(e) => e }
+          val estimate = data.state.seats.get(id).flatMap {
+            case Room.Seat.Voter(e)    => e
+            case Room.Seat.Facilitator => None
+          }
           Participant(id, member.name, Estimation.of(estimate, disclose))
         }
     )

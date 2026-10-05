@@ -164,10 +164,15 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       val roomId          = aSlug()
       val sessionProbe    = testKit.createTestProbe[Room.SessionMinted]()
 
-      behaviorTestKit.run(RoomManager.RequestSession(roomId, "Alice", None, sessionProbe.ref))
+      // Facilitator, not the Voter every other call sends, so a hard-coded role would fail here.
+      behaviorTestKit.run(
+        RoomManager.RequestSession(roomId, "Alice", Room.Role.Facilitator, None, sessionProbe.ref)
+      )
 
       val childInbox = behaviorTestKit.childInbox[Room.Command](roomId.raw)
-      childInbox.expectMessage(Room.RequestSession("Alice", None, sessionProbe.ref))
+      childInbox.expectMessage(
+        Room.RequestSession("Alice", Room.Role.Facilitator, None, sessionProbe.ref)
+      )
     }
 
     "pass ValidateToken through to an existing room" in {
@@ -202,9 +207,17 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         )
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
 
-      managerRef ! RoomManager.RequestSession(roomId, "Alice", None, sessionProbe.ref)
+      managerRef ! RoomManager.RequestSession(
+        roomId,
+        "Alice",
+        Room.Role.Facilitator,
+        None,
+        sessionProbe.ref
+      )
 
-      roomProbe.expectMessage(Room.RequestSession("Alice", None, sessionProbe.ref))
+      roomProbe.expectMessage(
+        Room.RequestSession("Alice", Room.Role.Facilitator, None, sessionProbe.ref)
+      )
     }
 
     "resolve ValidateToken against an unknown room as Unresolved instead of creating it" in {
@@ -471,7 +484,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         RoomManager.receiveBehaviour(RoomManagerData.empty, testGracePeriod, idleTimeout)
       )
 
-      managerRef ! RoomManager.RequestSession(roomId, "Alice", None, sessionProbe.ref)
+      managerRef ! RoomManager.RequestSession(
+        roomId,
+        "Alice",
+        Room.Role.Voter,
+        None,
+        sessionProbe.ref
+      )
       val first = sessionProbe.expectMessageType[Room.SessionMinted]
 
       // The room's idle tick stops it and Terminated drops it from the map; a surviving
@@ -488,7 +507,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         idleTimeout * 2
       )
 
-      managerRef ! RoomManager.RequestSession(roomId, "Alice", None, sessionProbe.ref)
+      managerRef ! RoomManager.RequestSession(
+        roomId,
+        "Alice",
+        Room.Role.Voter,
+        None,
+        sessionProbe.ref
+      )
       sessionProbe.expectMessageType[Room.SessionMinted]
     }
   }
