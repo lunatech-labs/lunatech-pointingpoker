@@ -40,6 +40,8 @@ This section settles the parent's "Voter" and "Facilitator".
 - **Remembered role**: a room's `role:<roomId>` key, this browser's role there
   as the server last accepted it. A room the server never accepted a join to
   has none.
+- **Pick**: a click on a "Join as" radio button. A value only pre-selected is
+  not a pick.
 - **Join role**: the role a join sends: the pick handed over for that join,
   else the room's remembered role, else the default role. "The join role" in
   2c says which picks exist.
@@ -71,15 +73,15 @@ This section settles the parent's "Voter" and "Facilitator".
    forgets a room after two hours without connections, and the session cookie
    ends with the browser, so a weekly meeting usually starts with a new
    identity. The page keeps each room's remembered role in step with its seat
-   ("What the browser stores" in 2c). The default role is a setting, chosen
-   explicitly in the lobby; it is one lobby line, not the settings page the
-   parent's Appendix A rules out. A product owner facilitates every room, so a
-   "Join as" choice, a switch or a join changes neither the default nor
-   another room's role.
+   ("What the browser stores" in 2c). The default role is chosen explicitly in
+   the lobby, on one lobby line, not the settings page the parent's Appendix A
+   rules out. A product owner facilitates every room, so only the "Your
+   default role" fieldset replaces a stored default ("What the browser stores"
+   lists the writers).
 7. **With no default role, the lobby comes first.** A room's own path joins at
    once only when a name and a default role are stored. Otherwise the lobby
-   shows, and with no default role it asks for that alone, so every browser's
-   default is confirmed by a person once. This is also where every existing user meets the
+   shows and asks for what is missing, so every browser's default is confirmed
+   by a person once. This is also where every existing user meets the
    feature.
 
 Considered and not taken:
@@ -109,7 +111,7 @@ Considered and not taken:
 - A separate settings page, required before the lobby: two forms on a first
   visit, where the parent's Appendix A keeps "no settings, no navigation".
 - Asking a first visit for the room's role as well as the default: the same
-  answer twice, nearly always. The role line switches in one click.
+  answer twice, nearly always (see Accepted costs).
 - Passing the lobby's choice as `?role` in the URL: a crafted link would switch
   a seat and drop a vote. `pendingJoin` lives in the tab, out of any link.
 - Writing `role:<id>` from a typed id lowercased: a client copy of the server's
@@ -293,29 +295,34 @@ before everyone confirms again.
   else writes one, so a key exists only for a room the server accepted, and a
   typo it refuses leaves none. The keys are the ids pages loaded,
   so an exact match needs none of the server's rewrite rules.
-- `defaultRole` is written by each pick in the "Your default role" fieldset,
+- `defaultRole` is written by each choice in the "Your default role" fieldset,
   at once and without a submit, so a change of mind overwrites it. A lobby
   submit writes it only when none is stored, so a first visit that kept the
   pre-selected Voter stores it. Nothing else writes it, so a lobby tab opened
-  before a pick cannot undo it.
+  before a choice cannot undo it.
 - Once `createRoom()` succeeds, Create removes any key under the id it gets.
   A slug is reused once the server forgets its room, and nobody remembers one
   from months ago, so an old role for a room just created would read as a bug.
-  `pendingJoin` already outranks the key; the removal covers a failed first
-  join and a reload before the first snapshot. A failed create changes no role
-  key.
-- The root lobby navigates, so a later visit's submit hands its "Join as"
-  value over in `pendingJoin`, a sessionStorage entry `{roomId, role}`, where
-  `roomId` is the trimmed typed id or the minted one. A first visit's submit
-  has no "Join as" and sets none. Every page load, the root's included,
-  reads and removes it. It **matches** when its `roomId` equals the path's id,
-  or when the page loaded with `?moved=1`, the server's legacy redirect, since
-  a pasted legacy id arrives under its slug. It is per tab, so only the tab's
-  next load can use it. 2c adds this condition to the roadmap's entry that
-  removes the legacy redirect.
+  A Create with no pick sets no `pendingJoin`, so the removal is what keeps
+  the old role out; with a pick, `pendingJoin` outranks the key. A failed
+  create changes no role key.
+- The root lobby navigates, so a later visit's submit hands its pick over in
+  `pendingJoin`, a sessionStorage entry `{roomId, role}`, where `roomId` is
+  the trimmed typed id or the minted one. A submit with no pick sets none, so
+  a pre-selected value never outranks the room's remembered role. Every page
+  load, the root's included, reads and removes it. It **matches** when its
+  `roomId` equals the path's id or the `moved` value, since a pasted legacy id
+  arrives under its slug. So a stale entry, left by a submit whose page never
+  loaded the app (a 404, a server down), can only match the room it named.
+- 2c changes the server's legacy redirect from `?moved=1` to `?moved=<the id
+  as requested>`, the raw path segment, not the lowercased UUID, so it compares
+  equal to the typed id. The banner shows when `moved` is present. The second
+  clause of the match goes with the redirect, and 2c says so in the roadmap's
+  entry that removes it.
 - Every read decodes the stored string, so a value other than the two roles
   counts as none: a bad default reaches the lobby, and a bad remembered role
-  is skipped, rather than sending a refused join.
+  is skipped, rather than sending a refused join. A `pendingJoin` that does not
+  parse, or lacks a `roomId` or one of the two roles, counts as none.
 
 ### The join role
 
@@ -326,32 +333,35 @@ Every join sends the join role (Terms). The pick handed over is:
 - for the auto-join, a `pendingJoin` that matches.
 
 A successful join stores the join role as the room's remembered role, and the
-snapshots that follow keep it in step with the seat. The join role, the match and "Join as"'s
-pre-selection live in one pure module, `room/joinRole.ts`, under the parent's
-principle 8, so step 4 cannot change them.
+snapshots that follow keep it in step with the seat. The join role, the match
+and "Join as"'s pre-selection live in one pure module, `room/joinRole.ts`,
+under the parent's principle 8, so step 4 cannot change them.
 
 ### The lobby
 
 The Create and the Join forms show the same role controls, under the name.
 Enter still submits from the name field only (principle 8). What they show
-depends on whether a default role is stored (decision 7).
+depends on whether a default role is stored when the page loads (decision 7).
+A default stored later, in this tab or another, changes the shape only at the
+next load, so a first visit's form stays as the user is filling it.
 
 **A first visit**, with no default role, gets one `fieldset`, "Your default
 role", with two radio buttons, Voter and Facilitator, Voter pre-selected, and
 the line "Used to join new rooms. You can change it here later." There is no
-"Join as", so no pick: the join sends the room's remembered role, else this
-new default, and a room's own role is never replaced by a default.
+"Join as", so no pick: the join role (Terms) is the room's remembered role,
+else this new default.
 
 **A later visit** gets:
 
 - the line "Default role: Voter" or "Default role: Facilitator", with a button
   "Change" that replaces the line with the "Your default role" fieldset,
-  holding the stored value. A pick there is stored at once, as above.
+  holding the stored value. A choice there is stored at once, as above.
 - a `fieldset` "Join as", with the same two radio buttons. It shows the user's
   pick once they make one, shared by both tabs, so typing or pasting an id, or
   changing the default, never overrides it. On a room's own path, a
   `pendingJoin` that matched counts as that pick, so a failed join or a missing
-  name keeps the root's choice. Until then it shows the remembered role of
+  name keeps the root's pick. A reload loses it, since the load removed
+  `pendingJoin`. Until then it shows the remembered role of
   the room it names, else the default role. A room's own path names its room,
   the root Join tab the trimmed id, and the root Create tab none.
 - under "Join as", the hint "Your role last time in this room" while it shows
@@ -359,14 +369,15 @@ new default, and a room's own role is never replaced by a default.
   the value is then the user's own.
 
 On the root tabs, `doCreate` and `doJoin` store the name and, as "What the
-browser stores" says, the default role, set `pendingJoin` on a later visit,
-and navigate, and the room's page then auto-joins. On a room's own path, the lobby's Join is
-`joinHere` in place, storing the same and sending the join role;
-`Connection.join` gains the role,
-and `joinHere` takes it as a parameter, since the auto-join and the lobby send
-different ones. The root lobby's "Rejoin …" link is navigation, not a submit:
-it sets no `pendingJoin`, so the room's path joins at once with its join role,
-or shows its lobby when no default role is stored.
+browser stores" says, the default role, set `pendingJoin` when there is a pick,
+and navigate, and the room's page then auto-joins. On a room's own path, the
+lobby's Join is `joinHere` in place, storing the name and the default role
+likewise, without `pendingJoin`, and sending the join role. `Connection.join`
+gains the role, and `joinHere` takes it as a parameter, since the auto-join
+and the lobby send different ones. The root lobby's "Rejoin …" link is
+navigation, not a submit: it sets no `pendingJoin`, so the room's path joins at
+once with its join role, or shows its lobby when no name or no default role is
+stored (decision 7).
 
 ### The role line
 
@@ -405,29 +416,35 @@ Additions, each a decision under the parent's principle 9:
 | A facilitator's page has no deck | `deck(page)` has count 0 |
 
 `revealedEstimation` and `expectSummaryMatchesParticipants` are unchanged. The
-`join` fixture gains a `{ role }` option, defaulting to Voter, which it picks as
-the default role, since each case starts from a first visit. One existing case
-changes: `slug.spec.js`, "a room remembered from before the cutover reopens
+`join` fixture gains a `{ role }` option, defaulting to Voter, which it
+chooses as the default role, since each case starts from a first visit. One
+existing case changes: `slug.spec.js`, "a room remembered from before the cutover reopens
 under its derived name", also seeds `defaultRole`, so it keeps testing the
 legacy redirect and the rejoin; a remembered name with no default role has its
 own case below.
-The others do not change.
+The others do not change. The suite may also seed `localStorage` `name`,
+`roomId`, `defaultRole` and `role:<roomId>`, and never reads storage.
 
 ### Pass condition
 
 `room/joinRole.test.ts` has scenario cases, each shown failing against a
 broken rule:
 
-- a stored role other than the two roles reads as none;
+- a stored role other than the two roles, or a malformed `pendingJoin`, reads
+  as none;
 - the join role takes the pick, else the remembered role, else the default;
 - a first visit has no pick, so a remembered role outranks the default it
   just set;
-- `pendingJoin` matches on an equal id, or on any id with `?moved=1`, and on
-  nothing else;
+- a submit with no pick sets no `pendingJoin`;
+- `pendingJoin` matches on an id equal to the path's or to the `moved` value,
+  and on nothing else;
 - "Join as" pre-selects the pick, else the named room's remembered role, else
   the default, and the root Create tab names no room;
 - the hint shows only while "Join as" shows a remembered role differing from
   the default.
+
+`APISpec`'s legacy-redirect case expects `?moved=` followed by the id as
+requested, with a mixed-case UUID to show the segment is not normalised.
 
 New e2e cases, each shown failing against 2b:
 
@@ -442,17 +459,22 @@ New e2e cases, each shown failing against 2b:
 - a legacy link, with a remembered name and no default role, reaches the
   first-visit lobby on its slug; the chosen default is the role the join
   sends, and the next visit to the link auto-joins with it;
-- a "Join as" choice at the root differing from the default role is the role
-  the join sends, and leaves `defaultRole` unchanged;
+- a pick at the root differing from the default role is the role
+  the join sends, and a later lobby still shows the same `Default role: X`;
 - after that join, a switch and a reload keep the switched role, so
-  `pendingJoin` was removed;
-- likewise for a legacy id pasted at the root, which the server redirects to
-  its slug;
-- a root "Join as" choice differing from the default, with the first `/join`
+  `pendingJoin` was not reused;
+- a pick at the root for a pasted legacy id, which the server redirects to
+  its slug, is the role the join sends, and a switch and a reload keep the
+  switched role;
+- a legacy id pasted at the root with no pick, for a room whose key differs
+  from the default, joins with that room's remembered role;
+- a root pick differing from the default, with the first `/join`
   routed to fail, is still picked in the room's lobby, and its Join sends it;
-- a pick after Change is stored without a submit: a new room's "Join as" then
-  pre-selects it, and a submit from a lobby tab opened before the pick does
-  not undo it;
+- a choice after Change is stored without a submit, and a new room's "Join
+  as" then pre-selects it;
+- on two first-visit tabs, choosing Facilitator in one keeps its first-visit
+  form, and after a submit from the other, showing Voter, a later lobby shows
+  `Default role: Facilitator`;
 - the hint shows while "Join as" holds a remembered role that differs from
   the default role, and hides on a pick;
 - at the root, typing a known room's id pre-selects its role, and a role picked
@@ -463,7 +485,7 @@ New e2e cases, each shown failing against 2b:
   and the first `/join` routed to fail, shows that room's lobby with "Join as"
   on the default role and no hint;
 - a switch survives a reload while the stream is frozen;
-- a root "Join as" choice differing from the default survives a reload while
+- a root pick differing from the default survives a reload while
   the stream is frozen after the join;
 - a switch in one room, then a reload of that room, changes neither another
   room's role nor the default role.
@@ -489,14 +511,18 @@ New e2e cases, each shown failing against 2b:
   old room's role, since only Create removes a key. The role line shows
   it, and one click changes it.
 - A room id typed at the root with another case is redirected by the server
-  without `?moved=1`, so `pendingJoin` does not match and the join sends the
-  room's remembered role, else the default role. Only a later visit's "Join
-  as" choice differing from the default is lost. The role line shows the role,
+  without `moved`, and the 404's "Did you mean" link names another id, so
+  `pendingJoin` does not match and the join role has no pick. Only a pick
+  differing from the room's role is lost. The role line shows the role,
   and one click changes it for that room.
-- A lobby tab opened before a default role pick made in another tab still
+- At the root, a pasted legacy id has no key, since keys are slugs, so "Join
+  as" shows the default even when the room remembers the other role. With no
+  pick, the join sends the remembered role, not the one shown. The role line
+  shows it right after the join, and the gap goes with the legacy redirect.
+- A lobby tab opened before a default role choice made in another tab still
   shows the old default. On a later visit its "Join as" follows it, so its
   join sends that role for that room; on a first visit its join uses the
-  stored pick, not the one it shows. It cannot change the default, and a
+  stored default, not the one it shows. It cannot change the default, and a
   reload shows the new one.
 - A first visit cannot choose a role for its room apart from its remembered
   role or the default. The role line switches in one click, and a wrong
