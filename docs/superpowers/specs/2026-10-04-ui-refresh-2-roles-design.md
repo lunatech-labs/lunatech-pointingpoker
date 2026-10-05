@@ -428,6 +428,11 @@ New e2e cases, each shown failing against 2b:
 - a switch in one room, then a reload of that room, changes neither another
   room's role nor the default role.
 
+Step 2b left one server case for 2c to decide: its `RoomSpec` join cells all
+have A present, but a facilitator's reload joins while A is not present (the
+reload gap). `rename` never checks presence, so the risk is low; 2c's plan
+should add that cell to the matrix, or say why it does not.
+
 ## Accepted costs
 
 - A tab loaded before the deploy that adds the required `role` gets a 400 on
