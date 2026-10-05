@@ -321,9 +321,9 @@ the next load, so a first visit's form stays as the user is filling it.
 role", with two radio buttons, Voter and Facilitator, Voter pre-selected, and
 the line "Used to join new rooms. You can change it here later."
 
-**A later visit** gets the line "Default role: Voter" or "Default role:
-Facilitator", with a button "Change" that replaces the line with the "Your
-default role" fieldset, holding the stored value. A choice there is stored at
+**A later visit** gets the default line, "Default role for new rooms: Voter"
+or "Default role for new rooms: Facilitator", with a button "Change" that
+replaces it with the "Your default role" fieldset, holding the stored value. A choice there is stored at
 once, as above.
 
 The lobby shows no role for the room being joined: the join role (Terms)
@@ -366,7 +366,7 @@ Additions, each a decision under the parent's principle 9:
 
 | What the suite reads | Contract |
 | --- | --- |
-| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`; on a later visit, the exact text `Default role: Voter` or `Default role: Facilitator`, in an element without the button, and `getByRole('button', { name: 'Change' })` |
+| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`; on a later visit, the exact text `Default role for new rooms: Voter` or `Default role for new rooms: Facilitator`, in an element without the button, and `getByRole('button', { name: 'Change' })` |
 | The switch | `getByRole('button', { name: 'Switch to facilitator' })` and `'Switch to voter'` |
 | A facilitator's row | the exact text `Facilitator` within `participantEntry(page, name)` |
 | A facilitator's page has no deck | `deck(page)` has count 0 |
@@ -418,7 +418,7 @@ New e2e cases, each shown failing against 2b:
   the next visit to the room auto-joins;
 - on two first-visit tabs, choosing Facilitator in one keeps its first-visit
   form, and after a submit from the other, showing Voter, a later lobby shows
-  `Default role: Facilitator`;
+  `Default role for new rooms: Facilitator`;
 - with default Facilitator, Create, with `/create-room` routed to a slug
   whose key is Voter, joins as a facilitator;
 - a switch survives a reload while the stream is frozen;
@@ -453,9 +453,9 @@ New e2e cases, each shown failing against 2b:
   and a voter's page shows the deck, until one click on the role line. Roles
   settle while a room gathers, before the first vote, and a wrong default
   changes at the next lobby.
-- An inattentive user may read "Default role: X" as the role for the room they
-  are joining, which may remember the other one. The role line shows the role
-  as soon as they join.
+- An inattentive user may overlook "for new rooms" in the default line and
+  read it as the role for the room they are joining, which may remember the
+  other one. The role line shows the role as soon as they join.
 - Switching moves the switcher's own page, since the deck appears or
   disappears. Step 3 lays out both pages.
 - A facilitator loses the "The round is revealed" line with the deck until step
