@@ -328,8 +328,8 @@ before everyone confirms again.
 
 Every join sends the join role (Terms). The pick handed over is:
 
-- for the lobby's Join on a room's own path, its "Join as", shown on a later
-  visit only;
+- for the lobby's Join on a room's own path, its pick, if any ("Join as"
+  shows on a later visit only);
 - for the auto-join, a `pendingJoin` that matches.
 
 A successful join stores the join role as the room's remembered role, and the
@@ -443,8 +443,8 @@ broken rule:
 - the hint shows only while "Join as" shows a remembered role differing from
   the default.
 
-`APISpec`'s legacy-redirect case expects `?moved=` followed by the id as
-requested, with a mixed-case UUID to show the segment is not normalised.
+`APISpec`'s two legacy-redirect cases expect `?moved=` followed by the id
+as requested; the upper-case one shows the segment is not normalised.
 
 New e2e cases, each shown failing against 2b:
 
@@ -520,10 +520,9 @@ New e2e cases, each shown failing against 2b:
   pick, the join sends the remembered role, not the one shown. The role line
   shows it right after the join, and the gap goes with the legacy redirect.
 - A lobby tab opened before a default role choice made in another tab still
-  shows the old default. On a later visit its "Join as" follows it, so its
-  join sends that role for that room; on a first visit its join uses the
-  stored default, not the one it shows. It cannot change the default, and a
-  reload shows the new one.
+  shows the old default. With no pick, its join sends the room's remembered
+  role, else the stored default, not the one it shows, on a later visit as on
+  a first. It cannot change the default, and a reload shows the new one.
 - A first visit cannot choose a role for its room apart from its remembered
   role or the default. The role line switches in one click, and a wrong
   default changes at the next lobby.
