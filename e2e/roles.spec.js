@@ -126,6 +126,23 @@ test("a double-click's second click does not switch back", async ({ join, room }
   await joinedAs(alice.page, 'Facilitator')
 })
 
+// A held key repeats its click, which would switch back once the first switch re-renders.
+test('a held Enter does not switch back', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const switches = []
+  alice.page.on('request', r => r.url().endsWith(`/rooms/${room}/role`) && switches.push(r))
+  await switchTo(alice.page, 'facilitator').focus()
+  await alice.page.keyboard.down('Enter')
+  await joinedAs(alice.page, 'Facilitator')
+
+  // A second down without an up is a repeat.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await alice.page.waitForTimeout(500)
+  expect(switches).toHaveLength(1)
+  await joinedAs(alice.page, 'Facilitator')
+})
+
 test('a facilitator stays one across a reload', async ({ join }) => {
   const alice = await join('Alice', { role: 'Facilitator' })
   const bob = await join('Bob')

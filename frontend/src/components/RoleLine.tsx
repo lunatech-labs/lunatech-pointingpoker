@@ -14,6 +14,8 @@ export function RoleLine({ role, onSwitch }: Props) {
           className="btn btn-link p-0 align-baseline"
           // A double-click's second click would switch back once the first switch re-renders.
           onClick={e => e.detail <= 1 && onSwitch(facilitator ? 'Voter' : 'Facilitator')}
+          // A held Enter repeats its click the same way.
+          onKeyDown={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
         >
           {facilitator ? 'Switch to voter' : 'Switch to facilitator'}
         </button>
