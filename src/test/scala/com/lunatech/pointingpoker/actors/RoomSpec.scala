@@ -1490,11 +1490,14 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
   "A seat" should {
     for cell <- seatCells do
       s"${cell.phase.label}: ${cell.row}, from ${describe(cell.aSeat)}" in {
-        val (a, _)       = createUser(UUID.randomUUID(), "A", false, "")
-        val (b, bProbe)  = createUser(UUID.randomUUID(), "B", false, "")
-        val replyProbe   = testKit.createTestProbe[Any]()
-        val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
-        val seated       = withUsers(a, b).withSeat(a, cell.aSeat).withSeat(b, cell.bSeat)
+        val (a, _)      = createUser(UUID.randomUUID(), "A", false, "")
+        val (b, bProbe) = createUser(UUID.randomUUID(), "B", false, "")
+        val replyProbe  = testKit.createTestProbe[Any]()
+        val dataProbe   = testKit.createTestProbe[Room.DataStatus]()
+        // Not present is what the beacon leaves: a session and a seat, but no member.
+        val people =
+          if cell.aPresent then withUsers(a, b) else withUsers(b).withMemberlessSession(a)
+        val seated       = people.withSeat(a, cell.aSeat).withSeat(b, cell.bSeat)
         val (_, roomRef) = createRoom(
           aSlug(),
           if cell.phase == Phase.Revealed then seated.withRevealed() else seated
@@ -1598,6 +1601,7 @@ object RoomSpec:
       row: String,
       event: SeatEvent,
       bSeat: Room.Seat,
+      aPresent: Boolean,
       aSeat: Room.Seat,
       outcome: Outcome
   ):
@@ -1621,13 +1625,18 @@ object RoomSpec:
     case Room.Seat.Facilitator => "Facilitator"
 
   // One row of the matrix, its columns in the spec's order.
-  private def row(phase: Phase, name: String, event: SeatEvent, bSeat: Room.Seat = bConfirmed)(
-      outcomes: Outcome*
-  ): List[SeatCell] =
+  private def row(
+      phase: Phase,
+      name: String,
+      event: SeatEvent,
+      bSeat: Room.Seat = bConfirmed,
+      aPresent: Boolean = true
+  )(outcomes: Outcome*): List[SeatCell] =
     require(outcomes.size == 4, s"$name: expected 4 outcomes, got ${outcomes.size}")
     List(noVote, confirmed, unconfirmed, facilitator)
       .zip(outcomes)
-      .map((aSeat, outcome) => SeatCell(phase, name, event, bSeat, aSeat, outcome))
+      .map((aSeat, outcome) => SeatCell(phase, name, event, bSeat, aPresent, aSeat, outcome))
+  end row
 
   import Phase.{Open, Revealed}
   import Room.Role.{Facilitator, Voter}
@@ -1668,6 +1677,19 @@ object RoomSpec:
       hidden(noVote)
     ),
     row(Open, "A joins as a facilitator", AJoins(Facilitator))(
+      hidden(facilitator),
+      hidden(facilitator),
+      hidden(facilitator),
+      hidden(facilitator)
+    ),
+    // The reload gap: the beacon has removed A, and the reload's join lands before A's stream.
+    row(Open, "A joins as a voter while not present", AJoins(Voter), aPresent = false)(
+      hidden(noVote),
+      hidden(confirmed),
+      hidden(unconfirmed),
+      hidden(noVote)
+    ),
+    row(Open, "A joins as a facilitator while not present", AJoins(Facilitator), aPresent = false)(
       hidden(facilitator),
       hidden(facilitator),
       hidden(facilitator),
@@ -1741,6 +1763,23 @@ object RoomSpec:
       revealed(facilitator)
     ),
     row(Revealed, "A joins as a voter", AJoins(Voter))(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(noVote)
+    ),
+    row(
+      Revealed,
+      "A joins as a facilitator while not present",
+      AJoins(Facilitator),
+      aPresent = false
+    )(
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator)
+    ),
+    row(Revealed, "A joins as a voter while not present", AJoins(Voter), aPresent = false)(
       revealed(noVote),
       revealed(confirmed),
       revealed(unconfirmed),
