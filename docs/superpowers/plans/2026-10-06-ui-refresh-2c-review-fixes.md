@@ -264,3 +264,55 @@ export const createRoom = async baseUrl => {
   and `npm test` (17) pass.
 - [ ] **Step 2.** `npm run e2e` passes 154 of 154.
 - [ ] **Step 3.** `git push`, once the user confirms.
+
+## Second pass
+
+One fresh reviewer, lens failure modes, ran over `e093779..4665bb8`. It found no Critical or
+Important defect. Its three Minor findings were checked against the code:
+
+| # | Finding | Decision |
+|---|---|---|
+| 1 | A held Enter repeats the role line's click with `detail` 0, so a repeat after the first switch's frame switches back | Prevent a repeated Enter's default: Task 10 |
+| 2 | The `detail` guard also drops a deliberate click within the OS double-click time | A known-issues entry, in Task 10's commit |
+| 3 | The failed-switch case's first `joinedAs` cannot fail, since only a snapshot changes the line | No action: the reload half is the one Task 4's mutation fails |
+
+Space activates on keyup, so a held Space clicks once and needs no guard.
+
+### Task 10: Ignore a held Enter's repeats on the role line
+
+**Judged by:** a new e2e case, which sent two `/role` requests in both browsers before the fix.
+
+- [ ] **Step 1.** In `RoleLine.tsx`, under the button's `onClick`:
+
+```tsx
+          // A held Enter repeats its click the same way.
+          onKeyDown={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
+```
+
+- [ ] **Step 2.** In `roles.spec.js`, after "a double-click's second click does not switch back":
+
+```js
+// A held key repeats its click, which would switch back once the first switch re-renders.
+test('a held Enter does not switch back', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const switches = []
+  alice.page.on('request', r => r.url().endsWith(`/rooms/${room}/role`) && switches.push(r))
+  await switchTo(alice.page, 'facilitator').focus()
+  await alice.page.keyboard.down('Enter')
+  await joinedAs(alice.page, 'Facilitator')
+
+  // A second down without an up is a repeat.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await alice.page.waitForTimeout(500)
+  expect(switches).toHaveLength(1)
+  await joinedAs(alice.page, 'Facilitator')
+})
+```
+
+  Mutation: without Step 1's `onKeyDown`, the case receives 2 requests in both browsers.
+- [ ] **Step 3.** Add the known-issues entry "A deliberate re-click on the role line within
+  the double-click time is ignored".
+- [ ] **Step 4.** `npm run typecheck`, `npm run lint`, `npm run test:unit` (114) and
+  `npm run e2e` (156 of 156) pass.
+- [ ] **Step 5.** `git commit -am "fix: ignore a held Enter's repeats on the role line (ui refresh step 2c)"`
