@@ -1,6 +1,7 @@
 import { useId, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { Role } from '../protocol/snapshot'
+import { roles } from '../room/joinRole'
 
 type Props = {
   role: Role
@@ -10,8 +11,6 @@ type Props = {
   onChoose: (role: Role) => void
   onChange: () => void
 }
-
-const roles: Role[] = ['Voter', 'Facilitator']
 
 export function DefaultRole({ role, choosing, disabled, onChoose, onChange }: Props) {
   const group = useId()

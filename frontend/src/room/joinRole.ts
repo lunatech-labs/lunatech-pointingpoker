@@ -4,13 +4,15 @@ import type { Role } from '../protocol/snapshot'
 export type RoleStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
 // Keyed by Role, so a role added to the schema fails the build here until it is decoded.
-const roles: Record<Role, true> = { Voter: true, Facilitator: true }
+const known: Record<Role, true> = { Voter: true, Facilitator: true }
+// Every role, in the order the lobby offers them.
+export const roles = Object.keys(known) as Role[]
 const DEFAULT_KEY = 'defaultRole'
 const roomKey = (roomId: string) => `role:${roomId}`
 
 // Any other stored string counts as none, so a bad value is skipped rather than sent and refused.
 const decode = (stored: string | null): Role | null =>
-  stored !== null && Object.hasOwn(roles, stored) ? (stored as Role) : null
+  stored !== null && Object.hasOwn(known, stored) ? (stored as Role) : null
 
 export const storedDefault = (storage: RoleStorage): Role | null =>
   decode(storage.getItem(DEFAULT_KEY))
