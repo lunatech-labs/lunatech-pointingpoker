@@ -308,6 +308,24 @@ test("Create forgets a reused slug's remembered role and joins with the default"
   await joinedAs(page, 'Facilitator')
 })
 
+test('a failed switch changes neither the line nor the role a reload joins with', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const role = new RegExp(`/rooms/${room}/role$`)
+  await alice.page.route(role, route => route.abort())
+  // Logged after any write the failure made, so the reload below sees it.
+  const logged = alice.page.waitForEvent('console', m => m.type() === 'log')
+  await switchTo(alice.page, 'facilitator').click()
+  await logged
+  await joinedAs(alice.page, 'Voter')
+
+  await alice.page.unroute(role)
+  await alice.page.reload()
+  await joinedAs(alice.page, 'Voter')
+})
+
 test('a switch survives a reload while the stream is frozen', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
