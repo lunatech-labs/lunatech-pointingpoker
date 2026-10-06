@@ -1,7 +1,7 @@
 # UI Refresh, Step 2: Roles
 
 Date: 2026-10-04
-Status: Validated. Steps 2a and 2b landed; step 2c not yet implemented
+Status: Validated. Steps 2a, 2b and 2c landed
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 2
 
 ## Purpose
