@@ -37,9 +37,10 @@ export function DefaultRole({ role, choosing, disabled, onChoose, onChangeRole }
       </div>
     )
   // The legend names the group only as the fieldset's first child, so no row div wraps it.
+  // Floated, the fieldset no longer draws it on its border, so it takes its column.
   return (
     <fieldset ref={fieldset} className="form-group row">
-      <legend className="col-form-label col-sm-3 pt-0">Your default role</legend>
+      <legend className="col-form-label col-sm-3 pt-0 float-left">Your default role</legend>
       <div className="col-sm-9 text-left">
         {roles.map(r => (
           <div className="form-check form-check-inline" key={r}>
