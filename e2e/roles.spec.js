@@ -4,6 +4,7 @@ import {
   card,
   createRoom,
   deck,
+  defaultRoleChoice,
   defaultRoleRadio,
   expectSummaryMatchesParticipants,
   facilitatorMark,
@@ -217,6 +218,14 @@ test("with default Voter, a legacy link takes its slug's remembered Facilitator"
   await page.goto(`/${legacy}`)
   await expect(page).toHaveURL(new RegExp(`/${slug}$`))
   await joinedAs(page, 'Facilitator')
+})
+
+test('the default role group is described by its help line', async ({ visitor }) => {
+  const page = await visitor()
+  await page.goto('/')
+  await expect(defaultRoleChoice(page)).toHaveAccessibleDescription(
+    'Used for rooms you have not joined before. In a room you have joined before, you keep your previous role there.'
+  )
 })
 
 test('a choice on a later visit is stored without a submit, and a new room takes it', async ({

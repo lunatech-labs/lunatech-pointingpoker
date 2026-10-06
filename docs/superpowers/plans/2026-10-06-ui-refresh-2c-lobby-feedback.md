@@ -171,3 +171,33 @@ grep -rnE "choosingRole|changeRole|ChangeRole|changeDefaultRole|defaultRoleLine|
 ```
 - [ ] Check PR #434's body for the line and Change; reword it if it describes them.
 - [ ] Push.
+
+### Task 5: Tie the help line to the group for a screen reader
+
+Added after the final review: since F3 the help line states a rule, but a screen reader on
+the radios hears only the group's name and the radio's. `Deck.tsx` already ties a note to its
+button with `aria-describedby`; this does the same for the fieldset.
+
+**Files:** `docs/superpowers/specs/2026-10-04-ui-refresh-2-roles-design.md`, `e2e/roles.spec.js`,
+`frontend/src/components/DefaultRole.tsx`
+
+- [ ] Spec: "The lobby" says the help line describes the group; the contract row adds "described
+  by the help line"; "Pass condition" adds "the "Your default role" group's description is the
+  help line".
+- [ ] Red first, with `npm run e2e -- e2e/roles.spec.js --project=chromium -g "described by"`:
+
+```js
+test('the default role group is described by its help line', async ({ visitor }) => {
+  const page = await visitor()
+  await page.goto('/')
+  await expect(defaultRoleChoice(page)).toHaveAccessibleDescription(
+    'Used for rooms you have not joined before. In a room you have joined before, you keep your previous role there.'
+  )
+})
+```
+
+- [ ] `DefaultRole.tsx`: `aria-describedby={`${group}-help`}` on the fieldset and
+  `id={`${group}-help`}` on the help line's `<small>`.
+- [ ] `npm run typecheck && npm run lint`, then `npm run e2e -- e2e/roles.spec.js` in both
+  browsers.
+- [ ] Commit: `fix: let a screen reader hear the default role's help line (ui refresh step 2c)`

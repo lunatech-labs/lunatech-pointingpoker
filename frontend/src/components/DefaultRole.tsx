@@ -13,7 +13,7 @@ export function DefaultRole({ role, disabled, onChoose }: Props) {
   // The legend names the group only as the fieldset's first child, so no row div wraps it.
   // Floated, the fieldset no longer draws it on its border, so it takes its column.
   return (
-    <fieldset className="form-group row">
+    <fieldset className="form-group row" aria-describedby={`${group}-help`}>
       <legend className="col-form-label col-sm-3 pt-0 float-left">Your default role</legend>
       <div className="col-sm-9 text-left">
         {roles.map(r => (
@@ -32,7 +32,7 @@ export function DefaultRole({ role, disabled, onChoose }: Props) {
             </label>
           </div>
         ))}
-        <small className="form-text text-muted">
+        <small id={`${group}-help`} className="form-text text-muted">
           Used for rooms you have not joined before. In a room you have joined
           before, you keep your previous role there.
         </small>

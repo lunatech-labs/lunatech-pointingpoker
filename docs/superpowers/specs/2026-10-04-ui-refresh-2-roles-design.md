@@ -320,10 +320,11 @@ name. Enter still submits from the name field only (principle 8).
 Every lobby shows one `fieldset`, "Your default role", laid out as a row like
 the name's, with two radio buttons, Voter and Facilitator, and the help line
 "Used for rooms you have not joined before. In a room you have joined before,
-you keep your previous role there." The stored default is checked, else Voter.
-A choice there is stored at once, as above. A first lobby and a later one
-differ only in what is checked, so one click changes the default, as one click
-on the role line changes a seat.
+you keep your previous role there." The help line describes the group
+(`aria-describedby`), so a screen reader hears the rule with the group's name.
+The stored default is checked, else Voter. A choice there is stored at once, as
+above. A first lobby and a later one differ only in what is checked, so one
+click changes the default, as one click on the role line changes a seat.
 
 The lobby shows no role for the room being joined: the join role (Terms)
 decides it, and the role line shows it once joined.
@@ -365,7 +366,7 @@ Additions, each a decision under the parent's principle 9:
 
 | What the suite reads | Contract |
 | --- | --- |
-| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`, on every visit |
+| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`, on every visit, described by the help line |
 | The switch | `getByRole('button', { name: 'Switch to facilitator' })` and `'Switch to voter'` |
 | A facilitator's row | the exact text `Facilitator` within `participantEntry(page, name)` |
 | A facilitator's page has no deck | `deck(page)` has count 0 |
@@ -409,6 +410,7 @@ New e2e cases, each shown failing against 2b:
   joins as a facilitator;
 - with default Voter, a legacy link for a room whose slug's key is
   Facilitator joins as a facilitator;
+- the "Your default role" group's description is the help line;
 - on a later visit, a choice of Facilitator is stored without a submit, and a
   new room then joins as a facilitator;
 - with default Facilitator, a join to room R, then a choice of Voter, then a
