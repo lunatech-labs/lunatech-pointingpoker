@@ -1,5 +1,5 @@
 import * as api from '../protocol/api'
-import type { RoomSnapshot } from '../protocol/snapshot'
+import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
 import { Controls } from './Controls'
 import { Deck } from './Deck'
@@ -15,11 +15,13 @@ type Props = {
   onCopied: () => void
   onLeave: () => void
   onRefused: () => void
+  // A 204 from /role, which the page remembers before any snapshot shows it.
+  onSwitched: (role: Role) => void
 }
 
 const log = (reason: unknown) => console.log(reason)
 
-export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) {
+export function Room({ roomId, snapshot, onCopied, onLeave, onRefused, onSwitched }: Props) {
   const view = applySnapshot(snapshot)
 
   const report = (reason: unknown) => (api.isSessionRefusal(reason) ? onRefused() : log(reason))
@@ -46,7 +48,7 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
             {view.ownRole && (
               <RoleLine
                 role={view.ownRole}
-                onSwitch={role => run(api.switchRole(roomId, role))}
+                onSwitch={role => run(api.switchRole(roomId, role).then(() => onSwitched(role)))}
               />
             )}
             <IssueEditor issue={view.currentIssue} onSave={saveIssue} />

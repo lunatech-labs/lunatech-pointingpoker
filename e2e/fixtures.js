@@ -31,7 +31,7 @@ export const test = base.extend({
     { scope: 'worker' }
   ],
 
-  // Every context the suite opens goes through guard, here and in join, or a page could pass.
+  // Every context the suite opens goes through guard, here and in visitor, or a page could pass.
   offOrigin: async ({}, use) => {
     const blocked = []
     await use(blocked)
@@ -78,24 +78,40 @@ export const test = base.extend({
     await use((await response.text()).trim())
   },
 
-  // One browser context per participant: two pages in one context share the room cookie and
-  // resolve to a single session, which is what newTab is for.
-  join: async ({ browser, origin, room, stub, offOrigin }, use) => {
+  // A page in its own guarded context, its localStorage seeded once, before its first goto.
+  visitor: async ({ browser, origin, offOrigin }, use) => {
     const closers = []
-    const join = async (name, { initScript } = {}) => {
-      const context = await browser.newContext({ baseURL: origin })
+    await use(async (storage = {}) => {
+      const localStorage = Object.entries(storage).map(([name, value]) => ({ name, value }))
+      const context = await browser.newContext({
+        baseURL: origin,
+        storageState: { cookies: [], origins: [{ origin, localStorage }] }
+      })
       // Tracked before anything else can throw, so a half-built participant is still torn down.
       closers.push(() => context.close())
       await guard(context, offOrigin)
+      return context.newPage()
+    })
+    // A case may have closed one already; context.close() is idempotent.
+    for (const close of closers) await close().catch(() => {})
+  },
+
+  // One browser context per participant: two pages in one context share the room cookie and
+  // resolve to a single session, which is what newTab is for.
+  join: async ({ visitor, room, stub }, use) => {
+    // Each case starts from a first visit, so the role is chosen as the default role.
+    const join = async (name, { initScript, role = 'Voter' } = {}) => {
+      const page = await visitor()
+      const context = page.context()
+      // Before the first goto, and context init scripts run on every navigation.
       if (initScript) await context.addInitScript(initScript)
-      const page = await context.newPage()
       const token = async () => {
         const cookie = (await context.cookies()).find(c => c.name === 'session')
         if (!cookie) throw new Error(`${name} has no session cookie`)
         return cookie.value
       }
       // A second page in the same context shares the room cookie, which is what makes two tabs
-      // one participant. localStorage already holds the name, so the room's path joins at once.
+      // one participant. localStorage holds the name and the default role, so it joins at once.
       const newTab = async () => {
         const tab = await context.newPage()
         await tab.goto(`/${room}`)
@@ -115,14 +131,13 @@ export const test = base.extend({
       // The lobby renders only once React mounts, so this is the mount.
       await expect(nameInput(page)).toBeVisible({ timeout: 15_000 })
       await nameInput(page).fill(name)
+      await defaultRoleRadio(page, role).check()
       await page.getByRole('button', { name: 'Join' }).click()
       // The room renders on the first SSE message, so the room view proves the stream arrived.
       await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
       return participant
     }
     await use(join)
-    // A case may have closed one already; context.close() is idempotent.
-    for (const close of closers) await close().catch(() => {})
   },
 
   // The captured output is the whole worker's, which is still the only place a config or
@@ -195,6 +210,14 @@ export const ownEstimation = page => deck(page).getByRole('button', { pressed: t
 // After a Re-vote the cast card is not pressed but keeps this description.
 export const unconfirmedCard = page =>
   deck(page).getByRole('button', { description: 'Previous vote, not confirmed' })
+
+// The lobby's default role: the fieldset on a first visit or after Change, else the line.
+export const defaultRoleChoice = page => page.getByRole('group', { name: 'Your default role' })
+export const defaultRoleRadio = (page, role) =>
+  defaultRoleChoice(page).getByRole('radio', { name: role, exact: true })
+export const defaultRoleLine = (page, role) =>
+  page.getByText(`Default role for new rooms: ${role}`, { exact: true })
+export const changeDefaultRole = page => page.getByRole('button', { name: 'Change' })
 
 // The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
 export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })
