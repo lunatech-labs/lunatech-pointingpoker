@@ -96,7 +96,7 @@ Each is implemented as written unless review changes it.
 
 The inputs most likely to bite a person, most likely first.
 
-1. **A regular user's first visit after the deploy,** with a remembered name and no default role. Expected: the room's lobby, the name prefilled, Voter chosen, and no join sent until they press Join. Pinned by Task 5's "a regular user from before roles gets the lobby once, on Voter, the name kept".
+1. **A regular user's first visit after the deploy,** with a remembered name and no default role. Expected: the room's lobby, the name prefilled, Voter chosen, and no join sent until they press Join. Pinned by Task 5's "a regular user from before roles gets the lobby on Voter, and joins on Join".
 2. **A facilitator reloading mid-round.** Expected: they rejoin as a facilitator, and the round does not reveal. Pinned by Task 5's "a facilitator stays one across a reload", where the default and the remembered role are both Facilitator; by the reloads in "a switch survives a reload while the stream is frozen" and "a switch in one room changes neither another room's role nor the default", where the remembered role differs from the default; and by Task 1's "A joins as a facilitator while not present" rows, which pin that the round does not reveal.
 3. **A switch while the stream is frozen, then a reload.** Expected: the reload keeps the switch, from the 204's write. Pinned by Task 5's "a switch survives a reload while the stream is frozen".
 4. **A browser holding garbage under `defaultRole` or `role:<roomId>`.** Expected: a bad default shows the lobby and a submit replaces it; a bad room role is skipped for the default. Pinned by Task 2's "a stored value other than the two roles" cases and Task 5's "a malformed default role reaches the lobby, and a submit keeping Voter stores it".
@@ -1380,7 +1380,7 @@ test('a facilitator stays one across a reload', async ({ join }) => {
   await expect(facilitatorMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
 })
 
-test('a regular user from before roles gets the lobby once, on Voter, the name kept', async ({
+test('a regular user from before roles gets the lobby on Voter, and joins on Join', async ({
   visitor,
   room
 }) => {
@@ -1615,7 +1615,7 @@ Apply each mutation alone, run `npm run e2e -- e2e/roles.spec.js e2e/slug.spec.j
 | `App.tsx`: drop `forgetRole(localStorage, id)` | "Create forgets a reused slug's remembered role and joins with the default" |
 | `App.tsx`: `chooseRole` also calls `setChoosingRole(false)` | six whose `check()` loses its radio as the form collapses: "a first-visit tab keeps its form, and another's submit keeps the choice it made", "a facilitator stays one across a reload", the legacy link with no default role, both Change cases and the revisit |
 | `App.tsx`: `onChangeRole={() => setChoosingRole(true)}` | "Change shows the default another tab stored after this page loaded" |
-| `App.tsx`: the auto-join tests `pathRoom && name` only | "a regular user from before roles gets the lobby once, on Voter, the name kept", and the legacy link with no default role |
+| `App.tsx`: the auto-join tests `pathRoom && name` only | "a regular user from before roles gets the lobby on Voter, and joins on Join", and the legacy link with no default role |
 | `App.tsx`: `joinHere` sends `keepDefault(localStorage, shownRole)`, skipping `joinRole` | "with default Voter, a Join at the root takes the room's remembered Facilitator", "with default Voter, a legacy link takes its slug's remembered Facilitator", the revisit, the frozen switch and "a switch in one room" (5) |
 | `App.tsx`: `onSwitched` also calls `chooseDefault(localStorage, role)` | "a switch in one room changes neither another room's role nor the default" |
 | `App.tsx`: `doCreate` calls `chooseDefault` in place of `keepDefault` | "a first-visit tab keeps its form, and another's submit keeps the choice it made" |
