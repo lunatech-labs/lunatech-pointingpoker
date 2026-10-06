@@ -1,4 +1,5 @@
-import { useId } from 'react'
+import { useId, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import type { Role } from '../protocol/snapshot'
 
 type Props = {
@@ -14,6 +15,12 @@ const roles: Role[] = ['Voter', 'Facilitator']
 
 export function DefaultRole({ role, choosing, disabled, onChoose, onChange }: Props) {
   const group = useId()
+  const fieldset = useRef<HTMLFieldSetElement>(null)
+  // Change unmounts its own button, so focus moves to the radio the fieldset opens on.
+  const reopen = () => {
+    flushSync(onChange)
+    fieldset.current?.querySelector<HTMLInputElement>('input:checked')?.focus()
+  }
   if (!choosing)
     return (
       <div className="form-group row">
@@ -23,7 +30,7 @@ export function DefaultRole({ role, choosing, disabled, onChoose, onChange }: Pr
             type="button"
             className="btn btn-link p-0 align-baseline"
             disabled={disabled}
-            onClick={onChange}
+            onClick={reopen}
           >
             Change
           </button>
@@ -32,7 +39,7 @@ export function DefaultRole({ role, choosing, disabled, onChoose, onChange }: Pr
     )
   // The legend names the group only as the fieldset's first child, so no row div wraps it.
   return (
-    <fieldset className="form-group row">
+    <fieldset ref={fieldset} className="form-group row">
       <legend className="col-form-label col-sm-3 pt-0">Your default role</legend>
       <div className="col-sm-9 text-left">
         {roles.map(r => (

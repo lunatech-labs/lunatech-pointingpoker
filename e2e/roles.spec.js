@@ -221,6 +221,14 @@ test('a choice after Change is stored without a submit, and a new room takes it'
   await joinedAs(page, 'Facilitator')
 })
 
+test('Change moves keyboard focus to the checked radio', async ({ visitor }) => {
+  const page = await visitor({ name: 'Alice', defaultRole: 'Facilitator' })
+  await page.goto('/')
+  await changeDefaultRole(page).focus()
+  await page.keyboard.press('Enter')
+  await expect(defaultRoleRadio(page, 'Facilitator')).toBeFocused()
+})
+
 test('Change shows the default another tab stored after this page loaded', async ({ visitor }) => {
   const page = await visitor({ name: 'Alice', defaultRole: 'Voter' })
   await page.goto('/')
