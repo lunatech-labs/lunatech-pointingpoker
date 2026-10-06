@@ -318,12 +318,12 @@ The Create and the Join forms show the same default role control, under the
 name. Enter still submits from the name field only (principle 8).
 
 Every lobby shows one `fieldset`, "Your default role", laid out as a row like
-the name's, with two radio buttons, Voter and Facilitator, and the help line "Used
-for rooms you have not joined before. In a room you have joined before, you
-keep your previous role there." The stored default is
-checked, else Voter. A choice there is stored at once, as above. A first lobby
-and a later one differ only in what is checked, so one click changes the
-default, as one click on the role line changes a seat.
+the name's, with two radio buttons, Voter and Facilitator, and the help line
+"Used for rooms you have not joined before. In a room you have joined before,
+you keep your previous role there." The stored default is checked, else Voter.
+A choice there is stored at once, as above. A first lobby and a later one
+differ only in what is checked, so one click changes the default, as one click
+on the role line changes a seat.
 
 The lobby shows no role for the room being joined: the join role (Terms)
 decides it, and the role line shows it once joined.

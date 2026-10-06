@@ -47,8 +47,9 @@ than to a previous default.
 
 ## Browser storage, the rows that change
 
-The 2c plan's "Browser storage, states by events", same notation. Only the *N and D* and
-*N, D and K* cells of these rows change; every other row and cell stands.
+The 2c plan's "Browser storage, states by events", same notation. In these rows only the
+*N and D* and *N, D and K* cells change. The only other changes are the note under the
+matrix, two cells of "Another tab stores a D", and P7, all listed below the table.
 
 | Event | Was | Becomes |
 | --- | --- | --- |
