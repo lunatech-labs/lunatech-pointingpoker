@@ -118,7 +118,7 @@ test('a facilitator stays one across a reload', async ({ join }) => {
   await expect(facilitatorMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
 })
 
-test('a regular user from before roles gets the lobby once, on Voter, the name kept', async ({
+test('a regular user from before roles gets the lobby on Voter, and joins on Join', async ({
   visitor,
   room
 }) => {

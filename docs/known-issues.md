@@ -985,6 +985,17 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
+### Pressing Change in the lobby drops keyboard focus
+
+- **Where:** `frontend/src/components/DefaultRole.tsx` (the Change button and
+  the fieldset that replaces it).
+- **Issue:** Change unmounts its own button as the role fieldset mounts, so
+  focus falls to the page body. A keyboard user has to Tab back from the top of
+  the page to reach the radios. The spec asks only that the role line's switch
+  keep focus, so nothing pins this.
+- **Resolution:** Stays open until step 4 restyles this markup. Then move focus
+  to the checked radio with a ref when Change is pressed, and add an e2e case.
+
 ### The frontend's type check stops at ES2022 APIs
 
 - **Where:** `frontend/tsconfig.json`, `target` and `lib`.
