@@ -107,6 +107,24 @@ test('a switch keeps keyboard focus on its one button', async ({ join }) => {
   await expect(switchTo(alice.page, 'voter')).toBeFocused()
 })
 
+// Spelled out, since a dblclick usually lands both clicks before the switch's frame.
+test("a double-click's second click does not switch back", async ({ join, room }) => {
+  const alice = await join('Alice')
+  const switches = []
+  alice.page.on('request', r => r.url().endsWith(`/rooms/${room}/role`) && switches.push(r))
+  await switchTo(alice.page, 'facilitator').click()
+  await joinedAs(alice.page, 'Facilitator')
+
+  const box = await switchTo(alice.page, 'voter').boundingBox()
+  await alice.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await alice.page.mouse.down({ clickCount: 2 })
+  await alice.page.mouse.up({ clickCount: 2 })
+  // The click handler posts at once, so a second switch would have been seen by now.
+  await alice.page.waitForTimeout(500)
+  expect(switches).toHaveLength(1)
+  await joinedAs(alice.page, 'Facilitator')
+})
+
 test('a facilitator stays one across a reload', async ({ join }) => {
   const alice = await join('Alice', { role: 'Facilitator' })
   const bob = await join('Bob')
