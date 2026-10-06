@@ -33,7 +33,8 @@ export function DefaultRole({ role, disabled, onChoose }: Props) {
           </div>
         ))}
         <small className="form-text text-muted">
-          Used to join new rooms. You can change it here later.
+          Used for rooms you have not joined before. In a room you have joined
+          before, you keep your previous role there.
         </small>
       </div>
     </fieldset>
