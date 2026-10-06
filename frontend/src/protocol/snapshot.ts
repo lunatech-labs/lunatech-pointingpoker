@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import type { components } from './generated/openapi'
+
+// The server's one table of role tags, so gen:api and the typecheck catch a renamed role.
+export type Role = components['schemas']['Role']
 
 type ObjectOf = typeof z.object
 
@@ -12,10 +16,10 @@ function build(object: ObjectOf) {
     object({ type: z.literal('Confirmed'), value: z.string() }),
     object({ type: z.literal('Unconfirmed'), value: z.string() })
   ])
-  // A facilitator's seat has no estimation, so it cannot carry one.
+  // A facilitator's seat has no estimation, so it cannot carry one; each tag must be a Role.
   const seat = z.discriminatedUnion('type', [
-    object({ type: z.literal('Voter'), estimation }),
-    object({ type: z.literal('Facilitator') })
+    object({ type: z.literal('Voter' satisfies Role), estimation }),
+    object({ type: z.literal('Facilitator' satisfies Role) })
   ])
   const participant = object({ id: z.string(), name: z.string(), seat })
   return object({
