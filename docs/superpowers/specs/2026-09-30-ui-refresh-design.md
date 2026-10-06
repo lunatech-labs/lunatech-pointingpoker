@@ -110,7 +110,9 @@ document as a whole stays in discussion.
    there is no control-less observer mode.
 8. **Logic stays out of markup** (settled). State and protocol logic lives
    under `room/` and `protocol/` and in the `use*` hooks; step 4, a restyle,
-   changes none of it. Behaviour components still hold is carried over
+   changes none of it. Behaviour is what a user can do and what the room sees
+   as a result; which controls show is presentation, unless the control is a
+   guard, as Re-vote's hiding is. Behaviour components still hold is carried over
    unchanged. The e2e cases guard most of it; these are, notably, the parts a
    restyle breaks most easily, several with no case:
    - `IssueEditor.tsx`: the Enter guard during input-method composition, focus
@@ -136,6 +138,16 @@ document as a whole stays in discussion.
 9. **The suite reads only the test contract** (settled), so a restyle is judged
    by the suite staying unchanged. A step that changes the contract lists each
    change as a decision in its own spec.
+10. **Accessibility first**. Low-vision and screen-reader users are served as
+    fully as anyone, as a mark of the product and of the company:
+    - All text at AAA contrast (7:1), other indicators at 3:1, and WCAG 2.2's
+      AAA focus appearance, checked with colour-blind simulations.
+    - No state by colour alone (principle 5), so the page survives
+      `forced-colors`, Windows' high-contrast mode.
+    - Live regions announce what changes (steps 1a and 4a), browser zoom stays
+      effective (principle 5), and motion stops under `prefers-reduced-motion`.
+
+    The numbers are J8's in `docs/design/ui-reference.md`.
 
 ## Steps
 
@@ -148,13 +160,15 @@ document as a whole stays in discussion.
 | 2b | Roles on the server and the wire | 2a | Unit and API tests, and the existing cases unchanged |
 | 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
-| 4 | Restyle | 1b, 2c, 3 | By eye, and the existing cases unchanged |
+| 1c | Test contract audit | 3 | Every case passing on today's page, each rewritten one shown to fail |
+| 4 | Restyle | 1b, 1c, 2c, 3 | By eye, and the existing cases unchanged |
 | 4a | The round's live region | 4 | Its cases |
+| 5 | Next issue | 4 | Its cases |
 | 5+ | One step per feature | 4 | Each one's spec |
 
 **Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
-2c likewise, then 4
-and 4a stacked, while 3 runs alongside from now.
+2c likewise, then 1c, 4 and 4a stacked, while 3 runs alongside from now, and 5
+after 4.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
 little or no time. The specialist's critique does not gate step 4: step 3's
@@ -173,6 +187,13 @@ ways to fail.
 change judged by its own tests, and keeping it out of step 1 keeps that step's
 unchanged look literally true.
 
+**Step 1c. Test contract audit.** Each case keeps the behaviour it guards and
+loses the elements it reaches it through by chance, so step 4 and step 5 can
+change which controls show. Known so far: Show votes as the fixed point of the
+reveal's layout-shift case, and as the sign a join succeeded in `fixtures.js`
+and the lobby cases, where Leave or the role line serve in every phase and
+role. Its list is completed from step 3's layouts, hence its place after 3.
+
 **Step 2. Roles: voter and facilitator.** Product owners who facilitate and
 never vote keep the round from completing, so auto-reveal never fires
 (Appendix A, "How sessions run"), and a "4 of 6 voted" count would never reach
@@ -189,8 +210,9 @@ pages, before and after a reveal, at the screens in principle 2, and the lobby.
 They can be clickable HTML built from lunatech.com's palette and type. The
 output is a short design reference committed to the repo: palette as custom
 properties, type scale, spacing, component looks, and the layouts. Appendix A is
-its starting input. After a reveal the deck stays on the page, disabled, at
-every width, as the suite's "takes no more votes" case expects; the result
+its starting input. It runs as 3a, the tokens, then 3b, the layouts, and its
+reference is `docs/design/ui-reference.md`. After a reveal the deck stays on
+the page, disabled, at every width, as the suite's "takes no more votes" case expects; the result
 appears near it, not in its place. The layouts include a phase line: text
 visible in both phases, saying whether voting is open or the round is revealed,
 outside the deck so the facilitator's page keeps it, and directly above or
@@ -208,7 +230,8 @@ says why.
 Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
 and the result placed so a reveal no longer pushes the participants down, which
 closes that entry in `docs/known-issues.md`, and the "Link copied" hint moved
-beside the "Copy link" link (principle 4; Appendix A, improve 10). It keeps the
+beside the "Copy link" link (principle 4; Appendix A, improve 10), and Show votes
+hidden while revealed, where it does nothing (the reference's J5). It keeps the
 interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:
@@ -228,8 +251,9 @@ element lists step 3's layouts give:
   name, an issue that wraps, and the banners shown.
 
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
-and the phase line get test ids, and the moved copy hint becomes a
-`role="status"` region, all listed as contract changes (principle 9).
+and the phase line get test ids, the moved copy hint becomes a
+`role="status"` region, and Show votes is absent while revealed, all listed as
+contract changes (principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
 Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
 chosen library may or may not ship one. The deck as a `<fieldset>` with a
@@ -248,13 +272,19 @@ needs text that changes in place. A visually hidden copy beside it was step
 so this waits for a visible line instead. It follows step 4 because a restyle
 adds no behaviour. Its spec starts from Appendix B.
 
+**Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
+improve 7), and the round's actions per phase it makes possible: the target
+column of the reference's J5. Its spec decides when the round clears, one
+request or two, its name, and whether Clear stays.
+
 **Steps 5 and after.** One step per feature, each with its own short spec,
 picked from these candidates and whatever the mockups raise. None is a
 commitment:
 
 - A progress count, "4 of 6 voted, waiting: Bob, Eve", which needs step 2's
   denominator (Appendix A, improve 3).
-- "Next issue" as one action instead of Clear, then edit the issue (improve 7).
+- The revealed phase's primary chosen by the result: Next issue when the votes
+  agree, Re-vote when they spread, if the specialist's critique supports it.
 - Results that show the spread and the lowest and highest voters (improve 5).
 - A pasted ticket link made clickable in the issue (improve 8).
 - "Not Alice?", joining under another name than the remembered one.
