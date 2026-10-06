@@ -9,15 +9,15 @@ type Props = {
   choosing: boolean
   disabled: boolean
   onChoose: (role: Role) => void
-  onChange: () => void
+  onChangeRole: () => void
 }
 
-export function DefaultRole({ role, choosing, disabled, onChoose, onChange }: Props) {
+export function DefaultRole({ role, choosing, disabled, onChoose, onChangeRole }: Props) {
   const group = useId()
   const fieldset = useRef<HTMLFieldSetElement>(null)
   // Change unmounts its own button, so focus moves to the radio the fieldset opens on.
   const reopen = () => {
-    flushSync(onChange)
+    flushSync(onChangeRole)
     fieldset.current?.querySelector<HTMLInputElement>('input:checked')?.focus()
   }
   if (!choosing)

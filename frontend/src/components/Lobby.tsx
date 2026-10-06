@@ -59,7 +59,7 @@ export function Lobby(props: Props) {
       choosing={choosingRole}
       disabled={disabled}
       onChoose={onChooseRole}
-      onChange={onChangeRole}
+      onChangeRole={onChangeRole}
     />
   )
   const nameRow = (action: () => void) => (
