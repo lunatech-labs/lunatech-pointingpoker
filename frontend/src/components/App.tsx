@@ -45,10 +45,15 @@ export function App({ connection }: { connection: Connection }) {
   const remembered = localStorage.getItem('roomId')
   const reached = room.snapshot !== null
 
+  // Every lobby submit stores the name, and the shown default if none is stored.
+  const keepLobby = () => {
+    localStorage.setItem('name', name)
+    return keepDefault(localStorage, shownRole)
+  }
+
   // In place, so a ?moved=1 banner survives joining.
   const joinHere = () => {
-    localStorage.setItem('name', name)
-    const role = joinRole(localStorage, pathRoom, keepDefault(localStorage, shownRole))
+    const role = joinRole(localStorage, pathRoom, keepLobby())
     void connection.join(pathRoom, name, role).then(result => {
       if (result === 'failed') setError(joinError)
       else if (result === 'joined') setError('')
@@ -56,8 +61,7 @@ export function App({ connection }: { connection: Connection }) {
   }
 
   const doCreate = () => {
-    localStorage.setItem('name', name)
-    keepDefault(localStorage, shownRole)
+    keepLobby()
     api
       .createRoom()
       .then(id => {
@@ -74,8 +78,7 @@ export function App({ connection }: { connection: Connection }) {
   const doJoin = () => {
     const id = roomId.trim()
     if (!id) return setError(joinError)
-    localStorage.setItem('name', name)
-    keepDefault(localStorage, shownRole)
+    keepLobby()
     goTo(id)
   }
 
