@@ -3,6 +3,7 @@ import {
   expect,
   card,
   changeDefaultRole,
+  createRoom,
   deck,
   defaultRoleChoice,
   defaultRoleLine,
@@ -348,8 +349,7 @@ test("a switch in one room changes neither another room's role nor the default",
   room,
   app
 }) => {
-  const response = await fetch(`${app.baseUrl}/create-room`, { method: 'POST' })
-  const other = (await response.text()).trim()
+  const other = await createRoom(app.baseUrl)
   const page = await visitor({ name: 'Alice', defaultRole: 'Voter' })
   await page.goto(`/${other}`)
   await joinedAs(page, 'Voter')

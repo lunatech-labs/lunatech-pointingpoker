@@ -12,6 +12,16 @@ const guard = async (context, blocked) => {
   })
 }
 
+// A new room on the app, checked, so a failed create fails here rather than at a later join.
+export const createRoom = async baseUrl => {
+  const response = await fetch(`${baseUrl}/create-room`, { method: 'POST' })
+  if (!response.ok) {
+    response.body?.cancel().catch(() => {})
+    throw new Error(`POST /create-room answered ${response.status}`)
+  }
+  return (await response.text()).trim()
+}
+
 export const test = base.extend({
   // restart() keeps the port, so the worker's stub goes on pointing at the new process.
   app: [
@@ -70,12 +80,7 @@ export const test = base.extend({
 
   // Per-test isolation without restarting anything.
   room: async ({ app }, use) => {
-    const response = await fetch(`${app.baseUrl}/create-room`, { method: 'POST' })
-    if (!response.ok) {
-      response.body?.cancel().catch(() => {})
-      throw new Error(`POST /create-room answered ${response.status}`)
-    }
-    await use((await response.text()).trim())
+    await use(await createRoom(app.baseUrl))
   },
 
   // A page in its own guarded context, its localStorage seeded once, before its first goto.
@@ -87,7 +92,7 @@ export const test = base.extend({
         baseURL: origin,
         storageState: { cookies: [], origins: [{ origin, localStorage }] }
       })
-      // Tracked before anything else can throw, so a half-built participant is still torn down.
+      // Tracked before anything else can throw, so a half-built page is still torn down.
       closers.push(() => context.close())
       await guard(context, offOrigin)
       return context.newPage()
