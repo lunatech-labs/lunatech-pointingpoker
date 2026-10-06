@@ -1,45 +1,19 @@
-import { useId, useRef } from 'react'
-import { flushSync } from 'react-dom'
+import { useId } from 'react'
 import type { Role } from '../protocol/snapshot'
 import { roles } from '../room/joinRole'
 
 type Props = {
   role: Role
-  // The fieldset rather than the line: a first visit, or after Change.
-  choosing: boolean
   disabled: boolean
   onChoose: (role: Role) => void
-  onChangeRole: () => void
 }
 
-export function DefaultRole({ role, choosing, disabled, onChoose, onChangeRole }: Props) {
+export function DefaultRole({ role, disabled, onChoose }: Props) {
   const group = useId()
-  const fieldset = useRef<HTMLFieldSetElement>(null)
-  // Change unmounts its own button, so focus moves to the radio the fieldset opens on.
-  const reopen = () => {
-    flushSync(onChangeRole)
-    fieldset.current?.querySelector<HTMLInputElement>('input:checked')?.focus()
-  }
-  if (!choosing)
-    return (
-      <div className="form-group row">
-        <div className="col-sm-9 offset-sm-3 text-left">
-          <span>{`Default role for new rooms: ${role}`}</span>{' '}
-          <button
-            type="button"
-            className="btn btn-link p-0 align-baseline"
-            disabled={disabled}
-            onClick={reopen}
-          >
-            Change
-          </button>
-        </div>
-      </div>
-    )
   // The legend names the group only as the fieldset's first child, so no row div wraps it.
   // Floated, the fieldset no longer draws it on its border, so it takes its column.
   return (
-    <fieldset ref={fieldset} className="form-group row">
+    <fieldset className="form-group row">
       <legend className="col-form-label col-sm-3 pt-0 float-left">Your default role</legend>
       <div className="col-sm-9 text-left">
         {roles.map(r => (

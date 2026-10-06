@@ -2,11 +2,8 @@ import {
   test,
   expect,
   card,
-  changeDefaultRole,
   createRoom,
   deck,
-  defaultRoleChoice,
-  defaultRoleLine,
   defaultRoleRadio,
   expectSummaryMatchesParticipants,
   facilitatorMark,
@@ -222,42 +219,19 @@ test("with default Voter, a legacy link takes its slug's remembered Facilitator"
   await joinedAs(page, 'Facilitator')
 })
 
-test('a choice after Change is stored without a submit, and a new room takes it', async ({
+test('a choice on a later visit is stored without a submit, and a new room takes it', async ({
   visitor
 }) => {
   const page = await visitor({ name: 'Alice', defaultRole: 'Voter' })
   await page.goto('/')
-  await expect(defaultRoleLine(page, 'Voter')).toBeVisible()
-  await changeDefaultRole(page).click()
   await expect(defaultRoleRadio(page, 'Voter')).toBeChecked()
   await defaultRoleRadio(page, 'Facilitator').check()
 
   await page.reload()
-  await expect(defaultRoleLine(page, 'Facilitator')).toBeVisible()
+  await expect(defaultRoleRadio(page, 'Facilitator')).toBeChecked()
   await page.getByRole('button', { name: 'Create' }).click()
   await expect(page).toHaveURL(ROOM_URL)
   await joinedAs(page, 'Facilitator')
-})
-
-test('Change moves keyboard focus to the checked radio', async ({ visitor }) => {
-  const page = await visitor({ name: 'Alice', defaultRole: 'Facilitator' })
-  await page.goto('/')
-  await changeDefaultRole(page).focus()
-  await page.keyboard.press('Enter')
-  await expect(defaultRoleRadio(page, 'Facilitator')).toBeFocused()
-})
-
-test('Change shows the default another tab stored after this page loaded', async ({ visitor }) => {
-  const page = await visitor({ name: 'Alice', defaultRole: 'Voter' })
-  await page.goto('/')
-  await expect(defaultRoleLine(page, 'Voter')).toBeVisible()
-  const other = await page.context().newPage()
-  await other.goto('/')
-  await changeDefaultRole(other).click()
-  await defaultRoleRadio(other, 'Facilitator').check()
-
-  await changeDefaultRole(page).click()
-  await expect(defaultRoleRadio(page, 'Facilitator')).toBeChecked()
 })
 
 test("a revisit takes the role the room's snapshot stored, not a default changed since", async ({
@@ -269,7 +243,6 @@ test("a revisit takes the role the room's snapshot stored, not a default changed
   await joinedAs(page, 'Facilitator')
 
   await page.goto('/')
-  await changeDefaultRole(page).click()
   await defaultRoleRadio(page, 'Voter').check()
   await page.goto(`/${room}`)
   await joinedAs(page, 'Facilitator')
@@ -290,7 +263,7 @@ test('a malformed default role reaches the lobby, and a submit keeping Voter sto
   await joinedAs(page, 'Voter')
 })
 
-test("a first-visit tab keeps its form, and another's submit keeps the choice it made", async ({
+test('a submit from a tab showing Voter keeps the Facilitator another tab chose', async ({
   visitor
 }) => {
   const first = await visitor()
@@ -298,15 +271,15 @@ test("a first-visit tab keeps its form, and another's submit keeps the choice it
   await first.goto('/')
   await second.goto('/')
   await defaultRoleRadio(first, 'Facilitator').check()
-  await expect(defaultRoleChoice(first)).toBeVisible()
   await expect(defaultRoleRadio(second, 'Voter')).toBeChecked()
 
   await nameInput(second).fill('Alice')
   await second.getByRole('button', { name: 'Create' }).click()
   await expect(second.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await joinedAs(second, 'Facilitator')
   const later = await first.context().newPage()
   await later.goto('/')
-  await expect(defaultRoleLine(later, 'Facilitator')).toBeVisible()
+  await expect(defaultRoleRadio(later, 'Facilitator')).toBeChecked()
 })
 
 test("Create forgets a reused slug's remembered role and joins with the default", async ({
@@ -379,7 +352,7 @@ test("a switch in one room changes neither another room's role nor the default",
 
   // The default first: the other room's own snapshot would write over a stray write to it.
   await page.goto('/')
-  await expect(defaultRoleLine(page, 'Voter')).toBeVisible()
+  await expect(defaultRoleRadio(page, 'Voter')).toBeChecked()
   await page.goto(`/${other}`)
   await joinedAs(page, 'Voter')
 })

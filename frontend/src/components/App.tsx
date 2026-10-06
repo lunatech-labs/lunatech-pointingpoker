@@ -23,7 +23,7 @@ const params = new URLSearchParams(window.location.search)
 const movedOnLoad = params.get('moved') === '1'
 const restartedOnLoad = params.get('restarted') === '1'
 if (movedOnLoad || restartedOnLoad) history.replaceState(null, '', window.location.pathname)
-// Decision 7: the lobby's shape and the auto-join follow the default role stored at load.
+// Decision 7: the auto-join and the radio first checked follow the default role stored at load.
 const defaultOnLoad = storedDefault(localStorage)
 const joinError = 'Could not join the room. Please try again.'
 // A room remembered from before the cutover is a UUID, which the server's page route redirects.
@@ -35,7 +35,6 @@ export function App({ connection }: { connection: Connection }) {
   const room = useRoom(connection)
   const [roomId, setRoomId] = useState(pathRoom)
   const [name, setName] = useState(localStorage.getItem('name') ?? '')
-  const [choosingRole, setChoosingRole] = useState(defaultOnLoad === null)
   const [shownRole, setShownRole] = useState<Role>(defaultOnLoad ?? 'Voter')
   const [tab, setTab] = useState<LobbyTab>(pathRoom ? 'join' : 'create')
   const [error, setError] = useState('')
@@ -99,12 +98,6 @@ export function App({ connection }: { connection: Connection }) {
     setShownRole(role)
   }
 
-  // Read again, since another tab may have stored a choice after this page loaded.
-  const changeRole = () => {
-    setShownRole(storedDefault(localStorage) ?? shownRole)
-    setChoosingRole(true)
-  }
-
   // Remembered only once reached, so an unreachable typed name is never offered back.
   useEffect(() => {
     if (reached) localStorage.setItem('roomId', pathRoom)
@@ -153,9 +146,7 @@ export function App({ connection }: { connection: Connection }) {
           name={name}
           onName={setName}
           defaultRole={shownRole}
-          choosingRole={choosingRole}
           onChooseRole={chooseRole}
-          onChangeRole={changeRole}
           rejoin={rejoin}
           disabled={room.fatal}
           onCreate={doCreate}

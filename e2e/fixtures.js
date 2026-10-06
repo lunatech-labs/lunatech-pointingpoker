@@ -216,13 +216,10 @@ export const ownEstimation = page => deck(page).getByRole('button', { pressed: t
 export const unconfirmedCard = page =>
   deck(page).getByRole('button', { description: 'Previous vote, not confirmed' })
 
-// The lobby's default role: the fieldset on a first visit or after Change, else the line.
+// The lobby's default role: a radio group on every visit.
 export const defaultRoleChoice = page => page.getByRole('group', { name: 'Your default role' })
 export const defaultRoleRadio = (page, role) =>
   defaultRoleChoice(page).getByRole('radio', { name: role, exact: true })
-export const defaultRoleLine = (page, role) =>
-  page.getByText(`Default role for new rooms: ${role}`, { exact: true })
-export const changeDefaultRole = page => page.getByRole('button', { name: 'Change' })
 
 // The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
 export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })

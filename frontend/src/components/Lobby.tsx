@@ -14,10 +14,7 @@ type Props = {
   name: string
   onName: (name: string) => void
   defaultRole: Role
-  // From the default stored at load (decision 7), and only Change sets it again.
-  choosingRole: boolean
   onChooseRole: (role: Role) => void
-  onChangeRole: () => void
   rejoin: { href: string; label: string } | null
   // A session that has ended: further clicks would be ignored, so the form is inert instead.
   disabled: boolean
@@ -39,9 +36,7 @@ export function Lobby(props: Props) {
     name,
     onName,
     defaultRole,
-    choosingRole,
     onChooseRole,
-    onChangeRole,
     rejoin,
     disabled,
     onCreate,
@@ -56,10 +51,8 @@ export function Lobby(props: Props) {
   const roleRow = (
     <DefaultRole
       role={defaultRole}
-      choosing={choosingRole}
       disabled={disabled}
       onChoose={onChooseRole}
-      onChangeRole={onChangeRole}
     />
   )
   const nameRow = (action: () => void) => (
