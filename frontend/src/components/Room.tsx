@@ -6,6 +6,7 @@ import { Deck } from './Deck'
 import { IssueEditor } from './IssueEditor'
 import { Participants } from './Participants'
 import { Results } from './Results'
+import { RoleLine } from './RoleLine'
 import { RoomHeader } from './RoomHeader'
 
 type Props = {
@@ -42,8 +43,14 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused }: Props) 
         <div className="card text-center shadow-sm m-1">
           <RoomHeader roomId={roomId} onCopied={onCopied} onLeave={onLeave} />
           <div className="card-body">
+            {view.ownRole && (
+              <RoleLine
+                role={view.ownRole}
+                onSwitch={role => run(api.switchRole(roomId, role))}
+              />
+            )}
             <IssueEditor issue={view.currentIssue} onSave={saveIssue} />
-            <Deck view={view} onVote={vote} />
+            {view.ownRole !== 'Facilitator' && <Deck view={view} onVote={vote} />}
             <Controls
               revealed={view.votesRevealed}
               onShow={() => run(api.command(roomId, 'show'))}

@@ -4,6 +4,7 @@ import type { Estimation, Participant, RoomSnapshot, Seat } from '../protocol/sn
 export type ParticipantRow = {
   id: string
   name: string
+  facilitator: boolean
   voted: boolean
   hasEstimation: boolean
   estimation: string
@@ -22,6 +23,7 @@ const toRow = ({ id, name, seat }: Participant): ParticipantRow => {
   return {
     id,
     name,
+    facilitator: seat.type === 'Facilitator',
     voted: confirmed(estimation),
     hasEstimation: estimation.type !== 'NoEstimation',
     estimation: shown(estimation)
@@ -34,6 +36,7 @@ const byName = (a: ParticipantRow, b: ParticipantRow) =>
   collator.compare(a.name.trim(), b.name.trim()) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
 
 export type View = {
+  ownRole: Seat['type'] | null
   users: ParticipantRow[]
   votesRevealed: boolean
   currentIssue: string
@@ -41,6 +44,10 @@ export type View = {
   ownVoteConfirmed: boolean
   votesSummary: [string, number][]
 }
+
+// Null only for a snapshot without the reader, which the server never sends.
+export const ownRoleOf = (s: RoomSnapshot): Seat['type'] | null =>
+  s.users.find(u => u.id === s.you)?.seat.type ?? null
 
 export function applySnapshot(s: RoomSnapshot): View {
   const users = s.users.map(toRow)
@@ -52,6 +59,7 @@ export function applySnapshot(s: RoomSnapshot): View {
     if (u.hasEstimation) tally[u.estimation] = (tally[u.estimation] || 0) + 1
   })
   return {
+    ownRole: ownRoleOf(s),
     // Sorted after the tally, which reads the snapshot's order, so tied values stay as they were.
     users: [...users].sort(byName),
     votesRevealed: s.votesRevealed,

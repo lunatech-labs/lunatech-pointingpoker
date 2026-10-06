@@ -196,6 +196,11 @@ export const ownEstimation = page => deck(page).getByRole('button', { pressed: t
 export const unconfirmedCard = page =>
   deck(page).getByRole('button', { description: 'Previous vote, not confirmed' })
 
+// The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
+export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })
+// What a facilitator's row shows in place of the voted mark.
+export const facilitatorMark = entry => entry.getByText('Facilitator', { exact: true })
+
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.

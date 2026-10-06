@@ -72,6 +72,17 @@ describe('applySnapshot', () => {
     expect(view).toMatchObject({ userEstimation: '', ownVoteConfirmed: true })
   })
 
+  it("marks a facilitator's row, and only theirs", () => {
+    const s = snap([facilitator('a'), row('b', confirmed('5')), row('c', none)])
+    expect(applySnapshot(s).users.map(u => u.facilitator)).toEqual([true, false, false])
+  })
+
+  it("reads the reader's own role from their seat", () => {
+    expect(applySnapshot(snap([facilitator('a'), row('b', none)])).ownRole).toBe('Facilitator')
+    expect(applySnapshot(snap([row('a', none), facilitator('b')])).ownRole).toBe('Voter')
+    expect(applySnapshot(snap([facilitator('b')])).ownRole).toBeNull()
+  })
+
   // Each pair is fed in the wrong order, so a missing sort fails every case.
   describe('lists participants in name order', () => {
     const named = (id: string, name: string): Participant => ({
