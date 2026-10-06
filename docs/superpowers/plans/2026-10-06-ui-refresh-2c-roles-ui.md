@@ -34,7 +34,7 @@ The spec's rules ("What the browser stores", "The join role", "The lobby") check
 | A choice in the fieldset | D := choice, at once; the form stays | as nothing stored | (after Change) D := choice; the fieldset stays open | as N and D | D := choice |
 | Change | cannot happen: no line | cannot happen | the fieldset, holding D as stored now, which another tab may have changed since the load | as N and D | cannot happen: a bad D shows the fieldset |
 | Create succeeds | D := shown; K of the new id removed; navigate | as nothing stored | D kept; K of the new id removed | as N and D | a bad D is replaced by shown |
-| Create fails | D := shown; the error shows | as nothing stored | nothing written; the error shows | as N and D | as nothing stored |
+| Create fails | D := shown; the error shows | as nothing stored | D kept; the error shows | as N and D | as nothing stored |
 | Join at the root | D := shown; navigate, and the path's load decides | as nothing stored | D kept; navigate | as N and D | a bad D is replaced by shown |
 | Join on a room's path | D := shown; sends K, else D | as nothing stored | sends D | sends K | a bad D is replaced by shown |
 | The join fails | the error shows; nothing else is written; Join retries | same | same | same | same |
@@ -44,9 +44,11 @@ The spec's rules ("What the browser stores", "The join role", "The lobby") check
 | A switch fails otherwise, or times out | cannot happen | cannot happen | logged; the line and K unchanged; a later snapshot writes K if the server applied it | same | same |
 | Reload | as loading the path | as loading the path | the beacon, then the path's auto-join with K or D | same | same |
 | Leave | cannot happen | cannot happen | removes `roomId` only; N, D and K stay | same | same |
-| Another tab stores a D | this tab's form keeps its shape; its submit joins with the stored D | same | the line keeps showing the old D until a load | same | same |
+| Another tab stores a D | this tab's form keeps its shape; its submit joins with the stored D | same | the line keeps showing the old D until a load or Change | same | same |
 | A snapshot in another tab of this room | cannot happen: no session | cannot happen | K := the seat's role, which the same session shares | same | same |
 | The stream is lost and back, or a restart reloads | cannot happen | cannot happen | snapshots resume and write K; a restart's reload auto-joins with K | same | same |
+
+*D* without *N*, a choice in the fieldset and then no submit, reads as the *N and D* column with an empty name: the root shows the line, and a room's path shows its lobby, since the auto-join needs *N* too.
 
 "Cannot happen" for a snapshot without the reader's own seat: the room sends a snapshot only to a member's connections, and a connection whose member has ended is "tolerated by of, produced by nothing" (`RoomDataFixtures.withDeparted`). If one came, the page would show no role line and the deck, and write no key.
 
