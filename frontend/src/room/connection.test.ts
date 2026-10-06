@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { JoinOutcome } from '../protocol/api'
+import type { Role } from '../protocol/snapshot'
 import {
   createConnection,
   decide,
@@ -65,7 +66,7 @@ describe('createConnection', () => {
     replace: Mock<(url: string | URL) => void>
   }
   let fetchPage: Mock<(url: string, init: RequestInit) => Promise<Response>>
-  let join: Mock<(roomId: string, name: string) => Promise<JoinOutcome>>
+  let join: Mock<(roomId: string, name: string, role: Role) => Promise<JoinOutcome>>
   const connect = () =>
     createConnection({
       connectionId: 'c-1',
@@ -113,23 +114,28 @@ describe('createConnection', () => {
     let answer: (outcome: JoinOutcome) => void = () => {}
     join.mockReturnValueOnce(new Promise(resolve => (answer = resolve)))
     const c = connect()
-    const first = c.join('r', 'Alice')
+    const first = c.join('r', 'Alice', 'Voter')
     // A double-clicked Join, or StrictMode's second effect, while the first is in flight.
-    expect(await c.join('r', 'Alice')).toBe('ignored')
+    expect(await c.join('r', 'Alice', 'Voter')).toBe('ignored')
     answer('joined')
     expect(await first).toBe('joined')
-    expect(await c.join('r', 'Alice')).toBe('ignored')
+    expect(await c.join('r', 'Alice', 'Voter')).toBe('ignored')
     expect(join).toHaveBeenCalledTimes(1)
     expect(streams).toHaveLength(1)
+  })
+
+  it('joins with the role it is given', async () => {
+    await connect().join('r', 'Alice', 'Facilitator')
+    expect(join).toHaveBeenCalledWith('r', 'Alice', 'Facilitator')
   })
 
   it('lets a join through again after a failed one', async () => {
     join.mockResolvedValueOnce('not-a-room').mockRejectedValueOnce(new Error('join answered 500'))
     const c = connect()
-    expect(await c.join('r', 'Alice')).toBe('failed')
-    expect(await c.join('r', 'Alice')).toBe('failed')
+    expect(await c.join('r', 'Alice', 'Voter')).toBe('failed')
+    expect(await c.join('r', 'Alice', 'Voter')).toBe('failed')
     expect(streams).toHaveLength(0)
-    expect(await c.join('r', 'Alice')).toBe('joined')
+    expect(await c.join('r', 'Alice', 'Voter')).toBe('joined')
     expect(streams).toHaveLength(1)
   })
 

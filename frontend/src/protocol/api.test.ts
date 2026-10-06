@@ -71,7 +71,7 @@ describe('isSessionRefusal', () => {
 // Every exported request, so one that drops its signal fails here.
 const requests = {
   createRoom: () => createRoom(),
-  join: () => join('brave-golden-otter', 'Alice'),
+  join: () => join('brave-golden-otter', 'Alice', 'Facilitator'),
   command: () => command('brave-golden-otter', 'show'),
   vote: () => vote('brave-golden-otter', '3'),
   switchRole: () => switchRole('brave-golden-otter', 'Facilitator'),
@@ -79,14 +79,14 @@ const requests = {
 }
 
 describe('a role', () => {
-  it.each([['switchRole', requests.switchRole, { role: 'Facilitator' }]])(
-    'is sent in the body of %s',
-    async (_, call, body) => {
-      fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
-      await call()
-      expect(await fetchMock.mock.calls[0][0].json()).toEqual(body)
-    }
-  )
+  it.each([
+    ['join', requests.join, { name: 'Alice', role: 'Facilitator' }],
+    ['switchRole', requests.switchRole, { role: 'Facilitator' }]
+  ])('is sent in the body of %s', async (_, call, body) => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
+    await call()
+    expect(await fetchMock.mock.calls[0][0].json()).toEqual(body)
+  })
 })
 
 describe('a request', () => {

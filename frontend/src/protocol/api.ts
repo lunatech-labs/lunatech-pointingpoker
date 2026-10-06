@@ -46,12 +46,11 @@ export async function createRoom(): Promise<string> {
   return data
 }
 
-export async function join(roomId: string, name: string): Promise<JoinOutcome> {
+export async function join(roomId: string, name: string, role: Role): Promise<JoinOutcome> {
   const { response } = await timed(signal =>
     client.POST('/rooms/{roomId}/join', {
       params: { path: { roomId } },
-      // Every join is a voter's until the page offers roles (ui refresh step 2c).
-      body: { name, role: 'Voter' },
+      body: { name, role },
       signal
     })
   )

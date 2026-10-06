@@ -34,7 +34,8 @@ export function App({ connection }: { connection: Connection }) {
   // In place, so a ?moved=1 banner survives joining.
   const joinHere = () => {
     localStorage.setItem('name', name)
-    void connection.join(pathRoom, name).then(result => {
+    // Every join is a voter's until the lobby offers a default role.
+    void connection.join(pathRoom, name, 'Voter').then(result => {
       if (result === 'failed') setError(joinError)
       else if (result === 'joined') setError('')
     })
