@@ -94,8 +94,9 @@ document as a whole stays in discussion.
    can beat one that holds 12 unchanged. Whatever the thresholds, rooms of 4 to
    14 stay usable.
 5. **Shared-screen legibility** (settled), its numbers not:
-   - The issue, the progress and the result are sized relative to the viewport,
-     so they read from the back of a room on a 40 inch TV.
+   - The issue, the progress and the result are sized to read from the back of
+     a room on a 40 inch TV at the laptop target, and scale with the viewport
+     above it (reopened 2026-10-07 for zoom; the reference's J2).
    - Their text meets WCAG AAA contrast (7:1), since a lit projector and video
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
@@ -142,8 +143,8 @@ document as a whole stays in discussion.
     fully as anyone, as a mark of the product and of the company:
     - All text at AAA contrast (7:1), other indicators at 3:1, and WCAG 2.2's
       AAA focus appearance, checked with colour-blind simulations.
-    - No state by colour alone, a fill included (principle 5), and every state
-      survives `forced-colors`, Windows' contrast themes.
+    - No state by colour alone (principle 5), and every state, a solid fill
+      included, survives `forced-colors`, Windows' contrast themes.
     - Live regions announce what changes (steps 1a and 4a), browser zoom stays
       effective (principle 5), and motion stops under `prefers-reduced-motion`.
 
@@ -160,8 +161,8 @@ document as a whole stays in discussion.
 | 2b | Roles on the server and the wire | 2a | Unit and API tests, and the existing cases unchanged |
 | 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
-| 1c | Test contract audit | 3b | Every case passing on today's page, each rewritten one shown to fail |
-| 4 | Restyle | 1b, 1c, 2c, 3 | By eye, and the existing cases unchanged |
+| 1c | Test contract audit | 3 (3b's layouts) | Every case passing on today's page, each rewritten one shown to fail |
+| 4 | Restyle | 1b, 1c, 2c, 3 | By eye, and the existing cases unchanged but for its listed contract changes |
 | 4a | The round's live region | 4 | Its cases |
 | 5 | Next issue | 4 | Its cases |
 | 5+ | One step per feature | 4 | Each one's spec |
@@ -197,8 +198,13 @@ change which controls show. Known so far:
   revealed when a straggler arrives', whose `join` enters a revealed room.
 - Show votes as the sign a join or rejoin succeeded, in every helper and case
   that waits for it (`join`, `newTab`, `joinAs`, the lobby, smoke and reload
-  cases); Leave or the role line serve in every phase and role.
+  cases, 'a submit from a tab showing Voter keeps the Facilitator another tab
+  chose', and 'a room remembered from before the cutover reopens under its
+  derived name'); Leave or the role line serve in every phase and role.
 - Clear votes clicked only to send traffic or to hold focus.
+- The "Voted" mark read on a revealed entry, in 'a vote survives its own
+  reconnect', where the revealed value serves (the reference's "Contract
+  reads").
 
 Its list is completed from step 3b's layouts, hence its place after 3b.
 
@@ -261,8 +267,9 @@ element lists step 3's layouts give:
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
 and the phase line get test ids, the moved copy hint becomes a
 `role="status"` region, Show votes is absent while revealed, and facilitators
-are listed in their own region (the reference's J3), all listed as contract
-changes (principle 9).
+are listed in their own region in name order (the reference's J3), and each
+entry's mark is read by its exact name, one mark per look (the reference's
+"Contract reads"), all listed as contract changes (principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
 Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
 chosen library may or may not ship one. The deck as a `<fieldset>` with a
@@ -284,10 +291,12 @@ adds no behaviour. Its spec starts from Appendix B.
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target
 column of the reference's J5. Its spec decides when the round clears, one
-request or two, its name, and whether Clear stays. The cases that click Clear
-votes while revealed guard its behaviour there ('a clear re-arms the
-auto-reveal', the Re-vote guard, the session and roles cases), so if Clear
-leaves that phase they are this step's contract changes, not 1c's.
+request or two, its name, whether Clear stays, and whether Next issue shows
+while voting. The cases that click Clear votes for its own behaviour, in
+either phase ('a clear re-arms the auto-reveal', the Re-vote guard, 'a re-vote
+leaves the caster shown as selected but unconfirmed', the session case and a
+roles case), are this step's contract changes, not 1c's, if Clear leaves the
+phase they click it in.
 
 **Steps after 5.** One step per feature, each with its own short spec,
 picked from these candidates and whatever the mockups raise. None is a
