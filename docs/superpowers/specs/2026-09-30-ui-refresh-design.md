@@ -37,13 +37,13 @@ document as a whole stays in discussion.
 - **Voter**: a participant who votes and counts toward "everyone has voted".
 - **Facilitator**: a participant who does not vote, typically the product owner
   sharing the page with the room. Step 9 of the protocol architecture already
-  says "facilitator" loosely for whoever records a round's value, and step 2's
-  spec settles the word.
+  says "facilitator" loosely for whoever records a round's value. Both words are
+  settled in step 2's spec, `2026-10-04-ui-refresh-2-roles-design.md`, "Terms".
 - **Progress**: who has voted and who is still waiting, however step 3 shows
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
 - **Test contract**: defined in step 1, under "The test contract"; steps 1a,
-  1b, 4 and 4a each add to it in their own sections.
+  1b, 2c, 4 and 4a each add to it in their own sections.
 - **Live region**: an element the browser watches, so text added or changed
   inside it is spoken without its user moving there.
 
@@ -144,13 +144,16 @@ document as a whole stays in discussion.
 | 1 | Test contract and accessibility | nothing | Tests, and an unchanged look |
 | 1a | The editor's live region | 1 | Its case, and an unchanged look |
 | 1b | Alphabetical participants | 1a | Unit tests and one order case |
-| 2 | Roles: voter and facilitator | 1 | Its spec and tests |
+| 2a | Seats, no behaviour change | 1 | The existing cases unchanged, and new unit cases |
+| 2b | Roles on the server and the wire | 2a | Unit and API tests, and the existing cases unchanged |
+| 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
-| 4 | Restyle | 1b, 2, 3 | By eye, and the existing cases unchanged |
+| 4 | Restyle | 1b, 2c, 3 | By eye, and the existing cases unchanged |
 | 4a | The round's live region | 4 | Its cases |
 | 5+ | One step per feature | 4 | Each one's spec |
 
-**Order**: 1, 1a and 1b stacked and merged in the same window, then 2, then 4
+**Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
+2c likewise, then 4
 and 4a stacked, while 3 runs alongside from now.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
@@ -176,11 +179,10 @@ never vote keep the round from completing, so auto-reveal never fires
 its total either. Step 2 adds a role per
 participant to the snapshot, excludes facilitators from the completion rule, and
 lets a participant choose and switch role; a facilitator's page has no deck. It
-is built in today's look and restyled in step 4. Its spec draws the states by
-events matrix, including a role switch mid-round with a vote cast, the last
-voter who has not voted switching to facilitator, and reconnects. The latch in
-section 3 of the protocol architecture fires on a vote, never on a departure,
-and step 2 decides whether a role switch behaves as a departure.
+is built in today's look and restyled in step 4. Specified in its own document,
+`docs/superpowers/specs/2026-10-04-ui-refresh-2-roles-design.md`, as steps 2a,
+2b and 2c: seats without a behaviour change, roles on the server and the wire,
+then roles in the page.
 
 **Step 3. Design direction.** Mockups of the voter's and the facilitator's
 pages, before and after a reveal, at the screens in principle 2, and the lobby.
@@ -276,6 +278,11 @@ commitment:
   also fixes a typo or a blank name. Close to "Not Alice?", which changes the
   name before joining rather than after.
 - Keyboard shortcuts for voting.
+- Known rooms in the lobby's Join form: completion from the `role:<id>` keys,
+  which exist only for rooms the page reached (step 2c), showing each room's
+  last role, so a known room is picked rather than typed. To decide: ordering,
+  how many, removal (only Create removes a key, so a link to a reused slug
+  finds an old one), and how the role is shown.
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
@@ -816,7 +823,7 @@ What step 1a's first design learned about announcing the round, kept for step
 | Show, or auto-reveal | becomes revealed: announced | Show: unchanged; auto-reveal: cannot happen, a revealed round takes no vote |
 | Re-vote | unchanged: not announced | becomes open: announced |
 | Clear | unchanged: not announced | becomes open: announced |
-| A role switch (step 2) that reveals the round, if step 2 makes it fire the latch; otherwise as any other snapshot | becomes revealed: announced | unchanged |
+| A `/role` switch to facilitator that completes the round (step 2b) | becomes revealed: announced | unchanged |
 | Any other snapshot (a vote that does not complete the round, a join or leave, an issue edit) | unchanged | unchanged |
 | Stream lost, or an invalid snapshot dropped, before a reconnect | unchanged | unchanged |
 | In-place reconnect, the round changed meanwhile | becomes revealed: announced | becomes open: announced |

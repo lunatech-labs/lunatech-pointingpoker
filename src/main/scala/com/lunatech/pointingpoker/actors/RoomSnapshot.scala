@@ -65,12 +65,13 @@ object RoomSnapshot:
       currentIssue = data.state.currentIssue,
       votesRevealed = round.revealed,
       // The join: a participant appears because they are one, their estimate comes from
-      // the round, and an estimate belonging to nobody present reaches nobody.
+      // their seat, and an estimate belonging to nobody present reaches nobody.
       users = data.members.toList
         .sortWith((a, b) => a._1.compareTo(b._1) < 0)
         .map { (id, member) =>
           val disclose = round.revealed || id == forUser
-          Participant(id, member.name, Estimation.of(round.estimates.get(id), disclose))
+          val estimate = data.state.seats.get(id).flatMap { case Room.Seat.Voter(e) => e }
+          Participant(id, member.name, Estimation.of(estimate, disclose))
         }
     )
   end of
