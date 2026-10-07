@@ -92,12 +92,13 @@ debugged at the same time.
 Backend logic can start earlier, but the UI is most efficient to build once,
 directly in the new frontend.
 
-- [ ] Roles: voting participant vs. observer, self-service switching, excluding
+- [x] Roles: voting participant vs. observer, self-service switching, excluding
       observers from vote counts and status indicators. **Becomes step 2 of**
       `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`:
       product owners who facilitate and never vote keep auto-reveal from ever
       firing. It builds the non-voting role as that design's "facilitator", who
-      keeps the controls, so there is no read-only observer.
+      keeps the controls, so there is no read-only observer. **Landed as steps
+      2a to 2c** of `docs/superpowers/specs/2026-10-04-ui-refresh-2-roles-design.md`.
 - [ ] Show how many participants have voted, so a facilitator reads abstention
       instead of counting check-circles. Comes out of step 3, which took the
       non-voter out of the tally as a non-value: a count beside the distribution is

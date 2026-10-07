@@ -985,6 +985,16 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
+### A deliberate re-click on the role line within the double-click time is ignored
+
+- **Where:** `frontend/src/components/RoleLine.tsx` (the button's `onClick`).
+- **Issue:** The line ignores a click whose `detail` is above 1, so a double-click
+  switches once. A browser counts any click within the OS double-click time and
+  without a mouse move as part of the same run, so switching and then switching
+  back at once, on the same spot, is ignored until a pause or a move. The line
+  keeps showing the role held, so nothing wrong is shown.
+- **Resolution:** Stays open, since the cost is a pause before the second click.
+
 ### The frontend's type check stops at ES2022 APIs
 
 - **Where:** `frontend/tsconfig.json`, `target` and `lib`.

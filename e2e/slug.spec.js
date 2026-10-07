@@ -71,17 +71,11 @@ test('a name typed into the Join form is checked by the page route', async ({ pa
 })
 
 test('a room remembered from before the cutover reopens under its derived name', async ({
-  page,
-  origin
+  visitor
 }) => {
-  // Seeded on / only: init scripts run on every navigation, and the rejoin rewrites the key.
-  await page.addInitScript(legacy => {
-    if (location.pathname === '/') {
-      localStorage.setItem('roomId', legacy)
-      localStorage.setItem('name', 'Alice')
-    }
-  }, crypto.randomUUID())
-  await page.goto(`${origin}/`)
+  // With a default role, so the rejoin joins at once rather than asking for one.
+  const page = await visitor({ roomId: crypto.randomUUID(), name: 'Alice', defaultRole: 'Voter' })
+  await page.goto('/')
   // The lobby offers it rather than joining it: only a room's own path joins.
   await page.getByRole('link', { name: 'Rejoin your last room as Alice' }).click()
   await expect(page).toHaveURL(ROOM_URL)

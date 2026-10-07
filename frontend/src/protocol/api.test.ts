@@ -7,6 +7,7 @@ import {
   isSessionRefusal,
   join,
   REQUEST_TIMEOUT_MS,
+  switchRole,
   vote
 } from './api'
 
@@ -70,11 +71,23 @@ describe('isSessionRefusal', () => {
 // Every exported request, so one that drops its signal fails here.
 const requests = {
   createRoom: () => createRoom(),
-  join: () => join('brave-golden-otter', 'Alice'),
+  join: () => join('brave-golden-otter', 'Alice', 'Facilitator'),
   command: () => command('brave-golden-otter', 'show'),
   vote: () => vote('brave-golden-otter', '3'),
+  switchRole: () => switchRole('brave-golden-otter', 'Facilitator'),
   editIssue: () => editIssue('brave-golden-otter', 'PP-1')
 }
+
+describe('a role', () => {
+  it.each([
+    ['join', requests.join, { name: 'Alice', role: 'Facilitator' }],
+    ['switchRole', requests.switchRole, { role: 'Facilitator' }]
+  ])('is sent in the body of %s', async (_, call, body) => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
+    await call()
+    expect(await fetchMock.mock.calls[0][0].json()).toEqual(body)
+  })
+})
 
 describe('a request', () => {
   it.each(Object.entries(requests))('fails once unanswered for 10 s: %s', async (_, call) => {

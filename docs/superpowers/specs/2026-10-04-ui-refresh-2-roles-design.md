@@ -1,7 +1,7 @@
 # UI Refresh, Step 2: Roles
 
 Date: 2026-10-04
-Status: Validated. Steps 2a and 2b landed; step 2c not yet implemented
+Status: Validated. Steps 2a, 2b and 2c landed
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 2
 
 ## Purpose
@@ -315,19 +315,16 @@ cannot change them.
 ### The lobby
 
 The Create and the Join forms show the same default role control, under the
-name. Enter still submits from the name field only (principle 8). What they
-show depends on whether a default role is stored when the page loads (decision
-7). A default stored later, in this tab or another, changes the shape only at
-the next load, so a first visit's form stays as the user is filling it.
+name. Enter still submits from the name field only (principle 8).
 
-**A first visit**, with no default role, gets one `fieldset`, "Your default
-role", with two radio buttons, Voter and Facilitator, Voter pre-selected, and
-the line "Used to join new rooms. You can change it here later."
-
-**A later visit** gets the default line, "Default role for new rooms: Voter"
-or "Default role for new rooms: Facilitator", with a button "Change" that
-replaces it with the "Your default role" fieldset, holding the stored value. A choice there is stored at
-once, as above.
+Every lobby shows one `fieldset`, "Your default role", laid out as a row like
+the name's, with two radio buttons, Voter and Facilitator, and the help line
+"Used for rooms you have not joined before. In a room you have joined before,
+you keep your previous role there." The help line describes the group
+(`aria-describedby`), so a screen reader hears the rule with the group's name.
+The stored default is checked, else Voter. A choice there is stored at once, as
+above. A first lobby and a later one differ only in what is checked, so one
+click changes the default, as one click on the role line changes a seat.
 
 The lobby shows no role for the room being joined: the join role (Terms)
 decides it, and the role line shows it once joined.
@@ -369,7 +366,7 @@ Additions, each a decision under the parent's principle 9:
 
 | What the suite reads | Contract |
 | --- | --- |
-| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`; on a later visit, the exact text `Default role for new rooms: Voter` or `Default role for new rooms: Facilitator`, in an element without the button, and `getByRole('button', { name: 'Change' })` |
+| The lobby's default role | `getByRole('group', { name: 'Your default role' })`, radios `Voter` and `Facilitator`, on every visit, described by the help line |
 | The switch | `getByRole('button', { name: 'Switch to facilitator' })` and `'Switch to voter'` |
 | A facilitator's row | the exact text `Facilitator` within `participantEntry(page, name)` |
 | A facilitator's page has no deck | `deck(page)` has count 0 |
@@ -413,15 +410,15 @@ New e2e cases, each shown failing against 2b:
   joins as a facilitator;
 - with default Voter, a legacy link for a room whose slug's key is
   Facilitator joins as a facilitator;
-- a choice of Facilitator after Change is stored without a submit, and a new
-  room then joins as a facilitator;
-- with default Facilitator, a join to room R, then Change to Voter, then a
+- the "Your default role" group's description is the help line;
+- on a later visit, a choice of Facilitator is stored without a submit, and a
+  new room then joins as a facilitator;
+- with default Facilitator, a join to room R, then a choice of Voter, then a
   revisit of R joins as a facilitator, from the key its snapshot wrote;
 - with a malformed `defaultRole` seeded, a submit keeping Voter stores it, and
   the next visit to the room auto-joins;
-- on two first-visit tabs, choosing Facilitator in one keeps its first-visit
-  form, and after a submit from the other, showing Voter, a later lobby shows
-  `Default role for new rooms: Facilitator`;
+- on two first-visit tabs, after a choice of Facilitator in one and a submit
+  from the other, showing Voter, a later lobby has Facilitator checked;
 - with default Facilitator, Create, with `/create-room` routed to a slug
   whose key is Voter, joins as a facilitator;
 - a switch survives a reload while the stream is frozen;
@@ -467,9 +464,9 @@ type the remembered role as `components['schemas']['Role']` and make
   and a voter's page shows the deck, until one click on the role line. Roles
   settle while a room gathers, before the first vote, and a wrong default
   changes at the next lobby.
-- An inattentive user may overlook "for new rooms" in the default line and
-  read it as the role for the room they are joining, which may remember the
-  other one. The role line shows the role as soon as they join.
+- A user who changes the default may still expect it in a room they joined
+  before, which keeps its remembered role. The lobby's help line says so, and
+  the role line shows the role as soon as they join.
 - Switching moves the switcher's own page, since the deck appears or
   disappears. Step 3 lays out both pages.
 - A facilitator loses the "The round is revealed" line with the deck until step

@@ -1,4 +1,6 @@
 import { useId, type KeyboardEvent, type MouseEvent } from 'react'
+import type { Role } from '../protocol/snapshot'
+import { DefaultRole } from './DefaultRole'
 
 export type LobbyTab = 'create' | 'join'
 
@@ -11,6 +13,8 @@ type Props = {
   onRoomId: (roomId: string) => void
   name: string
   onName: (name: string) => void
+  defaultRole: Role
+  onChooseRole: (role: Role) => void
   rejoin: { href: string; label: string } | null
   // A session that has ended: further clicks would be ignored, so the form is inert instead.
   disabled: boolean
@@ -31,6 +35,8 @@ export function Lobby(props: Props) {
     onRoomId,
     name,
     onName,
+    defaultRole,
+    onChooseRole,
     rejoin,
     disabled,
     onCreate,
@@ -42,6 +48,13 @@ export function Lobby(props: Props) {
     onTab(next)
   }
   const tabClass = (which: LobbyTab) => (tab === which ? 'nav-link active' : 'nav-link')
+  const roleRow = (
+    <DefaultRole
+      role={defaultRole}
+      disabled={disabled}
+      onChoose={onChooseRole}
+    />
+  )
   const nameRow = (action: () => void) => (
     <div className="form-group row">
       <label htmlFor={nameId} className="col-sm-3 col-form-label">
@@ -88,6 +101,7 @@ export function Lobby(props: Props) {
             <div className="card-body">
               <h5 className="card-title">Create Room</h5>
               {nameRow(onCreate)}
+              {roleRow}
               <div className="row">
                 <div className="col-sm-3 offset-sm-9">
                   <button type="button" className="btn btn-primary" onClick={onCreate}>
@@ -116,6 +130,7 @@ export function Lobby(props: Props) {
                 </div>
               </div>
               {nameRow(onJoin)}
+              {roleRow}
               <div className="row">
                 <div className="col-sm-3 offset-sm-9">
                   <button

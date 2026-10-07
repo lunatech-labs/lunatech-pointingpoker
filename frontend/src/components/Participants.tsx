@@ -16,7 +16,11 @@ export function Participants({ view }: { view: View }) {
           <tbody>
             {view.users.map(u => (
               <tr key={u.id} data-testid="participant">
-                <td>{u.voted && <CircleCheckBig size={20} role="img" aria-label="Voted" />}</td>
+                <td>
+                  {u.facilitator
+                    ? 'Facilitator'
+                    : u.voted && <CircleCheckBig size={20} role="img" aria-label="Voted" />}
+                </td>
                 <td>{u.name}</td>
                 <td>
                   {u.hasEstimation && !view.votesRevealed && (

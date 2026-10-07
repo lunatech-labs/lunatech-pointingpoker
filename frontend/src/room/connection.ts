@@ -1,5 +1,5 @@
 import { REQUEST_TIMEOUT_MS, type JoinOutcome } from '../protocol/api'
-import { snapshotSchema, type RoomSnapshot } from '../protocol/snapshot'
+import { snapshotSchema, type Role, type RoomSnapshot } from '../protocol/snapshot'
 
 export type RoomStore = { lost: boolean; fatal: boolean; snapshot: RoomSnapshot | null }
 
@@ -14,7 +14,7 @@ export type Stream = {
 
 export type ConnectionDeps = {
   connectionId: string
-  join: (roomId: string, name: string) => Promise<JoinOutcome>
+  join: (roomId: string, name: string, role: Role) => Promise<JoinOutcome>
   openStream: (url: string) => Stream
   sendBeacon: (url: string) => void
   fetchPage: (url: string, init: RequestInit) => Promise<Response>
@@ -29,7 +29,7 @@ export type JoinResult = 'joined' | 'failed' | 'ignored'
 export type Connection = {
   subscribe(listener: () => void): () => void
   getSnapshot(): RoomStore
-  join(roomId: string, name: string): Promise<JoinResult>
+  join(roomId: string, name: string, role: Role): Promise<JoinResult>
   open(roomId: string): void
   leave(): void
   // A command's own 401: the instance that answered it does not know this session, which the
@@ -197,11 +197,11 @@ export function createConnection(deps: ConnectionDeps): Connection {
     getSnapshot: () => store,
 
     // Two cookieless joins would each mint a session, and the second cookie replaces the first.
-    async join(id, name) {
+    async join(id, name, role) {
       if (joining || roomId !== null) return 'ignored'
       joining = true
       try {
-        if ((await deps.join(id, name)) !== 'joined') return 'failed'
+        if ((await deps.join(id, name, role)) !== 'joined') return 'failed'
         open(id)
         return 'joined'
       } catch (reason) {

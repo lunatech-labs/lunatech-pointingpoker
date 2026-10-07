@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import * as api from '../protocol/api'
+import type { Role } from '../protocol/snapshot'
 import type { Connection } from '../room/connection'
+import {
+  chooseDefault,
+  forgetRole,
+  joinRole,
+  keepDefault,
+  rememberRole,
+  storedDefault
+} from '../room/joinRole'
+import { ownRoleOf } from '../room/view'
 import { Alerts } from './Alerts'
 import { Lobby, type LobbyTab } from './Lobby'
 import { Room } from './Room'
@@ -13,6 +23,8 @@ const params = new URLSearchParams(window.location.search)
 const movedOnLoad = params.get('moved') === '1'
 const restartedOnLoad = params.get('restarted') === '1'
 if (movedOnLoad || restartedOnLoad) history.replaceState(null, '', window.location.pathname)
+// Decision 7: the auto-join and the radio first checked follow the default role stored at load.
+const defaultOnLoad = storedDefault(localStorage)
 const joinError = 'Could not join the room. Please try again.'
 // A room remembered from before the cutover is a UUID, which the server's page route redirects.
 const rejoinLabel = (id: string, name: string) =>
@@ -23,6 +35,7 @@ export function App({ connection }: { connection: Connection }) {
   const room = useRoom(connection)
   const [roomId, setRoomId] = useState(pathRoom)
   const [name, setName] = useState(localStorage.getItem('name') ?? '')
+  const [shownRole, setShownRole] = useState<Role>(defaultOnLoad ?? 'Voter')
   const [tab, setTab] = useState<LobbyTab>(pathRoom ? 'join' : 'create')
   const [error, setError] = useState('')
   const [moved, setMoved] = useState(movedOnLoad)
@@ -31,20 +44,29 @@ export function App({ connection }: { connection: Connection }) {
   const remembered = localStorage.getItem('roomId')
   const reached = room.snapshot !== null
 
+  // Every lobby submit stores the name, and the shown default if none is stored.
+  const keepLobby = () => {
+    localStorage.setItem('name', name)
+    return keepDefault(localStorage, shownRole)
+  }
+
   // In place, so a ?moved=1 banner survives joining.
   const joinHere = () => {
-    localStorage.setItem('name', name)
-    void connection.join(pathRoom, name).then(result => {
+    const role = joinRole(localStorage, pathRoom, keepLobby())
+    void connection.join(pathRoom, name, role).then(result => {
       if (result === 'failed') setError(joinError)
       else if (result === 'joined') setError('')
     })
   }
 
   const doCreate = () => {
-    localStorage.setItem('name', name)
+    keepLobby()
     api
       .createRoom()
-      .then(goTo)
+      .then(id => {
+        forgetRole(localStorage, id)
+        goTo(id)
+      })
       .catch(reason => {
         console.log(reason)
         setError('Could not create a room. Please try again.')
@@ -55,7 +77,7 @@ export function App({ connection }: { connection: Connection }) {
   const doJoin = () => {
     const id = roomId.trim()
     if (!id) return setError(joinError)
-    localStorage.setItem('name', name)
+    keepLobby()
     goTo(id)
   }
 
@@ -71,14 +93,25 @@ export function App({ connection }: { connection: Connection }) {
     connection.leave()
   }
 
+  const chooseRole = (role: Role) => {
+    chooseDefault(localStorage, role)
+    setShownRole(role)
+  }
+
   // Remembered only once reached, so an unreachable typed name is never offered back.
   useEffect(() => {
     if (reached) localStorage.setItem('roomId', pathRoom)
   }, [reached])
 
-  // A room's own path with a remembered name joins at once.
+  // Each snapshot's own seat, so a switch made in another tab is stored by every tab.
   useEffect(() => {
-    if (pathRoom && name) joinHere()
+    const role = room.snapshot && ownRoleOf(room.snapshot)
+    if (role) rememberRole(localStorage, pathRoom, role)
+  }, [room.snapshot])
+
+  // A room's own path joins at once with a remembered name and a default role (decision 7).
+  useEffect(() => {
+    if (pathRoom && name && defaultOnLoad !== null) joinHere()
     // Once, on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -112,6 +145,8 @@ export function App({ connection }: { connection: Connection }) {
           onRoomId={setRoomId}
           name={name}
           onName={setName}
+          defaultRole={shownRole}
+          onChooseRole={chooseRole}
           rejoin={rejoin}
           disabled={room.fatal}
           onCreate={doCreate}
@@ -124,6 +159,7 @@ export function App({ connection }: { connection: Connection }) {
           onCopied={onCopied}
           onLeave={doLeave}
           onRefused={() => connection.refused()}
+          onSwitched={role => rememberRole(localStorage, pathRoom, role)}
         />
       )}
     </>
