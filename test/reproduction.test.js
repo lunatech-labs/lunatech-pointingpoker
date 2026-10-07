@@ -21,7 +21,7 @@ test('an SSE stream through a buffering proxy delivers nothing and dies at the d
   const joined = await fetch(`${stub.baseUrl}/rooms/${roomId}/join`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name: 'Ada' })
+    body: JSON.stringify({ name: 'Ada', role: 'Voter' })
   })
   assert.equal(joined.status, 204)
   // Load-bearing: without a cookie /events answers 401, a small finite response the stub

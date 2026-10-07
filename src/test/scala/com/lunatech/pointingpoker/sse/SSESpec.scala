@@ -46,7 +46,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         RoomSnapshot.Participant(
           id = userId,
           name = "Alice",
-          estimation = RoomSnapshot.Estimation.NoEstimation
+          seat = RoomSnapshot.Seat.Voter(RoomSnapshot.Estimation.NoEstimation)
         )
       )
     )

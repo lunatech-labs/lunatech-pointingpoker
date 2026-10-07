@@ -477,10 +477,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
       val (_, roomRef) = createRoom(aSlug(), Room.RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, replyProbe.ref)
       val first = replyProbe.expectMessageType[Room.SessionMinted]
 
-      roomRef ! Room.RequestSession("Alice", Some(first.token), replyProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, Some(first.token), replyProbe.ref)
       val second = replyProbe.expectMessageType[Room.SessionMinted]
 
       second.userId mustBe first.userId
@@ -491,7 +491,12 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val replyProbe   = testKit.createTestProbe[Room.SessionMinted]()
       val (_, roomRef) = createRoom(aSlug(), Room.RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", Some(Room.SessionToken.mint()), replyProbe.ref)
+      roomRef ! Room.RequestSession(
+        "Alice",
+        Room.Role.Voter,
+        Some(Room.SessionToken.mint()),
+        replyProbe.ref
+      )
 
       replyProbe.expectMessageType[Room.SessionMinted]
     }
@@ -502,7 +507,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef)      = createRoom(aSlug(), withUsers(user))
 
-      roomRef ! Room.RequestSession("renamed", Some(user.token), replyProbe.ref)
+      roomRef ! Room.RequestSession("renamed", Room.Role.Voter, Some(user.token), replyProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
       val data = dataProbe.expectMessageType[Room.DataStatus].data
 
@@ -517,7 +522,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
       val (_, roomRef) = createRoom(aSlug(), Room.RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", None, replyProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, replyProbe.ref)
       roomRef ! Room.GetData(dataProbe.ref)
 
       // Invariant 5: a member who holds no connection would block auto-reveal for the meeting.
@@ -529,7 +534,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val dataProbe         = testKit.createTestProbe[Room.DataStatus]()
       val (roomId, roomRef) = createRoom(aSlug(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, sessionProbe.ref)
 
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
@@ -545,12 +550,27 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       data.data.state.seats mustBe Map(minted.userId -> Room.Seat.Voter(None))
     }
 
+    "create the seat from the join's role" in {
+      val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(aSlug(), RoomData.empty)
+
+      // After a restart the page's token is unknown, so the join's role is the seat's only source.
+      val stale = Some(Room.SessionToken.mint())
+      roomRef ! Room.RequestSession("Alice", Room.Role.Facilitator, stale, sessionProbe.ref)
+      val minted = sessionProbe.expectMessageType[Room.SessionMinted]
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.state.seats mustBe
+        Map(minted.userId -> Room.Seat.Facilitator)
+    }
+
     "resolve a session minted for a tab that has not connected" in {
       val sessionProbe = testKit.createTestProbe[Room.SessionMinted]()
       val resultProbe  = testKit.createTestProbe[Room.TokenResolution]()
       val (_, roomRef) = createRoom(aSlug(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Room.ValidateToken(minted.token, resultProbe.ref)
@@ -586,7 +606,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val userProbe    = TestProbe()(using testKit.system.classicSystem)
       val (_, roomRef) = createRoom(aSlug(), RoomData.empty)
 
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
 
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
@@ -613,7 +633,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Through RequestSession and Join, since promotion is what used to consume the entry:
       // seeding the map directly leaves the case green with the old code.
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.
@@ -643,7 +663,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
 
       // Same setup as the resolve case above: Alice's token is retained in `sessions`
       // after her member entry is removed at grace expiry.
-      roomRef ! Room.RequestSession("Alice", None, sessionProbe.ref)
+      roomRef ! Room.RequestSession("Alice", Room.Role.Voter, None, sessionProbe.ref)
       val minted = sessionProbe.expectMessageType[Room.SessionMinted]
       roomRef ! Attendee(minted.userId, "Alice", false, "", userProbe.ref, minted.token).joinMessage
       // Alice's Join publishes too, so consume it before the next publish can be the barrier.
@@ -881,7 +901,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       val (_, roomRef) = createRoom(aSlug(), withUsers(user))
 
       // A reload's join: the cookie resolves the session, so rename runs under the same name.
-      roomRef ! Room.RequestSession(user.name, Some(user.token), replyProbe.ref)
+      roomRef ! Room.RequestSession(user.name, Room.Role.Voter, Some(user.token), replyProbe.ref)
       replyProbe.expectMessage(Room.SessionMinted(user.id, user.token))
       roomRef ! Room.GetData(dataProbe.ref)
 
@@ -1465,6 +1485,52 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       dataProbe.expectMessageType[Room.DataStatus].data.connections.isEmpty mustBe true
     }
   }
+
+  // The spec's states by events for one identity, A, beside a present voter, B.
+  "A seat" should {
+    for cell <- seatCells do
+      s"${cell.phase.label}: ${cell.row}, from ${describe(cell.aSeat)}" in {
+        val (a, _)       = createUser(UUID.randomUUID(), "A", false, "")
+        val (b, bProbe)  = createUser(UUID.randomUUID(), "B", false, "")
+        val replyProbe   = testKit.createTestProbe[Any]()
+        val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+        val seated       = withUsers(a, b).withSeat(a, cell.aSeat).withSeat(b, cell.bSeat)
+        val (_, roomRef) = createRoom(
+          aSlug(),
+          if cell.phase == Phase.Revealed then seated.withRevealed() else seated
+        )
+
+        cell.event.send(roomRef, a, b, replyProbe.ref)
+        roomRef ! Room.GetData(dataProbe.ref)
+
+        cell.reply(a).foreach(replyProbe.expectMessage(_))
+        // Every event publishes, refused or not.
+        expectSnapshot(bProbe).votesRevealed mustBe cell.outcome.revealed
+        val data = dataProbe.expectMessageType[Room.DataStatus].data
+        data.state.seats(a.id) mustBe cell.outcome.seat
+        data.state.round.revealed mustBe cell.outcome.revealed
+        // One reply at most: a second would be a stray.
+        replyProbe.expectNoMessage(20.millis)
+      }
+    end for
+
+    // The matrix's B-switch row has no third identity, so its Facilitator cell cannot reveal.
+    "reveal the round when another voter's switch completes it beside a facilitator" in {
+      val (a, _)       = createUser(UUID.randomUUID(), "A", false, "")
+      val (b, bProbe)  = createUser(UUID.randomUUID(), "B", false, "")
+      val (c, _)       = createUser(UUID.randomUUID(), "C", true, "8")
+      val replyProbe   = testKit.createTestProbe[Room.CommandResult]()
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(aSlug(), withUsers(a, b, c).withSeat(a, facilitator))
+
+      roomRef ! Room.SwitchRole(b.token, Room.Role.Facilitator, replyProbe.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      replyProbe.expectMessage(Room.Applied)
+      expectSnapshot(bProbe).votesRevealed mustBe true
+      dataProbe.expectMessageType[Room.DataStatus].data.state.round.revealed mustBe true
+    }
+  }
 end RoomSpec
 
 object RoomSpec:
@@ -1493,4 +1559,234 @@ object RoomSpec:
     val roomRef = testKit.spawn[Room.Command](Room(roomId, data, gracePeriod, stopAfterIdle))
     (roomId, roomRef)
   end createRoom
+
+  // One event of the matrix: A's, or B's where the row is about another identity's act.
+  enum SeatEvent:
+    case AVotes(estimation: String)
+    case ASwitches(role: Room.Role)
+    case AJoins(role: Room.Role)
+    case AShows, AClears, AReVotes, ADeparts, AReconnects, BVotes
+    case BSwitches(role: Room.Role)
+
+    def send(room: ActorRef[Room.Command], a: Attendee, b: Attendee, replyTo: ActorRef[Any]): Unit =
+      this match
+        case AVotes(estimation) => room ! Room.Vote(a.token, estimation, replyTo)
+        case ASwitches(role)    => room ! Room.SwitchRole(a.token, role, replyTo)
+        case AJoins(role)       => room ! Room.RequestSession(a.name, role, Some(a.token), replyTo)
+        case AShows             => room ! Room.ShowVotes(a.token, replyTo)
+        case AClears            => room ! Room.ClearVotes(a.token, replyTo)
+        case AReVotes           => room ! Room.ReVote(a.token, replyTo)
+        case ADeparts           => room ! Room.Depart(a.token, a.connectionId, replyTo)
+        case AReconnects        => room ! a.joinMessage
+        case BVotes             => room ! Room.Vote(b.token, "8", replyTo)
+        case BSwitches(role)    => room ! Room.SwitchRole(b.token, role, replyTo)
+  end SeatEvent
+
+  final case class Outcome(seat: Room.Seat, revealed: Boolean, refusal: Option[Room.VoteRefusal])
+
+  def revealed(seat: Room.Seat, refusal: Option[Room.VoteRefusal] = None): Outcome =
+    Outcome(seat, revealed = true, refusal)
+  def hidden(seat: Room.Seat, refusal: Option[Room.VoteRefusal] = None): Outcome =
+    Outcome(seat, revealed = false, refusal)
+
+  enum Phase(val label: String):
+    case Open     extends Phase("open round")
+    case Revealed extends Phase("revealed round")
+
+  final case class SeatCell(
+      phase: Phase,
+      row: String,
+      event: SeatEvent,
+      bSeat: Room.Seat,
+      aSeat: Room.Seat,
+      outcome: Outcome
+  ):
+    def reply(a: Attendee): Option[Any] = outcome.refusal.orElse(event match
+      case SeatEvent.AJoins(_)   => Some(Room.SessionMinted(a.id, a.token))
+      case SeatEvent.AReconnects => None
+      case _                     => Some(Room.Applied))
+  end SeatCell
+
+  val noVote: Room.Seat      = Room.Seat.Voter(None)
+  val confirmed: Room.Seat   = Room.Seat.Voter(Some(Room.Estimate.of("5")))
+  val unconfirmed: Room.Seat = Room.Seat.Voter(Some(Room.Estimate.of("5", confirmed = false)))
+  val facilitator: Room.Seat = Room.Seat.Facilitator
+  val votedThree: Room.Seat  = Room.Seat.Voter(Some(Room.Estimate.of("3")))
+  val bConfirmed: Room.Seat  = Room.Seat.Voter(Some(Room.Estimate.of("8")))
+
+  def describe(seat: Room.Seat): String = seat match
+    case Room.Seat.Voter(None)    => "Voter(None)"
+    case Room.Seat.Voter(Some(e)) =>
+      if e.confirmed then "Voter(confirmed)" else "Voter(unconfirmed)"
+    case Room.Seat.Facilitator => "Facilitator"
+
+  // One row of the matrix, its columns in the spec's order.
+  private def row(phase: Phase, name: String, event: SeatEvent, bSeat: Room.Seat = bConfirmed)(
+      outcomes: Outcome*
+  ): List[SeatCell] =
+    require(outcomes.size == 4, s"$name: expected 4 outcomes, got ${outcomes.size}")
+    List(noVote, confirmed, unconfirmed, facilitator)
+      .zip(outcomes)
+      .map((aSeat, outcome) => SeatCell(phase, name, event, bSeat, aSeat, outcome))
+
+  import Phase.{Open, Revealed}
+  import Room.Role.{Facilitator, Voter}
+  import Room.VoteRefusal.{BlankEstimation, NotAVoter, RoundRevealed}
+  import SeatEvent.*
+
+  // B has confirmed, so a cell that completes the round reveals it, and a cell that must not
+  // reveal starts, from a confirmed A, in the complete but hidden state a departure leaves.
+  val seatCells: List[SeatCell] = List(
+    row(Open, "A votes, non-blank", AVotes("3"))(
+      revealed(votedThree),
+      revealed(votedThree),
+      revealed(votedThree),
+      hidden(facilitator, Some(NotAVoter))
+    ),
+    row(Open, "A votes, blank", AVotes(" "))(
+      hidden(noVote, Some(BlankEstimation)),
+      hidden(confirmed, Some(BlankEstimation)),
+      hidden(unconfirmed, Some(BlankEstimation)),
+      hidden(facilitator, Some(BlankEstimation))
+    ),
+    row(Open, "A switches to facilitator through /role", ASwitches(Facilitator))(
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator),
+      hidden(facilitator)
+    ),
+    row(Open, "A switches to voter through /role", ASwitches(Voter))(
+      hidden(noVote),
+      hidden(confirmed),
+      hidden(unconfirmed),
+      hidden(noVote)
+    ),
+    row(Open, "A joins as a voter", AJoins(Voter))(
+      hidden(noVote),
+      hidden(confirmed),
+      hidden(unconfirmed),
+      hidden(noVote)
+    ),
+    row(Open, "A joins as a facilitator", AJoins(Facilitator))(
+      hidden(facilitator),
+      hidden(facilitator),
+      hidden(facilitator),
+      hidden(facilitator)
+    ),
+    row(Open, "A presses Show", AShows)(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(facilitator)
+    ),
+    row(Open, "A presses Clear", AClears)(
+      hidden(noVote),
+      hidden(noVote),
+      hidden(noVote),
+      hidden(facilitator)
+    ),
+    row(Open, "A presses Re-vote", AReVotes)(
+      hidden(noVote),
+      hidden(unconfirmed),
+      hidden(unconfirmed),
+      hidden(facilitator)
+    ),
+    row(Open, "A departs by the beacon", ADeparts)(
+      hidden(noVote),
+      hidden(confirmed),
+      hidden(unconfirmed),
+      hidden(facilitator)
+    ),
+    row(Open, "A's stream reconnects in place", AReconnects)(
+      hidden(noVote),
+      hidden(confirmed),
+      hidden(unconfirmed),
+      hidden(facilitator)
+    ),
+    row(Open, "B casts the last vote", BVotes, bSeat = noVote)(
+      hidden(noVote),
+      revealed(confirmed),
+      hidden(unconfirmed),
+      revealed(facilitator)
+    ),
+    // From a facilitator, B was the last voter, so nobody is left to complete the round.
+    row(Open, "B switches to facilitator through /role", BSwitches(Facilitator), bSeat = noVote)(
+      hidden(noVote),
+      revealed(confirmed),
+      hidden(unconfirmed),
+      hidden(facilitator)
+    ),
+    row(Revealed, "A votes", AVotes("3"))(
+      revealed(noVote, Some(RoundRevealed)),
+      revealed(confirmed, Some(RoundRevealed)),
+      revealed(unconfirmed, Some(RoundRevealed)),
+      revealed(facilitator, Some(RoundRevealed))
+    ),
+    row(Revealed, "A switches to facilitator through /role", ASwitches(Facilitator))(
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator)
+    ),
+    row(Revealed, "A switches to voter through /role", ASwitches(Voter))(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(noVote)
+    ),
+    row(Revealed, "A joins as a facilitator", AJoins(Facilitator))(
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator),
+      revealed(facilitator)
+    ),
+    row(Revealed, "A joins as a voter", AJoins(Voter))(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(noVote)
+    ),
+    row(Revealed, "A presses Show", AShows)(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(facilitator)
+    ),
+    row(Revealed, "A presses Clear", AClears)(
+      hidden(noVote),
+      hidden(noVote),
+      hidden(noVote),
+      hidden(facilitator)
+    ),
+    row(Revealed, "A presses Re-vote", AReVotes)(
+      hidden(noVote),
+      hidden(unconfirmed),
+      hidden(unconfirmed),
+      hidden(facilitator)
+    ),
+    row(Revealed, "A departs by the beacon", ADeparts)(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(facilitator)
+    ),
+    row(Revealed, "A's stream reconnects in place", AReconnects)(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(facilitator)
+    ),
+    row(Revealed, "B votes", BVotes)(
+      revealed(noVote, Some(RoundRevealed)),
+      revealed(confirmed, Some(RoundRevealed)),
+      revealed(unconfirmed, Some(RoundRevealed)),
+      revealed(facilitator, Some(RoundRevealed))
+    ),
+    row(Revealed, "B switches to facilitator through /role", BSwitches(Facilitator))(
+      revealed(noVote),
+      revealed(confirmed),
+      revealed(unconfirmed),
+      revealed(facilitator)
+    )
+  ).flatten
 end RoomSpec

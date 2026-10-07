@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import type { Estimation, RoomSnapshot } from '../protocol/snapshot'
+import type { Estimation, Participant, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from './view'
 
 const none: Estimation = { type: 'NoEstimation' }
 const confirmed = (value: string): Estimation => ({ type: 'Confirmed', value })
 const unconfirmed = (value: string): Estimation => ({ type: 'Unconfirmed', value })
 
-const row = (id: string, estimation: Estimation) => ({ id, name: id.toUpperCase(), estimation })
+const row = (id: string, estimation: Estimation): Participant => ({
+  id,
+  name: id.toUpperCase(),
+  seat: { type: 'Voter', estimation }
+})
+const facilitator = (id: string): Participant => ({
+  id,
+  name: id.toUpperCase(),
+  seat: { type: 'Facilitator' }
+})
 const snap = (users: RoomSnapshot['users'], extra: Partial<RoomSnapshot> = {}): RoomSnapshot => ({
   you: 'a',
   currentIssue: 'PP-1',
@@ -52,9 +61,24 @@ describe('applySnapshot', () => {
     expect(absent).toMatchObject({ userEstimation: '', ownVoteConfirmed: true })
   })
 
+  it("gives a facilitator's row no estimation, so the tally leaves them out", () => {
+    const s = snap([facilitator('a'), row('b', confirmed('5'))], { votesRevealed: true })
+    const view = applySnapshot(s)
+    expect(view.users.map(u => [u.voted, u.hasEstimation, u.estimation])).toEqual([
+      [false, false, ''],
+      [true, true, '5']
+    ])
+    expect(view.votesSummary).toEqual([['5', 1]])
+    expect(view).toMatchObject({ userEstimation: '', ownVoteConfirmed: true })
+  })
+
   // Each pair is fed in the wrong order, so a missing sort fails every case.
   describe('lists participants in name order', () => {
-    const named = (id: string, name: string) => ({ id, name, estimation: none })
+    const named = (id: string, name: string): Participant => ({
+      id,
+      name,
+      seat: { type: 'Voter', estimation: none }
+    })
     const order = (...users: RoomSnapshot['users']) =>
       applySnapshot(snap(users)).users.map(u => u.name)
 

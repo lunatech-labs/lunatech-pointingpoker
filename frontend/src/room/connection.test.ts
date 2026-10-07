@@ -29,7 +29,7 @@ const frame = JSON.stringify({
   you: 'a',
   currentIssue: 'PP-1',
   votesRevealed: false,
-  users: [{ id: 'a', name: 'Alice', estimation: { type: 'NoEstimation' } }]
+  users: [{ id: 'a', name: 'Alice', seat: { type: 'Voter', estimation: { type: 'NoEstimation' } } }]
 })
 
 describe('decide', () => {

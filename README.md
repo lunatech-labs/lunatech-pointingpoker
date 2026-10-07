@@ -21,7 +21,12 @@ reconstructs state from a sequence. Json example:
         {
             "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
             "name": "John Doe",
-            "estimation": {"type": "Confirmed", "value": "5"}
+            "seat": {"type": "Voter", "estimation": {"type": "Confirmed", "value": "5"}}
+        },
+        {
+            "id": "c1d2a0b4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+            "name": "Jane Roe",
+            "seat": {"type": "Facilitator"}
         }
     ]
 }
@@ -29,12 +34,15 @@ reconstructs state from a sequence. Json example:
 
 `you` is the identity the snapshot was built for, so a client never has to infer
 which participant it is. `users` is ordered by `id`, the same order for every
-recipient. `votesRevealed` is stored on the server, set by `Show` and by the vote
-that completes the round, and cleared by `Clear` and `Re-vote`. While it is set the
-round is closed and the server discards any vote it receives, so a changed mind
-needs a `Clear` or a `Re-vote` rather than another vote.
+recipient. `seat` is the participant's role: a `Voter` carries an `estimation`, and
+a `Facilitator` holds no estimate and cannot vote. The round is complete when every
+present voter has confirmed an estimate, with at least one voter present; facilitators
+do not count. `votesRevealed` is stored on the server, set by `Show` and by the vote or
+the `/role` switch that completes the round, and cleared by `Clear` and `Re-vote`.
+While it is set the round is closed and the server discards any vote it receives, so
+a changed mind needs a `Clear` or a `Re-vote` rather than another vote.
 
-**Each snapshot is redacted for its recipient.** `estimation` is one of five
+**Each snapshot is redacted for its recipient.** A voter's `estimation` is one of five
 tags: `NoEstimation`, `ConfirmedHidden`, `UnconfirmedHidden`, `Confirmed` and
 `Unconfirmed`. `value` is present on `Confirmed` and `Unconfirmed` only, on a
 disclosed row that holds an estimate: the recipient's own, or any once
@@ -54,21 +62,24 @@ Available endpoints:
 |---------------------------------|--------|-----------------------|----------------------------------------------------------------------|
 |`/`                              | GET    | none                  | Load index with frontend                                             |
 |`/create-room`                   | POST   | none                  | Creates a room and returns its name, for example `brave-golden-otter`, as plain text. Answers `503` when no free name is found |
-|`/rooms/{roomId}/join`           | POST   | `{"name": "..."}`     | Resumes the session the cookie already names, renaming it, or mints one and sets a room-scoped session cookie. Answers `204` with no body, and creates the room when its id is absent |
+|`/rooms/{roomId}/join`           | POST   | `{"name": "...", "role": "Voter"}` | Resumes the session the cookie already names, renaming it and taking the given role, or mints one with that role and sets a room-scoped session cookie. `role` is `Voter` or `Facilitator`. Answers `204` with no body, and creates the room when its id is absent |
 |`/rooms/{roomId}/events?connectionId={uuid}` | GET | none      | Opens the SSE stream (`text/event-stream`) that pushes a `RoomSnapshot` on every room update, and joins the user to the room. The page mints the id once per page instance. Requires a valid session cookie from a prior `/join`; `401` otherwise, `400` without a connection id |
 |`/rooms/{roomId}/vote`           | POST   | `{"estimation": "..."}` | Casts the user's vote. Requires the session cookie                 |
 |`/rooms/{roomId}/show`           | POST   | none                  | Reveals all votes in the room. Requires the session cookie           |
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
 |`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires the session cookie               |
 |`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires the session cookie        |
+|`/rooms/{roomId}/role`           | POST   | `{"role": "Facilitator"}` | Switches the user's role, dropping any estimate they held; the same role changes nothing. Requires the session cookie |
 |`/rooms/{roomId}/leave?connectionId={uuid}` | POST | none       | Ends the named connection's membership at once instead of after the grace period. Sent by `navigator.sendBeacon` on `pagehide` and by the Leave link |
 
 Command endpoints answer what the room decided, with no body: `204` when applied,
 `401` without a session (including a valid name with no live room), and `403` when the session
-is no longer a member. `/vote` adds `409` for a revealed round and `400` for a
-blank estimation. `/leave` answers `204` on every branch it reaches past those two,
-and `400` without a connection id. A `{roomId}` that is not three vocabulary
-words in order answers `404` on every endpoint, before any room is consulted.
+is no longer a member. `/vote` adds `409` for a revealed round or a facilitator's
+vote, and `400` for a blank estimation. `/leave` answers `204` on every branch it
+reaches past those two, and `400` without a connection id. `/join` and `/role` answer
+`400` for a missing `role` or any value but `Voter` or `Facilitator`. A `{roomId}`
+that is not three vocabulary words in order answers `404` on every endpoint, before
+any room is consulted.
 
 `GET /{roomId}` serves the same frontend index page, so a room link can be
 shared directly. A room name in mixed case redirects to its lowercase form,

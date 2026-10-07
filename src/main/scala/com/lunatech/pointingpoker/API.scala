@@ -68,7 +68,13 @@ class API(
     Endpoints.join.serverLogicSuccess[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.SessionMinted](
-          RoomManager.RequestSession(roomId, request.name, resolveToken(rawCookie), _)
+          RoomManager.RequestSession(
+            roomId,
+            request.name,
+            request.role,
+            resolveToken(rawCookie),
+            _
+          )
         )
         .andThen { case Failure(reason) =>
           log.error("Error while joining room {}: {}", roomId, reason)
@@ -138,6 +144,13 @@ class API(
       roomManager
         .ask[Room.CommandResult](
           RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue, _)
+        )
+        .map(answer)
+    },
+    Endpoints.role.serverLogic[Future] { (roomId, rawCookie, request) =>
+      roomManager
+        .ask[Room.CommandResult](
+          RoomManager.SwitchRole(roomId, resolveToken(rawCookie), request.role, _)
         )
         .map(answer)
     },

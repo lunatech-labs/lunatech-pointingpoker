@@ -368,6 +368,60 @@
         }
       }
     },
+    "/rooms/{roomId}/role" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidRole",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RoleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          }
+        }
+      }
+    },
     "/rooms/{roomId}/leave" : {
       "post" : {
         "operationId" : "postRoomsRoomidLeave",
@@ -439,11 +493,35 @@
         "title" : "JoinRequest",
         "type" : "object",
         "required" : [
-          "name"
+          "name",
+          "role"
         ],
         "properties" : {
           "name" : {
             "type" : "string"
+          },
+          "role" : {
+            "$ref" : "#/components/schemas/Role"
+          }
+        }
+      },
+      "Role" : {
+        "title" : "Role",
+        "type" : "string",
+        "enum" : [
+          "Facilitator",
+          "Voter"
+        ]
+      },
+      "RoleRequest" : {
+        "title" : "RoleRequest",
+        "type" : "object",
+        "required" : [
+          "role"
+        ],
+        "properties" : {
+          "role" : {
+            "$ref" : "#/components/schemas/Role"
           }
         }
       },

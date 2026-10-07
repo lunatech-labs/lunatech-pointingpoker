@@ -47,8 +47,11 @@ object Room:
   final case class ShowVotes(token: SessionToken, replyTo: ActorRef[CommandResult])  extends Command
   final case class EditIssue(token: SessionToken, issue: String, replyTo: ActorRef[CommandResult])
       extends Command
+  final case class SwitchRole(token: SessionToken, role: Role, replyTo: ActorRef[CommandResult])
+      extends Command
   final case class RequestSession(
       name: String,
+      role: Role,
       existing: Option[SessionToken],
       replyTo: ActorRef[SessionMinted]
   ) extends Command
@@ -67,9 +70,9 @@ object Room:
   enum Refusal:
     case NoSession, NotAMember
   enum VoteRefusal:
-    case RoundRevealed, BlankEstimation
+    case RoundRevealed, BlankEstimation, NotAVoter
   export Refusal.{NoSession, NotAMember}
-  export VoteRefusal.{BlankEstimation, RoundRevealed}
+  export VoteRefusal.{BlankEstimation, NotAVoter, RoundRevealed}
   // Per endpoint, so the compiler refuses a result the endpoint's status table does not list.
   type CommandResult = Applied.type | Refusal
   type VoteResult    = CommandResult | VoteRefusal
@@ -87,16 +90,34 @@ object Room:
       require(!value.isBlank, "an estimate needs a value")
       Estimate(value, confirmed)
 
+  enum Role:
+    case Voter, Facilitator
+
   // A role plus that role's state: the role outlives the round, the estimate does not.
   enum Seat:
     case Voter(estimate: Option[Estimate])
+    case Facilitator
+
+    def role: Role = this match
+      case Voter(_)    => Role.Voter
+      case Facilitator => Role.Facilitator
 
     def cleared: Seat = this match
-      case Voter(_) => Voter(None)
+      case Voter(_)    => Voter(None)
+      case Facilitator => Facilitator
 
     def unconfirmed: Seat = this match
       case Voter(estimate) => Voter(estimate.map(_.unconfirmed))
+      case Facilitator     => Facilitator
+
+    // The switch transition: a change of role starts the new role afresh, so drops any estimate.
+    def switchedTo(role: Role): Seat = if role == this.role then this else Seat.of(role)
   end Seat
+
+  object Seat:
+    def of(role: Role): Seat = role match
+      case Role.Voter       => Voter(None)
+      case Role.Facilitator => Facilitator
 
   // Only what clear replaces whole, so fresh stays a constant.
   final case class Round(revealed: Boolean)
@@ -148,19 +169,31 @@ object Room:
       // Seats are keyed by id and survive a departure; only clear ends an estimate.
       this.copy(members = this.members - userId)
 
-    private[Room] def registerSession(token: SessionToken, userId: UUID, name: String): RoomData =
-      // The only place a session is created, so the only place a seat is.
+    private[Room] def registerSession(
+        token: SessionToken,
+        userId: UUID,
+        name: String,
+        role: Role
+    ): RoomData =
+      // The only place a session is created, and it seats every one it creates.
       this.copy(
         sessions = this.sessions + (token -> Session(userId, name)),
-        state = this.state.copy(seats = this.state.seats + (userId -> Seat.Voter(None)))
+        state = this.state.copy(seats = this.state.seats + (userId -> Seat.of(role)))
       )
 
-    private[Room] def rename(token: SessionToken, userId: UUID, name: String): RoomData =
+    private[Room] def rename(
+        token: SessionToken,
+        userId: UUID,
+        name: String,
+        role: Role
+    ): RoomData =
       // Both sides or neither: of requires a member's name to equal its session's.
-      this.copy(
-        sessions = this.sessions + (token -> Session(userId, name)),
-        members = this.members.updatedWith(userId)(_.map(_ => Member(name)))
-      )
+      this
+        .copy(
+          sessions = this.sessions + (token -> Session(userId, name)),
+          members = this.members.updatedWith(userId)(_.map(_ => Member(name)))
+        )
+        .switched(userId, role)
 
     // Resolving a token and being allowed to act are two checks: sessions carry no TTL.
     def acting(token: SessionToken): Either[Refusal, UUID] =
@@ -173,12 +206,24 @@ object Room:
 
     def holdsConnection(userId: UUID): Boolean = this.connections.contains(userId)
 
+    // The one reading of a seat: of requires one per session; a missing one is a new voter's.
+    private[actors] def seatOf(userId: UUID): Seat =
+      this.state.seats.getOrElse(userId, Seat.Voter(None))
+
     def vote(userId: UUID, estimation: String): (RoomData, Applied.type | VoteRefusal) =
       if this.state.round.revealed then (this, RoundRevealed)
       else if estimation.isBlank then (this, BlankEstimation)
       else
-        val seats = this.state.seats + (userId -> Seat.Voter(Some(Estimate.of(estimation))))
-        (withState(this.state.round.copy(revealed = complete(seats)), seats), Applied)
+        seatOf(userId) match
+          case Seat.Voter(_) =>
+            val seats = this.state.seats + (userId -> Seat.Voter(Some(Estimate.of(estimation))))
+            (withState(this.state.round, seats).latched, Applied)
+          case Seat.Facilitator => (this, NotAVoter)
+
+    // Only a change of seat latches, so a same-role switch never reveals a round left complete.
+    def switchRole(userId: UUID, role: Role): RoomData =
+      val next = switched(userId, role)
+      if next.seatOf(userId) == seatOf(userId) then this else next.latched
 
     def show(): RoomData  = withState(this.state.round.copy(revealed = true), this.state.seats)
     def clear(): RoomData = withState(Round.fresh, this.state.seats.view.mapValues(_.cleared).toMap)
@@ -194,12 +239,22 @@ object Room:
     private def withState(round: Round, seats: Map[UUID, Seat]): RoomData =
       this.copy(state = this.state.copy(round = round, seats = seats))
 
-    private def complete(seats: Map[UUID, Seat]): Boolean =
-      // nonEmpty is insurance rather than a live case: only a Vote ever runs this.
-      // A member with no seat breaks an invariant, so it holds the round open.
-      this.members.nonEmpty && this.members.keys.forall(id =>
-        seats.get(id).exists { case Seat.Voter(estimate) => estimate.exists(_.confirmed) }
+    private def switched(userId: UUID, role: Role): RoomData =
+      withState(this.state.round, this.state.seats + (userId -> seatOf(userId).switchedTo(role)))
+
+    // The latch step: only a deliberate act by someone present runs it (decision 1).
+    private def latched: RoomData =
+      if this.state.round.revealed || !complete then this
+      else withState(this.state.round.copy(revealed = true), this.state.seats)
+
+    // The Terms' "Complete".
+    private def complete: Boolean =
+      val confirmations = this.members.keys.toList.flatMap(id =>
+        seatOf(id) match
+          case Seat.Voter(estimate) => Some(estimate.exists(_.confirmed))
+          case Seat.Facilitator     => None
       )
+      confirmations.nonEmpty && confirmations.forall(identity)
   end RoomData
 
   object RoomData:
@@ -265,14 +320,14 @@ object Room:
       .receive[Command] { (context, message) =>
         // The commands whose only outcome past the membership check is an update and a publish.
         def act(token: SessionToken, replyTo: ActorRef[CommandResult])(
-            update: RoomData => RoomData
+            update: (RoomData, UUID) => RoomData
         ): Behavior[Command] =
           data.acting(token) match
-            case Right(_) =>
+            case Right(userId) =>
               replyTo ! Applied
               receiveBehaviour(
                 roomId,
-                publish(update(data), context),
+                publish(update(data, userId), context),
                 gracePeriod,
                 stopAfterIdle,
                 timers
@@ -314,17 +369,17 @@ object Room:
               // The stream is ended rather than left open: a refused page has nothing coming.
               ref ! StreamCompleted
               Behaviors.same
-          case RequestSession(name, existing, replyTo) =>
+          case RequestSession(name, role, existing, replyTo) =>
             existing.flatMap(t => data.sessions.get(t).map(t -> _)) match
               case Some((token, session)) =>
                 // Taking the name rather than ignoring it is the nearest this app has to a rename.
-                val newData = publish(data.rename(token, session.userId, name), context)
+                val newData = publish(data.rename(token, session.userId, name, role), context)
                 replyTo ! SessionMinted(session.userId, token)
                 receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
               case None =>
                 val userId  = UUID.randomUUID()
                 val token   = SessionToken.mint()
-                val newData = data.registerSession(token, userId, name)
+                val newData = data.registerSession(token, userId, name, role)
                 replyTo ! SessionMinted(userId, token)
                 receiveBehaviour(roomId, newData, gracePeriod, stopAfterIdle, timers)
           case Vote(token, estimation, replyTo) =>
@@ -337,11 +392,13 @@ object Room:
                 replyTo ! refusal
                 Behaviors.same
           case ClearVotes(token, replyTo) =>
-            act(token, replyTo)(_.clear())
+            act(token, replyTo)((room, _) => room.clear())
           case ReVote(token, replyTo) =>
-            act(token, replyTo)(_.reVote())
+            act(token, replyTo)((room, _) => room.reVote())
           case ShowVotes(token, replyTo) =>
-            act(token, replyTo)(_.show())
+            act(token, replyTo)((room, _) => room.show())
+          case SwitchRole(token, role, replyTo) =>
+            act(token, replyTo)(_.switchRole(_, role))
           case Leave(userId, ref) =>
             // Answerable at the moment of the event now that connections are their own map: a
             // member still holding one, or already removed, schedules nothing.
@@ -380,7 +437,7 @@ object Room:
                 replyTo ! refusal
                 Behaviors.same
           case EditIssue(token, issue, replyTo) =>
-            act(token, replyTo)(_.editIssue(issue))
+            act(token, replyTo)((room, _) => room.editIssue(issue))
           case ValidateToken(token, replyTo) =>
             // The map is the single authority now that it is retained: a member removed at
             // grace expiry still resolves, which is what makes their retry a rejoin, not a 401.

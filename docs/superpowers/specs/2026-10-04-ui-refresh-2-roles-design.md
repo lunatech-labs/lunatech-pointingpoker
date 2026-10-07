@@ -1,7 +1,7 @@
 # UI Refresh, Step 2: Roles
 
 Date: 2026-10-04
-Status: Validated. Step 2a landed; steps 2b and 2c not yet implemented
+Status: Validated. Steps 2a and 2b landed; step 2c not yet implemented
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 2
 
 ## Purpose
@@ -427,6 +427,17 @@ New e2e cases, each shown failing against 2b:
 - a switch survives a reload while the stream is frozen;
 - a switch in one room, then a reload of that room, changes neither another
   room's role nor the default role.
+
+Step 2b left one server case for 2c to decide: its `RoomSpec` join cells all
+have A present, but a facilitator's reload joins while A is not present (the
+reload gap). `rename` never checks presence, so the risk is low; 2c's plan
+should add that cell to the matrix, or say why it does not.
+
+Step 2b made one server table name a role on the wire (`RoomSnapshot.Seat.tag`),
+so a seat's `type` is what `role` sends back. The client still spells the tags
+twice, in `snapshot.ts`'s `z.literal`s and the generated `Role`; 2c's plan should
+type the remembered role as `components['schemas']['Role']` and make
+`Seat['type']` assignable to it, so `gen:api` and the typecheck catch drift.
 
 ## Accepted costs
 

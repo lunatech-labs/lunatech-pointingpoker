@@ -47,7 +47,12 @@ export async function createRoom(): Promise<string> {
 
 export async function join(roomId: string, name: string): Promise<JoinOutcome> {
   const { response } = await timed(signal =>
-    client.POST('/rooms/{roomId}/join', { params: { path: { roomId } }, body: { name }, signal })
+    client.POST('/rooms/{roomId}/join', {
+      params: { path: { roomId } },
+      // Every join is a voter's until the page offers roles (ui refresh step 2c).
+      body: { name, role: 'Voter' },
+      signal
+    })
   )
   // The page route has already judged the path, so a 404 here is a room refused after load.
   if (response.status === 404) return 'not-a-room'

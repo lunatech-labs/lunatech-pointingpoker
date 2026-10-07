@@ -12,7 +12,12 @@ function build(object: ObjectOf) {
     object({ type: z.literal('Confirmed'), value: z.string() }),
     object({ type: z.literal('Unconfirmed'), value: z.string() })
   ])
-  const participant = object({ id: z.string(), name: z.string(), estimation })
+  // A facilitator's seat has no estimation, so it cannot carry one.
+  const seat = z.discriminatedUnion('type', [
+    object({ type: z.literal('Voter'), estimation }),
+    object({ type: z.literal('Facilitator') })
+  ])
+  const participant = object({ id: z.string(), name: z.string(), seat })
   return object({
     you: z.string(),
     currentIssue: z.string(),
@@ -28,4 +33,5 @@ export const strictSnapshotSchema = build(z.strictObject as ObjectOf)
 
 export type RoomSnapshot = z.infer<typeof snapshotSchema>
 export type Participant = RoomSnapshot['users'][number]
-export type Estimation = Participant['estimation']
+export type Seat = Participant['seat']
+export type Estimation = Extract<Seat, { type: 'Voter' }>['estimation']
