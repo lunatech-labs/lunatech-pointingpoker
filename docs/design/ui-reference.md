@@ -80,11 +80,9 @@ lunatech.com's stylesheet, read 2026-10-06:
 - `b` is above zero, so every zoom step grows the text at every viewport.
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
-- Every other size is in `rem`. No viewport unit appears outside the root
-  but the app shell's height: exactly `100dvh` wherever principle 4's table
-  says the page never scrolls, so the participant area scrolls in its own
-  region, and at least `100dvh` elsewhere. 3b turns this into L11's media
-  queries and a rule on the shell while a message shows.
+- Every other size is in `rem`. No viewport unit appears outside the root but
+  the app shell's height: exactly `100dvh` where principle 4's table says the
+  page never scrolls, and at least `100dvh` in its other rows.
 - `px` only for the hairline token. Every other line (the Lines tokens but the
   hairline: control lines, message bars, the focus ring) is in `rem` with a
   pixel floor, such as `max(2px, 0.15rem)`, so it scales with the root and never
@@ -105,7 +103,7 @@ shape or fill from afar, and words explain the rest up close.
 
 | Voter's entry | While voting | Once revealed |
 | --- | --- | --- |
-| No estimate | outline | "–" in the value's place, named "no vote" |
+| No estimate | outline | "–" in the value's place |
 | Confirmed | solid fill | the value |
 | Kept | hatching | the value and a "not confirmed" pill |
 
@@ -225,7 +223,7 @@ bar only reinforce them.
   forced colours remove. On every ground it meets both WCAG tests: 2.4.13
   (AAA), an area at least a 2 px perimeter with 3:1 between the focused and
   unfocused pixels, and 1.4.11, 3:1 against what touches it. On the one
-  forced-colours opt-out it is `CanvasText` (J3).
+  forced-colours opt-out (J3), it is `CanvasText`.
 - Focus is never hidden behind a banner or the scrolled participant area
   (2.4.12).
 - Under `prefers-contrast: more`, hairlines and the hatching darken, to values
@@ -233,10 +231,10 @@ bar only reinforce them.
 - The frozen deck keeps every figure at 7:1, under every simulation too, though
   WCAG exempts disabled controls. Its figures and the chosen card's fill or
   frame may fade toward paper only that far (about `#5A5553`, a 3a token), and
-  the unchosen cards' edges may use the hairline token's width and colour, which
-  1.4.11 allows on a disabled control; the phase line says why it is frozen. 3b
-  picks the level on the mockups, and whether the fill fades. Nothing fades
-  under forced colours (J3).
+  the unchosen cards' edges may use the hairline's width and colour tokens,
+  which 1.4.11 allows on a disabled control; the phase line says why it is
+  frozen. 3b picks the level on the mockups, and whether the fill fades. Nothing
+  fades under forced colours.
 - 3a's script checks each text and indicator colour at its floor on every ground
   it can sit on: paper, paper-warm or white, paper-pale, the burgundy tint over
   each surface a message sits on, the ink fill (a confirmed card's figure), the
@@ -260,14 +258,14 @@ bar only reinforce them.
 
 3a fills this list with each token's name, value and purpose. Every colour,
 size, font and duration in a component's CSS comes from it (principle 6 for
-colours), except CSS keywords such as system colours and `currentColor`.
+colours), except CSS keywords such as system colours and `currentColor`, and
+L11's values in media queries, which cannot read a token.
 
 | Kind | Tokens |
 | --- | --- |
 | Colour | paper, paper-warm or white (J9), paper-pale, pale for hairlines, ink, a supporting-text grey at 7:1 (J8), the app's burgundy (Brand source), burgundy-deep, the burgundy tint, the frozen-deck grey (J8), or the supporting grey if 3a finds one serves both |
 | Root | the clamp's minimum, `vmin` and `rem` terms, and maximum (J2) |
 | Shell | its height, `100dvh` (J2) |
-| Breakpoints | L11's width breakpoint and height floor, written as literals in the media queries, since a media query cannot read a token; listed here with their values |
 | Type | the families (J7); the scale, the weights |
 | Spacing | one scale |
 | Shape | corner radii (J9) |
@@ -296,10 +294,12 @@ the cases. A look that changes one lists it in step 4's contract changes.
   "Vote hidden" while voting. J3's named marks change them, a contract change of
   step 4: each mark is read by its exact name. `hiddenMark` becomes the kept
   mark's read, which serves the read after a Re-vote and, since only
-  `hasEstimation` gives that look, proves it survives redaction. The reads of
-  "Vote hidden" on a confirmed entry are dropped, as the value's absence or
-  presence is read beside each. Step 1c moves every read of "Voted" on a
-  revealed entry to the value (its list names the cases).
+  `hasEstimation` gives that look, proves it survives redaction. On a confirmed
+  entry, the reads of "Vote hidden" are dropped where a read of "Voted" or of
+  the value sits beside them; the last, in `stragglerDepartsWithVotesHidden`,
+  the only proof that the votes survive a departure, becomes a `votedMark` read.
+  Step 1c moves every read of "Voted" on a revealed entry to the value (its list
+  names the cases).
 - The kept card's description, "Previous vote, not confirmed"
   (`unconfirmedCard`), from a hidden note, and the card's text, its figure
   alone (`toHaveText('5')`). J3's pill, `aria-hidden` and outside the button,
@@ -308,9 +308,9 @@ the cases. A look that changes one lists it in step 4's contract changes.
   empty for no vote (`revealedEstimation`, `expectSummaryMatchesParticipants`).
   J3's "–" and "not confirmed" sit outside it. Step 4 adds a read of both, a
   contract addition: at the third reveal of 'a session of rounds keeps the
-  summary honest across them', Alice and Bob kept, Carol confirmed and Dave
-  with no estimate, only Alice's and Bob's entries carry "not confirmed", and
-  only Dave's "no vote".
+  summary honest across them', Alice and Bob kept, Carol confirmed and Dave with
+  no estimate, only Alice's and Bob's entries carry the kept mark, and only
+  Dave's the no-vote mark, each read by J3's name.
 - The room id as a heading, any level (`lobby.spec.js`).
 - The copy hint's text, "Link copied to clipboard".
 
@@ -338,14 +338,12 @@ The layout questions 3b decides, on mockups of each layout cell.
 - **L7. The issue editor** and its messages.
 - **L8. The banners.**
 - **L9. The lobby.**
-- **L10. The monitor's width cap**, and the shared screen zoomed, where the
-  page may scroll but the issue, the progress and the result stay in view
-  (principle 4's table).
-- **L11. Width breakpoint** between the narrow and the wide layout, and the
-  height floor below which the page may scroll (principle 4's table, J2). It
-  sits clear of common window widths, such as 1280, rather than on them. Media
-  queries in `rem` resolve against the reader's default size, not the fluid
-  root.
+- **L10. The monitor's width cap**, and how the shared-screen elements stay in
+  view where the page may scroll (principle 4's table).
+- **L11. Width breakpoint and height floor** (principle 4's table). The
+  breakpoint sits clear of common window widths, such as 1280, rather than on
+  them. Media queries in `rem` resolve against the reader's default size, not
+  the fluid root.
 
 ## Decisions log
 
@@ -370,21 +368,19 @@ The reasons behind each rule, and what was set aside.
   available means, browser zoom among them (failure F94), which the 2.5 bound
   guarantees. The shell's `100dvh` is a container, not a size: under browser
   zoom it equals the visible area. It is bounded only where principle 4's table
-  says the page never scrolls; J2 points to that table, as three passes restated
-  its conditions and each drifted, the last making a message shrink the
-  participant area, to nothing at 600. Browser zoom scales `px` too; what `px`
-  misses is the fluid root, which would thin lines on a big shared screen.
-  Hairlines stay in `px` because borders round to whole device pixels, and a
-  thin `rem` border renders unevenly. Set aside: a root fluid at laptop sizes,
-  which gave 1.6 times the text at 200% zoom on 1344 by 757; fluid sizes on the
-  shared-screen elements only, which left their spacing fixed; pure `vmin`,
-  which ignores zoom; `rem` steps per media query, which jump; `height: 100%`
-  chained down from `html`, which one wrapper breaks and phones' toolbars
-  defeat; a `rem` height tuned to 600, which breaks when anything above it
-  changes; a shell bounded everywhere, whose main region would scroll instead of
-  the page; a message shrinking the participant area, which hides the room while
-  something is wrong; no `rem` term, which kept the monitor's text at 28 px
-  rather than 24.8 at the cost of the flat zoom band.
+  says the page never scrolls. Browser zoom scales `px` too; what `px` misses is
+  the fluid root, which would thin lines on a big shared screen. Hairlines stay
+  in `px` because borders round to whole device pixels, and a thin `rem` border
+  renders unevenly. Set aside: a root fluid at laptop sizes, which gave 1.6
+  times the text at 200% zoom on 1344 by 757; fluid sizes on the shared-screen
+  elements only, which left their spacing fixed; pure `vmin`, which ignores
+  zoom; `rem` steps per media query, which jump; `height: 100%` chained down
+  from `html`, which one wrapper breaks and phones' toolbars defeat; a `rem`
+  height tuned to 600, which breaks when anything above it changes; a shell
+  bounded everywhere, whose main region would scroll instead of the page; a
+  notice shrinking the participant area, which hides the room while something is
+  wrong; no `rem` term, which kept the monitor's text at 28 px rather than 24.8
+  at the cost of the flat zoom band.
 - **J3.** What the room watches needs a shape read from afar; the rest needs
   words. Two looks and a pill were tried: a pill does not register at a glance
   for a reader with strong glasses, and a room mid re-vote then looks as if
@@ -458,9 +454,14 @@ The reasons behind each rule, and what was set aside.
   facilitators apart and forced-colours marks; the offset ink focus ring; the
   simulations as a gate and a darker burgundy; the frozen deck within 7:1; J2's
   zoom bounds and the shell's `100dvh`; J5's destructive rule; the Tokens
-  section; hairlines by role; L1 to L11. The revealed form waits on L3. A
-  second pass (facts, consistency) brought: principle 5 reworded for J2; the
-  shell bounded only where the page must not scroll; a `rem` term in the root;
-  one mark per look, the mark reads a step 4 contract change; one wording for
-  the kept state; one forced-colours opt-out, its ring in `CanvasText`; the
-  facilitator region within principle 4; the Lines tokens.
+  section; hairlines by role; L1 to L11. The revealed form waits on L3. A second
+  pass (facts, consistency) brought: principle 5 reworded for J2; the shell
+  bounded only where the page must not scroll; a `rem` term in the root; one
+  mark per look, the mark reads a step 4 contract change; one wording for the
+  kept state; one forced-colours opt-out, its ring in `CanvasText`; the
+  facilitator region within principle 4; the Lines tokens. A third and a fourth
+  pass (failure modes, simplicity, the code) brought: principle 4 as one table
+  in viewport terms, which J2, L10 and L11 point to, as each restatement had
+  drifted; the card's pill outside its button; the mark names stated once, in
+  J3; the revealed marks read in the session case; the straggler's "Vote hidden"
+  read kept as a `votedMark` read.

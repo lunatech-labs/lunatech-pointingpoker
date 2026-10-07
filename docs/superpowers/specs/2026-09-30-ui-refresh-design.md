@@ -67,24 +67,28 @@ document as a whole stays in discussion.
    rewrite and it is what keeps a zoomed page usable (principle 5). Checks on a
    real phone happen on the deployed app only and never gate a merge; phone
    risks go to `docs/known-issues.md`.
-4. **Degrade gradually with room size** (settled). At 100% zoom on the laptop
-   target, a monitor or the shared screen, the page as a whole never scrolls;
-   the narrow layout, phones and a zoomed page included, may scroll vertically,
-   never horizontally. A notice that ends may push the room down and let the
-   page scroll vertically while it shows: a banner reporting a rare event, such
-   as the connection lost, a moved link or a restart, until it clears or is
+4. **Degrade gradually with room size** (settled). Nothing ever scrolls
+   horizontally. Whether the page scrolls vertically depends on the viewport
+   alone, zoom included, since zoom only shrinks the viewport in CSS px:
+
+   | Viewport | The page | The participant area | The reference's open question |
+   | --- | --- | --- | --- |
+   | The wide layout at or above the height floor: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The same, while a notice shows | may scroll vertically while it shows | flows with the page | the banners (L8), the issue editor's messages (L7) |
+   | The narrow layout or below the height floor, a phone among them | may scroll vertically | flows with the page | the width breakpoint and the height floor (L11) |
+   | The shared screen on such a viewport, as when zoomed | may scroll vertically, the issue, the progress and the result staying in view; the facilitator's page has no deck, so it has room to | flows with the page | how they stay in view (L10) |
+
+   A notice is a message that ends: a banner reporting a rare event, such as
+   the connection lost, a moved link or a restart, until it clears or is
    dismissed; and a failure or a conflict, such as a failed save, join or
    create, or the issue changed by someone else while the user edits it, until
    the user resolves it or ends the action it belongs to. Left unresolved, such
    a notice is an unfinished action, and the degraded layout is accepted.
    Routine confirmation of the user's own action, today only the "Link copied"
-   hint, shows beside its cause and moves nothing. A zoomed shared screen still
-   keeps the issue, the progress and the result in view without scrolling; the
-   facilitator's page has no deck, so it has room to. As the room grows, only
-   the participant area and the results grow. The participant area, past a size,
-   scrolls in its own region, and any line that names people summarizes
-   ("waiting: Bob, Eve and 3 more"). The results are bounded by the deck's 13
-   values for votes cast from the page; the server accepts any value
+   hint, shows beside its cause and moves nothing. As the room grows, only the
+   participant area and the results grow. Any line that names people
+   summarizes ("waiting: Bob, Eve and 3 more"). The results are bounded by the
+   deck's 13 values for votes cast from the page; the server accepts any value
    (`docs/known-issues.md`, "No request payload is validated on any endpoint
    that takes one"). Step 3 decides whether they scroll or summarize. Nothing
    else on the page moves because of the room's size. The thresholds belong to
@@ -92,16 +96,7 @@ document as a whole stays in discussion.
    regular upper bound, are informative, to be weighed against the design rather
    than imposed on it. A design excellent up to 8 and degrading gently past it
    can beat one that holds 12 unchanged. Whatever the thresholds, rooms of 4 to
-   14 stay usable. The same rules by condition, adding nothing to them:
-
-   | Condition | The page | The participant area | The reference's open question |
-   | --- | --- | --- | --- |
-   | The laptop target, a monitor or the shared screen, at 100% zoom | never scrolls | scrolls in its own region past a size | that size (L3) |
-   | The same, while a notice shows | may scroll vertically while it shows | flows with the page | the banners (L8), the issue editor's messages (L7) |
-   | The narrow layout or a phone | may scroll vertically | flows with the page | the width breakpoint (L11) |
-   | A window shorter than the laptop target | may scroll vertically | flows with the page | the height floor (L11) |
-   | A zoomed page | may scroll vertically | flows with the page | none: zoom shrinks the viewport, so L11's limits apply |
-   | A zoomed shared screen | may scroll vertically, the issue, the progress and the result staying in view | flows with the page | how they stay in view (L10) |
+   14 stay usable.
 
 5. **Shared-screen legibility** (settled), its numbers not:
    - The issue, the progress and the result are sized to read from the back of
@@ -278,11 +273,9 @@ element lists step 3's layouts give:
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
 and the phase line get test ids, the moved copy hint becomes a
 `role="status"` region, Show votes is absent while revealed, and facilitators
-are listed in their own region (the reference's J3), and each
-entry's mark is read by its exact name, the confirmed entries' reads of "Vote
-hidden" dropped, and the revealed "not confirmed" and "no vote" are read in
-'a session of rounds keeps the summary honest across them' (the reference's
-"Contract reads"), all listed as contract changes (principle 9).
+are listed in their own region (the reference's J3), and the mark reads change
+as the reference's "Contract reads" lists, all listed as contract changes
+(principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
 Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
 chosen library may or may not ship one. The deck as a `<fieldset>` with a
