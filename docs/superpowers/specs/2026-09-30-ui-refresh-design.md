@@ -92,7 +92,17 @@ document as a whole stays in discussion.
    regular upper bound, are informative, to be weighed against the design rather
    than imposed on it. A design excellent up to 8 and degrading gently past it
    can beat one that holds 12 unchanged. Whatever the thresholds, rooms of 4 to
-   14 stay usable.
+   14 stay usable. The same rules by condition, adding nothing to them:
+
+   | Condition | The page | The participant area | The reference's open question |
+   | --- | --- | --- | --- |
+   | The laptop target, a monitor or the shared screen, at 100% zoom | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The same, while a notice shows | may scroll vertically while it shows | flows with the page | the banners (L8), the issue editor's messages (L7) |
+   | The narrow layout or a phone | may scroll vertically | flows with the page | the width breakpoint (L11) |
+   | A window shorter than the laptop target | may scroll vertically | flows with the page | the height floor (L11) |
+   | A zoomed page | may scroll vertically | flows with the page | none: zoom shrinks the viewport, so L11's limits apply |
+   | A zoomed shared screen | may scroll vertically, the issue, the progress and the result staying in view | flows with the page | how they stay in view (L10) |
+
 5. **Shared-screen legibility** (settled), its numbers not:
    - The issue, the progress and the result are sized to read from the back of
      a room on a 40 inch TV at the laptop target, and scale with the viewport
@@ -202,9 +212,10 @@ change which controls show. Known so far:
   chose', and 'a room remembered from before the cutover reopens under its
   derived name'); Leave or the role line serve in every phase and role.
 - Clear votes clicked only to send traffic or to hold focus.
-- The "Voted" mark read on a revealed entry, in 'a vote survives its own
-  reconnect', where the revealed value serves (the reference's "Contract
-  reads").
+- Every "Voted" mark read on a revealed entry, where the revealed value serves
+  (the reference's "Contract reads"): each `votedMark` read expecting a mark
+  after a reveal. Found today: 'a vote survives its own reconnect' and 'two
+  tabs on one room are one participant', whose last vote reveals the round.
 
 Its list is completed from step 3b's layouts, hence its place after 3b.
 
@@ -267,8 +278,10 @@ element lists step 3's layouts give:
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
 and the phase line get test ids, the moved copy hint becomes a
 `role="status"` region, Show votes is absent while revealed, and facilitators
-are listed in their own region in name order (the reference's J3), and each
-entry's mark is read by its exact name, one mark per look (the reference's
+are listed in their own region (the reference's J3), and each
+entry's mark is read by its exact name, the confirmed entries' reads of "Vote
+hidden" dropped, and the revealed "not confirmed" and "no vote" are read in
+'a session of rounds keeps the summary honest across them' (the reference's
 "Contract reads"), all listed as contract changes (principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
 Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
@@ -293,10 +306,10 @@ improve 7), and the round's actions per phase it makes possible: the target
 column of the reference's J5. Its spec decides when the round clears, one
 request or two, its name, whether Clear stays, and whether Next issue shows
 while voting. The cases that click Clear votes for its own behaviour, in
-either phase ('a clear re-arms the auto-reveal', the Re-vote guard, 'a re-vote
-leaves the caster shown as selected but unconfirmed', the session case and a
-roles case), are this step's contract changes, not 1c's, if Clear leaves the
-phase they click it in.
+either phase ('a clear re-arms the auto-reveal, and the last vote fires it',
+the Re-vote guard, 'a re-vote leaves the caster shown as selected but
+unconfirmed', the session case and a roles case), are this step's contract
+changes, not 1c's, if Clear leaves the phase they click it in.
 
 **Steps after 5.** One step per feature, each with its own short spec,
 picked from these candidates and whatever the mockups raise. None is a
