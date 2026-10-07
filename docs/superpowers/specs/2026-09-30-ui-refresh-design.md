@@ -166,8 +166,10 @@ document as a whole stays in discussion.
 | 2b | Roles on the server and the wire | 2a | Unit and API tests, and the existing cases unchanged |
 | 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
-| 1c | Test contract audit | 3 (3b's layouts) | Every case passing on today's page, each rewritten one shown to fail |
-| 4 | Restyle | 1b, 1c, 2c, 3 | By eye, and the existing cases unchanged but for its listed contract changes |
+| 3a | Tokens | 3 | The contrast gate, then the product owner |
+| 3b | Layouts | 3a | The product owner, then the specialist |
+| 1c | Test contract audit | 3b | Every case passing on today's page, each rewritten one shown to fail |
+| 4 | Restyle | 1b, 1c, 2c, 3b | By eye, and the existing cases unchanged but for its listed contract changes |
 | 4a | The round's live region | 4 | Its cases |
 | 5 | Next issue | 4 | Its cases |
 | 5+ | One step per feature | 4 | Each one's spec |
@@ -228,12 +230,15 @@ then roles in the page.
 **Step 3. Design direction.** Mockups of the voter's and the facilitator's
 pages, before and after a reveal, at the screens in principle 2, and the lobby.
 They can be clickable HTML built from lunatech.com's palette and type. The
-output is a short design reference committed to the repo: palette as custom
-properties, type scale, spacing, component looks, and the layouts. Appendix A is
+output is a short design reference committed to the repo: palette, type scale,
+spacing, component looks, and the layouts, the token values living in
+`frontend/src/colours.css` and `frontend/src/tokens.css`. Appendix A is
 its starting input. It runs as 3a, the tokens, then 3b, the layouts, and its
-reference is `docs/design/ui-reference.md`. After a reveal the deck stays on
-the page, disabled, at every width, as the suite's "takes no more votes" case expects; the result
-appears near it, not in its place. The layouts include a phase line: text
+reference is `docs/design/ui-reference.md`. 3a is specified in its own
+document, `docs/superpowers/specs/2026-10-07-ui-refresh-3a-tokens-design.md`.
+After a reveal the deck stays on the page, disabled, at every width, as the
+suite's "takes no more votes" case expects; the result appears near it, not in
+its place. The layouts include a phase line: text
 visible in both phases, saying whether voting is open or the round is revealed,
 outside the deck so the facilitator's page keeps it, and directly above or
 beside the deck's first row, read just before it, and in view whenever that row
