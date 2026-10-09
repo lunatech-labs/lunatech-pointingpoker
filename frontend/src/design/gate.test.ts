@@ -171,6 +171,10 @@ describe('what tokens.css may hold', () => {
     expect(() => parseTokens(file('--a: 1px\n--b: 2rem;'))).toThrow('not a custom property in :root: --a: 1px')
   })
 
+  it.each(['--a: ;', '--a: /* none */;', '--A: 1rem;', '--a_b: 1rem;', '--: 1rem;'])('fails on %j', declaration => {
+    expect(() => parseTokens(file(declaration))).toThrow('not a custom property in :root')
+  })
+
   it('reads a last declaration with no semicolon', () => {
     expect(problems('--a: 1rem; --b: 2px')).toEqual(['--b: a px outside max() in 2px'])
   })

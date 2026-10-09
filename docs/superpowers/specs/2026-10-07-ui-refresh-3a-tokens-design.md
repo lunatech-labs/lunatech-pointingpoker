@@ -141,8 +141,9 @@ the `:root` values, then the `more` block over them. Every check runs on both.
 The gate resolves `colours.css`'s `var()` within a run and runs the table on
 each. These fail rather than pass quietly:
 
-- any other rule in either file, a token declared twice in one block or with
-  `!important`, or a colour token declared in `tokens.css`;
+- any other rule in either file; in a block, a name outside `--[a-z0-9-]+`,
+  an empty value, `!important` or a token declared twice; or a colour token
+  declared in `tokens.css`;
 - a value in `colours.css` that is not a hex, an `rgba()` or a `var()` to
   another colour;
 - a colour token reached by a pair in neither run, as foreground or ground,
