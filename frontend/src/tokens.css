@@ -1,0 +1,51 @@
+/* Every token but the colours (colours.css); the gate checks its units and J2's root. */
+:root {
+  --root-size: clamp(1rem, 1.05vmin + 0.5rem, 1.75rem); /* J2's root, the one fluid value */
+  --shell-height: 100dvh; /* the app shell's height (J2) */
+
+  --font-sans: 'DM Sans', system-ui, sans-serif; /* all text but figures (J7) */
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace; /* figures and the room id (J7) */
+  --font-serif: 'Instrument Serif', ui-serif, serif; /* at most the app's name in the lobby (J7) */
+  --text-sm: 0.875rem; /* labels */
+  --text-md: 1rem; /* body */
+  --text-lg: 1.25rem; /* headings and deck figures */
+  --text-xl: 1.625rem; /* own-page emphasis */
+  --text-2xl: 2.125rem; /* the 3 m step */
+  --text-3xl: 2.75rem; /* the 4 m step, shared-screen text (J7) */
+  --text-4xl: 3.5rem; /* result figures */
+  --weight-regular: 400; /* DM Sans and JetBrains Mono */
+  --weight-medium: 500; /* JetBrains Mono only */
+  --weight-strong: 600; /* DM Sans only, the lead */
+  --leading-body: 1.5; /* body text (WCAG 1.4.8) */
+  --leading-tight: 1.15; /* the large steps */
+  --tracking-label: 0.12em; /* uppercase mono labels */
+
+  --space-1: 0.25rem; /* gaps and padding, smallest */
+  --space-2: 0.5rem; /* gaps and padding */
+  --space-3: 0.75rem; /* gaps and padding */
+  --space-4: 1rem; /* gaps and padding */
+  --space-5: 1.5rem; /* gaps and padding */
+  --space-6: 2rem; /* gaps and padding */
+  --space-7: 3rem; /* gaps and padding */
+  --space-8: 4rem; /* gaps and padding, largest */
+
+  --radius: 0; /* every corner but a card's (J9) */
+  --radius-card: 0.25rem; /* the deck's cards and L3's card entries (J9) */
+  --target-min: max(44px, 2.75rem); /* a control's least width and height (WCAG 2.5.5) */
+
+  --line-hairline: 1px; /* the hairline's width, the one px value (J2) */
+  --line-control: max(1px, 0.0625rem); /* buttons, inputs, unchosen card edges */
+  --line-mark: max(2px, 0.125rem); /* J3's outline mark */
+  --frame-band: max(2px, 0.5rem); /* a card's kept frame (J3) */
+  --line-bar: max(3px, 0.1875rem); /* a message's bar */
+  --focus-width: max(2px, 0.125rem); /* the focus ring's thickness (J8) */
+  --focus-gap: max(2px, 0.125rem); /* the focus ring's offset (J8) */
+
+  --duration: 180ms; /* every transition, the site's shortest (J9) */
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line-control: var(--line-mark); /* controls take the mark's weight */
+  }
+}
