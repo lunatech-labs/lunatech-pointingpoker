@@ -1,0 +1,21 @@
+/* The colour tokens; the contrast gate (design/tokens.gate.test.ts) checks every pair. */
+:root {
+  --paper: #FCFAF6; /* the page */
+  --paper-warm: #FEFDFB; /* content surfaces; figures and labels on a fill */
+  --paper-pale: #F0EBE2; /* a notice's ground */
+  --pale: #D6CABB; /* hairlines, decorative */
+  --mute-soft: #8A7A70; /* hairlines under prefers-contrast: more */
+  --ink: #1E1815; /* text, controls, the focus ring */
+  --grey: #554B43; /* supporting text; the frozen deck */
+  --burgundy: #8E292E; /* the brand, the one primary per phase */
+  --burgundy-deep: #5C1C20; /* a problem's text and bar */
+  --burgundy-tint: rgba(142, 41, 46, 0.08); /* a problem's ground */
+  --hairline-colour: var(--pale); /* dividers and surface edges */
+  --card-back: var(--ink); /* J3's looks: outline, fill, kept frame; ink until 3b's choice */
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --hairline-colour: var(--mute-soft); /* hairlines become an indicator at 3:1 */
+  }
+}
