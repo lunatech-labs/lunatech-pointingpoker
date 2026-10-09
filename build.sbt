@@ -14,7 +14,7 @@ lazy val V = new {
   val pekko        = "1.7.0"
   val pekkoHttp    = "1.4.0"
   val scalatest    = "3.2.20"
-  val tapir        = "1.13.31"
+  val tapir        = "1.13.32"
 }
 
 lazy val root = project
