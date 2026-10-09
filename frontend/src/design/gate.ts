@@ -120,6 +120,8 @@ const allowedFunctions = new Set(['', 'calc', 'min', 'max', 'clamp', 'var'])
 const allowedUnits = new Set(['', 'rem', 'ms', 'px'])
 // J2: the viewport appears only in the root and the shell's height, em only in the label tracking.
 const unitOnlyOn: Record<string, string> = { em: '--tracking-label', vmin: '--root-size', dvh: '--shell-height' }
+// The generic font families; any other word, a colour name included, fails.
+const allowedWords = new Set(['system-ui', 'sans-serif', 'ui-monospace', 'monospace', 'ui-serif', 'serif'])
 
 // Each node of a value with the name of the function it sits directly in.
 const walk = (nodes: Node[], visit: (node: Node, inside?: string) => void, inside?: string) => {
@@ -139,12 +141,17 @@ export const tokenProblems = (
     if (colourNames.has(name)) problems.add(`${name} is a colour token, declared in colours.css`)
     walk(valueParser(value).nodes, (node, inside) => {
       if (node.type === 'function' && !allowedFunctions.has(node.value.toLowerCase())) say(`${node.value}()`)
-      if (node.type !== 'word') return
-      if (node.value.startsWith('#')) say('a hex colour')
-      if (/^(transparent|currentcolor)$/i.test(node.value)) say(node.value)
-      if (inside === 'var' && colourNames.has(node.value)) say(`a colour token, ${node.value}`)
+      if (node.type !== 'word' || ['+', '-', '*', '/'].includes(node.value)) return
+      if (inside === 'var' && node.value.startsWith('--')) {
+        if (colourNames.has(node.value)) say(`a colour token, ${node.value}`)
+        return
+      }
       const unit = valueParser.unit(node.value)
-      if (!unit) return
+      if (!unit) {
+        if (node.value.startsWith('#')) say('a hex colour')
+        else if (!allowedWords.has(node.value.toLowerCase())) say(`the word ${node.value}`)
+        return
+      }
       const lower = unit.unit.toLowerCase()
       if (!allowedUnits.has(lower) && unitOnlyOn[lower] !== name) say(`the unit ${unit.unit}`)
       if (lower === 'px' && inside !== 'max' && name !== '--line-hairline') say('a px outside max()')

@@ -153,8 +153,9 @@ each. These fail rather than pass quietly:
   `--tracking-label`, `vmin` on `--root-size` and `dvh` on `--shell-height`
   (J2);
 - in `tokens.css`, a function but `calc()`, `min()`, `max()`, `clamp()` and
-  `var()`, a hex, `transparent` or `currentColor` in any case, or a `var()` to
-  a token `colours.css` declares (decision 1).
+  `var()`, a hex, a word but a generic font family (`system-ui`, `sans-serif`,
+  `ui-monospace`, `monospace`, `ui-serif`, `serif`) in any case, or a `var()`
+  to a token `colours.css` declares (decision 1).
 
 **J2.** From the three terms of `tokens.css`'s `--root-size` clamp in each
 run, which must be there, at a default font size of 16 px:

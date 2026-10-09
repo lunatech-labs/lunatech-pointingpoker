@@ -150,8 +150,11 @@ describe('what tokens.css may hold', () => {
     ['--a: min(2PX, 1rem);', '--a: a px outside max() in min(2PX, 1rem)'],
     ['--a: rgb(0, 0, 0);', '--a: rgb() in rgb(0, 0, 0)'],
     ['--a: #fff;', '--a: a hex colour in #fff'],
-    ['--a: Transparent;', '--a: Transparent in Transparent'],
-    ['--a: CURRENTCOLOR;', '--a: CURRENTCOLOR in CURRENTCOLOR'],
+    ['--a: Transparent;', '--a: the word Transparent in Transparent'],
+    ['--a: CURRENTCOLOR;', '--a: the word CURRENTCOLOR in CURRENTCOLOR'],
+    ['--a: red;', '--a: the word red in red'],
+    ['--a: Canvas;', '--a: the word Canvas in Canvas'],
+    ['--a: --b;', '--a: the word --b in --b'],
     ['--a: var(--ink);', '--a: a colour token, --ink in var(--ink)'],
     ['--a: 2pt;', '--a: the unit pt in 2pt'],
     ['--a: calc(1rem + 2VW);', '--a: the unit VW in calc(1rem + 2VW)'],
@@ -162,6 +165,11 @@ describe('what tokens.css may hold', () => {
     ['--a: 0.12em;', '--a: the unit em in 0.12em']
   ])('fails on %s', (declaration, problem) => {
     expect(problems(declaration)).toEqual([problem])
+  })
+
+  it('allows the generic font families in any case, and calc()\'s operators', () => {
+    const fine = '--a: system-ui, SANS-SERIF, ui-monospace, monospace, ui-serif, serif; --b: calc(1rem + 2rem - 1rem * 2 / 3);'
+    expect(problems(fine)).toEqual([])
   })
 
   it('allows a unit inside a quoted font name', () => {
