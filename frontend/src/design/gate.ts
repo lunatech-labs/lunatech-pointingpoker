@@ -133,7 +133,8 @@ export const tokenProblems = (
     for (const [, target] of value.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
       if (colourNames.has(target)) say(`a colour token, ${target}`)
     }
-    for (const [, unit] of value.matchAll(/(?<![\w.#-])\d*\.?\d+([a-z%]+)/gi)) {
+    // Skips a digit in a name such as --text-2xl, not one after a minus sign.
+    for (const [, unit] of value.matchAll(/(?<![\w.#]|[\w-]-)\d*\.?\d+([a-z%]+)/gi)) {
       const lower = unit.toLowerCase()
       if (!allowedUnits.has(lower) && unitOnlyOn[lower] !== name) say(`the unit ${unit}`)
     }
