@@ -20,8 +20,9 @@ const isMore = (node?: ChildNode): node is AtRule => node?.type === 'atrule' && 
 const block = (rule: Rule, where: string): Map<string, string> => {
   const tokens = new Map<string, string>()
   for (const node of content(rule)) {
+    const custom = node.type === 'decl' && /^--[a-z0-9-]+$/.test(node.prop) && node.value.trim() !== ''
     // A value holds no colon, so a missing semicolon cannot merge two declarations.
-    if (node.type !== 'decl' || !node.prop.startsWith('--') || node.value.includes(':') || node.important) {
+    if (!custom || node.value.includes(':') || node.important) {
       throw new Error(`not a custom property in ${where}: ${node.toString()}`)
     }
     if (tokens.has(node.prop)) throw new Error(`${node.prop} is declared twice in ${where}`)
