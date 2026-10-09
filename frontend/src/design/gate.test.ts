@@ -150,7 +150,9 @@ describe('what tokens.css may hold', () => {
     ['--a: 2pt;', '--a: the unit pt in 2pt'],
     ['--a: calc(1rem + 2VW);', '--a: the unit VW in calc(1rem + 2VW)'],
     ['--a: 1vmin;', '--a: the unit vmin in 1vmin'],
-    ['--a: 100dvh;', '--a: the unit dvh in 100dvh']
+    ['--a: 100dvh;', '--a: the unit dvh in 100dvh'],
+    ['--a: -2vw;', '--a: the unit vw in -2vw'],
+    ['--a: calc(1rem - -.5pt);', '--a: the unit pt in calc(1rem - -.5pt)']
   ])('fails on %s', (declaration, problem) => {
     expect(problems(declaration)).toEqual([problem])
   })
