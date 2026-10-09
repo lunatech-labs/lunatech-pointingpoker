@@ -139,8 +139,8 @@ describe('what tokens.css may hold', () => {
     expect(problems(fine)).toEqual([])
   })
 
-  it('allows em, ms, no unit, vmin on the root and dvh on the shell', () => {
-    const fine = '--a: 0.12em; --b: 180ms; --c: 1.5; --d: var(--text-2xl); --shell-height: 100dvh;'
+  it('allows ms, no unit, em on the label tracking, vmin on the root and dvh on the shell', () => {
+    const fine = '--tracking-label: 0.12em; --b: 180ms; --c: 1.5; --d: var(--text-2xl); --shell-height: 100dvh;'
     expect(problems(`${fine} --root-size: clamp(1rem, 1.05vmin + 0.5rem, 1.75rem);`)).toEqual([])
   })
 
@@ -158,7 +158,8 @@ describe('what tokens.css may hold', () => {
     ['--a: 1vmin;', '--a: the unit vmin in 1vmin'],
     ['--a: 100dvh;', '--a: the unit dvh in 100dvh'],
     ['--a: -2vw;', '--a: the unit vw in -2vw'],
-    ['--a: calc(1rem - -.5pt);', '--a: the unit pt in calc(1rem - -.5pt)']
+    ['--a: calc(1rem - -.5pt);', '--a: the unit pt in calc(1rem - -.5pt)'],
+    ['--a: 0.12em;', '--a: the unit em in 0.12em']
   ])('fails on %s', (declaration, problem) => {
     expect(problems(declaration)).toEqual([problem])
   })

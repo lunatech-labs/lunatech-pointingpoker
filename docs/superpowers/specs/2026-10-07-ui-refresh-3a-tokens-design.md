@@ -149,8 +149,9 @@ each. These fail rather than pass quietly:
 - a colour token reached by a pair in neither run, as foreground or ground,
   directly or through `var()`, except `--pale`, decorative (J8);
 - in `tokens.css`, a `px` outside a `max()`, but on `--line-hairline` (J2);
-- in `tokens.css`, a unit but `rem`, `em`, `ms` and `px`, except `vmin` on
-  `--root-size` and `dvh` on `--shell-height` (J2);
+- in `tokens.css`, a unit but `rem`, `ms` and `px`, except `em` on
+  `--tracking-label`, `vmin` on `--root-size` and `dvh` on `--shell-height`
+  (J2);
 - in `tokens.css`, a function but `calc()`, `min()`, `max()`, `clamp()` and
   `var()`, a hex, `transparent` or `currentColor` in any case, or a `var()` to
   a token `colours.css` declares (decision 1).

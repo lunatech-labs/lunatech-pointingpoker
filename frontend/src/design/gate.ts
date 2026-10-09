@@ -117,9 +117,9 @@ export const unreached = (runs: Record<Run, Tokens>): string[] => {
 
 // '' allows bare parentheses and a number with no unit.
 const allowedFunctions = new Set(['', 'calc', 'min', 'max', 'clamp', 'var'])
-const allowedUnits = new Set(['', 'rem', 'em', 'ms', 'px'])
-// J2: the viewport appears only in the root and the shell's height.
-const unitOnlyOn: Record<string, string> = { vmin: '--root-size', dvh: '--shell-height' }
+const allowedUnits = new Set(['', 'rem', 'ms', 'px'])
+// J2: the viewport appears only in the root and the shell's height, em only in the label tracking.
+const unitOnlyOn: Record<string, string> = { em: '--tracking-label', vmin: '--root-size', dvh: '--shell-height' }
 
 // Each node of a value with the name of the function it sits directly in.
 const walk = (nodes: Node[], visit: (node: Node, inside?: string) => void, inside?: string) => {

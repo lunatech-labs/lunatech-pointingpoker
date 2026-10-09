@@ -84,9 +84,10 @@ lunatech.com's stylesheet, read 2026-10-06:
 - `b` is above zero, so every zoom step grows the text at every viewport.
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
-- Every other size is in `rem`. No viewport unit appears outside the root but
-  the app shell's height: exactly `100dvh` where principle 4's table says the
-  page never scrolls, and at least `100dvh` in its other rows.
+- Every other size is in `rem`, but the label tracking, in `em` so that it
+  follows its own text. No viewport unit appears outside the root but the app
+  shell's height: exactly `100dvh` where principle 4's table says the page
+  never scrolls, and at least `100dvh` in its other rows.
 - `px` only for the hairline token and inside a pixel floor. Every other line
   (the Lines tokens but the hairline: control lines, J3's marks, the kept
   frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
