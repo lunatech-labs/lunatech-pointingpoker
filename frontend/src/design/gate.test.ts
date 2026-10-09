@@ -31,7 +31,8 @@ describe('reading colours.css', () => {
     ['another rule', `${file('--a: #000000;')}\n.card { color: red; }`],
     ['a second :root block', `:root { --a: #000000; }\n${file('--b: #000000;')}`],
     ['the more block first', '@media (prefers-contrast: more) { :root { } }\n:root { --a: #000000; }'],
-    ['another media query', ':root { --a: #000000; }\n@media (prefers-color-scheme: dark) { :root { } }']
+    ['another media query', ':root { --a: #000000; }\n@media (prefers-color-scheme: dark) { :root { } }'],
+    ['a second rule in the more block', ':root { }\n@media (prefers-contrast: more) { :root { } .card { } }']
   ])('fails on %s', (_, css) => {
     expect(() => parseColours(css)).toThrow(shapeError)
   })
@@ -42,6 +43,11 @@ describe('reading colours.css', () => {
 
   it.each(['red', 'Canvas', 'rgb(0, 0, 0)', 'transparent', 'currentColor'])('fails on the value %j', value => {
     expect(() => parseColours(file(`--a: ${value};`))).toThrow('not a hex or an rgba() colour')
+  })
+
+  it('fails on !important', () => {
+    expect(() => parseColours(file('--a: #000000 !important;')))
+      .toThrow('not a custom property in :root: --a: #000000 !important')
   })
 
   it('fails on a var() to a token colours.css does not declare', () => {
@@ -155,6 +161,10 @@ describe('what tokens.css may hold', () => {
     ['--a: calc(1rem - -.5pt);', '--a: the unit pt in calc(1rem - -.5pt)']
   ])('fails on %s', (declaration, problem) => {
     expect(problems(declaration)).toEqual([problem])
+  })
+
+  it('allows a unit inside a quoted font name', () => {
+    expect(problems("--a: 'Inter 18pt', sans-serif;")).toEqual([])
   })
 
   it('fails on a missing semicolon between two declarations', () => {

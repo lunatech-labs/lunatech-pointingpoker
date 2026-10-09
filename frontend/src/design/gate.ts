@@ -1,3 +1,5 @@
+import postcss, { type AtRule, type ChildNode, type Container, type Rule } from 'postcss'
+import valueParser, { type Node } from 'postcss-value-parser'
 import { composite, parseColour, type Rgba } from './contrast'
 
 export const TEXT = 7
@@ -8,35 +10,35 @@ export type Tokens = ReadonlyMap<string, string>
 export type Ground = { token: string; over?: string }
 export type Pair = { foreground: string; ground: Ground; floor: number }
 
-const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '')
-
 const reference = (value: string) => /^var\(\s*(--[a-z0-9-]+)\s*\)$/i.exec(value)?.[1]
 
-const block = (body: string, where: string): Map<string, string> => {
+const content = (container: Container) => container.nodes?.filter(node => node.type !== 'comment') ?? []
+const isRoot = (node?: ChildNode): node is Rule => node?.type === 'rule' && node.selector.toLowerCase() === ':root'
+const isMore = (node?: ChildNode): node is AtRule => node?.type === 'atrule' && /^media$/i.test(node.name) &&
+  /^\(\s*prefers-contrast\s*:\s*more\s*\)$/i.test(node.params)
+
+const block = (rule: Rule, where: string): Map<string, string> => {
   const tokens = new Map<string, string>()
-  for (const part of body.split(';').map(text => text.trim()).filter(Boolean)) {
+  for (const node of content(rule)) {
     // A value holds no colon, so a missing semicolon cannot merge two declarations.
-    const declaration = /^(--[a-z0-9-]+)\s*:\s*([^:]+)$/.exec(part)
-    if (!declaration) throw new Error(`not a custom property in ${where}: ${part}`)
-    const [, name, value] = declaration
-    if (tokens.has(name)) throw new Error(`${name} is declared twice in ${where}`)
-    tokens.set(name, value.trim())
+    if (node.type !== 'decl' || !node.prop.startsWith('--') || node.value.includes(':') || node.important) {
+      throw new Error(`not a custom property in ${where}: ${node.toString()}`)
+    }
+    if (tokens.has(node.prop)) throw new Error(`${node.prop} is declared twice in ${where}`)
+    tokens.set(node.prop, node.value.trim())
   }
   return tokens
 }
 
-const shape = new RegExp(
-  String.raw`^:root\s*\{([^{}]*)\}\s*` +
-  String.raw`@media\s*\(\s*prefers-contrast\s*:\s*more\s*\)\s*\{\s*:root\s*\{([^{}]*)\}\s*\}$`, 'i')
-
 // Both token files: the base run is the :root block; the more run lays the more block over it.
 const parseRuns = (css: string, file: string): Record<Run, Tokens> => {
-  const blocks = shape.exec(stripComments(css).trim())
-  if (!blocks) {
+  const [root, media, ...rest] = content(postcss.parse(css))
+  const [more, ...others] = isMore(media) ? content(media) : []
+  if (!isRoot(root) || !isRoot(more) || rest.length > 0 || others.length > 0) {
     throw new Error(`${file} must hold one :root block, then one @media (prefers-contrast: more) block`)
   }
-  const base = block(blocks[1], ':root')
-  return { base, more: new Map([...base, ...block(blocks[2], 'the more block')]) }
+  const base = block(root, ':root')
+  return { base, more: new Map([...base, ...block(more, 'the more block')]) }
 }
 
 export const parseTokens = (css: string) => parseRuns(css, 'tokens.css')
@@ -112,10 +114,19 @@ export const unreached = (runs: Record<Run, Tokens>): string[] => {
   return [...runs.more.keys()].filter(name => name !== '--pale' && !reached.has(name))
 }
 
-const allowedFunctions = new Set(['calc', 'min', 'max', 'clamp', 'var'])
-const allowedUnits = new Set(['rem', 'em', 'ms', 'px'])
+// '' allows bare parentheses and a number with no unit.
+const allowedFunctions = new Set(['', 'calc', 'min', 'max', 'clamp', 'var'])
+const allowedUnits = new Set(['', 'rem', 'em', 'ms', 'px'])
 // J2: the viewport appears only in the root and the shell's height.
 const unitOnlyOn: Record<string, string> = { vmin: '--root-size', dvh: '--shell-height' }
+
+// Each node of a value with the name of the function it sits directly in.
+const walk = (nodes: Node[], visit: (node: Node, inside?: string) => void, inside?: string) => {
+  for (const node of nodes) {
+    visit(node, inside)
+    if (node.type === 'function') walk(node.nodes, visit, node.value.toLowerCase())
+  }
+}
 
 // tokens.css: no colour, no var() to one, J2's units, no px outside a floor but the hairline's.
 export const tokenProblems = (
@@ -125,21 +136,18 @@ export const tokenProblems = (
   for (const [name, value] of [...runs.base, ...runs.more]) {
     const say = (what: string) => problems.add(`${name}: ${what} in ${value}`)
     if (colourNames.has(name)) problems.add(`${name} is a colour token, declared in colours.css`)
-    for (const [, fn] of value.matchAll(/([a-z-]+)\(/gi)) {
-      if (!allowedFunctions.has(fn.toLowerCase())) say(`${fn}()`)
-    }
-    if (/#[0-9a-f]{3,8}\b/i.test(value)) say('a hex colour')
-    for (const [keyword] of value.matchAll(/\b(transparent|currentcolor)\b/gi)) say(keyword)
-    for (const [, target] of value.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
-      if (colourNames.has(target)) say(`a colour token, ${target}`)
-    }
-    // Skips a digit in a name such as --text-2xl, not one after a minus sign.
-    for (const [, unit] of value.matchAll(/(?<![\w.#]|[\w-]-)\d*\.?\d+([a-z%]+)/gi)) {
-      const lower = unit.toLowerCase()
-      if (!allowedUnits.has(lower) && unitOnlyOn[lower] !== name) say(`the unit ${unit}`)
-    }
-    const outsideFloors = value.replace(/max\([^()]*\)/gi, '')
-    if (name !== '--line-hairline' && /\dpx\b/i.test(outsideFloors)) say('a px outside max()')
+    walk(valueParser(value).nodes, (node, inside) => {
+      if (node.type === 'function' && !allowedFunctions.has(node.value.toLowerCase())) say(`${node.value}()`)
+      if (node.type !== 'word') return
+      if (node.value.startsWith('#')) say('a hex colour')
+      if (/^(transparent|currentcolor)$/i.test(node.value)) say(node.value)
+      if (inside === 'var' && colourNames.has(node.value)) say(`a colour token, ${node.value}`)
+      const unit = valueParser.unit(node.value)
+      if (!unit) return
+      const lower = unit.unit.toLowerCase()
+      if (!allowedUnits.has(lower) && unitOnlyOn[lower] !== name) say(`the unit ${unit.unit}`)
+      if (lower === 'px' && inside !== 'max' && name !== '--line-hairline') say('a px outside max()')
+    })
   }
   return [...problems]
 }
