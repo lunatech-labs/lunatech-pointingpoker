@@ -56,27 +56,30 @@ document as a whole stays in discussion.
    1. A laptop screen, about 1280 to 1440 by 700 CSS px of viewport at 100%
       zoom. This is the design target for principle 4. A 1366 by 768 laptop,
       or 1920 by 1080 at 150% scaling, leaves nearer 600; step 3 settles
-      which height the target is (the reference's J1: 1280 by 600).
+      which height the target is (the reference's J1: a floor of 1280 by 600
+      and a comfort target of 1280 by 680, step 3b1).
    2. A desktop monitor: the same layout at a capped width, not stretched.
    3. The facilitator's shared screen, legible on a meeting-room TV of 40 to 60
       inches, a projector in a lit room, and a compressed video-call tile.
    4. Narrow windows and phones, including a laptop split between the call and
       the page. The floor is that nothing breaks.
 3. **Mobile-first CSS** (settled), as a method. Base styles target the narrow
-   layout and `min-width` media queries add the wider ones. It costs little in a
+   layout and `min-width` queries, media or container, add the wider ones. It costs little in a
    rewrite and it is what keeps a zoomed page usable (principle 5). Checks on a
    real phone happen on the deployed app only and never gate a merge; phone
    risks go to `docs/known-issues.md`.
-4. **Degrade gradually with room size** (settled). Nothing ever scrolls
-   horizontally. Whether the page scrolls vertically depends on the viewport
-   alone, zoom included, since zoom only shrinks the viewport in CSS px:
+4. **Degrade gradually with room size** (settled; step 3b1 reopened its
+   table). Nothing ever scrolls horizontally. Whether the page scrolls
+   vertically depends on the viewport, zoom included, since zoom only shrinks
+   the viewport in CSS px, and in the wide layout on the issue's length and the
+   notices shown:
 
    | Viewport | The page | The participant area | The reference's open question |
    | --- | --- | --- | --- |
-   | The wide layout at or above the height floor: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
-   | The same, while a notice shows | may scroll vertically while it shows | flows with the page | the banners (L8), the issue editor's messages (L7) |
-   | The narrow layout or below the height floor, a phone among them | may scroll vertically | flows with the page | the width breakpoint and the height floor (L11) |
-   | The shared screen on such a viewport, as when zoomed | may scroll vertically, the issue, the progress and the result staying in view; the facilitator's page has no deck, so it has room to | flows with the page | how they stay in view (L10) |
+   | The wide layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | the banners (L8), the issue editor's messages (L7) |
+   | The narrow layout, a phone among them | may scroll vertically | flows with the page | the narrow layout (L11) |
+   | The shared screen in the narrow layout, as when zoomed | may scroll vertically, the issue, the progress and the result staying in view; the facilitator's page has no deck, so it has room to | flows with the page | how they stay in view (L10) |
 
    A notice is a message that ends: a banner reporting a rare event, such as
    the connection lost, a moved link or a restart, until it clears or is
@@ -167,9 +170,13 @@ document as a whole stays in discussion.
 | 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
 | 3a | Tokens | 3 | The contrast gate, then the product owner |
-| 3b | Layouts | 3a | The product owner, then the specialist |
-| 1c | Test contract audit | 3b | Every case passing on today's page, each rewritten one shown to fail |
-| 4 | Restyle | 1b, 1c, 2c, 3b | By eye, and the existing cases unchanged but for its listed contract changes |
+| 3b1 | The wide room page | 3a | The product owner, then the specialist |
+| 3a2 | The root follows the height | 3b1 | The contrast gate's tests, each change shown to fail |
+| 3b2 | Narrow and large screens | 3a2 | The product owner |
+| 3b3 | The issue editor and the messages | 3b2 | The product owner |
+| 3b4 | The lobby | 3b3 | The product owner, then the specialist on all four |
+| 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
+| 4 | Restyle | 1b, 1c, 2c, 3b4 | By eye, and the existing cases unchanged but for its listed contract changes |
 | 4a | The round's live region | 4 | Its cases |
 | 5 | Next issue | 4 | Its cases |
 | 5+ | One step per feature | 4 | Each one's spec |
@@ -236,35 +243,67 @@ spacing, component looks, and the layouts, the token values living in
 its starting input. It runs as 3a, the tokens, then 3b, the layouts, and its
 reference is `docs/design/ui-reference.md`. 3a is specified in its own
 document, `docs/superpowers/specs/2026-10-07-ui-refresh-3a-tokens-design.md`.
-After a reveal the deck stays on the page, disabled, at every width, as the
-suite's "takes no more votes" case expects; the result appears near it, not in
-its place. The layouts include a phase line: text
+3b runs as four steps, which take the reference's open questions grouped by
+what they share. At the laptop target, with an issue of up to two lines and no
+notice, the page never scrolls (principle 4), so
+the questions that divide its height go together:
+
+- 3b1, the wide room page: L1, L2, L3, L4, L6, L5's card size and L11's
+  breakpoint for the room page;
+- 3b2, narrow and large screens: L5's reflow, L10, and L11 below 3b1's
+  breakpoint;
+- 3b3, the issue editor and the messages: L7 and L8; the editing view, the read
+  view being 3b1's heading; the banners' panel's place, stacking and Dismiss;
+- 3b4, the lobby: L9, whose join and create failures are 3b3's messages, and
+  the lobby's breakpoint.
+
+Each step works on the pages the steps before it drew. One that finds an
+earlier decision does not hold reopens it, said so in the reference's log, as
+3b sends a value back to 3a. The first step that needs a look, such as a
+button or an input, draws it, and the later ones reuse it. Step 3a2 makes the
+root 3b1 sends back, and the layout tokens with it, before 3b2 draws on them
+(`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`).
+On the wide room page the result takes the deck's place after a reveal (step
+3b1), a contract change of step 4 for the suite's "takes no more votes" case;
+whether the deck stays on narrow screens is 3b2's. The layouts include a
+phase line: text
 visible in both phases, saying whether voting is open or the round is revealed,
 outside the deck so the facilitator's page keeps it, and directly above or
 beside the deck's first row, read just before it, and in view whenever that row
-is centred in the viewport, so a voter looking at the deck sees why it is
-frozen. Its place and its height change with neither the phase, the votes nor
-the room's size, at every width. Its revealed text contains "The round is
-revealed", which appears once on the page, and its open text does not, ignoring
-case, so `frozenNotice` reads it unchanged. It may share a line with the
+is centred in the viewport, so a voter looking at a frozen deck, where one
+stays after a reveal (3b2), sees why. Its place and its height change with neither the phase, the votes nor
+the room's size, at every width. Its texts are 3b1's, and the revealed one no
+longer says "The round is revealed", so `frozenNotice` is a contract change of
+step 4. It may share a line with the
 progress, as a separate element (Appendix B). Step 4a makes it the round's live
 region, and the disabled deck needs no description of its own, since the line
 says why.
 
 **Step 4. Restyle.** The step 3 reference applied, the CSS library chosen,
 Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
-and the result placed so a reveal no longer pushes the participants down, which
-closes that entry in `docs/known-issues.md`, and the "Link copied" hint moved
-beside the "Copy link" link (principle 4; Appendix A, improve 10), and Show votes
-hidden while revealed, where it does nothing (the reference's J5). It keeps the
-interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
+and the result placed as step 3b1 decides: in the deck's place on the voter's
+page, which closes that entry in `docs/known-issues.md` for voters, and above the
+table on the facilitator's page until the progress step keeps its place, and the
+"Link copied" hint moved beside the "Copy link" link (principle 4; Appendix A,
+improve 10), and Show votes and Re-vote as one button in one place that is
+`aria-disabled` for 1 s after it changes meaning (the reference's J5). It keeps
+the interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:
 
-- At the laptop target, in each phase, with a room of 14, as many distinct
-  values once revealed as step 3's layouts allow, and no notice shown, the page
-  does not scroll and each element step 3's layouts list, the phase line among
-  them, is wholly in view.
+- At the floor, in each phase, with a room of 14, as many distinct values
+  once revealed as step 3's layouts allow, an issue of two lines and no notice
+  shown, the page does not scroll and each element step 3's layouts list, the phase line among them,
+  is wholly in view. At the comfort target the 14 entries are too.
+- A longer issue, or a window below the floor, scrolls the page and cuts
+  nothing: the table keeps its minimum and the slot can be scrolled to.
+- The entries keep their scale through a reveal and never grow past a deck
+  card's height; a room of 0 or 1 voters gets a scale too.
+- A reveal with no votes shows the result, "Nobody voted" in place of the most
+  voted value, and the slot keeps its height.
+- The toggle is `aria-disabled` for 1 s after its change, keeping focus, and
+  acts after; a double-click on Show votes leaves the round revealed, and a
+  held Enter fires it once.
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
 - The facilitator's page, zoomed to 150% and 200% at least, keeps the issue in
@@ -278,7 +317,8 @@ element lists step 3's layouts give:
 Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
 and the phase line get test ids, the moved copy hint becomes a
 `role="status"` region, Show votes is absent while revealed, and facilitators
-are listed in their own region (the reference's J3), and the mark reads change
+are named on the table's title line rather than as entries (the reference's
+J3), and the mark reads change
 as the reference's "Contract reads" lists, all listed as contract changes
 (principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
@@ -319,6 +359,17 @@ commitment:
   when the votes agree, Re-vote when they spread, if the specialist's critique
   supports it.
 - Results that show the spread and the lowest and highest voters (improve 5).
+  The leading idea, from step 3b1: the voters' cards sorted by value on a
+  reveal, lowest first in the chart's deck order, no vote last, ties by name.
+  The position carries the spread, so it needs no colour and no hover. Every
+  card moves at the reveal (animated, not under reduced motion), and a re-vote
+  returns them to name order.
+- Ties shown rather than broken: "Most voted: 3 · 5", where today JavaScript's
+  key order picks one (`docs/known-issues.md`, "A tied vote is broken by
+  JavaScript key order"). "The highest when in doubt", a rule some teams use,
+  is a decision rather than a fact, so it belongs to step 9's recorded outcome
+  as a pre-selection. To decide: how many tied values the "Most voted" area
+  shows before it says "Tie". The `most-voted` read is a contract change.
 - A pasted ticket link made clickable in the issue (improve 8).
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
@@ -361,10 +412,10 @@ commitment:
 | Component library and look | Step 4, from step 3's reference |
 | Responsive layout | Step 4 |
 | Restyling the editor | Step 4 |
-| Participants above the results | Step 4, as "the result placed so a reveal no longer pushes the participants down" |
+| Participants above the results | Step 4, as the result placed per page (step 3b1) |
 | "Not Alice?" | A step 5+ candidate |
 | Light and dark theme | Dropped: lunatech.com has one theme |
-| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and the visible "The round is revealed" sentence already says why the deck is frozen |
+| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and the phase line says why a deck is frozen, where one stays after a reveal |
 
 ## Relation to other documents
 
