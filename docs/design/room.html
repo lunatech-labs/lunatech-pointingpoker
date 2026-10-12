@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room mockup (ui refresh step 3b1)</title>
+<link rel="stylesheet" href="../../frontend/src/colours.css">
+<link rel="stylesheet" href="../../frontend/src/tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500&display=block">
+<style>
+  /* 3a2's tokens (decision 16): the height-first root over tokens.css, and the sizes this page adds */
+  :root {
+    --root-size: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem);
+    --leading-figure: 1; /* one line of figures or labels */
+    --text-tag: 0.6875rem; /* the kept tag, under a deck card */
+    --tracking-tag: 0.04em; /* the kept tag, J2's em like the label tracking */
+    --tight-point: -0.22em; /* the point in "0.5", following its figure (J2's em) */
+    --icon: 1.125rem; /* an icon beside its words */
+    --brand-height: 2.375rem; /* the header's card back, 5:7 */
+    --deck-card: 5.5rem; /* a deck card's height, 5:7 */
+    --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
+    --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */
+    --table-min: 5rem; /* the table's least height: its title and a strip of cards */
+    --action-width: 9.5rem; /* every action but the quiet ones */
+    --slot-height: 7.5rem; /* the round panel's slot: deck, progress or result */
+    --chart-value: 2.25rem; /* the chart's value row */
+    --chart-bar: 2rem; /* the chart's tallest bar */
+  }
+  * { box-sizing: border-box; }
+  html { font-size: var(--root-size); }
+  body {
+    margin: 0; background: var(--paper-pale); color: var(--ink);
+    font: var(--weight-regular) var(--text-md)/var(--leading-body) var(--font-sans);
+  }
+  h1, h2, p { margin: 0; }
+  button { font: inherit; color: inherit; }
+  a { color: var(--ink); }
+  :focus-visible { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
+  .label {
+    font: var(--weight-medium) var(--text-sm)/var(--leading-figure) var(--font-mono);
+    letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--grey);
+  }
+  /* Parts later steps add, shown with later=1 */
+  .later { outline: var(--line-hairline) dashed var(--grey); outline-offset: var(--focus-gap); }
+
+  /* The shell: only the table scrolls, until it reaches its minimum; then the page does */
+  .shell {
+    height: var(--shell-height); display: flex; flex-direction: column;
+    padding: 0 var(--space-5); gap: var(--space-3);
+  }
+  /* The bottom spacing as an item, so it stays when the page scrolls; it gives way first, kept a hairline high
+     since a box of no height adds nothing to the page's scroll */
+  .shell::after { content: ''; flex: 0 1 auto; height: calc(var(--space-4) - var(--space-3)); min-height: var(--line-hairline); }
+  .panel { background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); padding: var(--space-4) var(--space-5); }
+
+  /* The header (L6) */
+  .header { display: flex; align-items: center; gap: var(--space-4); padding-top: var(--space-2); }
+  .header svg { width: var(--icon); height: var(--icon); }
+  .header .brand { height: var(--brand-height); width: auto; aspect-ratio: 5 / 7; transform: rotate(-6deg); color: var(--burgundy); flex: none; }
+  .chip { display: inline-flex; align-items: stretch; background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); }
+  .chip h1 { padding: 0 var(--space-3); display: flex; align-items: center; font: var(--weight-medium) var(--text-lg)/var(--leading-figure) var(--font-mono); }
+  .chip a { display: inline-flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3); border-left: var(--line-hairline) solid var(--hairline-colour); min-height: var(--target-min); }
+  /* J6's confirmation: plain text beside its cause; it moves and covers nothing */
+  .copied { flex: 1; color: var(--grey); white-space: nowrap; }
+  .role { color: var(--grey); }
+  .role button { background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; min-height: var(--target-min); color: var(--ink); }
+  .leave { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); }
+
+  /* The issue (L1): shared-screen size; a link breaks only before a path slash */
+  .issue { display: flex; align-items: baseline; gap: var(--space-4); padding-bottom: var(--space-1); }
+  .issue h2 { font: var(--weight-strong) var(--text-3xl)/var(--leading-tight) var(--font-sans); overflow-wrap: anywhere; flex: 1; min-width: 0; }
+  .issue .seg { display: inline-block; }
+  /* Recent rounds (step 9): each issue cut to a fixed width, the value never cut, rounds drop whole; its sizes are step 9's */
+  .recent { display: flex; align-items: baseline; gap: var(--space-4); min-width: 0; overflow: hidden; white-space: nowrap; font-size: var(--text-sm); }
+  .recent ol { display: flex; flex-wrap: wrap; height: 1.5em; gap: 0 var(--space-4); min-width: 0; overflow: hidden; margin: 0; padding: 0; list-style: none; }
+  .recent li { display: inline-flex; align-items: baseline; gap: var(--space-2); flex: none; line-height: 1.5; }
+  .recent .what { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; color: var(--grey); }
+  .recent .got { font: var(--weight-medium) var(--text-sm)/var(--leading-figure) var(--font-mono); }
+  .quiet {
+    display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--target-min);
+    padding: 0 var(--space-3); background: none; border: var(--line-control) solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .quiet svg { width: var(--icon); height: var(--icon); }
+
+  /* The round panel: the phase line and the actions, then the slot (deck, progress or result) */
+  .round { display: grid; gap: var(--space-3); }
+  .round-top { display: flex; align-items: center; gap: var(--space-4); min-height: var(--target-min); }
+  .phase { display: flex; align-items: baseline; gap: var(--space-3); flex: 1; }
+  /* Fixed places, right-aligned: Clear apart, Next issue (step 5), the toggle at the edge */
+  .actions { display: flex; gap: var(--space-3); align-items: center; }
+  .actions .btn, .actions .place { width: var(--action-width); padding: 0; }
+  .actions .quiet { margin-right: var(--space-5); }
+  .btn { min-height: var(--target-min); padding: 0 var(--space-5); border-radius: var(--radius); font-weight: var(--weight-strong); cursor: pointer; white-space: nowrap; }
+  .primary { background: var(--burgundy); color: var(--paper-warm); border: var(--line-control) solid var(--burgundy); }
+  .secondary { background: var(--paper-warm); color: var(--ink); border: var(--line-control) solid var(--ink); }
+  .slot { height: var(--slot-height); display: grid; align-items: end; padding-bottom: var(--space-2); }
+  /* The progress on the facilitator's page (a later step), at shared-screen size */
+  .big-progress { display: grid; gap: var(--space-2); align-self: center; }
+  .big-progress .tally { font: var(--weight-regular) var(--text-3xl)/var(--leading-tight) var(--font-sans); }
+  .big-progress .tally b { font-weight: var(--weight-strong); }
+  .big-progress .who { font-size: var(--text-lg); color: var(--grey); }
+
+  /* The deck: playing cards, 5:7; a chosen card lifts, which leaves room for the kept tag */
+  .deck { display: grid; grid-template-columns: repeat(13, 1fr); gap: var(--space-3); padding-inline: var(--space-4); }
+  .card-place { position: relative; display: flex; flex-direction: column; align-items: center; }
+  .card {
+    height: var(--deck-card); aspect-ratio: 5 / 7; display: grid; place-items: center; padding: 0;
+    background: var(--paper-warm); border: var(--line-control) solid var(--card-back); border-radius: var(--radius-card);
+    font: var(--weight-medium) var(--text-xl)/var(--leading-figure) var(--font-mono); cursor: pointer; transition: transform var(--duration);
+  }
+  .card.confirmed { background: var(--card-back); color: var(--paper-warm); }
+  .card.kept { border: var(--frame-band) solid var(--card-back); }
+  .card.confirmed, .card.kept { transform: translateY(calc(-1 * var(--space-2))); }
+  @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+  .tag {
+    font: var(--weight-medium) var(--text-tag)/var(--leading-tight) var(--font-mono); letter-spacing: var(--tracking-tag); text-transform: uppercase;
+    border: var(--line-control) solid var(--ink); background: var(--paper-warm); padding: 0 var(--space-1); white-space: nowrap;
+  }
+  .card-place .tag { position: absolute; bottom: calc(-1 * var(--space-3)); }
+  /* A mono point takes a full cell; set tight, "0.5" fits every card at full size */
+  .pt { margin-inline: var(--tight-point); }
+
+  /* The result: the deck's 13 values as columns on one baseline, counts on the bars */
+  .chart { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-6); align-items: end; height: 100%; }
+  .most { display: flex; flex-direction: column; gap: var(--space-1); }
+  .most .figure { font: var(--weight-medium) var(--text-4xl)/var(--leading-figure) var(--font-mono); }
+  .columns { display: grid; grid-template-columns: repeat(13, 1fr); gap: var(--space-2); height: 100%; align-items: end; }
+  .col { display: grid; grid-template-rows: minmax(0, 1fr) auto; justify-items: center; height: 100%; }
+  .bar-area { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%; }
+  .bar { width: 60%; height: calc(var(--chart-bar) * var(--share)); background: var(--card-back); }
+  .sr { position: absolute; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* The chart is J7's one element at the 3 m step; the "×" is decoration, not read and not in the text */
+  .count { font: var(--weight-regular) var(--text-2xl)/var(--leading-tight) var(--font-mono); color: var(--grey); }
+  .count::before { content: "×" / ""; font-size: var(--text-lg); }
+  .value {
+    height: var(--chart-value); width: 100%; text-align: center; padding-top: var(--space-1);
+    font: var(--weight-medium) var(--text-2xl)/var(--leading-tight) var(--font-mono); border-top: var(--line-mark) solid var(--card-back);
+  }
+  .col.empty .value { color: var(--grey); border-top: var(--line-hairline) solid var(--hairline-colour); font-size: var(--text-lg); }
+
+  /* The table: voters as cards, face down while voting, face up once revealed */
+  /* The gutter is kept, so the table's width, and with it the fit, never depends on whether it scrolls */
+  .people { flex: 1; min-height: var(--table-min); overflow: auto; scrollbar-gutter: stable; padding: var(--space-3) var(--space-5); display: flex; flex-direction: column; gap: var(--space-3); }
+  .people-top { display: flex; align-items: baseline; gap: var(--space-4); }
+  .people-top .progress { flex: 1; color: var(--grey); }
+  .people-top .progress b { color: var(--ink); font-weight: var(--weight-strong); }
+  .facilitators { color: var(--grey); margin-left: auto; }
+  .facilitators b { color: var(--ink); font-weight: var(--weight-strong); }
+  /* --s scales every entry alike to fill the table, from 1 up to a deck card's height */
+  .entries { --s: 1; list-style: none; margin: auto; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--space-3) * var(--s)) calc(var(--space-1) * var(--s)); }
+  .entries li { width: calc(var(--entry-width) * var(--s)); display: flex; flex-direction: column; align-items: center; gap: var(--space-1); text-align: center; }
+  /* The mark's colour is set on the entry, not the svg: forced colours repaint an svg only through its parent */
+  .entries li { color: var(--card-back); }
+  .mark, .face { height: calc(var(--entry-mark) * var(--s)); aspect-ratio: 5 / 7; flex: none; }
+  .face {
+    display: grid; place-items: center; background: var(--paper-warm); border: var(--line-mark) solid var(--card-back);
+    border-radius: var(--radius-card); font: var(--weight-medium) calc(var(--text-xl) * var(--s))/var(--leading-figure) var(--font-mono); color: var(--ink);
+  }
+  .face > * { grid-area: 1 / 1; }
+  .face.none { border-color: var(--hairline-colour); color: var(--grey); }
+  /* A revealed kept vote: J3's band outside the face, so the value keeps its paper */
+  .face.kept { outline: calc(var(--frame-band) - var(--line-mark)) solid var(--card-back); outline-offset: 0; }
+  .name { color: var(--ink); font-size: calc(var(--text-sm) * var(--s)); line-height: var(--leading-tight); max-width: 100%; overflow-wrap: anywhere; }
+  .name b { font-weight: var(--weight-strong); }
+  .name .you { color: var(--grey); }
+  .inset { stroke: var(--paper-warm); fill: none; }
+  .inset-pip { fill: var(--paper-warm); }
+  /* Today's messages in J6's tones; the banners in a panel of their own (decision 3); placement and stacking are 3b3's */
+  .msg { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-left: var(--line-bar) solid; }
+  .msg svg { width: var(--icon); height: var(--icon); flex: none; }
+  .msg p { flex: 1; }
+  .msg.problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-color: var(--burgundy-deep); }
+  .msg.notice { background: var(--paper-pale); color: var(--ink); border-color: var(--ink); }
+  .msg .quiet { color: inherit; }
+  .messages { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+  .editing { display: flex; flex-direction: column; gap: var(--space-2); }
+  .editing input { font: var(--weight-strong) var(--text-3xl)/var(--leading-tight) var(--font-sans); width: 100%; padding: var(--space-1) var(--space-2);
+    border: var(--line-control) solid var(--ink); background: var(--paper-warm); color: var(--ink); }
+
+  /* J3's one opt-out: the chosen card's fill, in system colours, its focus ring in CanvasText; the chart's bars too */
+  @media (forced-colors: active) {
+    .inset { stroke: Canvas; } .inset-pip { fill: Canvas; }
+    .card.confirmed { forced-color-adjust: none; background: CanvasText; color: Canvas; border-color: CanvasText; }
+    .card.confirmed:focus-visible { outline-color: CanvasText; }
+    .bar { forced-color-adjust: none; background: CanvasText; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1,
+// voters, issue, me, name0 (replaces the first name), brand=pip (the plain card back, the glyph's fallback), probe=1 (root and width),
+// message: a comma list of lost, ended, restarted, moved (banners), conflict, save-failed (the editor's);
+// votes=0: nobody has voted.
+const q = new URLSearchParams(location.search)
+const role = q.get('role') || 'voter'
+const voter = role === 'voter'
+const later = q.get('later') === '1'
+const voterCount = Number(q.get('voters') || 14)
+const nobody = q.get('votes') === '0'
+const issue = q.get('issue') || 'https://lunatech.atlassian.net/browse/PP-1234'
+let phase = q.get('phase') || 'voting'
+let from = phase === 'revealed-revote' ? 'revote' : 'voting'   // the round a reveal shows
+if (phase === 'revealed-revote') phase = 'revealed'
+
+const deck = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+const names = [q.get('name0') || 'Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Heidi',
+  'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert', 'Sybil', 'Trent']
+const facilitators = ['Peggy', 'Victor']
+// The own name, kept in the room when voters cuts the list short
+const me = names.slice(0, voterCount).includes(q.get('me') || 'Ivan') ? q.get('me') || 'Ivan' : names[0]
+// Each voter's value, its state while voting, and its state after a re-vote.
+const values = ['5', '0.5', '5', '8', '5', '13', '5', '3', '5', '8', null, '5', '2', '5', '5', '8']
+const voting = ['confirmed', 'confirmed', 'confirmed', 'none', 'confirmed', 'confirmed', 'none', 'confirmed',
+  'confirmed', 'confirmed', 'none', 'confirmed', 'none', 'confirmed', 'confirmed', 'none']
+const revote = ['kept', 'confirmed', 'confirmed', 'kept', 'confirmed', 'kept', 'none', 'confirmed',
+  'kept', 'confirmed', 'none', 'confirmed', 'none', 'kept', 'confirmed', 'none']
+// Most recent first; a free-text issue is the hard case for a short label (step 9 decides it).
+const rounds = [['PP-1233', '5'], ['Rework the login page so that a returning user lands on their last room', '8'], ['PP-1231', '3']]
+let ownChoice = null
+let settling = false, settled   // the toggle's 1 s window and its timer
+let copied = false   // as today: each copy hides the hint 2 s later, so it lasts 2 s from the first
+
+const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
+const pencil = icon('M4 20h4L19 9l-4-4L4 16v4z')
+const trash = icon('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')
+const link = icon('M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1')
+const exit = icon('M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10')
+const alertIcon = icon('M12 3l10 18H2zM12 10v5M12 18v.5')
+const infoIcon = icon('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v6M12 7.5v.5')
+const close = icon('M6 6l12 12M18 6L6 18')
+const messages = (q.get('message') || '').split(',').filter(Boolean)
+const msg = (tone, text, dismiss) => `<div class="msg ${tone}" role="${tone === 'problem' ? 'alert' : 'status'}">${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
+  dismiss ? `<button class="quiet" type="button" aria-label="Dismiss">${close}</button>` : ''}</div>`
+const banners = {
+  lost: msg('problem', 'Connection to the room was lost'),
+  ended: msg('problem', 'Your session has ended. Please reload the page to rejoin.'),
+  restarted: msg('notice', 'Reconnected. Please check your vote.', true),
+  moved: msg('notice', 'The old link you followed now opens this address. Please update your invitation or bookmark to use it.', true)
+}
+
+// The brand: the card back of the table's marks in burgundy, the Lunatech glyph (traced from
+// lunatech.com's logo, unmodified) as its pip; brand=pip is the fallback without the logo.
+const glyph = 'M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z'
+const pip = q.get('brand') === 'pip'
+  ? '<rect x="3.5" y="3.5" width="13" height="21" rx="1" fill="none" stroke="var(--paper-warm)" stroke-width="0.6"/><path d="M10 10l3 4-3 4-3-4z" fill="var(--paper-warm)"/>'
+  : `<rect x="2.5" y="2.5" width="15" height="23" rx="1" fill="none" stroke="var(--paper-warm)" stroke-width="0.6"/><g transform="translate(10 14) scale(0.24) translate(-55.5 -50.5)"><path fill="var(--paper-warm)" fill-rule="evenodd" d="${glyph}"/></g>`
+const brand = `<svg class="brand" viewBox="0 0 20 28" aria-hidden="true"><rect width="20" height="28" rx="2.5" fill="currentColor"/>${pip}</svg>`
+
+const fig = v => v === '0.5' ? '<span>0<span class="pt">.</span>5</span>' : v
+// A link breaks only before a single slash, each path segment kept whole; free text wraps at spaces.
+const issueText = /^https?:\/\//.test(issue)
+  ? issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${seg}</span>`).join('')
+  : issue
+
+const mark = state => {
+  const shape = {
+    none: '<rect x="1" y="1" width="18" height="26" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>',
+    confirmed: '<rect width="20" height="28" rx="2.5" fill="currentColor"/>' +
+      '<rect class="inset" x="3.5" y="3.5" width="13" height="21" rx="1" stroke-width="0.6"/><path class="inset-pip" d="M10 10l3 4-3 4-3-4z"/>',
+    kept: '<rect x="2" y="2" width="16" height="24" rx="1" fill="none" stroke="currentColor" stroke-width="4"/>'
+  }[state]
+  const name = { none: 'No vote', confirmed: 'Voted', kept: 'Previous vote, not confirmed' }[state]
+  return `<svg class="mark" viewBox="0 0 20 28" role="img" aria-label="${name}">${shape}</svg>`
+}
+
+function draw() {
+  const revealed = phase === 'revealed'
+  const people = names.slice(0, voterCount).map((name, i) => {
+    const round = revealed ? from : phase
+    const state = round === 'cleared' || nobody ? 'none' : round === 'revote' ? revote[i] : voting[i]
+    if (voter && name === me && ownChoice !== null) return { name, value: ownChoice, state: 'confirmed' }
+    return { name, value: state === 'none' ? null : values[i], state }
+  })
+  const own = people.find(p => p.name === me)
+  const counts = {}
+  if (revealed) people.forEach(p => p.value && (counts[p.value] = (counts[p.value] || 0) + 1))
+  // A tie falls to deck order here; today's tie rule is a known issue, and ties shown a step 5+ candidate.
+  const tally = deck.filter(v => counts[v]).map(v => [v, counts[v]]).sort((x, y) => y[1] - x[1])
+  const voted = people.filter(p => p.state === 'confirmed').length
+  const waiting = people.filter(p => p.state !== 'confirmed').map(p => p.name)
+  // Principle 4: any line that names people summarizes.
+  const summary = (all, name = n => n) => { const list = all.map(name)
+    return list.length > 2 ? `${list.slice(0, 2).join(', ')} and ${list.length - 2} more` : list.join(' and ') }
+  const waitingText = summary(waiting)
+
+  const header = `
+    <header class="header">
+      ${brand}
+      <span class="chip"><h1>brave-golden-otter</h1><a href="#" data-copy>${link}Copy link</a></span>
+      <span class="copied" role="status">${copied ? 'Link copied to clipboard' : ''}</span>
+      <span class="role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
+      <a class="leave" href="#">${exit}Leave</a>
+    </header>`
+  const recent = later ? `<div class="recent later"><span class="label" id="recent-h">Earlier rounds</span><ol aria-labelledby="recent-h">${rounds.map(([what, v]) =>
+    `<li><span class="what" title="${what}">${what}</span><span aria-hidden="true">→</span><span class="got">${v}</span></li>`).join('')}</ol></div>` : ''
+  const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
+    : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
+  // The editing view is 3b3's, drawn dashed only to hold its messages.
+  const issueBlock = editorMsg
+    ? `<div class="panel"><div class="editing"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></div>`
+    : `<div class="panel"><div class="issue"><h2>${issueText}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${recent}</div>`
+  const bannerList = messages.filter(m => banners[m]).map(m => banners[m]).join('')
+  const bannerBlock = bannerList && `<section class="panel messages" aria-label="Messages">${bannerList}</section>`
+
+  const phaseLine = `
+    <div class="phase" data-testid="phase-line">
+      <h2 class="label">${revealed ? 'Revealed' : 'Voting'}</h2>
+      <span>${revealed ? 'Talk it through, then re-vote or move on.' : 'Votes stay hidden until someone shows them.'}</span>
+    </div>`
+  // One button for Show votes and Re-vote, at the edge; Next issue (step 5) to its left, Clear apart.
+  const toggle = revealed
+    ? `<button class="btn secondary" data-do="revote" data-toggle type="button"${settling ? ' aria-disabled="true"' : ''}>Re-vote</button>`
+    : `<button class="btn primary" data-do="show" data-toggle type="button"${settling ? ' aria-disabled="true"' : ''}>Show votes</button>`
+  const next = !later ? '' : revealed ? '<button class="btn secondary later" type="button">Next issue</button>' : '<span class="place"></span>'
+  const actions = `<div class="actions"><button class="quiet" data-do="clear" type="button">${trash}Clear votes</button>${next}${toggle}</div>`
+
+  const deckBlock = `
+    <div class="deck" role="group" aria-label="Estimation cards">
+      ${deck.map(v => {
+        const mine = own?.value === v && own.state !== 'none'
+        return `<div class="card-place"><button class="card ${mine ? own.state : ''}" data-vote="${v}" type="button"
+          aria-pressed="${mine && own.state === 'confirmed'}">${fig(v)}</button>
+          ${mine && own.state === 'kept' ? '<span class="tag" aria-hidden="true">not confirmed</span>' : ''}</div>`
+      }).join('')}
+    </div>`
+  const top = tally.length ? tally[0][1] : 1
+  const chart = `
+    <div class="chart" role="region" aria-label="Results">
+      <div class="most">${tally.length
+        ? `<span class="label">Most voted</span><span class="figure" data-testid="most-voted">${fig(tally[0][0])}</span>`
+        : '<span class="label">Nobody voted</span><span class="figure" aria-hidden="true">&nbsp;</span>'}</div>
+      <div class="columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
+        ? `<div class="col" role="listitem" data-testid="tally-entry"><span class="sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><div class="bar-area" aria-hidden="true"><span class="count" data-testid="tally-count">${counts[v]}</span><span class="bar" style="--share:${counts[v] / top}"></span></div><span class="value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
+        : `<div class="col empty" aria-hidden="true"><div class="bar-area"></div><span class="value">${fig(v)}</span></div>`).join('')}</div>
+    </div>`
+  const bigProgress = `<div class="big-progress later"><p class="tally"><b>${voted}</b> of ${people.length} voted</p><p class="who">Waiting: ${waitingText}</p></div>`
+
+  // The voter's slot holds the deck, then the result. The facilitator's appears on reveal (step 4),
+  // or, once the progress step lands, holds the progress while voting so nothing moves on reveal.
+  let slot = ''
+  if (voter) slot = revealed ? chart : deckBlock
+  else if (revealed) slot = chart
+  else if (later) slot = bigProgress
+  const round = `<section class="panel round" aria-label="Round"><div class="round-top">${phaseLine}${actions}</div>${voter || revealed || later ? `<div class="slot">${slot}</div>` : ''}</section>`
+
+  const entry = p => {
+    const face = revealed
+      ? p.value
+        ? `<span class="face ${p.state}"><span data-testid="participant-estimation">${fig(p.value)}</span>${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
+        : `<span class="face none"><span data-testid="participant-estimation"></span><span role="img" aria-label="No vote">–</span></span>`
+      : mark(p.state)
+    const self = voter && p.name === me
+    return `<li data-testid="participant">${face}<span class="name">${self ? `<b>${p.name}</b> <span class="you">(you)</span>` : p.name}</span></li>`
+  }
+  const progress = later && voter && !revealed ? `<p class="progress later"><b>${voted} of ${people.length} voted</b> · waiting: ${waitingText}</p>` : ''
+  const table = `
+    <section class="panel people" role="region" aria-label="Participants" tabindex="0">
+      <div class="people-top"><h2 class="label">Voters · ${people.length}</h2>${progress}
+        ${facilitators.length ? `<p class="facilitators"><b>${facilitators.length > 1 ? 'Facilitators' : 'Facilitator'}:</b> ${summary(facilitators, n => `<span data-testid="facilitator">${n}</span>`)}</p>` : ''}</div>
+      <ul class="entries">${people.map(entry).join('')}</ul>
+    </section>`
+
+  const keep = document.activeElement?.matches('[data-toggle]')
+  document.getElementById('root').innerHTML = `<main class="shell">${bannerBlock}${header}${issueBlock}${round}${table}</main>`
+  if (keep) document.querySelector('[data-toggle]').focus()
+  watched.disconnect(); watched.observe(document.querySelector('.people'))
+}
+
+// The entries' scale: the largest that fits the table, never past a deck card's height, fitted to the
+// revealed phase's table so a reveal changes nothing; rows balanced. Step 4 writes it as a pure function.
+function fitEntries() {
+  const list = document.querySelector('.entries'), box = document.querySelector('.people')
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  const token = name => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name))
+  const slot = token('--slot-height') + token('--space-3')   // the slot and the round panel's gap, in rem
+  const reserve = !voter && !later && phase !== 'revealed' ? slot * rem : 0
+  const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (box.children.length - 1)
+  const used = () => [...box.children].reduce((h, c) => h + c.getBoundingClientRect().height, pad)
+  // Whole pixels, so the voting phase's estimate of the revealed box matches the revealed box itself.
+  const room = Math.floor(box.clientHeight - reserve)
+  const fits = v => { list.style.setProperty('--s', v); list.style.maxWidth = ''; return used() <= room }
+  let lo = 1, hi = token('--deck-card') / token('--entry-mark')
+  if (fits(hi)) lo = hi
+  else for (let i = 0; i < 10; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid }
+  fits(Math.floor(lo * 50) / 50)   // in steps of 0.02, clear of subpixel rounding
+  const items = [...list.children]
+  if (!items.length) return
+  const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
+  const perRow = Math.ceil(items.length / rows), width = items[0].getBoundingClientRect().width
+  if (rows > 1) list.style.maxWidth = `${perRow * width + (perRow - 1) * parseFloat(getComputedStyle(list).columnGap) + 1}px`
+}
+// Reruns whenever the table's box changes (resize, issue, role, banner, a wrapped line) and when a font lands.
+const watched = new ResizeObserver(fitEntries)
+document.fonts.addEventListener('loadingdone', fitEntries)
+
+// Clickable: the actions move the round and a card votes.
+// The toggle is aria-disabled for 1 s after it changes meaning, so a click meant for Show cannot re-vote.
+function moveTo(next) {
+  const turns = (phase === 'revealed') !== (next === 'revealed')
+  phase = next
+  if (turns) { settling = true; clearTimeout(settled); settled = setTimeout(() => { settling = false; draw() }, 1000) }
+  draw()
+}
+document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('[data-toggle]') && e.preventDefault())
+document.addEventListener('click', e => {
+  if (e.target.closest('[aria-disabled="true"]')) return
+  const act = e.target.closest('[data-do]')?.dataset.do
+  const vote = e.target.closest('[data-vote]')?.dataset.vote
+  if (act === 'show') { from = phase; moveTo('revealed') }
+  if (act === 'revote') { ownChoice = null; moveTo('revote') }
+  if (act === 'clear') { ownChoice = null; moveTo('cleared') }
+  if (vote && phase !== 'revealed') { ownChoice = vote; draw() }
+  if (e.target.closest('[data-copy]')) {
+    copied = true; draw()
+    setTimeout(() => { copied = false; draw() }, 2000)
+  }
+  if (e.target.closest('a')) e.preventDefault()
+})
+draw()
+
+if (q.get('probe') === '1') {
+  const badge = Object.assign(document.createElement('output'), { style: 'position:fixed;right:8px;bottom:8px;padding:4px 8px;background:var(--ink);color:var(--paper-warm);font:12px/1.4 var(--font-mono);z-index:9' })
+  const show = () => { const px = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    badge.textContent = `${innerWidth}×${innerHeight} · root ${px.toFixed(1)}px · ${(innerWidth / px).toFixed(1)} rem wide` }
+  document.body.append(badge); addEventListener('resize', show); show()
+}
+</script>
+</body>
+</html>
