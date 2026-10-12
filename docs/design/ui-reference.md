@@ -25,7 +25,8 @@ the decisions log at the end.
   (principle 5).
 - **Card**: one of the deck's 13 buttons, which a voter clicks to vote.
 - **Participant entry**: one voter in the participant area, today a table row;
-  its form is L3's. Facilitators are listed apart (J3).
+  its form is L3's. Facilitators have none; they share the voters' title line
+  (J3).
 - **Hairline**: a divider or a surface's edge, and nothing else. It is
   decorative: it identifies no control and no state.
 - **Message**: anything J6 gives a tone: a problem, a notice or a
@@ -34,12 +35,19 @@ the decisions log at the end.
 
 ## Mockups
 
-- They will live beside this file, under `docs/design/`, as clickable HTML.
+- They live beside this file, under `docs/design/`, as clickable HTML linking
+  the value source.
 - They show what step 4 builds and, behind a "later steps" toggle, the parts
-  later steps add (progress count, Next issue, the spread), so step 4 leaves
-  room for them.
+  later steps add (progress count, Next issue, recent rounds), dashed, so step
+  4 leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
+- `room.html`, the wide room page (J10). Its parameters: `role`, `phase`
+  (`voting`, `revote`, `revealed`, `revealed-revote`), `later`, `voters`,
+  `votes=0`, `issue`, `me`, `name0`, `brand`, `message` (today's banners and
+  the editor's messages) and `probe` (the root and the width in `rem`).
+- `room-cells.html`, its layout cells side by side at 1280 px wide, each with
+  a link that opens it alone at the window's size.
 
 ## Brand source
 
@@ -66,28 +74,36 @@ lunatech.com's stylesheet, read 2026-10-06:
 
 ### J1. Target laptop height
 
-- The laptop target is a viewport of **1280 by 600** CSS px, which step 4's
-  no-scroll case uses. It may relax to about 620 to 650 if that buys a clearly
-  better layout, said so when proposed.
+- The **floor** is a viewport of **1280 by 600** CSS px: there the page never
+  scrolls with an issue of up to two lines, and every element but the
+  participant area is in view. The **comfort target**, **1280 by 680**, puts
+  14 entries in view too; it is provisional until a Windows laptop is
+  measured. Step 4's no-scroll cases use both.
 - "Fits" is measured with the root font size J2 gives at that viewport.
-- Hand checks in 3b: 1344 by 757, 1536 by 756, 1280 by 952, and 3072 by 1598 as
-  the monitor case.
+- Hand checks in 3b: 1344 by 757, 1536 by 756, 1280 by 952, 1512 by 749,
+  1329 by 696, 1472 by 1493 and 1280 by 1300 (half of a 4K and of a 2560 by
+  1440 monitor), and 3072 by 1598 as the monitor case.
 
 ### J2. One fluid root, everything else in rem
 
 - The root font size is the only fluid value:
   `clamp(<min>rem, <a>vmin + <b>rem, <max>rem)`, the `--root-size` token,
-  which the contrast gate (J8) checks against the three rules below. Its limits
+  which the contrast gate (J8) checks against the three rules below. Step 3a2
+  makes it follow the height, `clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem,
+  1.75rem)`, and rewrites the gate's check to match; until then the mockups
+  set it over the value source. Its limits
   are in `rem`, so the reader's default font size counts.
-- The root sits at its minimum up to the laptop sizes (J1's target and hand
+- The root sits at its minimum up to the laptop sizes (J1's floor, comfort
+  target and hand
   checks below 800 px tall), so browser zoom there is exactly linear.
 - `b` is above zero, so every zoom step grows the text at every viewport.
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
-- Every other size is in `rem`, but the label tracking, in `em` so that it
-  follows its own text. No viewport unit appears outside the root but the app
-  shell's height: exactly `100dvh` where principle 4's table says the page
-  never scrolls, and at least `100dvh` in its other rows.
+- Every other size is in `rem`, but the label and tag trackings and the
+  tight point in "0.5", in `em` so that they follow their own text. No viewport unit appears outside the root but the app
+  shell's height: exactly `100dvh` in the wide layout, its content overflowing
+  it once the table is at its least height, and at least `100dvh` in the
+  narrow layout.
 - `px` only for the hairline token and inside a pixel floor. Every other line
   (the Lines tokens but the hairline: control lines, J3's marks, the kept
   frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
@@ -111,14 +127,14 @@ shape or fill from afar, and words explain the rest up close.
 | --- | --- | --- |
 | No estimate | outline | "–" in the value's place |
 | Confirmed | solid fill | the value |
-| Kept | kept frame | the value and a "not confirmed" tag |
+| Kept | kept frame | the value, the kept band outside its face |
 
 | Card | Shown as |
 | --- | --- |
 | Not chosen | plain |
 | Chosen, confirmed | solid fill |
 | Chosen, kept | the kept frame around the figure, and a "not confirmed" tag |
-| Revealed | all disabled, the phase line says why; the chosen one keeps its look, fill or kept frame, faded to the grey (J8) |
+| Revealed, where a deck stays (3b2) | all disabled, the phase line says why; the chosen one keeps its look, fill or kept frame, faded to the grey (J8) |
 
 - Three looks answer the room's two questions at a glance: who has chosen
   again, and whether enough estimates exist for a reveal to mean something.
@@ -141,11 +157,10 @@ shape or fill from afar, and words explain the rest up close.
 - 3b checks the kept frame on screenshots shrunk to a 480 by 270 video tile,
   and from a few metres away, on the smallest entry mark too (L3). If it fails
   there, 3b sends the band back to 3a (Tokens).
-- **Facilitators** have no round state, so they are listed in their own region
-  under one heading, in step 1b's order, and no entry carries a "Facilitator"
-  label. The region sits inside the participant area, after the voters, or is
-  one line that summarizes ("Facilitators: Ann, Bob and 2 more"), so principle
-  4's growth rule holds; L3 picks.
+- **Facilitators** have no round state, so they have no entry and no
+  "Facilitator" label. They share the voters' title line, in step 1b's order,
+  which summarizes ("Facilitators: Ann, Bob and 2 more"), so principle 4's
+  growth rule holds (J10).
 - Each look has one mark with an accessible name, written for the listener
   (WCAG 1.1.1, and 4.1.2 for a card's state), one wording per state: "No
   vote", as on the revealed "–"; "Voted"; and "Previous vote, not confirmed",
@@ -157,7 +172,9 @@ shape or fill from afar, and words explain the rest up close.
   would erase the fill:
   - a card's kept frame is its border, and an entry's mark is inline SVG drawn
     in an inherited `currentColor`; the browser repaints both in the user's
-    colours with no opt-out;
+    colours with no opt-out. Chromium repaints an `svg` only through its
+    parent (`preserve-parent-color`), so the mark's colour is set on the
+    entry, not the `svg`;
   - a card's solid fill is the one opt-out (`forced-color-adjust: none`),
     drawn only in system colours (`Canvas`, `CanvasText`), since nothing else
     keeps a figure readable on a fill;
@@ -169,8 +186,7 @@ shape or fill from afar, and words explain the rest up close.
 - Burgundy marks the brand and at most one primary action per phase, and in
   its deep shade a problem message (J6).
 - Every J3 state is drawn in the card back's colour, `--card-back`, which is
-  ink. 3b tries burgundy on the assembled mockups and the product owner
-  chooses; burgundy would reopen this rule.
+  ink. 3b1 tried burgundy on the assembled mockups and kept ink.
 - The focus ring is ink (J8). Links are ink and always underlined, so they
   never rely on colour and burgundy never sits in running text.
 
@@ -180,18 +196,23 @@ A button shows only in the phases where it does something.
 
 | Phase | Step 4 | Step 5 (Next issue) |
 | --- | --- | --- |
-| Voting | **Show votes** primary; Clear votes quiet | **Show votes** primary; Next issue quiet, if it shows while voting; Clear: step 5 decides |
-| Revealed | Re-vote secondary; Clear votes quiet | Re-vote and Next issue, both secondary; Clear: step 5 decides |
+| Voting | **Show votes** primary; Clear votes quiet | **Show votes** primary; Next issue's place kept; Clear: step 5 decides |
+| Revealed | Re-vote secondary; Clear votes quiet | Next issue and Re-vote, both secondary; Clear: step 5 decides |
 
 - After a Re-vote the round is voting again, with the voting buttons.
 - **Show** is the Show votes button, **Clear** the Clear votes one.
 - **Primary** is the phase's one burgundy button (J4); **secondary** an ink
   outline; **quiet** an ink button with words and an icon, never burgundy.
-- Step 4 hides Show while revealed, listed in its spec as a contract change,
-  after step 1c has removed Show's incidental uses.
+- Show votes and Re-vote are one button at the right edge, Show while voting
+  and Re-vote once revealed, so Show is hidden while revealed (a contract
+  change of step 4, after step 1c has removed Show's incidental uses). It
+  is `aria-disabled` for 1 s after it changes, its look and focus kept, so a
+  click meant for Show cannot land as Re-vote; a held Enter fires it once.
 - Re-vote still shows only while revealed, a guard principle 8 carries over.
-- The revealed phase has no primary. Its two actions stand as equals, in the
-  workflow's order: Re-vote, then Next issue.
+- The actions keep fixed places, right-aligned: Clear votes, quiet and set
+  apart; Next issue's place; the toggle. No button takes another's place, and
+  the tab order is the visual order.
+- The revealed phase has no primary. Its two actions stand as equals.
 - An action is **destructive** when it discards votes nobody has seen: Clear
   while voting, and Next issue while voting. It is marked by its words, its
   quiet look and its distance from the phase's other actions, never by colour
@@ -203,8 +224,7 @@ A button shows only in the phases where it does something.
 - Next issue's flow, an assumption for the mockups only: the editor opens empty
   and focused, saving starts the new round, cancelling changes nothing.
 - What step 5 decides is listed in its section of the UI refresh design.
-- Placements and colours stay open until the mockups, and the specialist's
-  critique may move them.
+- The specialist's critique may move the placements and colours.
 
 ### J6. Message tones
 
@@ -217,6 +237,10 @@ bar only reinforce them.
 | Notice | something changed to know about: the moved link, the restart ("Reconnected. Please check your vote."), the issue changed by someone else | ink on paper-pale, an ink bar, an icon |
 | Confirmation | the user's own action done: "Link copied to clipboard" | plain text beside its cause, no box |
 
+On the room page, whose ground is paper-pale (J9), the banners, problems and
+notices, sit in a panel of their own while one shows, each keeping its look.
+Where that panel sits, how banners stack and their Dismiss are 3b3's.
+
 ### J7. Type, self-hosted
 
 - JetBrains Mono for figures (cards, results, values) and the room id.
@@ -227,8 +251,8 @@ bar only reinforce them.
   so subsetting and woff2 need no renaming, and the licence text ships beside
   the files.
 - **Shared-screen text** is sized for 4 m on a 40 inch TV at the laptop
-  target: the `--text-3xl` step, 44 px. 3b may drop one element to the 3 m
-  step, `--text-2xl`, said so in the log.
+  target: the `--text-3xl` step, 44 px. The result's chart, its values and
+  counts, is the one element at the 3 m step, `--text-2xl` (3b1).
 - Step 4 keeps a late font load from shifting the page.
 
 ### J8. Contrast floor
@@ -249,7 +273,8 @@ bar only reinforce them.
   (2.4.12).
 - Under `prefers-contrast: more`, the hairline colour turns `--mute-soft`, an
   indicator at 3:1, and the control line takes the mark line's weight.
-- The frozen deck keeps every figure at 7:1, under every simulation too, though
+- Where a deck stays after a reveal (3b2's layouts; the wide room page has
+  none), the frozen deck keeps every figure at 7:1, under every simulation too, though
   WCAG exempts disabled controls. Its figures and the chosen card's fill or
   frame fade to `--grey`, whatever the card back, and the unchosen cards' edges
   may use the hairline's width and colour tokens, which 1.4.11 allows on a
@@ -269,8 +294,8 @@ bar only reinforce them.
 - **Motion**: only small transitions, such as entries turning on a reveal and a
   button changing state, each `--duration` long (at most 200 ms), and none under
   `prefers-reduced-motion`. Motion never carries information alone.
-- **Surfaces**: the page on paper, content surfaces on paper-warm, told apart
-  by a hairline, not a shadow.
+- **Surfaces**: the page on paper (the room page on paper-pale, J10), content
+  surfaces on paper-warm panels, told apart by a hairline, not a shadow.
 - **No dark sections**: one light theme (principle 6).
 - **Shapes**: lunatech.com's, as measured on 2026-10-07: corners square but the
   scrollbars' 2 and 3 px and the 50% dots; 1 px lines; 2 and 3 px burgundy
@@ -282,13 +307,22 @@ bar only reinforce them.
 - **Two line weights**: controls keep the brand's 1 px line, `--line-control`;
   J3's marks take 2 px, `--line-mark`; both within J8's 3:1 for indicators.
 
+### J10. The wide room page
+
+Step 3b1's spec holds its rules,
+`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
+and `room.html` draws them. It covers L1 to L4, L6, L5's card size and L11's
+breakpoint for this page: four bands (the header, then the issue, the round
+and the table on panels), the entries as cards at a fitted scale, the result as
+the deck's 13 values in columns, in the deck's place after a reveal.
+
 ## Tokens
 
 The value source (Terms) holds every token's value and purpose; this section
 keeps the kinds and the rules, and no value is written twice. Every colour,
 size, font and duration in a component's CSS comes from a token (principle 6
 for colours), except CSS keywords such as system colours and `currentColor`,
-and L11's values in media queries, which cannot read a token.
+and L11's values in media and container queries, which cannot read a token.
 
 | Kind | Tokens |
 | --- | --- |
@@ -309,9 +343,9 @@ and L11's values in media queries, which cannot read a token.
   element without renaming a token. It is provisional until 3b's assembled
   mockups judge it.
 - 3b may add a token a layout needs: it adds it to the value source, and its
-  reason to the log.
-- 3b may send a value back to 3a, the change recorded in the log. A layout that
-  does not fit at 600 tries J1's relaxation first.
+  reason to the log. 3b1's are declared in `room.html`'s "3a2's tokens"
+  block, which step 3a2 moves to the value source.
+- 3b may send a value back to 3a, the change recorded in the log.
 - A derived value, such as a pixel floor, lives in a token's definition, never
   as a literal in a component.
 
@@ -321,8 +355,9 @@ The test contract (principle 9) reads these today, in `e2e/fixtures.js` and
 the cases. A look that changes one lists it in step 4's contract changes.
 
 - The text "Facilitator" inside a facilitator's entry (`facilitatorMark`), and
-  one list holding every participant (`participantEntries`). J3's facilitator
-  region changes both, a contract change of step 4.
+  one list holding every participant (`participantEntries`). J3's facilitators
+  line changes both, a contract change of step 4: each named facilitator is an
+  element with the test id `facilitator`, and the list holds voters only.
 - Images named "Voted" and "Vote hidden" (`votedMark`, `hiddenMark`), matched as
   case-insensitive substrings, since neither read sets `exact`. A confirmed
   entry carries both while voting and "Voted" once revealed; a kept one only
@@ -348,44 +383,34 @@ the cases. A look that changes one lists it in step 4's contract changes.
   Dave's the no-vote mark, each read by J3's name.
 - The room id as a heading, any level (`lobby.spec.js`).
 - The copy hint's text, "Link copied to clipboard".
+- The table region's name, "Participants", while its title says "Voters · 14";
+  the tally's test ids and `participant-estimation` read the same text, and
+  each tally entry gains a spoken reading ("3: 2 votes") beside it.
+- 3b1's other contract changes (the deck leaving on a reveal, `frozenNotice`,
+  the issue's read view, the nobody-voted read) are listed in its spec.
 
 ## Open
 
-The layout questions 3b decides, on mockups of each layout cell.
+The layout questions 3b decides, on mockups of each layout cell, in the four
+steps the UI refresh design's step 3 groups them into.
 
-- **L1. Each page's structure per phase**, the phase line included. A
-  50-character ticket link fits the issue's one line at the laptop target, at
-  J7's shared-screen size; a longer issue wraps, never truncated, until a
-  clickable-link step brings an ellipsis that keeps the link's end.
-- **L2. How progress is shown.**
-- **L3. A voter's entry: a row or a card with the name under it**, and the
-  participant area's thresholds. Rows fit more people and longer names; cards
-  make the state and the values readable from afar, and turn face up on a
-  reveal. Decided on whole-page mockups at 1280 by 600 with 14 people. The
-  revealed entries' form follows: whether the marks stay around the value, or
-  the cards turn face up. Also where the facilitator region sits, within J3's
-  two choices. The kept frame is checked on the smallest entry mark (J3).
-- **L4. Results**: scroll or summarise, and the later-steps spread toggle.
-- **L5. How the deck reflows** on narrow screens and phones, and the card's
-  size (J3). A card fits its widest figure, "0.5"; for a narrower card, every
-  shown `0.5` may read "½" instead, a contract change of step 4: the card's
-  name, and the `most-voted`, `tally-value` and `participant-estimation` text,
-  which `expectSummaryMatchesParticipants` compares, all through one display.
-- **L6. The room page's header**, the copy hint and the role line. The app's
-  name may leave it: no case reads it, the tab title carries it, and the 600 px
-  budget wants the room. Today's headings skip levels: the name is an `<h2>`,
-  the room id an `<h5>`, "Your estimation" and "Most voted estimation" `<h6>`.
-  L6 gives the page an ordered heading structure, the room id staying a heading
-  (see "Contract reads").
-- **L7. The issue editor** and its messages, within L1's one-line issue.
-- **L8. The banners.**
-- **L9. The lobby.**
+L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
+settled by 3b1 (J10).
+
+- **L5. How the deck reflows** on narrow screens and phones (3b2).
+- **L7. The issue editor** and its messages; the read view is 3b1's heading
+  (3b3).
+- **L8. The banners**: on the room page they sit in a panel of their own
+  (J6); its place, stacking and Dismiss (3b3), its live region mounted while
+  empty, a banner arriving on a scrolled page brought into view.
+- **L9. The lobby** (3b4).
 - **L10. The monitor's width cap**, and how the shared-screen elements stay in
   view where the page may scroll (principle 4's table).
-- **L11. Width breakpoint and height floor** (principle 4's table). The
-  breakpoint sits clear of common window widths, such as 1280, rather than on
-  them. Media queries in `rem` resolve against the reader's default size, not
-  the fluid root.
+- **L11.** The layout below 3b1's 68.25 rem breakpoint is 3b2's, the lobby's
+  breakpoint 3b4's. A classic scrollbar narrows the page once it scrolls, so a
+  window just above the breakpoint takes 3b2's layout then; that layout must
+  scroll there too, or the two alternate. Media queries in `rem` resolve against the reader's
+  default size, not the fluid root; a container query reads the root.
 
 ## Decisions log
 
@@ -396,6 +421,12 @@ The reasons behind each rule, and what was set aside.
   windows also land at 665 and 757. Only the participant area pays for 600, and
   principle 4 already lets it scroll. 700 failed a 665 px window; 650 bought
   little over 600. A 990 by 665 window was set aside as not representative.
+  3b1 split the target in two: the same argument cuts both ways, since a taller
+  target costs a 600 px viewport only a scrolling table. Measured viewports:
+  1344 by 757 and 1329 by 696 (one Mac laptop, two browsers), 1512 by 749 (a
+  product owner's). 620 to 650 was set aside for the floor plus a provisional
+  comfort target. The two-line condition: a 128-character link takes four
+  lines, and the page then scrolls rather than hiding the table (3b1).
 - **J2.** Shared from the laptop, the viewport is the target's, so legibility on
   a TV comes from the sizes at 1280 by 600; the fluid root only matters above
   it, where the whole layout scales together, which is principle 2's monitor
@@ -409,8 +440,8 @@ The reasons behind each rule, and what was set aside.
   step grows it. WCAG 1.4.4 asks that text can be resized to 200% by any
   available means, browser zoom among them (failure F94), which the 2.5 bound
   guarantees. The shell's `100dvh` is a container, not a size: under browser
-  zoom it equals the visible area. It is bounded only where principle 4's table
-  says the page never scrolls. Browser zoom scales `px` too; what `px` misses is
+  zoom it equals the visible area. It is bounded in the wide layout, since the
+  entry scale needs the table's box bounded. Browser zoom scales `px` too; what `px` misses is
   the fluid root, which would thin lines on a big shared screen. Hairlines stay
   in `px` because borders round to whole device pixels, and a thin `rem` border
   renders unevenly. Set aside: a root fluid at laptop sizes, which gave 1.6
@@ -419,10 +450,21 @@ The reasons behind each rule, and what was set aside.
   zoom; `rem` steps per media query, which jump; `height: 100%` chained down
   from `html`, which one wrapper breaks and phones' toolbars defeat; a `rem`
   height tuned to 600, which breaks when anything above it changes; a shell
-  bounded everywhere, whose main region would scroll instead of the page; a
-  notice shrinking the participant area, which hides the room while something is
-  wrong; no `rem` term, which kept the monitor's text at 28 px rather than 24.8
-  at the cost of the flat zoom band.
+  bounded everywhere, whose main region would scroll instead of the page; no
+  `rem` term, which kept the monitor's text at 28 px rather than 24.8
+  at the cost of the flat zoom band. 3b1 found `vmin` following the width on
+  half a monitor, growing the text while narrowing the page: 1280 by 1300 gave
+  60 rem, too narrow for the deck, and gives 69 with the height-first root;
+  every landscape size J1 lists keeps its root. Set aside: a deck that shrinks
+  below the breakpoint. 3b1 reopened principle 4's table: a notice, a longer
+  issue or a window below the floor shrink the table to its 5 rem, then scroll
+  the page, two scrollers at once. A notice shrinking the table was set aside
+  before, as hiding the room while something is wrong; the banner panel is
+  short, one banner keeps the floor still and the table keeps a strip of
+  cards, and a bounded table keeps the entry scale steady. Set aside: the
+  table flowing with the page in those rows, which rescales the entries as a
+  banner appears and cannot see a three-line issue without a script. The tag's tracking and the tight point in "0.5" follow
+  their own text, as the label tracking does, hence `em`.
 - **J3.** What the room watches needs a shape read from afar; the rest needs
   words. Two looks and a pill were tried: a pill does not register at a glance
   for a reader with strong glasses, and a room mid re-vote then looks as if
@@ -440,7 +482,13 @@ The reasons behind each rule, and what was set aside.
   replaced the hatching in 3a: it reads as focused where hatching blurred, at
   full size and at the tile. Set aside: hatching; partial borders (top and
   bottom, left and right); a card band a fifth of a card width 3a would have
-  had to guess before 3b's layouts. The pill was renamed the tag in 3a.
+  had to guess before 3b's layouts. The pill was renamed the tag in 3a. 3b1:
+  the revealed kept value's tag (about 100 px) does not fit a 78 px entry, and
+  a band inside the face crushes "13" and "0.5", so the band sits outside the
+  face; a revealed kept value marks a value to talk about, not a person at
+  fault. Set aside: filled revealed faces, which put more ink beside the chart.
+  The facilitators' summarizing line was chosen over a region after the
+  voters, which costs a row.
 - **J4.** lunatech.com uses burgundy for its primary button and its active
   state. As states, it would fill a room of 14 and hide the primary action.
   Ink on paper is about 17:1 for every vision type. Burgundy against ink is
@@ -449,7 +497,8 @@ The reasons behind each rule, and what was set aside.
   ink, which gives one state two colours. A burgundy card back cannot fade
   within 7:1 (paper-warm on it 7.31 at full strength, 6.57 at 95%, at worst),
   hence the frozen card fades to the grey whatever the back; a blue back was
-  set aside, a colour from outside the brand.
+  set aside, a colour from outside the brand. 3b1 tried a burgundy back on the
+  assembled mockups: it took the eye from the one primary action.
 - **J5.** Showing Show while revealed re-reveals and republishes an identical
   snapshot (`RoomData.show`), so hiding it is presentation (principle 8).
   Re-voting and moving on happen about half each after a Show in the sessions
@@ -457,14 +506,30 @@ The reasons behind each rule, and what was set aside.
   as a ghost while revealed, a look built to be thrown away; Clear as step 4's
   revealed primary, which colours the destructive button in one phase only; a
   separate step to hide Show; Next issue as the revealed primary; a primary
-  chosen by the result, kept as a step 5+ candidate for the specialist.
+  chosen by the result, kept as a step 5+ candidate for the specialist. 3b1
+  made Show and Re-vote one button in one place: a button alone in the middle
+  read as floating, and two places left a gap that read as a misalignment.
+  The server's re-vote has no guard and the command carries no phase, so a
+  click meant for Show that lands once the button has changed (an
+  auto-reveal, someone else's Show) would unconfirm the room; the 1 s window
+  stops it, and covers a double-click too. A Re-vote already sent is the
+  server's to refuse, a known issue. The window is `aria-disabled`, not a silent
+  ignore: the tests' clicks wait for it, as a silent ignore would lose them, and
+  native `disabled` would drop the focus to the page. Set aside: separate fixed places; a disabled
+  Show while revealed, more content; a refusal window on the server; a
+  centred toggle, which wraps below 70 rem and gives one tab order two visual
+  orders. Next issue now precedes Re-vote, the toggle keeping the edge.
 - **J6.** Burgundy-deep on the tint over paper is 10.75 (protanopia 11.99,
   deuteranopia 10.07, tritanopia 10.75); ink on paper-pale 14.77 to 14.78
   for all three. The two grounds are close in
   lightness, hence the icon and words. Set aside: four hues, which bring colours
   from outside the brand, red-green confusion and an amber that rarely reaches
   AAA, to split moved from restarted, which nobody acts on differently; ink
-  only, which drops the red cue and is as loud as anything on the page.
+  only, which drops the red cue and is as loud as anything on the page. On
+  3b1's paper-pale room page a notice's box vanished, its bar and icon alone
+  telling it apart; in a panel it reads again, at about 40 px more than a bare
+  banner while one shows, which principle 4 accepts. Set aside: a notice on
+  paper-warm with a hairline, which gives the two tones two grounds.
 - **J7.** JetBrains Mono's figures are tabular and tell look-alikes apart.
   Instrument Serif has one light weight with thin strokes, which a lit
   projector and video compression eat. Self-hosting keeps visitors' addresses
@@ -474,7 +539,8 @@ The reasons behind each rule, and what was set aside.
   Grotesk, which the site uses only in places. Shared-screen text: cap height
   at least a two-hundredth of the distance, at 0.65 mm per CSS px measured on a
   40 inch TV, is 44 px of DM Sans (cap 0.70 em); a 3 m or a 5 m target set
-  aside.
+  aside. 3b1 put the chart at 3 m, its 13 columns and counts fitting the slot
+  at the floor; counts at the body size were set aside.
 - **J8.** Principle 10 asks for it, and the brand's ink and paper make it cheap;
   only the muted grey needs replacing. Set aside: AA beyond the shared-screen
   elements, which allows the site's grey but falls short of principle 10; 7:1
@@ -498,7 +564,20 @@ The reasons behind each rule, and what was set aside.
   source and the J6 log, and the gamma-space variant does not.
 - **J9.** A projector or a video tile loses a shadow and a dark page's contrast
   in a lit room. A playing card's corner tells a card from a button; the site's
-  corners are square. Set aside: a 1 px or a 2 px line everywhere.
+  corners are square. Set aside: a 1 px or a 2 px line everywhere. 3b1's room
+  page sits on paper-pale so its panels read as what the page is about, what
+  to do and who is doing it; strong panel titles were set aside.
+- **J10.** 3b1 decided on whole-page mockups, the reasons in its spec. Set
+  aside: a main-and-side layout (8 of 12 entries, the deck in two rows); the
+  deck at the bottom (the result at the screen's edge); the result below the
+  table; the history in the header; rows for entries; "½" for 0.5. The
+  breakpoint keeps no margin past the deck's tokens, since a margin of 0.3 rem
+  sent half of a 2560 by 1440 monitor to the narrow layout whenever a classic scrollbar
+  showed; `scrollbar-gutter: stable` was set aside, as it does so always. The
+  table, though, keeps its gutter: a hand check in Chromium on Linux at 1461
+  by 624 found its own classic scrollbar made two layouts true at one scale,
+  one row without the bar, or 13 and 1 with it, balanced to a 7 and 7 that
+  scrolls, the fit's search history picking between them.
 - **Brand source.** blog.lunatech.com was considered: black and gold, its gold
   2.02 on its own light ground, so it works only as a dark page, which J9 rules
   out. A new palette was considered for accessibility and set aside, since ink
