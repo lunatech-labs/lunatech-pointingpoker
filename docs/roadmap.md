@@ -171,13 +171,19 @@ directly in the new frontend.
       settled estimate at all. A command plus a snapshot field. New here, and
       **step 9** pairs it with the item below. The interaction for selecting the
       estimate is not defined yet; what is fixed is that it acts on a round whose
-      estimates every participant can already see.
+      estimates every participant can already see. One idea: pre-select the
+      highest of tied values, the "highest when in doubt" rule some teams use,
+      while the display shows the tie (the UI refresh's step 5+ candidate
+      "Ties shown rather than broken").
 - [ ] Round history within a session (running list of context to final estimate
       per round), held in memory on the room and gone when it stops. **Becomes
       step 9** together with the recorded outcome above, since a settled estimate
       you cannot look back at is half a feature. Only a revealed round enters it:
       the record travels to every participant unredacted, so a round nobody
-      revealed would leak its own vote spread.
+      revealed would leak its own vote spread. Each round shows its issue in a
+      short form, which the current issue may use too: a link without its
+      scheme, a Jira link's key (the part after `/browse/`), the end of an
+      undetermined text after an ellipsis.
 - [ ] Copy/export round history at end of session. Promoted from the backlog to
       sit with step 9: with history held only in memory this is the sole way to
       keep a session's rounds, which makes it part of the feature rather than a
