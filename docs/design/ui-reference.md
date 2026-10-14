@@ -323,7 +323,8 @@ stack and their Dismiss are 3b3's.
   surfaces on white panels with rounded corners, a hairline and a soft shadow
   (3b1's second look); the hairline alone tells them apart where a shadow is
   lost. A shadow is two tokens, its lengths in `tokens.css` and its colour in
-  `colours.css`, joined where it is used: `var(--shadow) var(--shadow-colour)`.
+  `colours.css`, joined where it is used: `var(--shadow) var(--shadow-colour)`
+  for a panel, `var(--lift-shadow) var(--lift-colour)` for the chosen card.
 - **No dark sections**: one light theme (principle 6).
 - **Shapes**: lunatech.com's, as measured on 2026-10-07: corners square but the
   scrollbars' 2 and 3 px and the 50% dots; 1 px lines; 2 and 3 px burgundy

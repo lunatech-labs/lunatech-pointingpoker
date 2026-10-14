@@ -120,7 +120,7 @@ describe('the colour tokens no pair reaches', () => {
   ].join(' ')
   const more = '--hairline-colour: var(--hairline-strong);'
 
-  it('are none when each token is in a pair, maybe through var() or the more run', () => {
+  it('are none when each token is in a pair, maybe through var() or the more run, but the decorative set', () => {
     expect(unreached(parseColours(file(every, more)))).toEqual([])
   })
 
