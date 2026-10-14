@@ -804,7 +804,7 @@ roadmap item instead of leaving it here as stale history.
   travels a slow link; Alice's lands first and reopens the round, Carol votes,
   then Bob's lands and turns Carol's fresh vote into a previous one, not
   confirmed, so the auto-reveal waits for her. She recovers with one click, and
-  nothing is lost. Step 3b1's toggle window
+  nothing is lost. Step 3b1's round bar guard
   (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
   decision 6) acts on one page only, so it cannot stop a press already sent.
 - **Resolution:** Guard `reVote` server-side: it applies only while the round
@@ -839,10 +839,13 @@ roadmap item instead of leaving it here as stale history.
   block's position rather than its existence, so placing the participants list
   above the results would settle it without hiding anything. Step 3b1
   (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`)
-  decided otherwise for the facilitator's page: the result appears above the
-  table and the table moves down, until the progress step fills that place
-  while voting and nothing moves. On the voter's page the result takes the
-  deck's place. Remove this entry when the progress step lands.
+  narrows it: on the voter's page the result takes the deck's place; on the
+  facilitator's page, in layout f, the result's slot appears below the table,
+  which keeps its place but gives the slot its height, so the entries,
+  centred in it, move up 50 to 80 px. Layout g, the open swap, would put the
+  slot above the table and push it down instead. The progress step, the first
+  step 5+ candidate, fills the slot while voting and ends both. Remove this
+  entry when the progress step lands.
 
 ### Only a real e2e failure exercises the artifact upload path
 
