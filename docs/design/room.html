@@ -12,7 +12,7 @@
   /* 3a2's tokens (decision 16): the designer's values under the app's names, the height-first root, and the sizes this page adds */
   :root {
     --root-size: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem);
-    --paper-pale: #F7F5F2; /* the page (decision 16's second role) */
+    --paper-pale: #F7F5F2; /* the page, the own row, the waiting pill: the darkest ground that keeps grey at 7:1 */
     --paper-warm: #FFFFFF; /* panels and cards; figures and labels on a fill */
     --ink: #1C1917; /* text, controls, the focus ring */
     --grey: #58524F; /* supporting text, 7:1 on panels and the page (B) */
@@ -23,17 +23,13 @@
     --burgundy-tint: #FEF3F3; /* a problem's ground (Q) */
     --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark */
     --bar-other: #E06C74; /* the chart's other bars, 3:1 (J) */
-    --problem-edge: #F3D3D5; /* a problem's hairline */
     --notice-ground: #EEF4FF; /* a notice's ground (Q) */
     --notice-ink: #1E3A8A; /* a notice's text (Q) */
     --notice-bar: #1D4ED8; /* a notice's icon and bar (Q) */
-    --notice-edge: #D6E2FB; /* a notice's hairline */
     --ok: #10612E; /* the Voted pill's text */
     --ok-tint: #F1F9F2; /* the Voted pill's ground */
-    --wait-tint: #F7F5F2; /* the waiting pill's ground, the darkest that keeps grey at 7:1 */
     --kept: #893F07; /* a kept vote's words: the tag, the pill, the roster's note */
     --kept-tint: #FAF6EC; /* the kept pill's ground */
-    --me-row: #F7F5F2; /* the own row in the roster, the darkest that keeps grey at 7:1 */
     --track: #EFEBE7; /* the small progress bar's track (later) */
     --mark-offset: #F9C3C6; /* the header mark's pale offset card */
     --pip: rgba(255, 255, 255, 0.85); /* the diamond on a voted mark and on the pip fallback */
@@ -41,13 +37,11 @@
     --lift-shadow: 0 0.4rem 0.9rem rgba(220, 47, 60, 0.25); /* a confirmed card's glow */
     --font-sans: 'Inter', system-ui, sans-serif; /* all text but the room id (A) */
     --text-xs: 0.75rem; /* labels, pills and small notes */
-    --weight-emphasis: 500; /* Inter's medium: names, quiet actions, messages */
     --weight-bold: 700; /* Inter's bold: figures and the app's name */
     --tracking-label: 0.06em; /* uppercase Inter labels */
     --leading-figure: 1; /* one line of figures or labels */
     --text-tag: 0.6875rem; /* the kept tag, a note beside a value, an avatar's initials */
-    --tracking-tag: 0.04em; /* the kept tag, J2's em like the label tracking */
-    --tight-point: -0.22em; /* the point in "0.5", following its figure (J2's em) */
+    --tight-point: -0.08em; /* the point in "0.5", following its figure (J2's em); Inter's point vanishes past it */
     --radius: 0.875rem; /* panels and messages */
     --radius-card: 0.5rem; /* cards, rows, the copy button, inputs */
     --radius-control: 0.625rem; /* buttons and the room chip */
@@ -71,13 +65,14 @@
     --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
     --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */
     --table-min: 5rem; /* the table's least height: its title and a strip of cards */
-    --slot-height: 7.5rem; /* the round panel's slot: deck, progress or result */
+    --slot-height: 7.5rem; /* the slot: deck, progress or result */
     --chart-value: 2.25rem; /* the chart's value row */
-    --value-fit: 60cqi; /* a chart value's largest size in its column: "0.5" in Inter bold is 1.59em */
+    --value-fit: 66cqi; /* a chart value's largest size in its column: the widest, a tight "0.5" in Inter bold, is 1.46em, with a margin */
     --chart-bar: 2rem; /* the chart's tallest bar */
   }
   * { box-sizing: border-box; }
-  html { font-size: var(--root-size); }
+  /* C: the page keeps its scrollbar's gutter, so the layout never depends on whether the page scrolls */
+  html { font-size: var(--root-size); scrollbar-gutter: stable; }
   body { margin: 0; background: var(--paper-pale); color: var(--ink); font: var(--weight-regular) var(--text-md)/var(--leading-body) var(--font-sans); }
   button { font: inherit; color: inherit; cursor: pointer; }
   svg { width: var(--icon); height: var(--icon); flex: none; }
@@ -104,14 +99,14 @@
   }
   .chip h1 { margin: 0; font: var(--weight-medium) var(--text-sm) var(--font-mono); }
   .chip a {
-    display: flex; gap: var(--space-1); align-items: center; font-size: var(--text-sm); font-weight: var(--weight-strong); color: var(--burgundy);
+    display: flex; gap: var(--space-1); align-items: center; min-height: var(--target-min); font-size: var(--text-sm); font-weight: var(--weight-strong); color: var(--ink);
     background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-radius: var(--radius-card); padding: var(--space-1) var(--space-2);
   }
   .chip a svg { width: var(--text-sm); height: var(--text-sm); }
   /* J6's confirmation: plain text beside its cause; it moves and covers nothing */
   .copied { flex: 1; color: var(--grey); white-space: nowrap; font-size: var(--text-sm); }
   .role { font-size: var(--text-sm); color: var(--grey); }
-  .role button, .leave { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; font-size: var(--text-sm); }
+  .role button, .leave { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; font-size: var(--text-sm); min-height: var(--target-min); }
   .leave { display: flex; align-items: center; gap: var(--space-1); }
 
   .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--sidebar); gap: var(--panel-gap); padding: var(--panel-gap) var(--page-edge) var(--space-4); }
@@ -121,15 +116,21 @@
     box-shadow: var(--shadow); padding: var(--panel-gap) var(--panel-inline);
   }
   .label { margin: 0; font-size: var(--text-xs); font-weight: var(--weight-strong); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--grey); }
-  .quiet { display: flex; align-items: center; gap: var(--space-2); background: none; border: 0; padding: var(--space-2); font-weight: var(--weight-emphasis); font-size: var(--text-sm); }
+  .quiet { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); background: none; border: 0; padding: var(--space-2); font-weight: var(--weight-medium); font-size: var(--text-sm); }
 
   /* H: the issue at heading size */
   .issue { display: flex; align-items: center; gap: var(--space-3); }
   .issue h2 { flex: 1; min-width: 0; margin: 0; font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: var(--leading-tight); overflow-wrap: anywhere; }
   .issue h2 a { color: var(--ink); }
+  .issue h2.empty { color: var(--grey); font-weight: var(--weight-regular); }
+  /* A link breaks only before a path slash, each segment kept whole (decision 4) */
+  .issue .seg { display: inline-block; text-decoration: inherit; }
+  /* Edit's target reaches into the panel's padding, so it does not grow the panel */
+  .issue .quiet { margin-block: calc(-1 * var(--space-3)); }
 
   /* K, O: the phase word and the buttons in their own bar */
   .controls { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding-block: var(--space-2); }
+  .controls .quiet { margin-right: var(--space-5); }   /* Clear votes set apart (decision 6) */
   .phase { flex: 1; min-width: 0; }
   .phase .label { color: var(--ink); }
   .progress { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--grey); padding: 0 var(--space-2); }
@@ -141,7 +142,7 @@
   }
   .btn.primary { background: var(--burgundy); color: var(--paper-warm); }
   .btn.secondary { background: var(--paper-warm); border-color: var(--mute-soft); }
-  .btn[aria-disabled="true"] { cursor: default; }
+  .controls [aria-disabled="true"] { cursor: default; }
   .slot { height: var(--slot-height); display: flex; }
 
   /* W: centred in the slot; cards shrink with the column, from a deck card's height to the touch target's width */
@@ -172,6 +173,7 @@
   .most .sub { font-size: var(--text-sm); color: var(--grey); margin-top: var(--space-1); }
   .most.later { padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2); }
   .columns { flex: 1; display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
+  .pt { margin-inline: var(--tight-point); }
   .colm { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; container-type: inline-size; }
   /* N: the count without its "×", muted but over the top bar */
   .count { font-size: var(--text-lg); font-weight: var(--weight-strong); color: var(--grey); }
@@ -186,12 +188,14 @@
     width: 100%; height: var(--chart-value); text-align: center; padding-top: var(--space-1); border-top: var(--line-mark) solid var(--hairline-colour);
     font-size: min(var(--text-2xl), var(--value-fit)); font-weight: var(--weight-bold); line-height: var(--leading-figure);
   }
-  .colm.empty .value { color: var(--grey); font-size: var(--text-lg); font-weight: var(--weight-emphasis); padding-top: var(--space-2); }
+  .colm.empty .value { color: var(--grey); font-size: var(--text-lg); font-weight: var(--weight-medium); padding-top: var(--space-2); }
   .big-progress { flex: 1; display: grid; place-content: center; text-align: center; padding: var(--space-1) var(--space-5); }
   .big-progress b { font-size: var(--text-4xl); line-height: var(--leading-figure); }
   .big-progress span { color: var(--grey); }
 
   /* The table: voters as cards, face down while voting, face up once revealed */
+  /* B: the facilitator's table keeps the slot's room while voting, so a reveal moves nothing below it */
+  .people.reserve { min-height: calc(var(--table-min) + var(--slot-height) + 3 * var(--panel-gap) + 2 * var(--line-hairline)); }
   .people { flex: 1; min-height: var(--table-min); display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; scrollbar-gutter: stable; }
   .people-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
   /* --s scales every entry alike to fill the table, from 1 up to a deck card's height */
@@ -209,7 +213,7 @@
   .face > * { grid-area: 1 / 1; }
   /* A revealed kept vote: a thinner band than the deck's, outside a paper gap, clear of the name */
   .face.kept { outline: calc(var(--space-1) * var(--s)) solid var(--card-back); outline-offset: var(--focus-gap); }
-  .face.none { border: var(--line-mark) solid var(--hairline-colour); color: var(--grey); font-weight: var(--weight-emphasis); }
+  .face.none { border: var(--line-mark) solid var(--hairline-colour); color: var(--grey); font-weight: var(--weight-medium); }
   .name { font-size: calc(var(--text-sm) * var(--s)); line-height: var(--leading-tight); max-width: 100%; overflow-wrap: anywhere; }
   .name .you { color: var(--grey); font-weight: var(--weight-regular); }
 
@@ -222,19 +226,21 @@
     display: flex; align-items: center; gap: var(--space-2); height: var(--row-height); padding: 0 var(--space-2);
     margin: 0 calc(-1 * var(--space-2)); border-radius: var(--radius-card); font-size: var(--text-sm);
   }
-  .row.me { background: var(--me-row); }
-  .row .who { flex: 1; min-width: 0; font-weight: var(--weight-emphasis); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row .who small { font-weight: var(--weight-regular); color: var(--grey); font-size: var(--text-xs); }
+  .row.me { background: var(--paper-pale); }
+  /* The name truncates; "(you)" stays whole beside it */
+  .row .who { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-1); font-weight: var(--weight-medium); white-space: nowrap; }
+  .row .who > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .row .who small { flex: none; font-weight: var(--weight-regular); color: var(--grey); font-size: var(--text-xs); }
   .av {
     flex: none; width: var(--avatar); height: var(--avatar); border-radius: 50%; display: grid; place-items: center;
     font-size: var(--text-tag); font-weight: var(--weight-bold); color: var(--h); background: var(--t);
   }
   .pill { flex: none; font-size: var(--text-xs); font-weight: var(--weight-strong); padding: calc(var(--space-1) / 2) var(--space-2); border-radius: var(--radius-pill); }
   .pill.confirmed { color: var(--ok); background: var(--ok-tint); }
-  .pill.none { color: var(--grey); background: var(--wait-tint); }
+  .pill.none { color: var(--grey); background: var(--paper-pale); }
   .pill.kept { color: var(--kept); background: var(--kept-tint); }
   .val { flex: none; font-weight: var(--weight-bold); font-size: var(--text-md); display: flex; gap: var(--space-2); align-items: baseline; }
-  .val.none { color: var(--grey); font-weight: var(--weight-emphasis); }
+  .val.none { color: var(--grey); font-weight: var(--weight-medium); }
   .val small { font-size: var(--text-tag); font-weight: var(--weight-strong); color: var(--kept); }
   .fac { flex: none; font-size: var(--text-xs); color: var(--grey); }
   .sep { border: 0; border-top: var(--line-hairline) solid var(--hairline-colour); margin: var(--space-1) 0; }
@@ -247,17 +253,17 @@
   .history li:last-child { font-weight: var(--weight-strong); }
 
   /* Q: full width under the header, each message a panel of its own; the icon and the words carry the tone */
-  .messages { flex: none; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--panel-gap) var(--page-edge) 0; }
-  .messages + .main { padding-top: var(--space-2); }
+  /* The gap below the banners is their own, so no ancestor of the view changes and scroll anchoring holds (decision 3) */
+  .messages { flex: none; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--panel-gap) var(--page-edge) 0; margin-bottom: calc(var(--space-2) - var(--panel-gap)); }
   .msg {
     display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
     background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-left: var(--line-bar) solid var(--ink);
-    border-radius: var(--radius); box-shadow: var(--shadow); font-weight: var(--weight-emphasis);
+    border-radius: var(--radius); box-shadow: var(--shadow); font-weight: var(--weight-medium);
   }
   .msg p { flex: 1; margin: 0; }
   .msg .quiet { color: inherit; padding: var(--space-2); }
-  .msg.problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-color: var(--problem-edge); border-left-color: var(--burgundy-deep); }
-  .msg.notice { background: var(--notice-ground); color: var(--notice-ink); border-color: var(--notice-edge); border-left-color: var(--notice-bar); }
+  .msg.problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-left-color: var(--burgundy-deep); }
+  .msg.notice { background: var(--notice-ground); color: var(--notice-ink); border-left-color: var(--notice-bar); }
   .msg.notice svg { color: var(--notice-bar); }
   /* The editing view is 3b3's, drawn dashed only to hold its messages */
   .issue-edit { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -290,11 +296,13 @@ const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default,
 const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
 const nobody = sample === '0'
 const voterCount = Number(q.get('voters') || 14)
-const issue = q.get('issue') || 'https://lunatech.atlassian.net/browse/PP-1234'
+const issue = q.get('issue') ?? 'https://lunatech.atlassian.net/browse/PP-1234'   // issue= draws the empty issue (E)
 let phase = q.get('phase') || 'voting'
 let from = phase === 'revealed-revote' ? 'revote' : 'voting'   // the round a reveal shows
 if (phase === 'revealed-revote') phase = 'revealed'
 
+// "0.5" sets its point tight wherever it shows, its text staying "0.5" (decision 13)
+const fig = v => v === '0.5' ? '<span>0<span class="pt">.</span>5</span>' : v
 const deck = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
 const names = [q.get('name0') || 'Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
 const facilitators = ['Peggy', 'Victor']
@@ -313,7 +321,7 @@ const revote = ['kept', 'confirmed', 'confirmed', 'kept', 'confirmed', 'kept', '
 const rounds = [['PP-1233', '5'], ['Rework the login page so that a returning user lands on their last room', '8'], ['PP-1231', '3']]
 const history = [['PP-1226', '3'], ['PP-1227', '8'], ['Spike: SSE reconnect strategy', '13'], ['PP-1229', '2'], ['PP-1230', '5'], ...[...rounds].reverse()]
 let ownChoice = null
-let settling = false, settled   // the toggle's 1 s window and its timer
+let settling = false, settled   // the round bar's 1 s guard and its timer
 let copied = false   // as today: each copy hides the hint 2 s later, so it lasts 2 s from the first
 
 const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
@@ -350,12 +358,13 @@ function draw() {
   if (revealed) people.forEach(p => p.value && (counts[p.value] = (counts[p.value] || 0) + 1))
   const tally = deck.filter(v => counts[v]).map(v => [v, counts[v]]).sort((x, y) => y[1] - x[1])
   const votes = tally.reduce((n, [, c]) => n + c, 0), top = tally.length ? tally[0][1] : 1
-  // Step 4 keeps today's tie-break (the first in deck order); later=1 shows the ties step's rule
+  // Step 4 keeps today's tie-break, JavaScript's key order: integer values first; later=1 shows the ties step's rule
   const tied = deck.filter(v => counts[v] === top), allTied = tied.length === tally.length
-  const red = v => counts[v] === top && (later ? !(tied.length > 1 && allTied) : v === tied[0])
+  const first = tied.find(v => /^\d+$/.test(v)) ?? tied[0]
+  const red = v => counts[v] === top && (later ? !(tied.length > 1 && allTied) : v === first)
   const each = `${top} vote${top > 1 ? 's' : ''} each`
   const mostVoted = () => !later || tied.length === 1
-    ? `<span class="label">Most voted</span><span class="figure" data-testid="most-voted">${tied[0]}</span><span class="sub">${top} of ${votes} votes</span>`
+    ? `<span class="label">Most voted</span><span class="figure" data-testid="most-voted">${fig(first)}</span><span class="sub">${top} of ${votes} votes</span>`
     : allTied ? `<span class="label">Most voted</span><span class="figure">None</span><span class="sub">Every value tied, ${each}</span>`
     : tied.length <= 3 ? `<span class="label">Most voted</span><span class="figure list">${tied.join(' · ')}</span><span class="sub">Tied, ${each}</span>`
     : `<span class="label">Most voted</span><span class="figure">Tie</span><span class="sub">${tied.length} values, ${each}</span>`
@@ -366,14 +375,15 @@ function draw() {
     : `<span class="logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
   const header = `<header class="header">${logo}<span class="app">Pointing Poker</span>
     <span class="chip"><h1>brave-golden-otter</h1><a href="#" data-copy>${link}Copy link</a></span>
-    <span class="copied" role="status">${copied ? 'Link copied to clipboard' : ''}</span>
+    <span class="copied" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
     <a class="leave" href="#">${exit}Leave</a></header>`
-  const issueHtml = /^https?:\/\//.test(issue) ? `<a href="#">${issue}</a>` : issue
+  const issueHtml = /^https?:\/\//.test(issue)
+    ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${seg}</span>`).join('')}</a>` : issue
   const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
     : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
   const issueBlock = editorMsg ? `<section class="panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
-    : `<section class="panel"><div class="issue"><h2>${issueHtml}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div></section>`
+    : `<section class="panel"><div class="issue"><h2${issue ? '' : ' class="empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div></section>`
   const bannerList = messages.filter(m => banners[m]).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="messages" aria-label="Messages">${bannerList}</section>`
 
@@ -384,18 +394,19 @@ function draw() {
   const guard = settling ? ' aria-disabled="true"' : ''
   const nextLeads = later && revealed
   const toggle = `<button class="btn ${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? 'Re-vote' : 'Show votes'}</button>`
-  const next = nextLeads ? '<button class="btn primary later" type="button">Next issue</button>' : ''
-  const actions = `${small}<button class="quiet" data-do="clear" type="button">${trash}Clear votes</button>${toggle}${next}`
+  const next = nextLeads ? `<button class="btn primary later" type="button"${guard}>Next issue</button>` : ''
+  const actions = `${small}<button class="quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
 
-  const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards">${deck.map(v => {
+  const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards"><span id="kept-note" hidden>Previous vote, not confirmed</span>${deck.map(v => {
     const mine = own?.value === v && own.state !== 'none'
-    return `<div class="card-place"><button class="card ${mine ? own.state : ''}" data-vote="${v}" type="button" aria-pressed="${mine && own.state === 'confirmed'}">${v}</button>
+    const kept = mine && own.state === 'kept' ? ' aria-describedby="kept-note"' : ''
+    return `<div class="card-place"><button class="card ${mine ? own.state : ''}" data-vote="${v}" type="button" aria-pressed="${mine && own.state === 'confirmed'}"${kept}>${fig(v)}</button>
       ${mine && own.state === 'kept' ? '<span class="tag" aria-hidden="true">Not confirmed</span>' : ''}</div>` }).join('')}</div>`
   const chart = `<div class="chart" role="region" aria-label="Results">
     <div class="most${later && tied.length > 1 ? ' later' : ''}">${tally.length ? mostVoted() : '<span class="label">Nobody voted</span>'}</div>
     <div class="columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
-      ? `<div class="colm${red(v) ? ' top' : ''}" role="listitem" data-testid="tally-entry"><span class="sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="value" aria-hidden="true" data-testid="tally-value">${v}</span></div>`
-      : `<div class="colm empty" aria-hidden="true"><span class="value">${v}</span></div>`).join('')}</div></div>`
+      ? `<div class="colm${red(v) ? ' top' : ''}" role="listitem" data-testid="tally-entry"><span class="sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
+      : `<div class="colm empty" aria-hidden="true"><span class="value">${fig(v)}</span></div>`).join('')}</div></div>`
   const bigProgress = `<div class="big-progress later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
   // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
   let slot = ''
@@ -408,30 +419,30 @@ function draw() {
   const entry = p => {
     const face = revealed
       ? p.value
-        ? `<span class="face ${p.state}"><span data-testid="participant-estimation">${p.value}</span>${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
+        ? `<span class="face ${p.state}"><span data-testid="participant-estimation">${fig(p.value)}</span>${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
         : `<span class="face none"><span data-testid="participant-estimation"></span><span role="img" aria-label="No vote">–</span></span>`
       : `<span class="mark ${p.state}" role="img" aria-label="${stateName[p.state]}"></span>`
     const self = p.name === me
     return `<li data-testid="participant">${face}<span class="name">${self ? `<b>${p.name}</b> <span class="you">(you)</span>` : p.name}</span></li>`
   }
-  const table = `<section class="panel people" role="region" aria-label="Voters" tabindex="0"><div class="people-top"><h2 class="label">Voters · ${people.length}</h2></div>
+  const table = `<section class="panel people${!voter && !later && phase !== 'revealed' ? ' reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="people-top"><h2 class="label">Voters · ${people.length}</h2></div>
     <ul class="entries">${people.map(entry).join('')}</ul></section>`
 
   const right = p => revealed
-    ? p.value ? `<span class="val">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${p.value}</span>` : '<span class="val none">–</span>'
+    ? p.value ? `<span class="val">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="val none">–</span>'
     : `<span class="pill ${p.state}">${{ none: 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
   // A roster row never carries the participant test id: the table's entries are the contract's
-  const row = (n, end, self, id = '') => `<li class="row${self ? ' me' : ''}">${avatar(n)}<span class="who" title="${n}"><span${id}>${n}</span>${self ? ' <small>(you)</small>' : ''}</span>${end}</li>`
+  const row = (n, end, self, id = '') => `<li class="row${self ? ' me' : ''}">${avatar(n)}<span class="who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
   const historyPanel = `<section class="panel history later" aria-label="Rounds"><h2 class="label">Rounds · ${history.length}</h2>
     <ol>${history.map(([w, v]) => `<li><span class="what" title="${w}">${w}</span><b>${v}</b></li>`).join('')}</ol></section>`
-  const roster = `<aside class="panel roster" aria-label="Participants"><h2 class="label">Participants · ${people.length + facilitators.length}</h2>
-    <ul>${people.map(p => row(p.name, right(p), p.name === me)).join('')}</ul><hr class="sep">
-    <ul>${facilitators.map(n => row(n, '<span class="fac">Facilitator</span>', n === me, ' data-testid="facilitator"')).join('')}</ul></aside>`
+  const roster = `<aside class="panel roster" aria-label="Participants" tabindex="0"><h2 class="label">Participants · ${people.length + facilitators.length}</h2>
+    <ul>${people.map(p => row(p.name, right(p), voter && p.name === me)).join('')}</ul>${facilitators.length ? '<hr class="sep">' : ''}
+    <ul>${facilitators.map(n => row(n, '<span class="fac">Facilitator</span>', false, ' data-testid="facilitator"')).join('')}</ul></aside>`
 
-  const keep = document.activeElement?.matches('[data-toggle]')
+  const keep = [...document.querySelectorAll('.controls button')].indexOf(document.activeElement)
   document.getElementById('root').innerHTML = `<div class="shell">${header}${bannerBlock}<main class="main"><div class="col">${issueBlock}${
     layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="side">${later ? historyPanel : ''}${roster}</div></main></div>`
-  if (keep) document.querySelector('[data-toggle]').focus()
+  if (keep >= 0) document.querySelectorAll('.controls button')[keep]?.focus()   // focus stays on its place
   document.querySelector('.history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.people'))
 }
@@ -441,7 +452,7 @@ function fitEntries() {
   const list = document.querySelector('.entries'), box = document.querySelector('.people')
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
-  // The facilitator's slot panel appears at a reveal, so its height, padding, gap and borders are reserved
+  // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
   const reserve = !voter && !later && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (box.children.length - 1)
   const used = () => [...box.children].reduce((h, c) => h + c.getBoundingClientRect().height, pad)
@@ -459,14 +470,14 @@ function fitEntries() {
 const watched = new ResizeObserver(fitEntries)
 document.fonts.addEventListener('loadingdone', fitEntries)
 
-// The toggle is aria-disabled for 1 s after it changes meaning, so a click meant for Show cannot re-vote
+// Every action in the round bar is aria-disabled for 1 s after the phase changes, so a late click acts on nothing
 function moveTo(next) {
   const turns = (phase === 'revealed') !== (next === 'revealed')
   phase = next
   if (turns) { settling = true; clearTimeout(settled); settled = setTimeout(() => { settling = false; draw() }, 1000) }
   draw()
 }
-document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('[data-toggle]') && e.preventDefault())
+document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('.controls') && e.preventDefault())
 document.addEventListener('click', e => {
   if (e.target.closest('[aria-disabled="true"]')) return
   const act = e.target.closest('[data-do]')?.dataset.do, vote = e.target.closest('[data-vote]')?.dataset.vote
