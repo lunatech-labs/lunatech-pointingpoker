@@ -442,6 +442,8 @@ settled by 3b1 (J10).
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
+- **Copy link's colour**: ink since 3b1's review wave (J4); the designer's red
+  waits on the designer's final validation.
 
 ## Decisions log
 
@@ -688,6 +690,12 @@ The reasons behind each rule, and what was set aside.
   - **Its final review** darkened the kept amber one step, to keep 7:1 for
     the own row's note on paper-pale, and named the chosen card's fill
     `--burgundy`, the one red fill with text.
+  - **A comparison with the designer's draft** brought back the room chip's
+    size: Copy link's 44 px target had filled the header and merged the chip
+    into the page, so the target reaches past the link unseen. The issue
+    panel keeps the side margin all round, whatever its number of lines, and
+    one line takes the round bar's height, so the two bars match. The entries
+    lose a little scale for it, 1.02 at the comfort target from 1.08.
 - **Brand source.** blog.lunatech.com was considered: black and gold, its gold
   2.02 on its own light ground, so it works only as a dark page, which J9 rules
   out. A new palette was considered for accessibility and set aside, since ink

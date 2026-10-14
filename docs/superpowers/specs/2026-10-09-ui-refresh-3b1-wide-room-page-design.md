@@ -250,9 +250,9 @@ and each role keeps its scale through every phase.
 
 | Viewport | Entry scale | Table |
 | --- | --- | --- |
-| The floor | 1.00 | 7 of 14 entries in view, 65 px to scroll |
-| The comfort target | 1.08 | all 14 in view |
-| 1512 by 749 | 1.42; 1.18 with one banner, 1.00 with two | all 14 in view |
+| The floor | 1.00 | 7 of 14 entries in view, 74 px to scroll |
+| The comfort target | 1.02 | all 14 in view |
+| 1512 by 749 | 1.40; 1.12 with one banner, 1.00 with two | all 14 in view |
 | Both half monitors | 1.42, the cap | all 14 in view |
 
 - The breakpoint, from 900 to 1400 px wide in steps of 4, then of 1 near it,
@@ -261,15 +261,14 @@ and each role keeps its scale through every phase.
   tall, 1153 px at the 17.58 px root of 1000 and 1300; 1065 and 1168 px
   windows with Chromium's 15 px gutter). Nothing spills at 1263 by 1300 and 1455 by 1493 either, half
   monitors less a 17 px scrollbar.
-- A 240-character issue keeps the page still: the table keeps 161 px at the
-  floor and 241 at the comfort target. Just above the breakpoint, a 1068 px
-  window, it keeps 138 px at the floor, and 88 with a banner, over its 80 px
-  minimum.
+- A 240-character issue keeps the page still: the table keeps 153 px at the
+  floor and 233 at the comfort target. Just above the breakpoint, a 1068 px
+  window, it keeps 130 px at the floor, and with a banner its 80 px minimum.
 - Banners: one at the comfort target leaves 7 of 14 entries in view; at the
-  floor one leaves the table 157 px and two 87 px; the page never scrolls.
-  With two and a 240-character issue, either page scrolls 23 px at the floor
-  and 46 px at the breakpoint in both phases, and the round bar stays put
-  through the reveal.
+  floor one leaves the table 148 px and two its 80 px minimum; the page never
+  scrolls. With two and a 240-character issue, either page scrolls 31 px at
+  the floor and 54 px at the breakpoint in both phases, and the round bar
+  stays put through the reveal.
 - No reveal changes the scale, in all 60 sets of four phases: five viewports,
   both roles, with and without the later steps, three banner states.
 - A chart value is the smaller of `--text-2xl` and 66% of its column, so none
