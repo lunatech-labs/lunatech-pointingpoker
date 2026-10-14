@@ -162,9 +162,10 @@ copy hint's 2 s timer, which is today's.
     scale or a row count at a given size.
 11. **Progress (L2)**: in step 4 the table is the progress. The count is the
     first step 5+ candidate, one component in two places and nowhere else: on
-    the voter's page small at the start of the round bar, before Clear votes,
-    as a separate element; on the facilitator's page the slot while voting, at
-    J7's 4 m step, with the waiting names. Both go once revealed.
+    the voter's page small in the round bar, just before Clear votes, as a
+    separate element; on the facilitator's page the slot while voting, at the
+    most-voted value's 4xl step, with the waiting names (the parent's
+    candidate; `later=1` draws the count alone). Both go once revealed.
 
 **The result (L4) and the cards (L5)**
 
@@ -185,9 +186,9 @@ copy hint's 2 s timer, which is today's.
 13. **The deck's cards are playing cards**, 5:7, in one row of 13, centred in
     the slot. They shrink with the column, from 5.5 rem tall down to the
     height whose width is `--target-min`, so the sidebar costs the deck, not
-    the breakpoint: 5.40 rem at the comfort target, 4.24 rem on half of a 2560
-    by 1440 monitor, 3.86 rem at the breakpoint. A chosen card lifts half a
-    rem, which leaves room for the kept tag. "0.5" sets its point tight
+    the breakpoint: 5.30 rem at the comfort target, 4.15 rem on half of a 2560
+    by 1440 monitor, 3.86 rem at the breakpoint. A confirmed card lifts half a
+    rem; the kept tag sits under its card. "0.5" sets its point tight
     wherever it shows, its text staying "0.5": the face needs it at every size
     and the chart at the narrow end, and one look serves all.
 14. **The card back is red** (`--card-back`): the voted back and the kept
@@ -254,11 +255,11 @@ and each role keeps its scale through every phase.
 | 1512 by 749 | 1.42; 1.18 with one banner, 1.00 with two | all 14 in view |
 | Both half monitors | 1.42, the cap | all 14 in view |
 
-- The breakpoint, from 900 to 1400 px wide in steps of 4, at 600, 1000 and
-  1300 px tall, later steps shown, both roles and every phase: nothing spills
-  from 65.63 rem of the page's own width (1050 px at 600 tall, 1136 px at the
-  17.3 px root of 1000 and 1300; 1066 and 1168 px windows with Chromium's 15 px
-  gutter). Nothing spills at 1263 by 1300 and 1455 by 1493 either, half
+- The breakpoint, from 900 to 1400 px wide in steps of 4, then of 1 near it,
+  at 600, 1000 and 1300 px tall, later steps shown, both roles and every
+  phase: nothing spills from 65.6 rem of the page's own width (1050 px at 600
+  tall, 1153 px at the 17.58 px root of 1000 and 1300; 1065 and 1168 px
+  windows with Chromium's 15 px gutter). Nothing spills at 1263 by 1300 and 1455 by 1493 either, half
   monitors less a 17 px scrollbar.
 - A 240-character issue keeps the page still: the table keeps 161 px at the
   floor and 241 at the comfort target. Just above the breakpoint, a 1068 px
@@ -266,8 +267,8 @@ and each role keeps its scale through every phase.
   minimum.
 - Banners: one at the comfort target leaves 7 of 14 entries in view; at the
   floor one leaves the table 157 px and two 87 px; the page never scrolls.
-  With two and a 240-character issue, the facilitator's page scrolls 23 px at
-  the floor and 46 px at the breakpoint in both phases, and the round bar stays put
+  With two and a 240-character issue, either page scrolls 23 px at the floor
+  and 46 px at the breakpoint in both phases, and the round bar stays put
   through the reveal.
 - No reveal changes the scale, in all 60 sets of four phases: five viewports,
   both roles, with and without the later steps, three banner states.
@@ -378,8 +379,8 @@ on the final layout.
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_3b1_wide_room_page`, stacked on 3a's
-`20260930.ui_refresh_3a_tokens`, in nine commits: the first version's three,
-then the designer's look in six.
+`20260930.ui_refresh_3a_tokens`, in ten commits: the first version's three,
+then the designer's look in seven.
 
 1. `docs: specify the wide room page (ui refresh step 3b1)`: this document and
    its changes to the parent spec, `docs/known-issues.md` and
@@ -400,3 +401,5 @@ then the designer's look in six.
    3b1)`: the reference's sections and its decisions log.
 9. `docs: fix the room page after its final review (ui refresh step 3b1)`: the
    kept amber, the chosen card's red and 3a2's open token values.
+10. `docs: correct the room page's figures and wording (ui refresh step 3b1)`:
+   the final review's minor findings.

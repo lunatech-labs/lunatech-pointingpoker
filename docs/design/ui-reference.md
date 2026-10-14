@@ -229,15 +229,11 @@ A button shows only in the phases where it does something.
 - Show is hidden while revealed (a contract change of step 4, after step 1c
   has removed Show's incidental uses). Re-vote still shows only while
   revealed, a guard principle 8 carries over.
-- **The round bar's guard**: a flip of the phase changes what a press at any
-  place does, so for 1 s after the phase the page shows changes, whoever
-  changed it, every action in the round bar is `aria-disabled`, its look kept
-  and focus on the button that had it. A late click meant for Show acts on
-  nothing, nor does a double-click, in step 4 and from step 5 alike; a held
-  Enter fires once. A Clear while voting changes no phase and starts none.
+- **The round bar's guard**: every action in the round bar ignores presses
+  for 1 s after any phase change, defined in 3b1 decision 6.
 - An action is **destructive** when it discards votes nobody has seen: Clear
-  while voting, and Next issue while voting. It is marked by its words, its
-  quiet look and its distance from the phase's other actions, never by colour
+  while voting. It is marked by its words, its quiet look and its distance
+  from the phase's other actions, never by colour
   or a confirmation (Appendix A, avoid 6). Step 4 keeps Clear quiet in every
   phase.
 - Next issue's flow, an assumption for the mockups only: the editor opens empty
