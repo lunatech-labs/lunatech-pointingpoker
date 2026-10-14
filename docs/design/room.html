@@ -9,67 +9,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=block">
 <style>
-  /* 3a2's tokens (decision 16): the designer's values under the app's names, the height-first root, and the sizes this page adds */
-  :root {
-    --root-size: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem);
-    --paper-pale: #F7F5F2; /* the page, the own row, the waiting pill: the darkest ground that keeps grey at 7:1 */
-    --paper-warm: #FFFFFF; /* panels and cards; figures and labels on a fill */
-    --ink: #1C1917; /* text, controls, the focus ring */
-    --grey: #58524F; /* supporting text, 7:1 on panels and the page (B) */
-    --pale: #E7E2DC; /* hairlines, decorative */
-    --mute-soft: #8A8480; /* the dashed outline, card and button edges, 3:1 (B) */
-    --burgundy: #A31B26; /* the primary button and the confirmed card (L) */
-    --burgundy-deep: #A31B26; /* a problem's text and bar (Q) */
-    --burgundy-tint: #FEF3F3; /* a problem's ground (Q) */
-    --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark */
-    --bar-other: #E06C74; /* the chart's other bars, 3:1 (J) */
-    --notice-ground: #EEF4FF; /* a notice's ground (Q) */
-    --notice-ink: #1E3A8A; /* a notice's text (Q) */
-    --notice-bar: #1D4ED8; /* a notice's icon and bar (Q) */
-    --ok: #10612E; /* the Voted pill's text */
-    --ok-tint: #F1F9F2; /* the Voted pill's ground */
-    --kept: #873E07; /* a kept vote's words: the tag, the pill, the roster's note */
-    --kept-tint: #FAF6EC; /* the kept pill's ground */
-    --track: #EFEBE7; /* the small progress bar's track (later) */
-    --mark-offset: #F9C3C6; /* the header mark's pale offset card */
-    --pip: rgba(255, 255, 255, 0.85); /* the diamond on a voted mark and on the pip fallback */
-    --shadow: 0 1px 2px rgba(28, 25, 23, 0.05); /* a panel's soft shadow (A) */
-    --lift-shadow: 0 0.4rem 0.9rem rgba(220, 47, 60, 0.25); /* a confirmed card's glow */
-    --font-sans: 'Inter', system-ui, sans-serif; /* all text but the room id (A) */
-    --text-xs: 0.75rem; /* labels, pills and small notes */
-    --weight-bold: 700; /* Inter's bold: figures and the app's name */
-    --tracking-label: 0.06em; /* uppercase Inter labels */
-    --leading-figure: 1; /* one line of figures or labels */
-    --text-tag: 0.6875rem; /* the kept tag, a note beside a value, an avatar's initials */
-    --tight-point: -0.08em; /* the point in "0.5", following its figure (J2's em); Inter's point vanishes past it */
-    --radius: 0.875rem; /* panels and messages */
-    --radius-card: 0.5rem; /* cards, rows, the copy button, inputs */
-    --radius-control: 0.625rem; /* buttons and the room chip */
-    --radius-mark: 0.375rem; /* small cards: the header mark and the table's marks */
-    --radius-small: 0.25rem; /* a bar's top corners and the progress track */
-    --radius-pill: 100rem; /* fully rounded ends */
-    --frame-band: max(2px, 0.375rem); /* a card's kept frame (J3) */
-    --panel-gap: 0.875rem; /* between panels, and a panel's block padding */
-    --panel-inline: 1.125rem; /* a panel's inline padding */
-    --page-edge: 1.25rem; /* the page's side margin */
-    --header-height: 3.5rem; /* the header bar */
-    --brand-height: 1.875rem; /* the header mark */
-    --sidebar: 18.125rem; /* the participants sidebar (E) */
-    --icon: 1.125rem; /* an icon beside its words */
-    --avatar: 1.375rem; /* a roster avatar (I) */
-    --row-height: 1.75rem; /* a roster or history row */
-    --action-width: 8.5rem; /* a button's least width */
-    --progress-width: 8rem; /* the voter's small progress bar (later) */
-    --bar-min: 0.375rem; /* the thinnest bar: the progress track, a chart bar's floor */
-    --deck-card: 5.5rem; /* a deck card's greatest height, 5:7 (W) */
-    --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
-    --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */
-    --table-min: 5rem; /* the table's least height: its title and a strip of cards */
-    --slot-height: 7.5rem; /* the slot: deck, progress or result */
-    --chart-value: 2.25rem; /* the chart's value row */
-    --value-fit: 66cqi; /* a chart value's largest size in its column: the widest, a tight "0.5" in Inter bold, is 1.46em, with a margin */
-    --chart-bar: 2rem; /* the chart's tallest bar */
-  }
   * { box-sizing: border-box; }
   /* C: the page keeps its scrollbar's gutter, so the layout never depends on whether the page scrolls */
   html { font-size: var(--root-size); scrollbar-gutter: stable; }
@@ -115,7 +54,7 @@
   .col { display: flex; flex-direction: column; gap: var(--panel-gap); min-height: 0; }
   .panel {
     background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-radius: var(--radius);
-    box-shadow: var(--shadow); padding: var(--panel-gap) var(--panel-inline);
+    box-shadow: var(--shadow) var(--shadow-colour); padding: var(--panel-gap) var(--panel-inline);
   }
   .label { margin: 0; font-size: var(--text-xs); font-weight: var(--weight-strong); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--grey); }
   .quiet { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); background: none; border: 0; padding: var(--space-2); font-weight: var(--weight-medium); font-size: var(--text-sm); }
@@ -159,7 +98,7 @@
   .card:hover { transform: translateY(calc(-1 * var(--space-1))); }
   .card.confirmed {
     background: var(--burgundy); border-color: var(--burgundy); color: var(--paper-warm);
-    transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow);
+    transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow) var(--lift-colour);
   }
   /* A border, not an inset shadow: forced colours drop shadows */
   .card.kept { border: var(--frame-band) solid var(--card-back); }
@@ -262,7 +201,7 @@
   .msg {
     display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
     background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-left: var(--line-bar) solid var(--ink);
-    border-radius: var(--radius); box-shadow: var(--shadow); font-weight: var(--weight-medium);
+    border-radius: var(--radius); box-shadow: var(--shadow) var(--shadow-colour); font-weight: var(--weight-medium);
   }
   .msg p { flex: 1; margin: 0; }
   .msg .quiet { color: inherit; padding: var(--space-2); }
