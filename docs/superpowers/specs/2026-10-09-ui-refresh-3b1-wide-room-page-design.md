@@ -193,7 +193,9 @@ copy hint's 2 s timer, which is today's.
 14. **The card back is red** (`--card-back`): the voted back and the kept
     frame. Red marks the toggle, the voted back and, once revealed, the
     most-voted bars; faces, figures, links and the focus ring stay ink, and
-    states differ by shape, never by red against ink.
+    states differ by shape, never by red against ink. The chosen card is the
+    one red fill with text, its figure in white, so it takes the toggle's
+    `--burgundy` (7.66), not `--card-back` (4.65).
 
 **Process**
 
@@ -204,14 +206,19 @@ copy hint's 2 s timer, which is today's.
     3b1 and before 3b2, judged by the contrast gate's tests, each change shown
     to fail, with its own spec. It moves the mockup's "3a2's tokens" block to
     the value source as it stands, the root `clamp(1rem, min(1.05vh, 0.82vw) +
-    0.5rem, 1.75rem)` with it, so the mockup's rules use tokens only, but step
-    9's recent rounds; a name `colours.css` or `tokens.css` already has is an
-    override. What a diff of the block does not show: `--paper-pale` becomes the
-    room page's ground, the own row's and the waiting pill's, while a notice's
-    ground moves to `--notice-ground`; `--card-back`'s comment loses "until
-    3b's choice"; `--radius` is no longer 0 (J9); the weights are named by
-    weight, not by font, Inter using 400 to 700. The gate's changes are 3a2's
-    spec's; the new pairs are in Measured, and the root's reasons in the
+    0.5rem, 1.75rem)` with it; a name `colours.css` or `tokens.css` already
+    has is an override. What a diff of the block does not show: `--paper-pale`
+    becomes the room page's ground, the own row's and the waiting pill's, while
+    a notice's ground moves to `--notice-ground`; `--card-back`'s comment loses
+    "until 3b's choice"; `--card-back` carries no text any more (decision 14),
+    so the gate's pair of paper-warm on it becomes an indicator, 3:1;
+    `--radius` is no longer 0 (J9); the weights are named by weight, not by
+    font, Inter using 400 to 700; `tokens.css`'s `--font-mono` comment drops
+    the figures (J7). Three of the block's values pass neither file's checks,
+    and 3a2 decides each: the two shadows mix a colour with `px` lengths;
+    `--value-fit` is in `cqi`, a container unit; `--tight-point` is in `em`,
+    which the gate allows on the label tracking only. The gate's changes are
+    3a2's spec's; the new pairs are in Measured, and the root's reasons in the
     reference's J2 log.
 
 **The sidebar (E)**
@@ -220,7 +227,7 @@ copy hint's 2 s timer, which is today's.
     "Participants · 16": a soft avatar, the name on one line with an ellipsis,
     then the state as a word at the right edge, never on the avatar:
     "Choosing…", "Voted" or "Not confirmed" while voting, the value once
-    revealed. Voters first, in the table's order, then the facilitators in
+    revealed, a kept one after a small "not confirmed" in `--kept`. Voters first, in the table's order, then the facilitators in
     step 1b's order, each marked "Facilitator", however many, so they are the
     first rows to scroll out of view. On the voter's page the own row is tinted
     and says "(you)", kept whole when the name is cut; never on the
@@ -270,8 +277,10 @@ and each role keeps its scale through every phase.
 - Contrast, the gate's new pairs: text at 7:1, grey on paper-pale 7.06 and on
   paper-warm 7.68, burgundy on paper-warm 7.66 both ways, burgundy-deep on
   burgundy-tint 7.05, notice-ink on notice-ground 9.38, ok on ok-tint 7.06,
-  kept on kept-tint 7.01 and on paper-warm 7.56; shapes at 3:1, card-back 4.65, mute-soft 3.69 and bar-other 3.20 on
-  paper-warm, notice-bar on notice-ground 6.07.
+  kept on kept-tint 7.15, on paper-warm 7.71 and on paper-pale 7.09, the own
+  row's note; shapes at 3:1, card-back 4.65, mute-soft 3.69 and bar-other 3.20
+  on paper-warm, paper-warm on card-back 4.65, notice-bar on notice-ground
+  6.07.
 - Under forced colours the voted card and marks, the bars, the banners' bars
   and the header mark hold.
 
@@ -369,8 +378,8 @@ on the final layout.
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_3b1_wide_room_page`, stacked on 3a's
-`20260930.ui_refresh_3a_tokens`, in eight commits: the first version's three,
-then the designer's look in five.
+`20260930.ui_refresh_3a_tokens`, in nine commits: the first version's three,
+then the designer's look in six.
 
 1. `docs: specify the wide room page (ui refresh step 3b1)`: this document and
    its changes to the parent spec, `docs/known-issues.md` and
@@ -389,3 +398,5 @@ then the designer's look in five.
    document and the parent spec, reviewed by one wave.
 8. `docs: give the design reference the room page's new look (ui refresh step
    3b1)`: the reference's sections and its decisions log.
+9. `docs: fix the room page after its final review (ui refresh step 3b1)`: the
+   kept amber, the chosen card's red and 3a2's open token values.
