@@ -264,7 +264,8 @@ earlier decision does not hold reopens it, said so in the reference's log, as
 3b sends a value back to 3a. The first step that needs a look, such as a
 button or an input, draws it, and the later ones reuse it. Step 3a2 makes the
 root 3b1 sends back, and the layout tokens with it, before 3b2 draws on them
-(`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`).
+(`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
+`docs/superpowers/specs/2026-10-14-ui-refresh-3a2-root-height-design.md`).
 On the wide room page the result takes the deck's place after a reveal (step
 3b1), a contract change of step 4 for the suite's "takes no more votes" case;
 whether the deck stays on narrow screens is 3b2's. The layouts include a
