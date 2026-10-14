@@ -113,8 +113,10 @@ lunatech.com's stylesheet, read 2026-10-06:
 - `b` is above zero, so every zoom step grows the text at every viewport.
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
-- Every other size is in `rem`, but the label and tag trackings and the
-  tight point in "0.5", in `em` so that they follow their own text. No viewport unit appears outside the root but the app
+- Every other size is in `rem`, but the label tracking and the tight point
+  in "0.5", in `em` so that they follow their own text, and a chart value's
+  fit, in `cqi` so that it follows its column; 3a2 settles the gate's units
+  (3b1 decision 16). No viewport unit appears outside the root but the app
   shell's height: exactly `100dvh` in the wide layout, its content overflowing
   it once the table is at its least height, and at least `100dvh` in the
   narrow layout.
@@ -122,7 +124,8 @@ lunatech.com's stylesheet, read 2026-10-06:
   (the Lines tokens but the hairline: control lines, J3's marks, the kept
   frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
   such as `max(2px, 0.125rem)`, so it scales with the root and never rounds to
-  nothing. The gate checks the units in `tokens.css`.
+  nothing; the shadows' `px` (J9) wait on 3a2 (3b1 decision 16). The gate
+  checks the units in `tokens.css`.
 
 ### J3. How each round state is shown
 
@@ -155,10 +158,11 @@ shape or fill from afar, and words explain the rest up close.
 - No tag on a kept entry while voting: the kept frame carries it, and the
   accessible name says it.
 - **Solid fill** and the **kept frame** are each defined once, on entries and
-  cards alike, both in the card back's colour (J4). The solid fill covers the
-  mark or the card. The kept frame is a solid band around a paper centre: on a
-  card the band is `--frame-band`, a fixed line; on an entry it is a fifth of
-  its mark's width in the mark's viewBox, the stroke inset. The frame surrounds
+  cards alike, in red (J4). The solid fill covers the mark in `--card-back`,
+  and the chosen card in `--burgundy`, since the card carries its figure in
+  white at 7:1 (J8). The kept frame is a solid band of `--card-back` around a
+  paper centre: `--frame-band` on a card, and that band times the entry scale
+  on an entry. The frame surrounds
   a card's figure, so the figure stays on paper and in line with the others.
   Outline, kept frame and fill read as no fill, some, full: no estimate, kept,
   confirmed.
@@ -197,7 +201,8 @@ shape or fill from afar, and words explain the rest up close.
 - Reopened in 3b1's second look (2026-10-12). Red marks the toggle, the
   primary in both phases; the voted back, its solid fill and the kept frame;
   and once revealed the most-voted bars. Every J3 state is drawn in the card
-  back's colour, `--card-back`, the designer's bright red.
+  back's colour, `--card-back`, the designer's bright red, but the chosen
+  card's fill, which carries its figure in white and so takes `--burgundy`.
 - States differ by shape, never by red against ink. Clear stays quiet, and
   in its deep shade red marks a problem message (J6).
 - Faces, figures, links and the focus ring stay ink (J8). Links are ink and
@@ -684,6 +689,9 @@ The reasons behind each rule, and what was set aside.
     on a reveal until the progress count fills the slot, accepted, as cards
     centred in each phase were preferred to a fix that step would undo; the
     progress count became the first step 5+ candidate.
+  - **Its final review** darkened the kept amber one step, to keep 7:1 for
+    the own row's note on paper-pale, and named the chosen card's fill
+    `--burgundy`, the one red fill with text.
 - **Brand source.** blog.lunatech.com was considered: black and gold, its gold
   2.02 on its own light ground, so it works only as a dark page, which J9 rules
   out. A new palette was considered for accessibility and set aside, since ink
