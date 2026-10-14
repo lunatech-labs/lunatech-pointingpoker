@@ -196,7 +196,8 @@ copy hint's 2 s timer, which is today's.
     most-voted bars; faces, figures, links and the focus ring stay ink, and
     states differ by shape, never by red against ink. The chosen card is the
     one red fill with text, its figure in white, so it takes the toggle's
-    `--burgundy` (7.66), not `--card-back` (4.65).
+    `--burgundy` (7.66 under normal vision, darkened by 3a2's decision 6),
+    not `--card-back` (4.65).
 
 **Process**
 
@@ -275,13 +276,14 @@ and each role keeps its scale through every phase.
 - A chart value is the smaller of `--text-2xl` and 66% of its column, so none
   overflows: 33 px at the comfort target, 28.2 px on a half monitor, 21.3 px at
   the breakpoint.
-- Contrast, the gate's new pairs: text at 7:1, grey on paper-pale 7.06 and on
-  paper-warm 7.68, burgundy on paper-warm 7.66 both ways, burgundy-deep on
-  burgundy-tint 7.05, notice-ink on notice-ground 9.38, ok on ok-tint 7.06,
-  kept on kept-tint 7.15, on paper-warm 7.71 and on paper-pale 7.09, the own
-  row's note; shapes at 3:1, card-back 4.65, mute-soft 3.69 and bar-other 3.20
-  on paper-warm, paper-warm on card-back 4.65, notice-bar on notice-ground
-  6.07.
+- Contrast under normal vision, the gate's new pairs: text at 7:1, grey on
+  paper-pale 7.06 and on paper-warm 7.68, burgundy on paper-warm 7.66 both
+  ways, burgundy-deep on burgundy-tint 7.05, notice-ink on notice-ground 9.38,
+  ok on ok-tint 7.06, kept on kept-tint 7.15, on paper-warm 7.71 and on
+  paper-pale 7.09, the own row's note; shapes at 3:1, card-back 4.65,
+  mute-soft 3.69 and bar-other 3.20 on paper-warm, paper-warm on card-back
+  4.65, notice-bar on notice-ground 6.07. 3a2's decision 6 darkens five of
+  these values to pass under every vision.
 - Under forced colours the voted card and marks, the bars, the banners' bars
   and the header mark hold.
 
