@@ -102,9 +102,11 @@ document as a whole stays in discussion.
    14 stay usable.
 
 5. **Shared-screen legibility** (settled), its numbers not:
-   - The issue, the progress and the result are sized to read from the back of
-     a room on a 40 inch TV at the laptop target, and scale with the viewport
-     above it (reopened 2026-10-07 for zoom; the reference's J2).
+   - The progress and the result are sized to read from the back of a room on
+     a 40 inch TV at the laptop target, and scale with the viewport above it
+     (reopened 2026-10-07 for zoom; the reference's J2). The issue left this
+     list in step 3b1 (reopened 2026-10-13): the room hears it, and remote
+     people read it on their own screen.
    - Their text meets WCAG AAA contrast (7:1), since a lit projector and video
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
@@ -271,8 +273,10 @@ visible in both phases, saying whether voting is open or the round is revealed,
 outside the deck so the facilitator's page keeps it, and directly above or
 beside the deck's first row, read just before it, and in view whenever that row
 is centred in the viewport, so a voter looking at a frozen deck, where one
-stays after a reveal (3b2), sees why. Its place and its height change with neither the phase, the votes nor
-the room's size, at every width. Its texts are 3b1's, and the revealed one no
+stays after a reveal (3b2), sees why. On the wide room page, where the deck
+leaves on a reveal, the phase word sits instead in the round bar at the column's
+foot, with the actions (3b1, reopened 2026-10-13). Its place and its height
+change with neither the phase, the votes nor the room's size, at every width. Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
 step 4. It may share a line with the
 progress, as a separate element (Appendix B). Step 4a makes it the round's live
@@ -282,11 +286,12 @@ says why.
 **Step 4. Restyle.** The step 3 reference applied, the CSS library chosen,
 Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
 and the result placed as step 3b1 decides: in the deck's place on the voter's
-page, which closes that entry in `docs/known-issues.md` for voters, and above the
-table on the facilitator's page until the progress step keeps its place, and the
+page, and below the table on the facilitator's page (layout f), the table
+giving it its height, which narrows that entry in `docs/known-issues.md`, and the
 "Link copied" hint moved beside the "Copy link" link (principle 4; Appendix A,
-improve 10), and Show votes and Re-vote as one button in one place that is
-`aria-disabled` for 1 s after it changes meaning (the reference's J5). It keeps
+improve 10), and Show votes and Re-vote as one button in one place, every
+action in the round bar `aria-disabled` for 1 s after the phase changes (the
+reference's J5; 3b1 decision 6). It keeps
 the interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:
@@ -301,24 +306,23 @@ element lists step 3's layouts give:
   card's height; a room of 0 or 1 voters gets a scale too.
 - A reveal with no votes shows the result, "Nobody voted" in place of the most
   voted value, and the slot keeps its height.
-- The toggle is `aria-disabled` for 1 s after its change, keeping focus, and
-  acts after; a double-click on Show votes leaves the round revealed, and a
-  held Enter fires it once.
+- Every action in the round bar is `aria-disabled` for 1 s after the phase
+  changes, keeping focus, and acts after; a double-click on Show votes leaves
+  the round revealed, and a held Enter fires it once.
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
 - The facilitator's page, zoomed to 150% and 200% at least, keeps the issue in
   view, and in each phase its progress or its result.
 - The phase line keeps its place and its height through a reveal, a reopening
-  and a vote, and on the voter's page sits by the deck's first row (step 3).
+  and a vote, and sits where step 3 places it.
 - The copy hint moves nothing and covers nothing.
 - No page scrolls horizontally at 320 CSS px, including with a long unbroken
   name, an issue that wraps, and the banners shown.
 
-Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
-and the phase line get test ids, the moved copy hint becomes a
-`role="status"` region, Show votes is absent while revealed, and facilitators
-are named on the table's title line rather than as entries (the reference's
-J3), and the mark reads change
+Principle 8's Re-vote and copy-hint timing are guarded from step 1. The phase
+line gets a test id, the moved copy hint becomes a `role="status"` region, Show
+votes is absent while revealed, facilitators are the roster's last rows rather
+than entries (3b1 decision 17), and the mark reads change
 as the reference's "Contract reads" lists, all listed as contract changes
 (principle 9).
 Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
@@ -342,8 +346,10 @@ adds no behaviour. Its spec starts from Appendix B.
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target
 column of the reference's J5. Its spec decides when the round clears, one
-request or two, its name, whether Clear stays, and whether Next issue shows
-while voting. The cases that click Clear votes for its own behaviour, in
+request or two, its name and whether Clear stays. The actions' order, Next
+issue's place and the round bar's guard, which this step inherits, are 3b1's
+decision 6 (reopened 2026-10-13). The cases that click Clear votes for its own
+behaviour, in
 either phase ('a clear re-arms the auto-reveal, and the last vote fires it',
 the Re-vote guard, 'a re-vote leaves the caster shown as selected but
 unconfirmed', the session case and a roles case), are this step's contract
@@ -354,10 +360,10 @@ picked from these candidates and whatever the mockups raise. None is a
 commitment:
 
 - A progress count, "4 of 6 voted, waiting: Bob, Eve", which needs step 2's
-  denominator (Appendix A, improve 3).
-- The revealed phase's primary chosen by the result, after step 5: Next issue
-  when the votes agree, Re-vote when they spread, if the specialist's critique
-  supports it.
+  denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
+  fills the facilitator's slot that step 4 leaves empty while voting, which
+  ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
+  votes still pushes the participants list down").
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.
@@ -368,8 +374,17 @@ commitment:
   key order picks one (`docs/known-issues.md`, "A tied vote is broken by
   JavaScript key order"). "The highest when in doubt", a rule some teams use,
   is a decision rather than a fact, so it belongs to step 9's recorded outcome
-  as a pre-selection. To decide: how many tied values the "Most voted" area
-  shows before it says "Tie". The `most-voted` read is a contract change.
+  as a pre-selection. The rule, drawn in step 3b1's mockup (`later=1`): up to
+  three tied values on one
+  line, two size steps down ("0.5 · 13 · 89" the widest), read as "3, 5 and 13";
+  from four, "Tie" with "N values, k votes each"; no red bar when every voted
+  value ties, the figure's wording to decide ("None" in the mockup). The
+  `most-voted` read is a contract
+  change.
+- From the designer's mockup (2026-10), each a step of its own: statistics, the
+  average and the median in a compact form (an agreement percentage would
+  repeat "6 of 10 votes"); a "share your reasoning" callout; the round counter
+  and its start time; the coffee card.
 - A pasted ticket link made clickable in the issue (improve 8).
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
@@ -865,11 +880,14 @@ their teams run sessions.
    reds, while red conventionally means danger, and Clear, the one destructive
    action, is a red outline like the cards, at the other end of the row from a
    filled red Show, with nothing marking it destructive. The brand colour is an
-   accent, and destructive actions get their own treatment.
+   accent, and destructive actions get their own treatment. Reopened
+   2026-10-12: where red goes is 3b1's decision 14; Clear stays quiet.
 3. Information only on hover, which phones do not have.
 4. Layout shifts on reveal or on a notice.
 5. Scope creep toward a platform: accounts, a gating facilitator role,
-   onboarding tours, avatars, sounds, gamification, settings pages.
+   onboarding tours, avatars, sounds, gamification, settings pages. The
+   roster's initials, drawn from the name (step 3b1), need no account and are
+   not these avatars.
 6. A confirmation dialog on routine actions; protect Clear by position and
    styling, or later by undo.
 7. Colour or an icon alone as a state; words first, icons beside them.
@@ -967,7 +985,7 @@ spec. Provisional, like the plan.
   overlaps none of those same elements. Both run at the laptop target and at
   320 px, where "beside" may not fit.
 - The copy hint becomes a `role="status"` region beside "Copy link": always
-  rendered, empty until a copy, holding "Link copied to clipboard" for the 2 s,
+  rendered, empty until a copy, holding "Link copied" for the 2 s,
   and checked with step 1a's region helper. Swapping today's `alert` role
   alone would silence it, since a status that appears with its text is not
   announced. A second copy within the 2 s changes no text and is not announced
