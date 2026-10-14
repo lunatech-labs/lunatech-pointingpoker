@@ -4,59 +4,56 @@
 <meta charset="utf-8">
 <title>Room mockup, layout cells (ui refresh step 3b1)</title>
 <style>
-  body { margin: 0; padding: 16px; background: #e9e4dc; font: 14px/1.4 system-ui, sans-serif; color: #1e1815; }
-  .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #e9e4dc; padding: 8px 0; z-index: 1; }
-  .bar fieldset { border: 1px solid #b9ad9f; padding: 4px 8px; margin: 0; }
+  body { margin: 0; padding: 16px; background: #E7E2DC; font: 14px/1.4 system-ui, sans-serif; color: #1C1917; }
+  .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #E7E2DC; padding: 8px 0; z-index: 1; }
+  .bar fieldset { border: 1px solid #B9AD9F; padding: 4px 8px; margin: 0; }
   .bar legend { font-weight: 600; }
-  .grid { display: grid; gap: 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(1280px * var(--s)), 1fr)); gap: 24px; }
   figure { margin: 0; }
   figcaption { font-weight: 600; margin-bottom: 6px; }
-  .frame { width: calc(1280px * var(--s)); height: calc(var(--h) * var(--s)); overflow: hidden; outline: 1px solid #8a7a70; background: #fff; }
+  .frame { width: calc(1280px * var(--s)); height: calc(var(--h) * var(--s)); overflow: hidden; outline: 1px solid #8A7A70; background: #fff; }
   iframe { width: 1280px; height: var(--h); border: 0; transform: scale(var(--s)); transform-origin: 0 0; }
 </style>
 </head>
 <body>
+<p style="margin:0 0 8px;max-width:80rem"><b>Pointing Poker, the room page.</b> Every cell is the page at 1280 px wide. Solid is step 4, dashed is a later step. "Open alone" shows a cell at your window's size, with the probe, and is clickable (cards, Show votes, Re-vote, Clear, Copy link).</p>
 <div class="bar" id="bar"></div>
 <div class="grid" id="grid"></div>
 <script>
 // Each cell is room.html at 1280 px wide; "open alone" shows one at the window's own size.
+const long = 'Rework the login page so that a returning user lands on their last room, and keep the room list in sync with the rooms they were invited to since their last visit, including the rooms that were renamed or archived meanwhile by a facilitator'
 const options = {
   role: [['voter', 'Voter'], ['facilitator', 'Facilitator']],
   phase: [['voting', 'Voting'], ['revote', 'After a re-vote'], ['revealed', 'Revealed'], ['revealed-revote', 'Revealed after a re-vote']],
-  later: [['0', 'Step 4'], ['1', 'With later steps (dashed)']],
+  votes: [['sample', 'One most voted'], ['tie3', 'Three tied'], ['tie4', 'Four tied'], ['0', 'Nobody voted']],
   voters: [['14', '14 voters'], ['12', '12 voters'], ['4', '4 voters']],
-  votes: [['', 'Votes cast'], ['0', 'Nobody voted']],
-  issue: [['https://lunatech.atlassian.net/browse/PP-1234', 'Issue: a link'], ['Rework the login page so that a returning user lands on their last room', 'free text']],
-  message: [['', 'No message'], ['lost', 'Problem: connection lost'], ['restarted', 'Notice: reconnected'], ['moved', 'Notice: the link moved'],
-    ['lost,restarted', 'Problem and notice'], ['conflict', "Editor's notice: conflict"], ['save-failed', "Editor's problem: save failed"]],
+  later: [['0', 'Step 4 only'], ['1', 'With later steps, dashed: progress, round history, Next issue, the tie rule']],
+  issue: [['https://lunatech.atlassian.net/browse/PP-1234', 'Issue: a link'], ['Rework the login page so that a returning user lands on their last room, and keep the room list in sync', 'free text'], [long, 'long free text']],
+  layout: [['deck-bottom', 'f. Deck or result above the bar (default)'], ['deck-top', 'g. Deck or result on top (the open swap)']],
+  message: [['', 'No message'], ['lost', 'Connection lost'], ['ended', 'Session ended'], ['restarted', 'Reconnected'], ['moved', 'Moved link'], ['lost,moved', 'Lost + moved'],
+    ['restarted,moved', 'Restarted + moved'], ['conflict', 'Issue changed by someone else (editor)'], ['save-failed', 'Issue save failed (editor)']],
   height: [['680', '1280×680 (comfort)'], ['600', '1280×600 (floor)']],
-  scale: [['1', 'Actual size'], ['0.75', '75%'], ['0.5', '50%']]
+  scale: [['0.5', '50%'], ['0.75', '75%'], ['1', 'Actual size']]
 }
-const multi = ['phase']
-const state = { role: 'voter', phase: ['voting', 'revealed'], later: '0', voters: '14', votes: '', issue: options.issue[0][0], message: '', height: '680', scale: '1' }
-
+const multi = ['role', 'phase']
+const state = { role: ['voter', 'facilitator'], phase: ['voting', 'revote', 'revealed'], votes: 'sample', voters: '14', later: '0', message: '', layout: 'deck-bottom', issue: options.issue[0][0], height: '680', scale: '0.5' }
 const bar = document.getElementById('bar')
 for (const [key, list] of Object.entries(options)) {
   const fs = document.createElement('fieldset')
   fs.innerHTML = `<legend>${key}</legend>` + list.map(([v, label]) => {
-    const type = multi.includes(key) ? 'checkbox' : 'radio'
-    const on = multi.includes(key) ? state[key].includes(v) : state[key] === v
+    const type = multi.includes(key) ? 'checkbox' : 'radio', on = multi.includes(key) ? state[key].includes(v) : state[key] === v
     return `<label><input type="${type}" name="${key}" value="${v}" ${on ? 'checked' : ''}> ${label}</label> `
   }).join('')
-  fs.addEventListener('change', () => {
-    const picked = [...fs.querySelectorAll('input:checked')].map(i => i.value)
-    state[key] = multi.includes(key) ? picked : picked[0]
-    render()
-  })
+  fs.addEventListener('change', () => { const picked = [...fs.querySelectorAll('input:checked')].map(i => i.value); state[key] = multi.includes(key) ? picked : picked[0]; render() })
   bar.append(fs)
 }
-
 function render() {
-  document.getElementById('grid').innerHTML = state.phase.map(phase => {
-    const src = `room.html?role=${state.role}&phase=${phase}&later=${state.later}&voters=${state.voters}&issue=${encodeURIComponent(state.issue)}&message=${state.message}&votes=${state.votes}`
-    return `<figure><figcaption>${state.role}, ${phase} — <a href="${src}&probe=1" target="_blank">open alone</a> (clickable: the actions, the cards, Copy link)</figcaption>
-      <div class="frame" style="--s:${state.scale};--h:${state.height}px"><iframe src="${src}" title="${state.role} ${phase}"></iframe></div></figure>`
-  }).join('')
+  document.getElementById('grid').style.setProperty('--s', state.scale)
+  document.getElementById('grid').innerHTML = state.role.flatMap(role => state.phase.map(phase => {
+    const src = `room.html?role=${role}&phase=${phase}&votes=${state.votes}&voters=${state.voters}&later=${state.later}&message=${state.message}&layout=${state.layout}&issue=${encodeURIComponent(state.issue)}`
+    return `<figure><figcaption>${role}, ${phase} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
+      <div class="frame" style="--s:${state.scale};--h:${state.height}px"><iframe src="${src}" title="${role} ${phase}"></iframe></div></figure>`
+  })).join('')
 }
 render()
 </script>
