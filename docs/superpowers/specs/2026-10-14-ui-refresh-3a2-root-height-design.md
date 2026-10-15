@@ -158,7 +158,8 @@ The gate checks tokens, not their uses; step 4's review checks these:
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_3a2_root_height`, stacked on 3b1's
-`20260930.ui_refresh_3b1_wide_room_page` (#445), in three commits:
+`20260930.ui_refresh_3b1_wide_room_page` (#445), in three commits besides its
+plan and the review fixes:
 
 1. `docs: specify the root and the room page's tokens (ui refresh step 3a2)`:
    this document and the parent's change.
