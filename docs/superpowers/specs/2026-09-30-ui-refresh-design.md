@@ -432,7 +432,7 @@ commitment:
 | Participants above the results | Step 4, as the result placed per page (step 3b1) |
 | "Not Alice?" | A step 5+ candidate |
 | Light and dark theme | Dropped: lunatech.com has one theme |
-| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and no deck stays frozen after a reveal (step 3b2) |
+| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and no deck stays frozen after a reveal (step 3) |
 
 ## Relation to other documents
 
