@@ -49,18 +49,22 @@ never gate a merge.
    their gaps). A card is never under `--target-min` nor over `--deck-card`.
    One row of 13 is 3b1's foot only: a one-row slot is too short for the
    result (Measured).
-4. **The slot keeps the deck's height through a reveal**, computed in CSS from
-   the deck's columns and card width (`calc()` on `--deck-width`, a token
-   whose value is `100cqi`), the deck's gaps and one extra `--space-2` above
-   it. That top line holds the voter's progress at its left (a later step's,
+4. **The slot keeps one height through a reveal**, computed in CSS: the
+   deck's height from its columns and card width, a card at least
+   `--target-min` (`calc()` on `--deck-width`, a token whose value is
+   `100cqi`), its gaps and one extra `--space-2` above it, and at least the
+   result's least height (`--result-least`), a `max()` of the two. A deck
+   shorter than that floor sits centred in the slot while voting. That top line holds the voter's progress at its left (a later step's,
    text only; 3b1 decision 11 had it in the round bar) and the kept tag
    at its right, clear of a lifted card: the tag leaves its card (3b1 decision
    13), and the kept frame marks which card.
 5. **The result in the compact slot**: "Most voted" on two rows (the label and
    the count, then the figure: a single value at the 3xl step, a tie's list at
    the 2xl step, or "Tie" or "None"); the bars fill what is left, the tallest
-   at most `--deck-card`. The figures share a baseline; values with no votes
-   and the counts are at `min(var(--text-lg), var(--value-fit))`.
+   at most `--deck-card`. The figures share a baseline; the voted values are
+   at `min(var(--text-xl), var(--value-fit))`, so they hold the value row, and
+   values with no votes and the counts at `min(var(--text-lg),
+   var(--value-fit))`.
 6. **The round bar is one row**: the phase word, Clear set apart (3b1 decision
    6), then the phase's main action with its word. Show votes and Re-vote keep
    their words today; once Next issue exists (step 5), Re-vote becomes its
@@ -155,7 +159,11 @@ Chromium, 14 voters, the mockup:
 - The header is 61 px closed and 143 px open; the chip with the longest room
   id fits beside ☰.
 - A Jira link takes 2 lines from 377 to 410 px, not 3 broken inside its host.
-- A one-row deck at 800 px is 84 px tall; its result needs about 190.
+- A one-row deck at 800 px is 84 px tall; its result needs about 190. A 7 and
+  6 deck of 44 px cards, at 433 px, is 147 px tall; the result's least height
+  is 11.75 rem in the phone layout and about 10 rem in the wide one. With the
+  floor and the xl cap, a sweep from 320 to 1170 px wide, both roles and
+  phases, spills nothing from the slot.
 - At 51.75 rem the round bar is 448 px: Clear's words leave 99 px today, 30
   with Next issue and Re-vote as an icon; with Re-vote's words it wraps.
 - In the wide layout at 960 by 900 and 960 by 1600 (59 rem), all 14 entries
@@ -179,6 +187,8 @@ Chromium, 14 voters, the mockup:
   line rule and step 4's check carry the exception. The facilitator's own Show
   causes it, but for a second facilitator's.
 - The kept tag sits on the top line, away from its card.
+- A 7 and 6 deck shorter than the floor, from 433 px wide, has up to about
+  40 px of spare room in the slot while voting.
 - The phone layout reaches 843 px windows, where its 7 and 6 sheet is about
   280 px.
 - On an iPhone the pinned sheet takes about half the viewport; 5 entries show
@@ -209,7 +219,7 @@ banner stays in the flow under the closed header. Step 4 runs it.
   Appendix A's disabled deck; Appendix B's copy hint and phase line cases.
 - **3b1**: its Status line points here for decisions 2, 4, 7, 11 and 13.
 - **Tokens and gate**: `--page-max`, `--entry-scale-narrow`,
-  `--sheet-clearance` and `--deck-width`, which the gate allows `cqi` on. J2's
+  `--sheet-clearance`, `--result-least` and `--deck-width`, which the gate allows `cqi` on. J2's
   `vw` coefficient stays unbounded, as 3a2 left it to 3b2: these rules are in
   rem and hold for any coefficient.
 - **Mockup**: `room.html` draws the two switches, the phone layout and the cap.
