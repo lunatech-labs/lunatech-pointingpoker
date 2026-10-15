@@ -53,7 +53,7 @@
   --shadow: 0 max(1px, 0.0625rem) max(2px, 0.125rem); /* a panel's soft shadow, drawn in --shadow-colour (J9) */
   --lift-shadow: 0 0.4rem 0.9rem; /* the chosen card's glow, drawn in --lift-colour */
 
-  --panel-gap: 0.875rem; /* between panels, and a panel's block padding */
+  --panel-gap: 0.875rem; /* between panels, and a panel's block padding unless it sets its own */
   --panel-inline: 1.125rem; /* a panel's inline padding */
   --page-edge: 1.25rem; /* the page's side margin */
   --header-height: 3.5rem; /* the header bar */
