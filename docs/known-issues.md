@@ -747,7 +747,11 @@ roadmap item instead of leaving it here as stale history.
   over the same `[(score, count)]` shape, so they would otherwise inherit this
   tie-break by accident. The server builds `distribution` itself, so what carries
   over is the count-only comparator and the stable sort, not `Object.entries`
-  order. Remove this entry once a rule is chosen and implemented.
+  order. A step 5+ candidate of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, "Ties shown rather
+  than broken", proposes showing the tie and leaving "the highest when in
+  doubt" to step 9's recorded outcome. Remove this entry once a rule is chosen
+  and implemented.
 
 ### A Show during a partial re-vote tallies two rounds as one distribution
 
@@ -791,6 +795,26 @@ roadmap item instead of leaving it here as stale history.
   rendered beside the current one, or once a rule is chosen that clears an
   estimation on `reVote`.
 
+### A late Re-vote unconfirms a vote cast in the round it reopened
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.reVote`, which applies whatever the phase).
+- **Issue:** `reVote` has no phase guard: it clears every confirmation even
+  when the round is already voting, and the command carries no phase. Alice and Bob both press Re-vote on a revealed round, or Bob's press
+  travels a slow link; Alice's lands first and reopens the round, Carol votes,
+  then Bob's lands and turns Carol's fresh vote into a previous one, not
+  confirmed, so the auto-reveal waits for her. She recovers with one click, and
+  nothing is lost. Step 3b1's round bar guard
+  (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
+  decision 6) acts on one page only, so it cannot stop a press already sent.
+- **Resolution:** Guard `reVote` server-side: it applies only while the round
+  is revealed, and is otherwise a no-op, as a second `show` is. It leaves a
+  Re-vote late by a whole round, and a late Show that re-reveals a round just
+  reopened, both needing people acting within a round trip, which only a round
+  number in the command would close. A backend
+  change, so its own step with a case shown to fail first. Remove this entry
+  when that lands.
+
 ### A reveal with votes still pushes the participants list down
 
 - **Where:** `frontend/src/components/Results.tsx` (the summary block, rendered
@@ -813,9 +837,15 @@ roadmap item instead of leaving it here as stale history.
   this block is real content arriving, and the movement is honest feedback that
   the reveal landed. What step 4 should carry over is that the shift is the
   block's position rather than its existence, so placing the participants list
-  above the results would settle it without hiding anything. Remove this entry
-  when step 4 of `docs/superpowers/specs/2026-09-30-ui-refresh-design.md` lands
-  or decides otherwise.
+  above the results would settle it without hiding anything. Step 3b1
+  (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`)
+  narrows it: on the voter's page the result takes the deck's place; on the
+  facilitator's page, in layout f, the result's slot appears below the table,
+  which keeps its place but gives the slot its height, so the entries,
+  centred in it, move up 50 to 80 px. Layout g, the open swap, would put the
+  slot above the table and push it down instead. The progress step, the first
+  step 5+ candidate, fills the slot while voting and ends both. Remove this
+  entry when the progress step lands.
 
 ### Only a real e2e failure exercises the artifact upload path
 
