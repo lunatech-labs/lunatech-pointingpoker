@@ -66,7 +66,8 @@ never gate a merge.
    values with no votes and the counts at `min(var(--text-lg),
    var(--value-fit))`.
 6. **The round bar is one row**: the phase word, Clear set apart (3b1 decision
-   6), then the phase's main action with its word. Show votes and Re-vote keep
+   6), then the phase's main action with its word, at most `--action-width`
+   and right-aligned, as in the wide layout. Show votes and Re-vote keep
    their words today; once Next issue exists (step 5), Re-vote becomes its
    icon. In the wide layout Clear keeps its words (decision 10 for the phone
    layout). Every icon keeps an accessible name.
