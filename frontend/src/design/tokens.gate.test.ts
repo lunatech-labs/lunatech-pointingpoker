@@ -20,7 +20,7 @@ describe('the contrast gate', () => {
     expect(contrast(...paint(runs[run], pair), vision)).toBeGreaterThanOrEqual(pair.floor)
   })
 
-  it('reaches every colour token but --pale', () => {
+  it('reaches every colour token but the decorative set', () => {
     expect(unreached(runs)).toEqual([])
   })
 

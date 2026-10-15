@@ -1,17 +1,30 @@
 /* The colour tokens; the contrast gate (design/tokens.gate.test.ts) checks every pair. */
 :root {
   --paper: #FCFAF6; /* the page */
-  --paper-warm: #FEFDFB; /* content surfaces; figures and labels on a fill */
-  --paper-pale: #F0EBE2; /* a notice's ground */
-  --pale: #D6CABB; /* hairlines, decorative */
-  --mute-soft: #8A7A70; /* hairlines under prefers-contrast: more */
-  --ink: #1E1815; /* text, controls, the focus ring */
-  --grey: #554B43; /* supporting text; the frozen deck */
-  --burgundy: #8E292E; /* the brand, the one primary per phase */
-  --burgundy-deep: #5C1C20; /* a problem's text and bar */
-  --burgundy-tint: rgba(142, 41, 46, 0.08); /* a problem's ground */
+  --paper-warm: #FFFFFF; /* panels and cards; figures and labels on a fill */
+  --paper-pale: #F7F5F2; /* the room page, the own row, the waiting pill: the darkest ground that keeps grey at 7:1 */
+  --pale: #E7E2DC; /* hairlines, decorative */
+  --mute-soft: #8A8480; /* the dashed outline, card and button edges, hairlines under prefers-contrast: more; 3:1 */
+  --ink: #1C1917; /* text, controls, the focus ring */
+  --grey: #58524F; /* supporting text; the frozen deck */
+  --burgundy: #9B1A24; /* the primary button and the chosen card */
+  --burgundy-deep: #931822; /* a problem's text and bar */
+  --burgundy-tint: #FEF3F3; /* a problem's ground */
   --hairline-colour: var(--pale); /* dividers and surface edges */
-  --card-back: var(--ink); /* J3's looks: outline, fill, kept frame; ink until 3b's choice */
+  --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark */
+  --bar-other: #DE656D; /* the chart's other bars */
+  --notice-ground: #EEF4FF; /* a notice's ground */
+  --notice-ink: #1E3A8A; /* a notice's text */
+  --notice-bar: #1D4ED8; /* a notice's icon and bar */
+  --ok: #0F5D2C; /* the Voted pill's text */
+  --ok-tint: #F1F9F2; /* the Voted pill's ground */
+  --kept: #7F3A07; /* a kept vote's words: the tag, the pill, the roster's note */
+  --kept-tint: #FAF6EC; /* the kept pill's ground */
+  --track: #EFEBE7; /* the small progress bar's track */
+  --pip: rgba(255, 255, 255, 0.85); /* the diamond on a voted mark and on the plain header mark */
+  --mark-offset: #F9C3C6; /* the header mark's pale offset card, decorative */
+  --shadow-colour: rgba(28, 25, 23, 0.05); /* a panel's soft shadow, decorative */
+  --lift-colour: rgba(220, 47, 60, 0.25); /* the chosen card's glow, decorative */
 }
 
 @media (prefers-contrast: more) {
