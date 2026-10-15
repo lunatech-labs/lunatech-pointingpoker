@@ -379,8 +379,8 @@ on the final layout.
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_3b1_wide_room_page`, stacked on 3a's
-`20260930.ui_refresh_3a_tokens`, in thirteen commits: the first version's
-three, then the designer's look in ten.
+`20260930.ui_refresh_3a_tokens`: the first version's commits, then the
+designer's look.
 
 1. `docs: specify the wide room page (ui refresh step 3b1)`: this document and
    its changes to the parent spec, `docs/known-issues.md` and
