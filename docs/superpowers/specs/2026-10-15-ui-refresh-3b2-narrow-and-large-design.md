@@ -11,7 +11,7 @@ wide screens: the reference's L5 (the deck's reflow), L10 (the width cap) and
 L11 (the layout below the breakpoint). It builds on 3b1's page
 (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`)
 and 3a2's tokens, and reopens 3b1's decisions 2 (the breakpoint), 7 (the
-header) and 13 (the kept tag), each below a switch. The product owner judges it
+header), 11 (the voter's progress) and 13 (the kept tag), each below a switch. The product owner judges it
 on `docs/design/room.html`. Phones are hand-tested on the deployed app only and
 never gate a merge.
 
@@ -50,9 +50,10 @@ never gate a merge.
    One row of 13 is 3b1's foot only: a one-row slot is too short for the
    result (Measured).
 4. **The slot keeps the deck's height through a reveal**, computed in CSS from
-   the deck's columns and card width (`calc()` on `--deck-width`, `100cqi`),
-   the deck's gaps and one extra `--space-2` above it. That top line holds the
-   voter's progress at its left (a later step's, text only) and the kept tag
+   the deck's columns and card width (`calc()` on `--deck-width`, a token
+   whose value is `100cqi`), the deck's gaps and one extra `--space-2` above
+   it. That top line holds the voter's progress at its left (a later step's,
+   text only; 3b1 decision 11 had it in the round bar) and the kept tag
    at its right, clear of a lifted card: the tag leaves its card (3b1 decision
    13), and the kept frame marks which card.
 5. **The result in the compact slot**: "Most voted" on two rows (the label and
@@ -76,8 +77,11 @@ never gate a merge.
    size: every portrait phone from a 629 px viewport up pins; landscape
    phones, the first iPhone SE and a laptop at 200% flow. Phone users'
    feedback tunes the 39. The tallest sheet is 23.75 rem, at a 430 px page,
-   so `scroll-padding-bottom: var(--sheet-clearance)` (24 rem) on `html`,
-   under the same media query, keeps focus clear of it (2.4.12).
+   so `scroll-margin-bottom: var(--sheet-clearance)` (24 rem) on the
+   focusable elements outside the sheet, where it pins, keeps focus clear of
+   it (2.4.11, 2.4.12). `scroll-padding` on `html` would scroll the page as
+   focus moves through the sheet in Chromium, and would reach the wide
+   layout.
 8. **The header is one row**: the mark, the chip with Copy link as its icon
    alone (its name "Copy link"), and ☰ (its name "Menu"), each a 44 by 44
    target. ☰ shows or hides a second row in the header's flow, the wide
@@ -120,6 +124,7 @@ never gate a merge.
 
 ☰ is a disclosure: a button with `aria-expanded` and the row after it in the
 DOM, not an ARIA menu. The row is in the header's flow, so it covers nothing.
+The table is the phone layout's; crossing 51.75 rem leaves it.
 
 | Event | Closed | Open |
 | --- | --- | --- |
@@ -133,8 +138,8 @@ DOM, not an ARIA menu. The row is in the header's flow, so it covers nothing.
 | Banner, reconnect or phase change | nothing | stays open |
 | Width crosses 51.75 rem | ☰ shows or hides | closes; the wide header shows the row's content |
 
-Accepted: focus in the row falls to the page when the width crosses 51.75 rem,
-which needs a resize with the row open.
+Accepted: focus on ☰, in the row, or on the wide header's switch or Leave falls
+to the page when the width crosses 51.75 rem, which needs a resize.
 
 ## Measured
 
@@ -157,10 +162,10 @@ Chromium, 14 voters, the mockup:
   show and the page does not scroll, with a three-way tie, Next issue and the
   progress drawn; at 1000 by 700 the table shows 7 of 14 and scrolls in its
   region.
-- At a 16 px root, every window under about 975 px wide, 51.75 rem is about
-  843 px and 65.75 rem about 1067 px, a classic scrollbar included; a tall
-  window's root grows with its width, so 65.75 rem is about 1174 px at 1528 px
-  tall.
+- At a 16 px root, 51.75 rem is about 843 px and 65.75 rem about 1067 px, a
+  classic scrollbar included. The root is 16 px in a window under about 975 px
+  wide or 762 px tall; a taller window's root grows with its width, so 65.75
+  rem is about 1174 px at 1528 px tall.
 
 ## Accepted costs
 
@@ -169,7 +174,8 @@ Chromium, 14 voters, the mockup:
   700).
 - The facilitator's phone page, until the progress step fills its slot while
   voting: a reveal grows the sheet over the table, and where the page ends on
-  screen the round bar moves down by the result's height. The parent's phase
+  screen, or where the sheet flows, the round bar moves down by the result's
+  height. The parent's phase
   line rule and step 4's check carry the exception. The facilitator's own Show
   causes it, but for a second facilitator's.
 - The kept tag sits on the top line, away from its card.
@@ -201,7 +207,7 @@ banner stays in the flow under the closed header. Step 4 runs it.
   principle 5's zoom bullet; the phase line's exception (Accepted costs) in
   step 3's paragraph and step 4's checks; step 4's copy hint and zoom checks;
   Appendix A's disabled deck; Appendix B's copy hint and phase line cases.
-- **3b1**: its Status line points here for decisions 2, 7 and 13.
+- **3b1**: its Status line points here for decisions 2, 4, 7, 11 and 13.
 - **Tokens and gate**: `--page-max`, `--entry-scale-narrow`,
   `--sheet-clearance` and `--deck-width`, which the gate allows `cqi` on. J2's
   `vw` coefficient stays unbounded, as 3a2 left it to 3b2: these rules are in
@@ -209,7 +215,8 @@ banner stays in the flow under the closed header. Step 4 runs it.
 - **Mockup**: `room.html` draws the two switches, the phone layout and the cap.
 - **Reference**: L5, L10 and L11 leave Open for a section on the two switches,
   the phone layout and the cap; the frozen deck's rules go (the "Revealed,
-  where a deck stays" row, J8's frozen deck); J5 gains decision 10; the Tokens
+  where a deck stays" row, J8's frozen deck); J2's units allow `cqi` on
+  `--deck-width`; J5 gains decision 10; the Tokens
   section's exemption names the queries' values; Open gains Parked; the log
   gains a 3b2 entry with what was set aside, the cap's reasons and the
   three-way tie at 840 px behind decision 1, which the plan lists.
