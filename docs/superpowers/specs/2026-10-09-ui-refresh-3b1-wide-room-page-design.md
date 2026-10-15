@@ -1,7 +1,8 @@
 # UI Refresh, Step 3b1: The Wide Room Page
 
 Date: 2026-10-09
-Status: In discussion
+Status: In discussion; step 3b2 reopens decisions 2, 7 and 13 below its widths
+(`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`)
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 3
 
 ## Purpose
