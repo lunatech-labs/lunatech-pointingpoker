@@ -10,169 +10,211 @@ Step 3b2 draws the room page below 3b1's 65.75 rem breakpoint and caps it on
 wide screens: the reference's L5 (the deck's reflow), L10 (the width cap) and
 L11 (the layout below the breakpoint). It builds on 3b1's page
 (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`)
-and 3a2's tokens. The product owner judges it on `docs/design/room.html`.
-Phones are hand-tested on the deployed app only and never gate a merge.
+and 3a2's tokens, and reopens 3b1's decisions 2 (the breakpoint), 7 (the
+header) and 13 (the kept tag), each below a switch. The product owner judges it
+on `docs/design/room.html`. Phones are hand-tested on the deployed app only and
+never gate a merge.
 
 ## Terms
 
 - **Width**: the page's own width in rem, as a container query reads it, at
-  the fluid root (J2). In px it moves with the root: at a 16 px root, the root
-  of every window under about 975 px wide, 51.75 rem is about 843 px and
-  65.75 rem about 1067 px, a classic scrollbar included; a tall window's root
-  grows with its width, so 65.75 rem is about 1130 px at 1528 px tall.
-- **Phone layout**: the page below 51.75 rem.
-- **Band**: the page from 51.75 to 65.75 rem.
-- **Wide layout**: 3b1's page, from 65.75 rem.
-- **Foot**: the slot and the round bar, the column's last two panels.
-- **Sheet**: the foot pinned at the viewport's bottom (decision 4).
-- **Multi-row deck**: a deck whose 13 cards wrap onto more than one row.
-- **Top line**: the slot's padding above a multi-row deck (decision 7).
+  the fluid root (J2). Its px equivalents are in Measured.
+- **Wide layout**: 3b1's page, with its sidebar (3b1's Terms), from 51.75 rem.
+- **Phone layout**: the page below 51.75 rem, one column without the sidebar.
+- **Compact foot**: the slot and the round bar below 65.75 rem, in either
+  layout (decisions 3 to 6).
+- **Multi-row deck**: a deck whose 13 cards wrap onto more than one row, as
+  every deck in the compact foot does.
+- **Top line**: the slot's padding above a multi-row deck (decision 4).
+- **Sheet**: the phone layout's slot and round bar, pinned together at the
+  viewport's bottom (decision 7).
 
 ## Decisions
 
-**The three layouts**
+**Two switches**
 
-1. **The phone layout, the band and the wide layout**, switched by container
-   queries on the width. 51.75 rem is where the full header holds the longest
-   room id (`charming-speckled-anteater`) with "Link copied" (measured 51.5)
-   and where the band's result still holds a three-way tie, with 36 px bars at
-   840 px.
-2. **The band is 3b1's page** with its sidebar and full header, "Pointing
-   Poker" hidden, and three changes: the deck wraps (decision 6), the slot
-   becomes a multi-row slot (decisions 7 and 8), and the round bar follows
-   decision 9.
-3. **The width cap is 106 rem** (`--page-max`), a 1080p monitor's page. The
-   page stops growing there, centred on the ground; the header's bar stays full
-   width, its content aligned with the page. It caps 1440p (117 rem), 4K at
-   100% scaling (137) and ultrawides (157), and must stay above 65.75 rem.
+1. **51.75 rem switches the page's structure**: the wide layout at and above
+   it, the phone layout below, by a container query on the width. It is where
+   the full header holds the longest room id (`charming-speckled-anteater`)
+   with "Link copied" (measured 51.5). 3b1's breakpoint moves here; J2's and
+   principle 4's wide and narrow layouts are these two.
+2. **65.75 rem switches the foot**: below it, in both layouts, the compact
+   foot, and "Pointing Poker" is hidden; at and above, 3b1's foot. 65.75 rem
+   stays 3b1's measure: 13 cards at the touch target beside the sidebar.
+
+**The compact foot**
+
+3. **The deck wraps in balanced rows**, by container queries on the deck's own
+   width: 5, 5 and 3 cards; 7 and 6 from 22.25 rem (seven 44 px cards and
+   their gaps). A card is never under `--target-min` nor over `--deck-card`.
+   One row of 13 is 3b1's foot only: a one-row slot is too short for the
+   result (Measured).
+4. **The slot keeps the deck's height through a reveal**, computed in CSS from
+   the deck's columns and card width (`calc()` on `--deck-width`, `100cqi`),
+   the deck's gaps and one extra `--space-2` above it. That top line holds the
+   voter's progress at its left (a later step's, text only) and the kept tag
+   at its right, clear of a lifted card: the tag leaves its card (3b1 decision
+   13), and the kept frame marks which card.
+5. **The result in the compact slot**: "Most voted" on two rows (the label and
+   the count, then the figure: a single value at the 3xl step, a tie's list at
+   the 2xl step, or "Tie" or "None"); the bars fill what is left, the tallest
+   at most `--deck-card`. The figures share a baseline; values with no votes
+   and the counts are at `min(var(--text-lg), var(--value-fit))`.
+6. **The round bar is one row**: the phase word, Clear set apart (3b1 decision
+   6), then the phase's main action with its word. Show votes and Re-vote keep
+   their words today; once Next issue exists (step 5), Re-vote becomes its
+   icon. In the wide layout Clear keeps its words (decision 10 for the phone
+   layout). Every icon keeps an accessible name.
 
 **The phone layout**
 
-4. **One column, in the wide layout's order**: the issue, the table, the
-   slot, the round bar. The roster is hidden; the facilitators get one line
-   under the table. The foot is the sheet (`position: sticky`, bottom 0) where
-   the viewport is at least 47 rem tall (a media query, at the reader's default
-   size): phones 800 px tall and up pin, a 740 px phone and an iPhone SE do
-   not. The tallest sheet is 23.75 rem (a 430 px phone, five full cards a row),
-   so `scroll-padding-bottom: 24rem` keeps focus clear of it (2.4.12).
-5. **The header is one row**: the mark, the chip with Copy link as its icon
-   alone (accessible name "Copy link", a 44 px target unseen), and a ☰ button
-   that discloses the role sentence, its switch and Leave (Disclosure).
-   "Pointing Poker" is hidden. "Link copied" takes the room id's place in the
-   chip for its 2 s (J6).
-6. **The deck reflows in balanced rows**, by container queries on the deck's
-   own width: 5, 5 and 3 cards; 7 and 6 from 22.25 rem (seven 44 px cards and
-   their gaps); one row of 13 from 41.75 rem. A card is never under 44 px nor
-   over the wide page's `--deck-card`. The rule holds in the band too.
-7. **A multi-row slot keeps the deck's height through a reveal**, computed in
-   CSS from the deck's columns and card width (`calc()` on `cqi`), the deck's
-   gaps and one extra `--space-2` above it. That top line holds the voter's
-   progress at its left (a later step's, text only) and the kept tag at its
-   right, clear of a lifted card.
-8. **The result in a multi-row slot**: "Most voted" on two rows (the label
-   and the count, then the figure, a tie's list at the 2xl step, or "Tie" or
-   "None"); the bars fill what is left, the tallest at most `--deck-card`. The
-   figures share a baseline, the empty ones and the counts at
-   `min(var(--text-lg), var(--value-fit))`.
-9. **The round bar is one row**: the phase word, Clear as its icon (set apart
-   as 3b1 decision 6), then the phase's main action with its word. Show votes
-   and Re-vote keep their words today; once Next issue exists (step 5),
-   Re-vote becomes its icon, and below about 21 rem Next issue's visible word
-   shortens to "Next", its name staying "Next issue" (WCAG 2.5.3). Every icon
-   keeps an accessible name.
-10. **The deck leaves at a reveal**, the result taking its place, as on the
-    wide page. No deck stays frozen anywhere.
-11. **The table's entries are at a fixed scale of 0.8**, their names at the
-    xs step: the table flows with the page, so it has no height to fill.
-12. **The issue**: a link breaks only before a path slash or after a dot in
-    its host, at every width (3b1 decision 4 extended). Edit is the pencil
-    alone, its name "Edit issue" kept.
-13. **The facilitator's page follows the voter's rules**, the slot holding no
-    deck but as tall as a voter's: nothing while voting until the progress
-    step fills it, the result once revealed.
+7. **One column, in the wide layout's order**: the issue, the table, the slot,
+   the round bar. The roster is hidden; the facilitators get one line under
+   the table, which names two, then "and 3 more" (3b1 decision 8). The slot
+   and the round bar are the sheet (`position: sticky`, bottom 0) where the
+   viewport is at least 39 rem tall, a media query at the reader's default
+   size: every portrait phone from a 629 px viewport up pins; landscape
+   phones, the first iPhone SE and a laptop at 200% flow. Phone users'
+   feedback tunes the 39. The tallest sheet is 23.75 rem, at a 430 px page,
+   so `scroll-padding-bottom: var(--sheet-clearance)` (24 rem) on `html`,
+   under the same media query, keeps focus clear of it (2.4.12).
+8. **The header is one row**: the mark, the chip with Copy link as its icon
+   alone (its name "Copy link"), and ☰ (its name "Menu"), each a 44 by 44
+   target. ☰ shows or hides a second row in the header's flow, the wide
+   header's role sentence, its switch and Leave (Disclosure). "Link copied"
+   takes the room id's place in the chip for its 2 s (J6).
+9. **The table's entries are at the phone layout's own scale**,
+   `--entry-scale-narrow` (0.8), their names at the xs step: the table flows
+   with the page, so it has no height to fill. 3b1's scale, from 1, holds in
+   the wide layout.
+10. **Clear and Edit are their icons alone**, their names "Clear votes" and
+    "Edit issue" kept. Clear is marked by its icon, its quiet look and its
+    distance (J5 gains this); its words wrap at 392 px even today.
+11. **The facilitator's page follows the voter's**: while voting the sheet is
+    the round bar alone; the slot appears at a reveal, as tall as a voter's.
+    Until the progress step fills it while voting, the reveal moves the round
+    bar (Accepted costs).
+
+**Every width**
+
+12. **A link in the issue breaks only before a path slash or after a dot in
+    its host** (3b1 decision 4 extended); a piece wider than the line still
+    breaks anywhere (1.4.10).
+13. **The width cap is 106 rem** (`--page-max`), a 1080p monitor's page. The
+    page stops growing there, centred on the ground; the header's bar stays
+    full width, its content aligned with the page. It must stay above 65.75
+    rem.
+14. **The shared screen is the wide layout**, as principle 4's last row says.
 
 **What later steps inherit**
 
-14. **The shared screen is the wide layout.** A larger screen matches the
-    laptop target at about 125% (1080p) to 170% (4K at 100%) zoom, which stays
-    wide; zoom past that may degrade the layout but never breaks it. This
-    replaces principle 4's last row.
-15. **Constraints**: the progress (a later step) sits on the top line below
-    65.75 rem; step 5's Next issue follows decision 9; step 9's round history
-    sits at the phone layout's end, after the round bar, to confirm in its own
+15. **Constraints**: step 5 shortens Next issue's visible word to "Next" where
+    the round bar cannot hold it (about a 21 rem page), its name staying "Next
+    issue" (2.5.3), and rechecks Clear's words at 51.75 rem; the progress's
+    order in the DOM is the progress step's call; step 9's round history sits
+    at the phone layout's end, after the round bar, to confirm in its own
     design; a feature that needs the roster below 51.75 rem brings it back or
     uses the room the phone layout has.
 
 ## Disclosure
 
-The ☰ is a disclosure: a button with `aria-expanded` and the list after it in
-the DOM, not an ARIA menu. Its items are the role sentence, the switch and
-Leave.
+☰ is a disclosure: a button with `aria-expanded` and the row after it in the
+DOM, not an ARIA menu. The row is in the header's flow, so it covers nothing.
 
 | Event | Closed | Open |
 | --- | --- | --- |
 | Tap or Enter on ☰ | open, focus stays on ☰ | close, focus stays on ☰ |
-| Escape | nothing | close, focus to ☰ |
-| Tap outside the list and ☰ | nothing | close, focus where tapped |
-| Tab out of the list | cannot happen | stays open |
-| Switch | cannot happen | the role changes, close, focus to ☰ |
+| Escape, focus in the row or on ☰ | nothing | close, focus to ☰ |
+| Escape, focus elsewhere | nothing | stays open |
+| Tap or Tab elsewhere | nothing | stays open |
+| Switch | cannot happen | the role changes, stays open, focus stays on the switch |
 | Leave | cannot happen | the lobby, as today |
-| Role changed from another tab | the sentence follows | the sentence and switch follow, stays open |
+| Role changed from another tab | the row follows, hidden | the sentence and switch follow |
 | Banner, reconnect or phase change | nothing | stays open |
-| Width crosses 51.75 rem | ☰ shows or hides | hidden with ☰; open again if the width comes back |
+| Width crosses 51.75 rem | ☰ shows or hides | closes; the wide header shows the row's content |
 
-Accepted: the last cell keeps the open state while the wide header shows,
-which needs a resize across the threshold with the list open.
+Accepted: focus in the row falls to the page when the width crosses 51.75 rem,
+which needs a resize with the row open.
 
 ## Measured
 
-At 390 by 844, 14 voters, Chromium:
+Chromium, 14 voters, the mockup:
 
-- The sheet is 344 px voting (41%), the same revealed; 10 of 14 entries show
-  above it at load (8 at scale 1).
+- At 390 by 844 the sheet is 344 px (41%), voting and revealed; 10 of 14
+  entries show above it at load (8 at scale 1).
+- Phone viewports, from Playwright's device list: the sheet is 50 to 53% on
+  every iPhone (659 to 739 px tall), 48% at 392 by 743, 41 to 43% on Pixels
+  and a Galaxy S24; at 39 rem all of them pin.
 - The kept tag fits the 22 px above a deck's first row; it touched the
   top-right card by 1 px and its hover lift before the extra `--space-2`.
-- The header is 61 px; the chip with the longest room id fits beside ☰.
-- A Jira link takes 2 lines, not 3 broken inside its host.
-
-In the band, at 960 by 900 and 960 by 1600 (59 rem), all 14 entries show and
-the page does not scroll, with a three-way tie, Next issue and the progress
-drawn. At 1000 by 700 the table shows 7 of 14 and scrolls in its region.
+- The header is 61 px closed and 143 px open; the chip with the longest room
+  id fits beside ☰.
+- A Jira link takes 2 lines from 377 to 410 px, not 3 broken inside its host.
+- A one-row deck at 800 px is 84 px tall; its result needs about 190.
+- At 51.75 rem the round bar is 448 px: Clear's words leave 99 px today, 30
+  with Next issue and Re-vote as an icon; with Re-vote's words it wraps.
+- In the wide layout at 960 by 900 and 960 by 1600 (59 rem), all 14 entries
+  show and the page does not scroll, with a three-way tie, Next issue and the
+  progress drawn; at 1000 by 700 the table shows 7 of 14 and scrolls in its
+  region.
+- At a 16 px root, every window under about 975 px wide, 51.75 rem is about
+  843 px and 65.75 rem about 1067 px, a classic scrollbar included; a tall
+  window's root grows with its width, so 65.75 rem is about 1174 px at 1528 px
+  tall.
 
 ## Accepted costs
 
-- The band on a short window: the two-row slot takes the table's room, so it
-  scrolls in its region sooner (7 of 14 at 1000 by 700).
-- Until the progress step fills it, a reveal grows the facilitator's sheet
-  over the table; scrolled to the very end, the round bar moves down.
-- The kept tag sits on the top line, away from its card; the kept frame marks
-  which card.
-- The phone layout reaches 843 px windows, where it is a wide phone.
-- 120 or 140 rem would leave 1440p or 4K at 100% uncapped; 106 was chosen on
-  the user's screen and is one token to tune on feedback (about 140 rem is the
-  ergonomic edge of eye movement without turning the head).
+- The wide layout below 65.75 rem on a short window: the two-row slot takes
+  the table's room, so it scrolls in its region sooner (7 of 14 at 1000 by
+  700).
+- The facilitator's phone page, until the progress step fills its slot while
+  voting: a reveal grows the sheet over the table, and where the page ends on
+  screen the round bar moves down by the result's height. The parent's phase
+  line rule and step 4's check carry the exception. The facilitator's own Show
+  causes it, but for a second facilitator's.
+- The kept tag sits on the top line, away from its card.
+- The phone layout reaches 843 px windows, where its 7 and 6 sheet is about
+  280 px.
+- On an iPhone the pinned sheet takes about half the viewport; 5 entries show
+  at load at 392 by 743.
+- A banner arriving on a page scrolled down shows above the view (3b1's
+  accepted cost); a phone scrolls more, so it happens more.
+- Opening ☰'s row moves the page below it down by the row's height.
+
+## Parked
+
+- The issue at full width above the column and the sidebar, below 65.75 rem:
+  until users find two-line issues annoying.
+- A shortened issue on a phone (the Jira key, the full text kept).
 
 ## Contract
 
 No e2e case changes. Every case but one runs at the default viewport, in the
 wide layout. `slug.spec.js`'s phone case, at 390 by 844, waits for a visible
-Show votes, votes from the deck and dismisses a banner: the sheet keeps the
-first two in view and above the page, and the banner stays in the flow under
-the header. Step 4 runs it.
+Show votes, votes from the deck and dismisses a banner: the sheet pins (844 px
+is over 39 rem) and keeps the first two in view and above the page, and the
+banner stays in the flow under the closed header. Step 4 runs it.
 
 ## The docs' changes
 
-- **Parent**: principle 4's last row gives way to decision 14; step 3's
-  paragraph points here and says the deck leaves at a reveal at every width;
-  the phase line's "where one stays after a reveal (3b2)" goes.
-- **Reference**: L5, L10 and L11 leave Open for a section on the phone layout,
-  the band and the cap; the frozen deck's rules go (the "Revealed, where a deck
-  stays" row, J8's frozen deck); Open gains the issue at full width in the band
-  (dropped until users find two-line issues annoying) and a shortened issue
-  shown on a phone (the Jira key, the text kept); the log gains a 3b2 entry
-  with what was set aside, which the plan lists.
-- **Mockup**: `room.html` draws the three layouts and the cap; `tokens.css`
-  gains `--page-max`, the narrow entry scale and the sheet's focus padding.
+- **Parent**, with this document: principle 4's last row (decision 14);
+  principle 5's zoom bullet; the phase line's exception (Accepted costs) in
+  step 3's paragraph and step 4's checks; step 4's copy hint and zoom checks;
+  Appendix A's disabled deck; Appendix B's copy hint and phase line cases.
+- **3b1**: its Status line points here for decisions 2, 7 and 13.
+- **Tokens and gate**: `--page-max`, `--entry-scale-narrow`,
+  `--sheet-clearance` and `--deck-width`, which the gate allows `cqi` on. J2's
+  `vw` coefficient stays unbounded, as 3a2 left it to 3b2: these rules are in
+  rem and hold for any coefficient.
+- **Mockup**: `room.html` draws the two switches, the phone layout and the cap.
+- **Reference**: L5, L10 and L11 leave Open for a section on the two switches,
+  the phone layout and the cap; the frozen deck's rules go (the "Revealed,
+  where a deck stays" row, J8's frozen deck); J5 gains decision 10; the Tokens
+  section's exemption names the queries' values; Open gains Parked; the log
+  gains a 3b2 entry with what was set aside, the cap's reasons and the
+  three-way tie at 840 px behind decision 1, which the plan lists.
+- **Known issues**: "A reveal with votes still pushes the participants list
+  down" gains the facilitator's phone page.
 
 ## Branches and commits
 
