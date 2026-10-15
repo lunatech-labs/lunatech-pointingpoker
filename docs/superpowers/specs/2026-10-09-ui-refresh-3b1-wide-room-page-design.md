@@ -265,10 +265,11 @@ and each role keeps its scale through every phase.
   floor and 233 at the comfort target. Just above the breakpoint, a 1068 px
   window, it keeps 130 px at the floor, and with a banner its 80 px minimum.
 - Banners: one at the comfort target leaves 7 of 14 entries in view; at the
-  floor one leaves the table 148 px and two its 80 px minimum; the page never
-  scrolls. With two and a 240-character issue, either page scrolls 31 px at
-  the floor and 54 px at the breakpoint in both phases, and the round bar
-  stays put through the reveal.
+  floor one leaves the table 148 px and two its 80 px minimum, the round bar
+  then 2 px into the page's bottom margin; the page never scrolls. With two
+  and a 240-character issue, either page scrolls 31 px at the floor and 54 px
+  at the breakpoint in both phases, and the round bar stays put through the
+  reveal.
 - No reveal changes the scale, in all 60 sets of four phases: five viewports,
   both roles, with and without the later steps, three banner states.
 - A chart value is the smaller of `--text-2xl` and 66% of its column, so none
@@ -378,8 +379,8 @@ on the final layout.
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_3b1_wide_room_page`, stacked on 3a's
-`20260930.ui_refresh_3a_tokens`, in ten commits: the first version's three,
-then the designer's look in seven.
+`20260930.ui_refresh_3a_tokens`, in thirteen commits: the first version's
+three, then the designer's look in ten.
 
 1. `docs: specify the wide room page (ui refresh step 3b1)`: this document and
    its changes to the parent spec, `docs/known-issues.md` and
@@ -402,3 +403,9 @@ then the designer's look in seven.
    kept amber, the chosen card's red and 3a2's open token values.
 10. `docs: correct the room page's figures and wording (ui refresh step 3b1)`:
    the final review's minor findings.
+11. `docs: plan the room chip and issue panel fixes (ui refresh step 3b1)`: the
+   plan, after a comparison with the designer's draft.
+12. `docs: fix the room chip and the issue panel's margins (ui refresh step
+   3b1)`: the chip's size and the issue panel's margins, re-measured.
+13. `docs: fix the room page after the chip and issue panel review (ui refresh
+   step 3b1)`: the issue editor's margins and that review's findings.

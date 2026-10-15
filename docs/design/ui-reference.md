@@ -444,6 +444,14 @@ settled by 3b1 (J10).
   card's darker red against the designer's brighter one.
 - **Copy link's colour**: ink since 3b1's review wave (J4); the designer's red
   waits on the designer's final validation.
+- **The voters panel's room**: the entries scale to the largest that fits (3b1
+  decision 10), so they reach the panel's padding and the panel reads tighter
+  than the others; whether to leave them room waits on the designer's final
+  validation.
+- **The result's balance**: the result keeps the slot's height (3b1 decision
+  5), so "Most voted" centres with the leftover above it while the columns sit
+  on the padding, 29 px above against 14 below at the comfort target; it waits
+  on the designer's final validation.
 
 ## Decisions log
 

@@ -339,3 +339,22 @@ Run: `npm run test:unit && npm run typecheck && npm run lint`
 Expected: `Tests 531 passed (531)`, then no typecheck or lint output.
 
 Push nothing: the user sees the result first, then both branches are pushed together.
+
+---
+
+### Final review fixes
+
+The final review found no Critical or Important issue. The user settled its findings in chat on 2026-10-15:
+
+1. The round bar reaches 2 px into the page's bottom margin at the floor with two banners: accepted, and the spec says so.
+2. The issue editor keeps the issue panel's margins: its section takes `issue-panel` too.
+3. Measured to the ink, equal padding does not look equal: the issue's large heading needs the 18 px; the voters panel's tightness and the result's larger top come from 3b1 decisions 10 and 5, so they go to the reference's Open for the designer's final validation.
+4. Wording: the spec's commit list, the mockup's comment naming its tokens, and `--panel-gap`'s comment in 3a2's `tokens.css`.
+
+**On the 3b1 branch, one commit** `docs: fix the room page after the chip and issue panel review (ui refresh step 3b1)`:
+- `docs/design/room.html`: in the editor's `issueBlock`, `<section class="panel"><div class="issue-edit">` → `<section class="panel issue-panel"><div class="issue-edit">`; the comment `its 44 px controls and 8 px padding` → `its --target-min controls and --space-2 padding`.
+- The 3b1 spec's banners bullet gains `the round bar then 2 px into the page's bottom margin`; its commit list says thirteen commits and gains 11 to 13.
+- The reference's Open gains `The voters panel's room` and `The result's balance`.
+- Check: with `message=conflict`, the editor's panel padding goes from 14 px to 18 px top and bottom; `measure-3b1.mjs` still equals `measure-after.txt`; `npm run test:unit` gives 422.
+
+**On the 3a2 branch**, after it takes the 3b1 commit: `frontend/src/tokens.css`'s `--panel-gap` comment → `between panels, and a panel's block padding unless it sets its own`, in its own commit. The mockup's copy of that comment on the 3b1 branch stays, since 3a2 moves the block out and an edit there would conflict.

@@ -122,7 +122,7 @@
 
   /* H: the issue at heading size, its margin the panel's side margin all round */
   .issue-panel { padding-block: var(--panel-inline); }
-  /* One line matches the round bar's height: its 44 px controls and 8 px padding */
+  /* One line matches the round bar's height: its --target-min controls and --space-2 padding */
   .issue { display: flex; align-items: center; gap: var(--space-3); min-height: calc(var(--target-min) + 2 * var(--space-2) - 2 * var(--panel-inline)); }
   .issue h2 { flex: 1; min-width: 0; margin: 0; font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: var(--leading-tight); overflow-wrap: anywhere; }
   .issue h2 a { color: var(--ink); }
@@ -386,7 +386,7 @@ function draw() {
     ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${seg}</span>`).join('')}</a>` : issue
   const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
     : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
-  const issueBlock = editorMsg ? `<section class="panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
+  const issueBlock = editorMsg ? `<section class="panel issue-panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
     : `<section class="panel issue-panel"><div class="issue"><h2${issue ? '' : ' class="empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div></section>`
   const bannerList = messages.filter(m => banners[m]).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="messages" aria-label="Messages">${bannerList}</section>`
