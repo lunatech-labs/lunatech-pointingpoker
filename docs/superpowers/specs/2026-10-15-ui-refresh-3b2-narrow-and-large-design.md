@@ -203,6 +203,10 @@ Chromium, 14 voters, the mockup:
 - The issue at full width above the column and the sidebar, below 65.75 rem:
   until users find two-line issues annoying.
 - A shortened issue on a phone (the Jira key, the full text kept).
+- The phone layout's entries growing from 0.8 to the deck card where every
+  entry fits above the sheet, fitted to `svh` and not to the ☰ row: 1.42 at
+  600×1000 and 820×1180, 0.9 at 430×932, nothing at 392×743 (14 voters). After
+  step 4, with phone feedback.
 
 ## Contract
 
