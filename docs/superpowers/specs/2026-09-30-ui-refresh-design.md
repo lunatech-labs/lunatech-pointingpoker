@@ -303,7 +303,9 @@ element lists step 3's layouts give:
 - A longer issue, or a window below the floor, scrolls the page and cuts
   nothing: the table keeps its minimum and the slot can be scrolled to.
 - The entries keep their scale through a reveal and never grow past a deck
-  card's height; a room of 0 or 1 voters gets a scale too.
+  card's height; a room of 0 or 1 voters gets a scale too. On the
+  facilitator's page this holds from 65.75 rem; below it, until the progress
+  step, a reveal refits them (3b2's Accepted costs).
 - A reveal with no votes shows the result, "Nobody voted" in place of the most
   voted value, and the slot keeps its height.
 - Every action in the round bar is `aria-disabled` for 1 s after the phase

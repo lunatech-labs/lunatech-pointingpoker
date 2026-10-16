@@ -850,6 +850,9 @@ roadmap item instead of leaving it here as stale history.
   its slot appears at a reveal, growing the sheet over the table, and where
   the page ends on screen or the sheet flows, the round bar moves down by the
   result's height, until the progress step fills the slot while voting.
+  In the wide layout below 65.75 rem, the facilitator's table also refits
+  its entries smaller at a reveal, since the slot there is taller than the
+  room 3b1 holds for it.
   Remove this entry when the progress step lands.
 
 ### Only a real e2e failure exercises the artifact upload path

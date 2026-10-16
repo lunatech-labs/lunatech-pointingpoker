@@ -193,6 +193,11 @@ Chromium, 14 voters, the mockup:
   height. The parent's phase
   line rule and step 4's check carry the exception. The facilitator's own Show
   causes it, but for a second facilitator's.
+- The facilitator's table in the wide layout below 65.75 rem, until the
+  progress step fills the slot while voting: it holds 3b1's slot height for
+  the result, which is taller here, so a reveal refits its entries smaller
+  and a Re-vote back (1.42 to 1.10 at 1000 by 900, 1.24 to 1.16 at 1130 by
+  900). The phone layout holds no room for it (decision 11).
 - The kept tag sits on the top line, away from its card.
 - A 7 and 6 deck shorter than the floor, from 433 px wide, has up to about
   40 px of spare room in the slot while voting.
