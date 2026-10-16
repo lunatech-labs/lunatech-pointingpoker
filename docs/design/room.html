@@ -256,8 +256,8 @@
     .most { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: var(--space-1) var(--space-3); padding: 0 0 var(--space-2); border-right: 0; border-bottom: var(--line-hairline) solid var(--hairline-colour); }
     .most .sub { margin: 0; text-align: right; }
     .most .figure { grid-column: 1 / -1; grid-row: 2; font-size: var(--text-3xl); }
-    .columns { flex: 1; max-height: calc(var(--deck-card) + var(--chart-value) + var(--text-lg) * 1.5); }
-    .bar { height: auto; flex: 0 0 calc(var(--share) * (100% - var(--chart-value) - var(--text-lg) * 1.5)); }
+    .columns { flex: 1; max-height: calc(var(--deck-card) + var(--chart-value) + var(--text-lg) * var(--leading-body)); }
+    .bar { height: auto; flex: 0 0 calc(var(--share) * (100% - var(--chart-value) - var(--text-lg) * var(--leading-body))); }
     .value { font-size: min(var(--text-xl), var(--value-fit)); }
     .colm.empty .value, .count { font-size: min(var(--text-lg), var(--value-fit)); }
     /* The round bar: Clear apart, each action at most the action width, the secondary as its icon */
@@ -292,7 +292,7 @@
     .col, .side { display: contents; }
     .issue-panel { order: 1; }
     .people { order: 2; flex: none; overflow: visible; }
-    .people.reserve { min-height: var(--table-min); }   /* no room held for the facilitator's slot (decision 11) */
+    .people.reserve { min-height: var(--table-min); }   /* no room held for the facilitator's slot (3b2 decision 11) */
     .round { order: 3; }
     .controls { order: 4; }
     .history { order: 5; }
@@ -304,13 +304,13 @@
     .round { z-index: 1; box-shadow: 0 calc(-1 * var(--space-1)) var(--space-4) var(--shadow-colour); border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 0; }
     .controls { z-index: 1; margin-top: calc(-1 * var(--panel-gap)); border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
     .slot { --least: var(--result-least-narrow); margin-top: 0; }
-    .columns { gap: var(--space-1); min-height: calc(var(--chart-bar) + var(--chart-value) + var(--text-lg) * 1.5); }
+    .columns { gap: var(--space-1); min-height: calc(var(--chart-bar) + var(--chart-value) + var(--text-lg) * var(--leading-body)); }
     .colm.empty .value { padding-top: var(--space-1); }
-    /* Clear and Edit as their icons, their names kept (decision 10) */
+    /* Clear and Edit as their icons, their names kept (3b2 decision 10) */
     .controls [data-do="clear"], .issue .quiet { font-size: 0; gap: 0; min-width: var(--target-min); justify-content: center; }
-    .issue .seg:first-child { display: inline; }
+    .issue .seg:first-child { display: inline; }   /* the host breaks after its dots too (3b2 decision 12) */
   }
-  /* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (decision 7) */
+  /* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */
   @media (min-height: 39rem) {
     @container page (width < 51.75rem) {
       .round { position: sticky; bottom: calc(var(--target-min) + 2 * var(--space-2) + var(--line-hairline)); }
@@ -321,7 +321,7 @@
 
   /* 3b2: the width cap (decision 13) */
   .shell-in > :not(.header) { width: 100%; max-width: var(--page-max); margin-inline: auto; }
-  .header { padding-inline: max(var(--page-edge), (100% - var(--page-max)) / 2 + var(--page-edge)); }
+  @container page (width >= 51.75rem) { .header { padding-inline: max(var(--page-edge), (100% - var(--page-max)) / 2 + var(--page-edge)); } }
 </style>
 </head>
 <body>
@@ -331,8 +331,8 @@
 // voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, ended, restarted, moved, conflict, save-failed),
 // menu=1 (☰'s row open), room (the room id), facilitators (1 to 5).
 const q = new URLSearchParams(location.search)
-const phoneBelow = 51.75   // the structure switch (decision 1); container queries have no script API
-const isPhone = () => document.querySelector('.shell').clientWidth / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
+const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
+const isPhone = () => document.querySelector('.shell').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
 let menuShown = q.get('menu') === '1'
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
@@ -550,7 +550,7 @@ document.addEventListener('keydown', e => {
 })
 new ResizeObserver(() => { if (menuShown && !isPhone()) { menuShown = false; draw() } }).observe(document.getElementById('root'))
 // Firefox does not scroll to a focus already in the viewport, so a keyboard focus not wholly in view above the
-// pinned sheet scrolls to the top, which clears the sheet wherever it fits (decision 7)
+// pinned sheet scrolls to the top, which clears the sheet wherever it fits (3b2 decision 7)
 document.addEventListener('focusin', e => {
   const bar = document.querySelector('.controls'), sheetTop = (document.querySelector('.round') ?? bar).getBoundingClientRect().top
   const box = e.target.getBoundingClientRect()
