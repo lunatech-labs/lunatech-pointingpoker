@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Room mockup (ui refresh step 3b1)</title>
+<title>Room mockup (ui refresh steps 3b1 and 3b2)</title>
 <link rel="stylesheet" href="../../frontend/src/colours.css">
 <link rel="stylesheet" href="../../frontend/src/tokens.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,8 @@
   button { font: inherit; color: inherit; cursor: pointer; }
   svg { width: var(--icon); height: var(--icon); flex: none; }
   :focus-visible { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
-  .shell { height: var(--shell-height); display: flex; flex-direction: column; }
+  .shell { height: var(--shell-height); }
+  .shell-in { height: var(--shell-height); display: flex; flex-direction: column; }
   /* Parts later steps add, shown with later=1 */
   .later { outline: var(--line-mark) dashed var(--mute-soft); outline-offset: var(--focus-gap); border-radius: var(--radius-card); }
 
@@ -226,14 +227,112 @@
     .bar, .colm.top .bar, .progress i::after { forced-color-adjust: none; background: CanvasText; }
     .msg { border-left-color: CanvasText; }
   }
+
+  /* 3b2: the page and the round panel are the switches' containers; the phone layout's parts hide elsewhere */
+  .shell { container: page / inline-size; }
+  .round { container: deck / inline-size; }
+  .fac-line, .menu-btn, .menu, .top-progress { display: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
+  .btn svg { display: none; }
+
+  /* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+  @container page (width < 65.75rem) {
+    .header .app { display: none; }
+    /* The slot keeps one height through a reveal: its deck's rows, at least the result's least height */
+    .round { position: relative; }
+    .slot {
+      --cols: 5; --rows: 3; --least: var(--result-least); margin-top: var(--space-2);
+      height: max(var(--least), calc(var(--rows) * min(var(--deck-card), max(var(--target-min), (var(--deck-width) - (var(--cols) - 1) * var(--space-2)) / var(--cols)) * 7 / 5) + (var(--rows) + 1) * var(--space-2)));
+    }
+    @container deck (width >= 22.25rem) { .slot { --cols: 7; --rows: 2; } }
+    .deck { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, calc(var(--deck-card) * 5 / 7))); justify-content: center; gap: var(--space-2); width: 100%; padding-block: var(--space-2); margin-block: auto; }
+    .card-place { position: static; max-width: none; }
+    /* The kept tag leaves its card for the top line's right; the kept frame marks the card */
+    .tag { top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1)); left: auto; right: var(--panel-inline); transform: none; }
+    /* The voter's progress leaves the round bar for the top line's left (a later step's) */
+    .controls .progress { display: none; }
+    .top-progress { display: block; position: absolute; left: var(--panel-inline); top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1)); padding: 0; }
+    .chart { flex-direction: column; gap: var(--space-3); justify-content: space-between; }
+    .most { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: var(--space-1) var(--space-3); padding: 0 0 var(--space-2); border-right: 0; border-bottom: var(--line-hairline) solid var(--hairline-colour); }
+    .most .sub { margin: 0; text-align: right; }
+    .most .figure { grid-column: 1 / -1; grid-row: 2; font-size: var(--text-3xl); }
+    .columns { flex: 1; max-height: calc(var(--deck-card) + var(--chart-value) + var(--text-lg) * 1.5); }
+    .bar { height: auto; flex: 0 0 calc(var(--share) * (100% - var(--chart-value) - var(--text-lg) * 1.5)); }
+    .value { font-size: min(var(--text-xl), var(--value-fit)); }
+    .colm.empty .value, .count { font-size: min(var(--text-lg), var(--value-fit)); }
+    /* The round bar: Clear apart, each action at most the action width, the secondary as its icon */
+    .controls { gap: var(--space-2); }
+    .phase { flex: none; }
+    .controls [data-do="clear"] { margin-left: auto; }
+    .controls .btn { flex: 1 1 auto; min-width: 0; max-width: var(--action-width); padding-inline: var(--space-3); }
+    .controls .btn.secondary { flex: none; min-width: var(--target-min); padding-inline: var(--space-2); }
+    .controls .btn.secondary svg { display: block; }
+    .controls .btn.secondary .word { display: none; }
+  }
+
+  /* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+  @container page (width < 51.75rem) {
+    .shell-in { height: auto; min-height: var(--shell-height); }
+    /* The header: the mark, the room id with Copy link as its icon, and ☰ for the rest */
+    .header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: var(--space-3); row-gap: 0; height: auto; padding: var(--space-2) var(--space-3); }
+    .logo { grid-area: 1 / 1; }
+    .chip { grid-area: 1 / 2; min-width: 0; justify-self: start; }
+    .chip h1 { min-width: 0; overflow-wrap: anywhere; }
+    .chip a { white-space: nowrap; min-height: var(--space-6); }
+    .chip .word, .role, .leave, .copied:empty { display: none; }
+    .chip a::after { inset: calc((100% - var(--target-min)) / 2); }
+    /* "Link copied" takes the room id's place, so nothing moves */
+    .copied { grid-area: 1 / 2; align-self: center; padding-left: calc(var(--space-3) + var(--line-hairline)); font-weight: var(--weight-medium); color: var(--ink); pointer-events: none; }
+    .header.is-copied .chip h1 { visibility: hidden; }
+    .menu-btn { display: flex; grid-area: 1 / 3; justify-content: center; min-width: var(--target-min); }
+    .menu { display: flex; grid-row: 2; grid-column: 1 / -1; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: var(--space-4); margin-top: var(--space-2); padding: var(--space-2) 0 0; border: 0; border-top: var(--line-hairline) solid var(--hairline-colour); border-radius: 0; box-shadow: none; background: none; }
+    .menu-role { flex-basis: 100%; font-size: var(--text-sm); color: var(--grey); }
+    /* One column: the issue, the table, the sheet; the roster gives way to the facilitators' line */
+    .main { display: flex; flex-direction: column; padding-inline: var(--space-3); }
+    .col, .side { display: contents; }
+    .issue-panel { order: 1; }
+    .people { order: 2; flex: none; overflow: visible; }
+    .round { order: 3; }
+    .controls { order: 4; }
+    .history { order: 5; }
+    .roster { display: none; }
+    .fac-line { display: block; margin: 0; font-size: var(--text-sm); color: var(--grey); text-align: center; }
+    .entries { --s: var(--entry-scale-narrow); }
+    .name { font-size: var(--text-xs); }
+    /* The sheet: the round panel and the round bar as one, its shadow over the table */
+    .round { z-index: 1; box-shadow: 0 calc(-1 * var(--space-1)) var(--space-4) var(--shadow-colour); border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-bottom: 0; }
+    .controls { z-index: 1; margin-top: calc(-1 * var(--panel-gap)); border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+    .slot { --least: var(--result-least-narrow); margin-top: 0; }
+    .columns { gap: var(--space-1); min-height: calc(var(--chart-bar) + var(--chart-value) + var(--text-lg) * 1.5); }
+    .colm.empty .value { padding-top: var(--space-1); }
+    /* Clear and Edit as their icons, their names kept (decision 10) */
+    .controls [data-do="clear"], .issue .quiet { font-size: 0; gap: 0; min-width: var(--target-min); justify-content: center; }
+    .issue .seg:first-child { display: inline; }
+  }
+  /* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (decision 7) */
+  @media (min-height: 39rem) {
+    @container page (width < 51.75rem) {
+      .round { position: sticky; bottom: calc(var(--target-min) + 2 * var(--space-2) + var(--line-hairline)); }
+      .controls { position: sticky; bottom: 0; }
+      .header :is(a, button), .issue-panel :is(a, button, input), .people { scroll-margin-bottom: var(--sheet-clearance); }
+    }
+  }
+
+  /* 3b2: the width cap (decision 13) */
+  .shell-in > :not(.header) { width: 100%; max-width: var(--page-max); margin-inline: auto; }
+  .header { padding-inline: max(var(--page-edge), (100% - var(--page-max)) / 2 + var(--page-edge)); }
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
-// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, ended, restarted, moved, conflict, save-failed).
+// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, ended, restarted, moved, conflict, save-failed),
+// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5).
 const q = new URLSearchParams(location.search)
+const phoneBelow = 51.75   // the structure switch (decision 1); container queries have no script API
+const isPhone = () => document.querySelector('.shell').clientWidth / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
+let menuShown = q.get('menu') === '1'
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
 const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
@@ -248,7 +347,7 @@ if (phase === 'revealed-revote') phase = 'revealed'
 const fig = v => v === '0.5' ? '<span>0<span class="pt">.</span>5</span>' : v
 const deck = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
 const names = [q.get('name0') || 'Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
-const facilitators = ['Peggy', 'Victor']
+const facilitators = ['Peggy', 'Victor', 'Walter', 'Trent', 'Sybil'].slice(0, Math.max(1, Number(q.get('facilitators') || 2)))
 // me: the own row, a voter kept in the room when voters cuts the list short, or a facilitator
 const asked = q.get('me')
 const me = voter ? (names.slice(0, voterCount).includes(asked || 'Ivan') ? asked || 'Ivan' : names[0]) : facilitators.includes(asked) ? asked : facilitators[0]
@@ -312,17 +411,21 @@ function draw() {
     : tied.length <= 3 ? `<span class="label">Most voted</span><span class="figure list">${tied.join(' · ')}</span><span class="sub">Tied, ${each}</span>`
     : `<span class="label">Most voted</span><span class="figure">Tie</span><span class="sub">${tied.length} values, ${each}</span>`
   const voted = people.filter(p => p.state === 'confirmed').length
+  // The phone's facilitators' line names two, then the rest as a count
+  const facNames = facilitators.length > 2 ? `${facilitators.slice(0, 2).join(', ')} and ${facilitators.length - 2} more` : facilitators.join(', ')
 
   // The mark: the Lunatech glyph (traced from lunatech.com's logo, as in v1) on the card back; brand=pip is the fallback
   const logo = q.get('brand') === 'pip' ? '<span class="logo pip" aria-hidden="true"></span>'
     : `<span class="logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
-  const header = `<header class="header">${logo}<span class="app">Pointing Poker</span>
-    <span class="chip"><h1>brave-golden-otter</h1><a href="#" data-copy>${link}Copy link</a></span>
+  const header = `<header class="header${copied ? ' is-copied' : ''}">${logo}<span class="app">Pointing Poker</span>
+    <span class="chip"><h1>${q.get('room') || 'brave-golden-otter'}</h1><a href="#" data-copy aria-label="Copy link">${link}<span class="word">Copy link</span></a></span>
     <span class="copied" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
-    <a class="leave" href="#">${exit}Leave</a></header>`
+    <a class="leave" href="#">${exit}Leave</a>
+    <button class="menu-btn quiet" type="button" aria-expanded="${menuShown}" aria-label="Menu">${icon('M4 7h16M4 12h16M4 17h16')}</button>
+    ${menuShown ? `<div class="menu panel"><span class="menu-role">You are a ${role}.</span><button class="quiet" type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button><a class="quiet" href="#">${exit}Leave</a></div>` : ''}</header>`
   const issueHtml = /^https?:\/\//.test(issue)
-    ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${seg}</span>`).join('')}</a>` : issue
+    ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${i ? seg : seg.replace(/\./g, '.<wbr>')}</span>`).join('')}</a>` : issue
   const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
     : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
   const issueBlock = editorMsg ? `<section class="panel issue-panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
@@ -336,10 +439,11 @@ function draw() {
   // M: Clear · toggle · Next issue, right-aligned; the toggle is the primary until Next issue exists (step 5)
   const guard = settling ? ' aria-disabled="true"' : ''
   const nextLeads = later && revealed
-  const toggle = `<button class="btn ${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? 'Re-vote' : 'Show votes'}</button>`
-  const next = nextLeads ? `<button class="btn primary later" type="button"${guard}>Next issue</button>` : ''
+  const toggle = `<button class="btn ${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? icon('M4 4v6h6M4.6 15a8 8 0 1 0 1.9-8.3L4 10') : icon('M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z')}<span class="word">${revealed ? 'Re-vote' : 'Show votes'}</span></button>`
+  const next = nextLeads ? `<button class="btn primary later" type="button"${guard}>${icon('M5 12h14M13 6l6 6-6 6')}<span class="word">Next issue</span></button>` : ''
   const actions = `${small}<button class="quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
 
+  const topProgress = later && voter && !revealed ? `<span class="progress top-progress later">${voted} of ${people.length} voted</span>` : ''
   const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards"><span id="kept-note" hidden>Previous vote, not confirmed</span>${deck.map(v => {
     const mine = own?.value === v && own.state !== 'none'
     const kept = mine && own.state === 'kept' ? ' aria-describedby="kept-note"' : ''
@@ -353,7 +457,7 @@ function draw() {
   const bigProgress = `<div class="big-progress later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
   // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
   let slot = ''
-  if (voter) slot = revealed ? chart : deckBlock
+  if (voter) slot = revealed ? chart : topProgress + deckBlock
   else if (revealed) slot = chart
   else if (later) slot = bigProgress
   const controls = `<section class="panel controls" aria-label="Round">${phaseLine}${actions}</section>`
@@ -369,7 +473,7 @@ function draw() {
     return `<li data-testid="participant">${face}<span class="name">${self ? `<b>${p.name}</b> <span class="you">(you)</span>` : p.name}</span></li>`
   }
   const table = `<section class="panel people${!voter && !later && phase !== 'revealed' ? ' reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="people-top"><h2 class="label">Voters · ${people.length}</h2></div>
-    <ul class="entries">${people.map(entry).join('')}</ul></section>`
+    <ul class="entries">${people.map(entry).join('')}</ul><p class="fac-line">Facilitators: ${facNames}</p></section>`
 
   const right = p => revealed
     ? p.value ? `<span class="val">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="val none">–</span>'
@@ -383,9 +487,11 @@ function draw() {
     <ul>${facilitators.map(n => row(n, '<span class="fac">Facilitator</span>', false, ' data-testid="facilitator"')).join('')}</ul></aside>`
 
   const keep = [...document.querySelectorAll('.controls button')].indexOf(document.activeElement)
-  document.getElementById('root').innerHTML = `<div class="shell">${header}${bannerBlock}<main class="main"><div class="col">${issueBlock}${
-    layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="side">${later ? historyPanel : ''}${roster}</div></main></div>`
+  const onMenu = document.activeElement?.classList.contains('menu-btn')
+  document.getElementById('root').innerHTML = `<div class="shell"><div class="shell-in">${header}${bannerBlock}<main class="main"><div class="col">${issueBlock}${
+    layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="side">${later ? historyPanel : ''}${roster}</div></main></div></div>`
   if (keep >= 0) document.querySelectorAll('.controls button')[keep]?.focus()   // focus stays on its place
+  if (onMenu) document.querySelector('.menu-btn').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.people'))
 }
@@ -393,6 +499,8 @@ function draw() {
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
 function fitEntries() {
   const list = document.querySelector('.entries'), box = document.querySelector('.people')
+  // The phone layout's fixed scale applies only once the wide fit's inline values are gone
+  if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; return }
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
   // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
@@ -429,8 +537,15 @@ document.addEventListener('click', e => {
   if (act === 'clear') { ownChoice = null; moveTo('cleared') }
   if (vote && phase !== 'revealed') { ownChoice = vote; draw() }
   if (e.target.closest('[data-copy]')) { copied = true; draw(); setTimeout(() => { copied = false; draw() }, 2000) }
+  if (e.target.closest('.menu-btn')) { menuShown = !menuShown; draw() }
   if (e.target.closest('a')) e.preventDefault()
 })
+// ☰'s row closes on Escape from ☰ or the row, focus back on ☰; crossing 51.75 rem closes it
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !menuShown || !e.target.closest?.('.menu, .menu-btn')) return
+  menuShown = false; draw(); document.querySelector('.menu-btn').focus()
+})
+new ResizeObserver(() => { if (menuShown && !isPhone()) { menuShown = false; draw() } }).observe(document.getElementById('root'))
 draw()
 
 if (q.get('probe') === '1') {
