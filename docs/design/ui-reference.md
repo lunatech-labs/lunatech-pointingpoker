@@ -43,14 +43,16 @@ the decisions log at the end.
   4 leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
-- `room.html`, the wide room page (J10). Its parameters, listed at the top of
-  its script: `role`, `phase` (`voting`, `revote`, `revealed`,
-  `revealed-revote`), `later`, `layout` (f, the default, or g), `votes`
-  (`sample`, `tie3`, `tie4`, `0`), `voters`, `issue` (empty draws "No issue
-  yet"), `me`, `name0`, `brand`, `message` (today's banners and the editor's
-  messages) and `probe` (the root and the width in `rem`).
-- `room-cells.html`, its layout cells side by side at 1280 px wide, each with
-  a link that opens it alone at the window's size.
+- `room.html`, the room page at every width (J10, J11). Its parameters,
+  listed at the top of its script: `role`, `phase` (`voting`, `revote`,
+  `revealed`, `revealed-revote`), `later`, `layout` (f, the default, or g),
+  `votes` (`sample`, `tie3`, `tie4`, `0`), `voters`, `issue` (empty draws "No
+  issue yet"), `me`, `name0`, `brand`, `message` (today's banners and the
+  editor's messages), `menu` (☰'s row open), `room` (the room id),
+  `facilitators` (1 to 5) and `probe` (the root and the width in `rem`).
+- `room-cells.html`, its layout cells side by side at a chosen width (1280,
+  1000, 800 or 392 px) and height, each with a link that opens it alone at
+  the window's size.
 
 ## Brand source
 
@@ -107,8 +109,8 @@ lunatech.com's stylesheet, read 2026-10-06:
   height, and the width instead on windows less than 1.28 times as wide as
   tall. The contrast gate (J8) passes only the shape `clamp(<min>rem,
   min(<a>vh, <c>vw) + <b>rem, <max>rem)` and checks it against the three
-  rules below; the `vw` term can only lower the root, so no rule bounds `c`
-  before 3b2. Its limits are in `rem`, so the reader's default font size
+  rules below; the `vw` term can only lower the root, so no rule bounds `c`,
+  and 3b2's rules hold for any `c`. Its limits are in `rem`, so the reader's default font size
   counts.
 - The root sits at its minimum up to the laptop sizes (J1's floor, comfort
   target and hand
@@ -117,12 +119,13 @@ lunatech.com's stylesheet, read 2026-10-06:
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
 - Every other size is in `rem`, but the label tracking and the tight point
-  in "0.5", in `em` so that they follow their own text, and a chart value's
-  fit, in `cqi` so that it follows its column; the gate allows each unit on
+  in "0.5", in `em` so that they follow their own text, a chart value's
+  fit, in `cqi` so that it follows its column, and the deck's width, so that
+  the compact slot follows its deck; the gate allows each unit on
   its tokens only. No viewport unit appears outside the root but the app
   shell's height: exactly `100dvh` in the wide layout, its content overflowing
   it once the table is at its least height, and at least `100dvh` in the
-  narrow layout.
+  phone layout (J11).
 - `px` only for the hairline token and inside a pixel floor. Every other line
   (the Lines tokens but the hairline: control lines, J3's marks, the kept
   frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
@@ -154,7 +157,6 @@ shape or fill from afar, and words explain the rest up close.
 | Not chosen | plain |
 | Chosen, confirmed | solid fill |
 | Chosen, kept | the kept frame around the figure, and a "not confirmed" tag |
-| Revealed, where a deck stays (3b2) | all disabled, the phase line says why; the chosen one keeps its look, fill or kept frame, faded to the grey (J8) |
 
 - Three looks answer the room's two questions at a glance: who has chosen
   again, and whether enough estimates exist for a reveal to mean something.
@@ -170,11 +172,12 @@ shape or fill from afar, and words explain the rest up close.
   Outline, kept frame and fill read as no fill, some, full: no estimate, kept,
   confirmed.
 - A card's size is 3b's, with a token 3b adds: a kept card shows its widest
-  figure inside the band with room around it (L5).
+  figure inside the band with room around it (J11).
 - The card's tag is `aria-hidden`: its hidden description, "Previous vote,
   not confirmed", already says it. It sits outside the button, in the card's
   wrapper beside that description, so the button's text stays the figure
-  (see "Contract reads").
+  (see "Contract reads"). In the compact foot it sits on the top line, away
+  from its card, and the kept frame marks the card (J11).
 - 3b checks the kept frame on screenshots shrunk to a 480 by 270 video tile,
   and from a few metres away, on the smallest entry mark too (L3). If it fails
   there, 3b sends the band back to 3a (Tokens).
@@ -235,10 +238,13 @@ A button shows only in the phases where it does something.
 - **The round bar's guard**: every action in the round bar ignores presses
   for 1 s after any phase change, defined in 3b1 decision 6.
 - An action is **destructive** when it discards votes nobody has seen: Clear
-  while voting. It is marked by its words, its quiet look and its distance
-  from the phase's other actions, never by colour
+  while voting. It is marked by its words (its icon in the phone layout), its
+  quiet look and its distance from the phase's other actions, never by colour
   or a confirmation (Appendix A, avoid 6). Step 4 keeps Clear quiet in every
   phase.
+- In the phone layout Clear and Edit are their icons alone, their names kept;
+  Clear is marked by its icon, its quiet look and its distance (3b2 decision
+  10).
 - Next issue's flow, an assumption for the mockups only: the editor opens empty
   and focused, saving starts the new round, cancelling changes nothing.
 - What step 5 decides is listed in its section of the UI refresh design.
@@ -298,13 +304,6 @@ stack and their Dismiss are 3b3's.
   (2.4.12).
 - Under `prefers-contrast: more`, the hairline colour turns `--mute-soft`, an
   indicator at 3:1, and the control line takes the mark line's weight.
-- Where a deck stays after a reveal (3b2's layouts; the wide room page has
-  none), the frozen deck keeps every figure at 7:1, under every simulation too, though
-  WCAG exempts disabled controls. Its figures and the chosen card's fill or
-  frame fade to `--grey`, whatever the card back, and the unchosen cards' edges
-  may use the hairline's width and colour tokens, which 1.4.11 allows on a
-  disabled control; the phase line says why it is frozen. Nothing fades under
-  forced colours.
 - **The contrast gate**, a Vitest test in `test:unit`, checks each text and
   indicator colour at its floor on every ground it can sit on, under normal
   vision and the colour-blind simulations (Machado 2009, full severity): a gate
@@ -347,13 +346,40 @@ and the roster's sidebar), the entries as cards at a fitted scale, the deck's
 cards shrinking with the column down to the touch target, and the result as
 the deck's 13 values in columns, in the deck's place after a reveal.
 
+### J11. Narrow and large screens
+
+Step 3b2's spec holds its rules,
+`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`,
+and `room.html` draws them.
+
+- **Two switches**, both container queries on the page's width: 51.75 rem
+  switches the structure, the wide layout (J10) at and above it and the phone
+  layout below, and 65.75 rem switches the foot.
+- **The compact foot**, below 65.75 rem in either layout, wraps the deck in
+  balanced rows (5, 5 and 3, then 7 and 6 from a 22.25 rem deck), keeps the
+  slot at one height through a reveal with the result stacked in it, puts the
+  kept tag and the voter's progress on the line above the deck, and keeps the
+  round bar on one row.
+- **The phone layout** is one column, the issue, the table at its own scale,
+  then the slot and the round bar as one sheet, pinned to the viewport's
+  bottom where the viewport is at least 39 rem tall, its header one row with
+  ☰ for the role switch and Leave, and one line naming the facilitators in
+  the roster's place.
+- **The cap** stops the page at 106 rem, centred, the header's bar full width
+  and its content aligned with the page.
+- The room page keeps its scrollbar's gutter, so the two layouts never
+  alternate as a scrollbar comes and goes (3b1 decision 2). Media queries in
+  `rem` resolve against the reader's default size, not the fluid root; a
+  container query reads the root.
+
 ## Tokens
 
 The value source (Terms) holds every token's value and purpose; this section
 keeps the kinds and the rules, and no value is written twice. Every colour,
 size, font and duration in a component's CSS comes from a token (principle 6
 for colours), except CSS keywords such as system colours and `currentColor`,
-and L11's values in media and container queries, which cannot read a token.
+and the switches' values in container and media queries (J11), which cannot
+read a token.
 
 | Kind | Tokens |
 | --- | --- |
@@ -364,7 +390,7 @@ and L11's values in media and container queries, which cannot read a token.
 | Spacing | one scale |
 | Shape | the radii (J9); the least target size; the shadows' lengths (J9) |
 | Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
-| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10) |
+| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11) |
 | Motion | the one duration (J9) |
 
 - Nothing imports the value source before step 4; 3b's mockups link both
@@ -430,9 +456,8 @@ The layout questions 3b decides, on mockups of each layout cell, in the four
 steps the UI refresh design's step 3 groups them into.
 
 L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
-settled by 3b1 (J10).
+settled by 3b1 (J10), and L5, L10 and L11 for the room page by 3b2 (J11).
 
-- **L5. How the deck reflows** on narrow screens and phones (3b2).
 - **L7. The issue editor** and its messages; the read view is 3b1's heading
   (3b3).
 - **L8. The banners**: on the room page, full width under the header, each
@@ -440,13 +465,6 @@ settled by 3b1 (J10).
   (3b3). A banner arriving on a scrolled page stays above the view, by the
   browser's scroll anchoring (3b1 decision 3).
 - **L9. The lobby** (3b4).
-- **L10. The monitor's width cap**, and how the shared-screen elements stay in
-  view where the page may scroll (principle 4's table).
-- **L11.** The layout below 3b1's 65.75 rem breakpoint is 3b2's, the lobby's
-  breakpoint 3b4's. The room page keeps its scrollbar's gutter, so the two
-  layouts never alternate as a scrollbar comes and goes (3b1 decision 2).
-  Media queries in `rem` resolve against the reader's default size, not the
-  fluid root; a container query reads the root.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -460,6 +478,14 @@ settled by 3b1 (J10).
   5), so "Most voted" centres with the leftover above it while the columns sit
   on the padding, 29 px above against 14 below at the comfort target; it waits
   on the designer's final validation.
+
+**Parked** by 3b2, each until its condition:
+
+- The issue at full width above the column and the sidebar, below 65.75 rem:
+  until users find two-line issues annoying.
+- A shortened issue on a phone (the Jira key, the full text kept).
+- The phone layout's entries growing from 0.8 to the deck card where every
+  entry fits above the sheet: after step 4, with phone feedback.
 
 ## Decisions log
 
@@ -737,6 +763,21 @@ The reasons behind each rule, and what was set aside.
   the pip and the track; checking the simulations on shapes only, or
   exempting the button's white, either of which keeps #A31B26 by weakening
   the gate.
+- **3b2.** The narrow and large room page came with its own spec,
+  `docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`.
+  Two switches, not three layouts, since the compact foot serves the wide
+  layout below 65.75 rem as well as the phone layout. The cap at 106 rem is a
+  1080p monitor's page, checked by hand: it caps 1440p, the user's screen and
+  4K, for less eye travel. 51.75 rem is where the full header holds the
+  longest room id with "Link copied", and a three-way tie, Next issue and the
+  progress still fit the round bar (36 px bars at 840 px). Set aside: the
+  roster's rows for the table, and both lists, on a phone; two header rows
+  with every word, and an overlay menu; a flowing deck, low keys and the deck
+  first; a frozen deck after a reveal, and a shrinking or centred slot; every
+  round action as an icon, and a round menu; the round bar at the page's end;
+  a single column from 46.75 rem; pinning at 47 rem tall; `scroll-padding` on
+  `html`; Clear as an icon in the wide layout; no cap, and 120 or 140 rem;
+  hiding "https://".
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

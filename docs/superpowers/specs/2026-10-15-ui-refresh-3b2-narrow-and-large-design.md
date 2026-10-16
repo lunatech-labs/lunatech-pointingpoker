@@ -120,7 +120,9 @@ never gate a merge.
 15. **Constraints**: step 5 shortens Next issue's visible word to "Next" where
     the round bar cannot hold it (about a 21 rem page), its name staying "Next
     issue" (2.5.3), and rechecks Clear's words at 51.75 rem; the progress's
-    order in the DOM is the progress step's call; step 9's round history sits
+    order in the DOM is the progress step's call; its place on the top line
+    must clear a lifted card in the first row, which the drawn progress does
+    not (a lift is `--space-2`); step 9's round history sits
     at the phone layout's end, after the round bar, to confirm in its own
     design; a feature that needs the roster below 51.75 rem brings it back or
     uses the room the phone layout has.

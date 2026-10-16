@@ -314,6 +314,8 @@ element lists step 3's layouts give:
 - The facilitator's page, zoomed to 150%, keeps the issue in view, and in each
   phase its progress or its result; at 200% it scrolls only vertically
   (principle 4).
+- Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
+  width gives, the table's scale and ☰'s row included (3b2).
 - The phase line keeps its place and its height through a reveal, a reopening
   and a vote, and sits where step 3 places it, with step 3's exception.
 - The copy hint moves nothing and covers nothing, but the room id it replaces
