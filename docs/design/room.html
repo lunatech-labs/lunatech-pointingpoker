@@ -546,6 +546,13 @@ document.addEventListener('keydown', e => {
   menuShown = false; draw(); document.querySelector('.menu-btn').focus()
 })
 new ResizeObserver(() => { if (menuShown && !isPhone()) { menuShown = false; draw() } }).observe(document.getElementById('root'))
+// Firefox does not scroll to a focus already in the viewport, so a keyboard focus not wholly in view above the
+// pinned sheet scrolls to the top, which clears the sheet wherever it fits (decision 7)
+document.addEventListener('focusin', e => {
+  const bar = document.querySelector('.controls'), sheetTop = (document.querySelector('.round') ?? bar).getBoundingClientRect().top
+  const box = e.target.getBoundingClientRect()
+  if (e.target.matches(':focus-visible') && getComputedStyle(bar).position === 'sticky' && !e.target.closest('.round, .controls') && (box.top < 0 || box.bottom > sheetTop)) e.target.scrollIntoView({ block: 'start' })
+})
 draw()
 
 if (q.get('probe') === '1') {

@@ -300,8 +300,8 @@ stack and their Dismiss are 3b3's.
   (AAA), an area at least a 2 px perimeter with 3:1 between the focused and
   unfocused pixels, and 1.4.11, 3:1 against what touches it. On the
   forced-colours opt-outs (J3), it is `CanvasText`.
-- Focus is never hidden behind a banner or the scrolled participant area
-  (2.4.12).
+- Focus is never hidden behind a banner, the scrolled participant area or
+  the phone's pinned sheet (2.4.12, J11).
 - Under `prefers-contrast: more`, the hairline colour turns `--mute-soft`, an
   indicator at 3:1, and the control line takes the mark line's weight.
 - **The contrast gate**, a Vitest test in `test:unit`, checks each text and
@@ -364,7 +364,9 @@ and `room.html` draws them.
   then the slot and the round bar as one sheet, pinned to the viewport's
   bottom where the viewport is at least 39 rem tall, its header one row with
   ☰ for the role switch and Leave, and one line naming the facilitators in
-  the roster's place.
+  the roster's place; keyboard focus outside the sheet keeps clear of it, by
+  scroll margins and, for Firefox, a scroll to the top of what the sheet
+  covers.
 - **The cap** stops the page at 106 rem, centred, the header's bar full width
   and its content aligned with the page.
 - The room page keeps its scrollbar's gutter, so the two layouts never
