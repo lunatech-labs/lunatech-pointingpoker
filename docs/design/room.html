@@ -505,8 +505,10 @@ function fitEntries() {
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
   // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
   const reserve = !voter && !later && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
-  const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (box.children.length - 1)
-  const used = () => [...box.children].reduce((h, c) => h + c.getBoundingClientRect().height, pad)
+  // Only the drawn children count: the facilitators' line is hidden outside the phone layout
+  const shown = [...box.children].filter(c => c.getClientRects().length)
+  const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
+  const used = () => shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad)
   const room = Math.floor(box.clientHeight - reserve)
   const fits = v => { list.style.setProperty('--s', v); list.style.maxWidth = ''; return used() <= room }
   let lo = 1, hi = token('--deck-card') / token('--entry-mark')
