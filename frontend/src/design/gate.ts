@@ -130,10 +130,10 @@ export const unreached = (runs: Record<Run, Tokens>): string[] => {
 // '' allows bare parentheses and a number with no unit.
 const allowedFunctions = new Set(['', 'calc', 'min', 'max', 'clamp', 'var'])
 const allowedUnits = new Set(['', 'rem', 'ms', 'px'])
-// J2: the viewport appears only in the root and the shell's height; em and cqi follow their text and column.
+// J2: the viewport appears only in the root and the shell's height; em follows its text, cqi its column or deck.
 const unitOnlyOn = new Map<string, readonly string[]>([
   ['em', ['--tracking-label', '--tight-point']],
-  ['cqi', ['--value-fit']],
+  ['cqi', ['--value-fit', '--deck-width']],
   ['vh', ['--root-size']],
   ['vw', ['--root-size']],
   ['dvh', ['--shell-height']]

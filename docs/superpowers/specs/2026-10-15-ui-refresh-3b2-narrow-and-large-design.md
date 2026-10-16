@@ -53,7 +53,7 @@ never gate a merge.
    deck's height from its columns and card width, a card at least
    `--target-min` (`calc()` on `--deck-width`, a token whose value is
    `100cqi`), its gaps and one extra `--space-2` above it, and at least the
-   result's least height (`--result-least`), a `max()` of the two. A deck
+   result's least height (`--result-least`, `--result-least-narrow` in the phone layout), a `max()` of the two. A deck
    shorter than that floor sits centred in the slot while voting. That top line holds the voter's progress at its left (a later step's,
    text only; 3b1 decision 11 had it in the round bar) and the kept tag
    at its right, clear of a lifted card: the tag leaves its card (3b1 decision
@@ -224,7 +224,7 @@ banner stays in the flow under the closed header. Step 4 runs it.
   Appendix A's disabled deck; Appendix B's copy hint and phase line cases.
 - **3b1**: its Status line points here for decisions 2, 4, 7, 11 and 13.
 - **Tokens and gate**: `--page-max`, `--entry-scale-narrow`,
-  `--sheet-clearance`, `--result-least` and `--deck-width`, which the gate allows `cqi` on. J2's
+  `--sheet-clearance`, `--result-least`, `--result-least-narrow` and `--deck-width`, which the gate allows `cqi` on. J2's
   `vw` coefficient stays unbounded, as 3a2 left it to 3b2: these rules are in
   rem and hold for any coefficient.
 - **Mockup**: `room.html` draws the two switches, the phone layout and the cap.
