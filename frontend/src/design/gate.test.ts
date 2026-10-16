@@ -152,8 +152,8 @@ describe('what tokens.css may hold', () => {
     expect(problems(fine)).toEqual([])
   })
 
-  it('allows ms, no unit, em on the label tracking and the tight point, cqi on the value fit, dvh on the shell', () => {
-    const fine = '--tracking-label: 0.06em; --tight-point: -0.08em; --value-fit: 66cqi; --b: 180ms; --c: 1.5;'
+  it('allows ms, no unit, em on the label tracking and the tight point, cqi on the value fit and the deck width, dvh on the shell', () => {
+    const fine = '--tracking-label: 0.06em; --tight-point: -0.08em; --value-fit: 66cqi; --deck-width: 100cqi; --b: 180ms; --c: 1.5;'
     expect(problems(`${fine} --d: var(--text-2xl); --shell-height: 100dvh;`)).toEqual([])
   })
 
