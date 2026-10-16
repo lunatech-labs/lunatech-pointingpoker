@@ -68,10 +68,12 @@ step 4 builds the page, and step 1a's editor region contract stays (parent,
    differently once edited: a textarea cannot take the heading's breaks before
    a slash and after a dot (3b1 decision 4, 3b2 decision 12).
    - **One line only.** `oneLine`, a pure function in `room/issueEditor.ts`,
-     takes every text entering the draft, typed, pasted or seeded by Edit: line
-     breaks at either end are removed, an inner run becomes one space, typed
-     spaces are never trimmed. The editor's states and events are otherwise
-     unchanged.
+     takes every text entering the draft: typed or pasted, seeded by Edit, and
+     seeded by Use theirs. Line breaks at either end are removed, an inner run
+     becomes one space, typed spaces are never trimmed. Only the draft is
+     normalised: `start` keeps the room's issue, so an issue holding a line
+     break (the server stores it raw) raises no conflict notice. The editor's
+     states and events are otherwise unchanged.
    - **Keys.** Enter saves and never inserts a line break, Escape cancels, and
      an input method's Enter is not a save (today's keys). The field sets
      `enterkeyhint="done"`.
@@ -82,23 +84,31 @@ step 4 builds the page, and step 1a's editor region contract stays (parent,
    The names "Edit issue", "Save issue" and "Cancel editing" stay, the visible
    words being "Save" and "Cancel" (WCAG 2.5.3). The DOM and tab order are Save
    then Cancel at every width, so the screen order never differs from the
-   reading order (WCAG 2.4.3).
+   reading order (WCAG 2.4.3). In the wide layout the buttons align to the
+   field's first line while it grows.
 9. **When the editing view closes** (Escape, Cancel, a save that succeeded),
-   focus returns to Edit, if it was inside the editor panel or had already
-   dropped, as the existing `editor.failed` effect tests; focus the user moved
-   elsewhere is left alone.
-10. **While saving**, Save and Cancel are `aria-disabled` and keep focus, a
-    guard in `submit` and `cancel` ignoring presses, with a muted look so a
-    save in flight shows; the field is read-only. This is the short spec the
-    known issue "A screen reader does not hear a failed save from the Save
-    issue button" asked for; step 4 builds it.
+   focus returns to Edit, if it was inside the editor panel or had dropped (on
+   the body or nowhere); focus the user moved elsewhere is left alone.
+10. **While saving**, Save and Cancel are `aria-disabled` and keep focus, with
+    a muted look so a save in flight shows; the field is read-only. The
+    existing guards in `submit` and `step` already ignore presses outside
+    editing, and `timed` ends a hung save in `failed`, so no timer is added.
+    The `editor.failed` effect narrows to what it was for, a focus that fell:
+    after a failure the field takes focus only if focus is on the body or
+    nowhere; focus on Save or Cancel stays, so the failure is read, and Enter
+    or Space on Save retries. This is the short spec the known issue "A screen
+    reader does not hear a failed save from the Save issue button" asked for;
+    step 4 builds it.
 11. **The editor's two messages are message panels inside the editor panel**,
     under the field, without the banners' shadow, in J6's tones. The editor
     region is one element, rendered in the read and the editing views alike
-    (1a's contract), and only its panels sit under the field. When both show,
+    (1a's contract), and only its panels sit under the field. The order is the
+    field, then Save and Cancel, then the panels, on screen and in the DOM at
+    every width, so the tab order is the screen order. When both panels show,
     the problem is above the notice, as for the banners; 1a's code had the
-    notice first, by no rule. A long "Changed by someone else to: …" quote wraps
-    and is never cut (3b1 decision 4).
+    notice first, by no rule. The panels' icons add no text (`aria-hidden`).
+    A long "Changed by someone else to: …" quote wraps and is never cut (3b1
+    decision 4).
 
 ## States and events
 
@@ -106,14 +116,16 @@ The banner region. Rows are events, columns what shows.
 
 | Event | Problem: none | Problem: lost | Notice: absent | Notice: shown | Notice: dismissed |
 | --- | --- | --- | --- | --- | --- |
-| The connection drops | lost | same | n/a | n/a | n/a |
+| `connection.ts` sets lost (a drop, a stale stream reopened, a refused frame or command) | lost | same | n/a | n/a | n/a |
 | The stream opens, or a snapshot arrives | same | none | n/a | n/a | n/a |
-| A page load (the restart reload, the legacy redirect, Leave) | starts over: none | starts over: none | shown if the URL carries its flag | starts over | starts over |
+| A page load (the restart reload, the legacy redirect, Leave, the user's reload, a page restored from cache) | starts over: none | starts over: none | shown if the URL carries its flag, which the page then strips | starts over | starts over |
 | Dismiss pressed | n/a | cannot happen (none offered) | n/a | dismissed, focus by decision 5 | cannot happen (unmounted) |
-| Any other event | same | same | same | same | same |
+| Any other event (a heartbeat included) | same | same | same | same | same |
 
-A drop that ends with the app answering after the room was reached is a page
-load: `connection.ts` reloads onto `?restarted=1`. The editor's messages need no
+The notice columns stand for each notice on its own. A drop the browser
+recovers from in place is no page load; one it stops retrying, or a refused
+command, answered by a 200 once the room was reached is: `connection.ts`
+reloads onto `?restarted=1`. The editor's messages need no
 table of their own: the editor's states and events are step 8b's (the frontend
 rewrite spec's "Issue editor behaviour", `frontend/src/room/issueEditor.ts`),
 and 3b3 draws what `notice` and `failed` render (decision 11).
@@ -131,7 +143,11 @@ nothing.
 - A paste with a line break in the middle of the draft moves the caret to the
   end and loses native undo.
 - A swallowed Gboard Enter (known issues, "The issue editor's phone keyboard
-  behaviour is unverified") now becomes a stray space, where it did nothing.
+  behaviour is unverified") at the end of the draft does nothing, as today;
+  inside the text it becomes a space and the caret moves to the end.
+- The muted saving look flashes on a fast save; no delay is added.
+- If the conflict ends while focus is on "Use theirs" (someone else edits the
+  issue again), the button unmounts and focus drops to the page.
 - On a phone, the virtual keyboard and the pinned sheet may leave the editing
   view little room (inferred, held in known issues, never a merge gate).
 - Focus after Dismiss lands on the page's `h1`, which a screen reader reads as
@@ -146,11 +162,17 @@ contract changes, as principle 9 asks:
 
 - "the editor's notices are announced from one live region" (`room.spec.js`)
   changes one expected string: the failure before the conflict (decision 11).
+- "a save the network drops keeps the draft and says so" (`room.spec.js`) no
+  longer expects the field focused after a click on Save, where focus stays
+  (decision 10); step 1a's accepted cost for the mouse save goes with it.
 - New cases: focus on the page's `h1` after Dismiss (decision 5), focus on Edit
   after the editing view closes (decision 9), Enter saving and never inserting
-  a line break, `aria-disabled` and focus kept while saving (decision 10).
+  a line break, `aria-disabled` and focus kept while saving (decision 10;
+  Playwright treats `aria-disabled` as disabled, so a press mid-save needs
+  `force` or `dispatchEvent`).
 - A unit table for `oneLine` (decision 7): each end, an inner run, a CRLF run,
-  and a trailing space left alone.
+  and a trailing space left alone; and for `step`, Edit on an issue holding a
+  line break shows no notice.
 - The Messages section is found by role and name, as 3b1's contract already
   says; the moved and restart lookups by role and text stay.
 
@@ -168,8 +190,9 @@ contract changes, as principle 9 asks:
   them; L9 gains the lobby's three messages; the log gains a 3b3 entry.
 - **Known issues**: "A screen reader does not hear a failed save from the Save
   issue button" is decided here and built in step 4; the phone keyboard entry
-  gains decision 7's Enter sentence; a phone risk for the keyboard and the
-  pinned sheet is added.
+  gains decision 7's Enter sentence and the planned narrowing of the Enter
+  guard (a `beforeinput` of `insertLineBreak`, inferred, never a merge gate);
+  a phone risk for the keyboard and the pinned sheet is added.
 
 ## Branches and commits
 
