@@ -53,9 +53,11 @@ never gate a merge.
    deck's height from its columns and card width, a card at least
    `--target-min` (`calc()` on `--deck-width`, a token whose value is
    `100cqi`), its gaps and one extra `--space-2` above it, and at least the
-   result's least height (`--result-least`, `--result-least-narrow` in the phone layout), a `max()` of the two. A deck
-   shorter than that floor sits centred in the slot while voting. That top line holds the voter's progress at its left (a later step's,
-   text only; 3b1 decision 11 had it in the round bar) and the kept tag
+   result's least height (`--result-least`, `--result-least-narrow` in the
+   phone layout), a `max()` of the two. A deck shorter than that floor sits
+   centred in the slot while voting. That top line holds the voter's progress
+   at its left (a later step's, text only; 3b1 decision 11 had it in the
+   round bar) and the kept tag
    at its right, clear of a lifted card: the tag leaves its card (3b1 decision
    13), and the kept frame marks which card.
 5. **The result in the compact slot**: "Most voted" on two rows (the label and
@@ -164,7 +166,8 @@ Chromium, 14 voters, the mockup:
 - The kept tag fits the 22 px above a deck's first row; it touched the
   top-right card by 1 px and its hover lift before the extra `--space-2`.
 - The header is 61 px closed and 143 px open; the chip with the longest room
-  id fits beside ☰.
+  id fits beside ☰ from a 380 px phone, and below it takes two lines (63 px),
+  moving nothing when "Link copied" shows.
 - A Jira link takes 2 lines from 377 to 410 px, not 3 broken inside its host.
 - A one-row deck at 800 px is 84 px tall; its result needs about 190. A 7 and
   6 deck of 44 px cards, at 433 px, is 147 px tall; the result's least height
@@ -233,7 +236,7 @@ banner stays in the flow under the closed header. Step 4 runs it.
   principle 5's zoom bullet; the phase line's exception (Accepted costs) in
   step 3's paragraph and step 4's checks; step 4's copy hint and zoom checks;
   Appendix A's disabled deck; Appendix B's copy hint and phase line cases.
-- **3b1**: its Status line points here for decisions 2, 4, 7, 11 and 13.
+- **3b1**: its Status line points here for decisions 2, 7, 11 and 13.
 - **Tokens and gate**: `--page-max`, `--entry-scale-narrow`,
   `--sheet-clearance`, `--result-least`, `--result-least-narrow` and `--deck-width`, which the gate allows `cqi` on. J2's
   `vw` coefficient stays unbounded, as 3a2 left it to 3b2: these rules are in

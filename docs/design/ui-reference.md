@@ -110,8 +110,8 @@ lunatech.com's stylesheet, read 2026-10-06:
   tall. The contrast gate (J8) passes only the shape `clamp(<min>rem,
   min(<a>vh, <c>vw) + <b>rem, <max>rem)` and checks it against the three
   rules below; the `vw` term can only lower the root, so no rule bounds `c`,
-  and 3b2's rules hold for any `c`. Its limits are in `rem`, so the reader's default font size
-  counts.
+  and 3b2's rules hold for any `c`. Its limits are in `rem`, so the reader's
+  default font size counts.
 - The root sits at its minimum up to the laptop sizes (J1's floor, comfort
   target and hand
   checks below 800 px tall), so browser zoom there is exactly linear.
@@ -344,7 +344,8 @@ breakpoint for this page, in the designer's look: four areas (the header, the
 banners, the column with the issue, the table, the slot and the round bar,
 and the roster's sidebar), the entries as cards at a fitted scale, the deck's
 cards shrinking with the column down to the touch target, and the result as
-the deck's 13 values in columns, in the deck's place after a reveal.
+the deck's 13 values in columns, in the deck's place after a reveal. J11
+moves its breakpoint to 51.75 rem and gives it a compact foot below 65.75 rem.
 
 ### J11. Narrow and large screens
 
@@ -356,7 +357,8 @@ and `room.html` draws them.
   switches the structure, the wide layout (J10) at and above it and the phone
   layout below, and 65.75 rem switches the foot.
 - **The compact foot**, below 65.75 rem in either layout, wraps the deck in
-  balanced rows (5, 5 and 3, then 7 and 6 from a 22.25 rem deck), keeps the
+  balanced rows (5, 5 and 3, then 7 and 6 from a 22.25 rem deck), each card
+  between `--target-min` and `--deck-card`, keeps the
   slot at one height through a reveal with the result stacked in it, puts the
   kept tag and the voter's progress on the line above the deck, and keeps the
   round bar on one row.
@@ -368,7 +370,10 @@ and `room.html` draws them.
   scroll margins and, for Firefox, a scroll to the top of what the sheet
   covers.
 - **The cap** stops the page at 106 rem, centred, the header's bar full width
-  and its content aligned with the page.
+  and its content aligned with the page; in the phone layout the header
+  shares the column's edges.
+- **The shared screen** is the wide layout, as principle 4's last row says
+  (3b2 decision 14).
 - The room page keeps its scrollbar's gutter, so the two layouts never
   alternate as a scrollbar comes and goes (3b1 decision 2). Media queries in
   `rem` resolve against the reader's default size, not the fluid root; a
