@@ -59,6 +59,8 @@
   --header-height: 3.5rem; /* the header bar */
   --brand-height: 1.875rem; /* the header mark */
   --sidebar: 18.125rem; /* the participants sidebar */
+  --page-max: 106rem; /* the page's width cap, a 1080p monitor's page, above the 65.75 rem switch (3b2 decision 13) */
+  --sheet-clearance: 24rem; /* focus's clearance above the phone's pinned sheet, at most 23.75 rem tall (3b2 decision 7) */
   --icon: 1.125rem; /* an icon beside its words */
   --avatar: 1.375rem; /* a roster avatar */
   --row-height: 1.75rem; /* a roster or history row */
@@ -68,8 +70,12 @@
   --deck-card: 5.5rem; /* a deck card's greatest height, 5:7 */
   --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
   --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */
+  --entry-scale-narrow: 0.8; /* the entries' scale in the phone layout (3b2 decision 9) */
   --table-min: 5rem; /* the table's least height: its title and a strip of cards */
   --slot-height: 7.5rem; /* the slot: deck, progress or result */
+  --deck-width: 100cqi; /* the deck's width, which the compact slot's height reads (3b2 decision 4) */
+  --result-least: 11.5rem; /* the compact slot's least height in the wide layout; its result needs about 10 rem */
+  --result-least-narrow: 13rem; /* the compact slot's least height in the phone layout; its result needs 11.75 rem */
   --chart-value: 2.25rem; /* the chart's value row */
   --value-fit: 66cqi; /* a chart value's largest size in its column: the widest, a tight "0.5" in Inter bold, is 1.46em, with a margin */
   --chart-bar: 2rem; /* the chart's tallest bar */
