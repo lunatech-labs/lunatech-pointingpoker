@@ -84,9 +84,13 @@ never gate a merge.
    feedback tunes the 39. The tallest sheet is 23.75 rem, at a 430 px page,
    so `scroll-margin-bottom: var(--sheet-clearance)` (24 rem) on the
    focusable elements outside the sheet, where it pins, keeps focus clear of
-   it (2.4.11, 2.4.12). `scroll-padding` on `html` would scroll the page as
-   focus moves through the sheet in Chromium, and would reach the wide
-   layout.
+   it (2.4.11, 2.4.12). Firefox does not scroll to a focus already in the
+   viewport, margin or not, so a keyboard focus (`:focus-visible`) not wholly
+   in view above the pinned sheet scrolls to the top (`scrollIntoView`),
+   which clears the sheet wherever it fits; a tap scrolls nothing.
+   `scroll-padding` on `html` would scroll the page as focus moves through
+   the sheet in Chromium, would reach the wide layout, and fails in Firefox
+   alike.
 8. **The header is one row**: the mark, the chip with Copy link as its icon
    alone (its name "Copy link"), and ☰ (its name "Menu"), each a 44 by 44
    target. ☰ shows or hides a second row in the header's flow, the wide
