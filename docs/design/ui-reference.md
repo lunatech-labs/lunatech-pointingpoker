@@ -396,10 +396,13 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   issue", which grows to fit (by `field-sizing: content`, with a script fit in
   Firefox ESR 140, which lacks it). Enter saves and never inserts a line break;
   `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
-  beside the field in the wide layout and below it in the phone layout, in the
-  DOM order field, Save, Cancel, messages at every width. When the editing view
-  closes (Escape, Cancel, a save that succeeded), focus returns to Edit if it was
-  inside the panel or had dropped; focus the user moved elsewhere is left alone.
+  beside the field at and above 65.75 rem and below it under 65.75 rem, in both
+  layouts (J11's compact switch), in the DOM order field, Save, Cancel,
+  messages at every width. In the band between 51.75 and 65.75 rem a panel
+  with a narrow arrangement uses it unless measured otherwise. When the
+  editing view closes (Escape, Cancel, a save that succeeded), focus returns to
+  Edit if it was inside the panel or had dropped; focus the user moved elsewhere
+  is left alone.
 - **While saving**, Save and Cancel are `aria-disabled`, keep focus and look
   muted; the field is read-only. After a failure the field takes focus only if
   focus fell to the page.
@@ -825,10 +828,11 @@ The reasons behind each rule, and what was set aside.
   arrival tracked; the editor's messages follow it too, the problem above the
   notice, where step 1a's code had the notice first by no rule. The field is a
   wrapping textarea so the whole issue stays visible, with Enter saving and a
-  `oneLine` draft; Save and Cancel are beside it where Edit was and below it
-  on a phone, where 360 to 430 px left the field 178 to 248 px beside them.
-  Saving keeps focus on the buttons (`aria-disabled`), which closes the Save
-  button's screen reader issue. Set aside: Dismiss on problems, and an
+  `oneLine` draft; Save and Cancel are beside it at and above 65.75 rem, where
+  Edit was, and below it under, where 360 to 430 px left the field 178 to 248
+  px beside them, as did the band's 232 px at 51.75 rem. Saving keeps focus on
+  the buttons (`aria-disabled`), which closes the Save button's screen reader
+  issue. Set aside: Dismiss on problems, and an
   always-rendered Messages section, which nothing today needs; the next
   banner's Dismiss as the focus target, dead outside a typed URL; a one-line
   input and a two-line capped field; the buttons below the field at every
