@@ -261,8 +261,8 @@ the questions that divide its height go together:
   view being 3b1's heading; the banners' stacking, Dismiss and mounting
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`);
 - 3b4, the lobby: L9 and the lobby's messages, the join and create failures and
-  "Your session has ended", which show only over the lobby, and the lobby's
-  breakpoint
+  "Your session has ended", which show only over the lobby, and its
+  arrangement at every width
   (`docs/superpowers/specs/2026-10-19-ui-refresh-3b4-lobby-design.md`).
 
 Each step works on the pages the steps before it drew. One that finds an
