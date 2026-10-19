@@ -3,7 +3,9 @@
 Date: 2026-10-09
 Status: In discussion; step 3b2 reopens decisions 2, 7, 11 and 13 below its widths
 and extends decision 4
-(`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`)
+(`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`);
+step 3b3 settles the banners' and the editor's deferred decisions
+(`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`)
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 3
 
 ## Purpose
