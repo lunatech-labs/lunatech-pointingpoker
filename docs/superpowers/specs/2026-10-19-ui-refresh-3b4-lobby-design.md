@@ -13,7 +13,7 @@ on. It takes the lobby's messages, which 3b3 left to it
 decision 1), and the banner mechanics 3b3 settled (its decisions 2 to 6). The
 product owner judges it on `docs/design/lobby.html`, then the specialist, who
 judges all four 3b steps. It changes no app code: step 4 builds the pages. It
-adds two tokens to the value source, as 3b may.
+changes the value source, as 3b may: one token added, one removed.
 
 The designer's Figma drew a landing and an invite page. It was a conversation
 opener made before the designer had used the app, so it informs the look and
@@ -24,20 +24,23 @@ binds nothing.
 - **Lobby**: `Lobby.tsx`'s page, in the two forms below. The lobby has no phase.
 - **Root form**: at `/`, with the Create and Join tabs. No stream ever opens
   here: Join and Create load a new page.
-- **Pinned form**: on a room's own path, with no tabs and the room fixed. A
-  browser holding a remembered name and a default role joins it at once on
-  load (2c), but the lobby shows until the first snapshot, so that user sees
-  it briefly, name prefilled, and stays on it whenever the join fails, the
-  stream is lost or the session ends. Only this form has a stream, so only it
-  can be lost or ended.
+- **Pinned form**: on a room's own path, with no tabs and the room fixed. The
+  only form with a stream, so the only one that can be lost or ended. A stored
+  name and default role join it at once on load (2c), but the lobby shows until
+  the first snapshot.
 - **Not-a-room page**: the server's 404 for a name outside the slug vocabulary
   (`PageRoutes.notARoom`), with a suggestion when one name is nearest. It is
   server HTML, not the React app.
-- **Header bar**: the room page's, holding the brand lockup.
+- **Header bar**: the room page's ground, hairline, height and brand lockup.
+  The lobby has no breakpoint, so the room header's narrow-width changes do not
+  apply.
 - **Brand lockup**: the room header's mark and "Pointing Poker", in Inter bold.
 - **Room row**: a box holding a square in `--card-back`, a room id in monospace
-  and, as a link, a second line and an arrow. The pinned form's badge is the
-  same row without the second line and the arrow.
+  and, as a link, a second line and an arrow. As a link the whole row is the
+  link, and its name is its content in visible order, `<id> <line 2>`, with no
+  `aria-label`. The square is plain (the mark is only in the lockup), a shape
+  without text; the arrow is ink. The pinned form's badge is the same row
+  without the second line and the arrow.
 - **Banner**, **problem**, **notice**: 3b's.
 
 ## Decisions
@@ -55,13 +58,12 @@ binds nothing.
 3. **One column at every width, labels above their fields, no breakpoint.**
    The column is `--lobby-width`, a new token in the value source, 24rem until
    the mockup is judged, and `min(--lobby-width, 100% - 2 × --page-edge)` on a
-   narrow screen. `--page-max` does not apply. A banner pushes the panel down,
-   as the room page's banners push the page. At 24rem the longest valid name,
-   26 characters, fits on one line in a room row and in the not-a-room page's
-   typed name.
+   narrow screen. `--page-max` does not apply. At 24rem the longest valid name,
+   26 characters, fits on one line in the suggestion's row; at phone width an
+   id wraps at its hyphens and is never cut, in a row and in the badge.
 4. **No hero panel and no marketing copy.** The people at `/` already know the
    app, the form is the point, and a hero would add a breakpoint and copy to
-   keep. The page is dressed by the regions, the lockup and the palette.
+   keep.
 
 **The headings and rows**
 
@@ -72,24 +74,22 @@ binds nothing.
    field goes.
 6. **The tabs are links named Create and Join**, hidden on a pinned link. The
    active one is marked `aria-current="true"` (they switch a view on one page,
-   so not `"page"`), and states differ by shape, never by red against ink:
-   links stay ink and underlined (J4, J8).
+   so not `"page"`), and states differ by shape, never by red against ink (J4,
+   J8).
 7. **The default-role row is restyled radios in a row.** It stays a group named
    "Your default role" with radios Voter and Facilitator, described by the
-   existing help line word for word. The help line sits against the radios it
-   explains, with a larger gap after it than between the other rows, before the
-   primary button. Set aside: a segmented bar, where a filled cell reads as the
-   room's action, like the button.
-8. **The rejoin link is a room row, above the tabs and on both**, at `/` only,
-   the whole row the link. Line 1 is the room id, or "your last room" for a
-   legacy id; line 2 is "Rejoin as <name>", and without a name just "Rejoin".
-   Its name is derived from this content, so what is seen is what is read:
-   `<id> Rejoin as <name>`. The mark is in the brand lockup only, so the
-   square is plain; one shape serves the link and the badge. The arrow is ink.
+   existing help line word for word. The help line stays against the radios,
+   with the larger gap after it. Set aside: a segmented bar, where a filled
+   cell reads as the room's action, like the button.
+8. **The rejoin link is a room row, above the tabs and on both**, at `/` only.
+   Line 1 is the room id, or "your last room" for a legacy id; line 2 is
+   "Rejoin as <name>", and without a name just "Rejoin", so its name is
+   `<id> Rejoin as <name>`. Line 2 is underlined, J4's cue; a link drawn as a
+   button (9, 14) is not, its shape being the cue.
 9. **One burgundy-filled control per page**: the primary. On a form it is the
-   primary button; the square is `--card-back`, a shape without text. Where
-   the room row is the page's primary, as on the not-a-room page, its arrow is
-   a small burgundy chip with a white arrow, the page's one such control.
+   primary button. Where the room row is the page's primary, as on the
+   not-a-room page, its arrow is a small burgundy chip with a white arrow, the
+   page's one such control.
 
 **The messages**
 
@@ -105,27 +105,28 @@ binds nothing.
     decision 10's look (the saving look, extended to the fields and the
     radios, with no new token). An inert control's edge is exempt from J8's 3:1
     (WCAG 1.4.11 exempts inactive components); its text stays at the 7:1 floor.
-    `disabled` is native, so focus falls to the page: nothing can be retried,
-    the only way out being a reload. Set aside: removing the form, which reads
-    as a page that did not load. The message text is unchanged.
+    `disabled` is native, so focus falls to the page; the only way out is a
+    reload (Accepted costs). Set aside: removing the form, which reads as a
+    page that did not load. The message text is unchanged.
 
 **The not-a-room page**
 
 12. **It is drawn in the lobby's regions**: the header bar, then a panel in the
-    same column. Its `h1` is the sentence, with the typed name on its own line
-    in monospace and "is not a room name." below it, so the name wraps
-    anywhere inside its line and is never cut. `<code>x</code> is not a room
-    name.` stays in the markup.
-13. **A suggestion is the lobby's own widget.** "Did you mean" is a label, then
-    the room row: the suggested name, and "Join as <name>" below, the whole
-    row a link to `/<suggestion>`. The name comes from the browser's stored
-    name, filled in by a few lines of inline script; with none, or without the
-    script, the line reads "Join". A returning user joins at once on arrival
-    (2c), so "Join as <name>" is true. The row is the page's primary (9).
+    same column. Its `h1` is the sentence, the typed name a `<bdi>` in
+    monospace that wraps anywhere and is never cut, so a pasted bidi character
+    cannot reorder it. `<code>x</code> is not a room name.` stays in the
+    markup.
+13. **A suggestion is the lobby's own widget.** "Did you mean" is plain text,
+    then the room row: the suggested name, and "Join as <name>" below, the
+    whole row a link to `/<suggestion>`. The name is the browser's stored name,
+    which the pinned form prefills, set by a few lines of inline script with
+    `textContent`; an empty stored name counts as none. With none, or without
+    the script, the line reads "Join". The row is the page's primary (9).
 14. **The secondary action is "Join a different room"**, not "Create a room",
     since the user came to join. With a suggestion it is an outlined button;
-    with none it is the burgundy primary and the page's only action. It leads
-    to `/`, ideally open on the Join tab (Accepted costs).
+    with none it is the burgundy primary (9) and the page's only action. It
+    leads to `/` open on the Join tab, by a URL flag read at load that step 4
+    builds, such as `?tab=join`.
 
 ## States and events
 
@@ -136,9 +137,10 @@ The root form:
 
 | Event | None | Failed |
 | --- | --- | --- |
-| Join with an empty room id (`doJoin`) | failed | same |
+| Join with an empty room id (`doJoin`) | failed | the join text replaces it |
 | Join with an id, or a successful Create | page load | page load |
 | Create fails (`doCreate`) | failed, with the create text | the create text replaces it |
+| Create pressed during a create | a second room is created, as today (known issues) | same |
 | A tab switch | same | same: the failure stays across it |
 | A page load | starts over | starts over |
 
@@ -149,10 +151,11 @@ that awaits its first snapshot.
 | --- | --- | --- | --- | --- |
 | A join answered "failed" (`joinHere`) | failed | same | cannot happen (a join after a stream is ignored) | cannot happen |
 | A join answered "joined" | none | none | cannot happen | cannot happen |
-| Join pressed while a stream exists (`join` answers "ignored") | nothing happens | cannot happen (no stream) | nothing happens | cannot happen (disabled) |
-| The stream errors before the first snapshot (an errored stream, a stale reopen, a refused first frame) | lost | cannot happen (a failed join opens no stream) | same | ended wins |
+| Join pressed while a stream exists (`join` answers "ignored") | nothing happens; the name is stored, not sent | cannot happen (no stream) | same | cannot happen (disabled) |
+| The stream errors before the first snapshot (an errored stream, a stale reopen, a refused first frame) | lost | cannot happen (a failed join opens no stream) | same | cannot happen (the stream is stopped) |
+| The stream opens or reopens (`onopen`) | none | cannot happen | none: the banner clears and the panel moves up | cannot happen |
 | The first snapshot arrives | the room | cannot happen | the room | cannot happen |
-| A closed stream, the app answers 200, the room never reached (`check`) | ended | cannot happen | ended | same |
+| A closed stream, the app answers 200, the room never reached (`check`) | lost, then ended (a close sets lost first) | cannot happen | ended | cannot happen (the stream is stopped) |
 | A page load | starts over | starts over | starts over | starts over |
 | Any other event | same | same | same | same |
 
@@ -160,8 +163,7 @@ A page load starts over: no message, except the notices a URL carries (3b3's
 table). A failure stays until a join answers "joined" or the page loads, as
 today, so retyping does not clear it.
 
-The not-a-room page has no states: it shows a suggestion or not, and its
-widget's second line reads "Join as <name>" or "Join".
+The not-a-room page has no states: it shows a suggestion or not (13).
 
 Accepted race: Dismiss pressed during the auto-join puts focus on the `h1`,
 which drops when the room mounts; it needs one human within a round trip.
@@ -171,26 +173,22 @@ which drops when the room mounts; it needs one human within a round trip.
 - A failure that repeats unchanged is not announced twice by a screen reader,
   because the message text does not change (inferred, a known issue; the fix is
   app code).
-- Join stays live between a join's answer and the first snapshot, and a click
-  does nothing. On a slow connection there is no sign of progress; a
-  "Joining…" look is left open.
+- Join stays live from a press until the first snapshot, and a click does
+  nothing. On a slow connection there is no sign of progress; a "Joining…"
+  look is left open.
 - On "session ended" the one retry is the user's reload, which stops a loop the
   page cannot tell from a transient failure (`check`'s comment). A Reload
   button in the message would do it in one click; it adds an action to a
   problem, which J6's messages do not have, so it waits on its own decision.
 - A full URL pasted into the Join field gets the not-a-room page, since
   `doJoin` only trims; accepting one is a behaviour change, left open.
-- "Join a different room" should open the lobby on its Join tab, and the
-  lobby opens on Create at `/`. The tab needs a flag read at load, such as a
-  hash, which is app code for step 4; carrying the typed name into the Join
-  field is a further option, open.
+- The rejoin link follows the typed name, but the next page joins with the
+  stored one: with Alice stored and Bob typed it reads "Rejoin as Bob" and
+  joins as Alice, as today.
 - The not-a-room page is server HTML, so building it means getting the styles
-  into a page the server writes, and a script into a page that has none; both
-  are open for step 4, including whether a content-security policy allows an
-  inline script.
-- The room id in the room row is a legacy UUID for a room remembered from
-  before the cutover, so the row says "your last room" and shows no id.
-- The rejoin link's text follows the name field as you type, as today.
+  into a page the server writes, and a script into a page that has none. No
+  content-security-policy header is set today; step 4 confirms an inline script
+  still runs.
 
 ## Contract
 
@@ -203,41 +201,48 @@ contract changes, as principle 9 asks:
 - The rejoin link's name becomes `<id> Rejoin as <name>`, so the lookups in
   `lobby.spec.js` and `slug.spec.js` change. Step 1c may re-frame them first
   as a link whose name contains the room id, or "your last room", so that each
-  passes on today's page and on the new one.
+  passes on today's page and on the new one. Lookups by `name: 'Join'` match
+  substrings, so step 4 confirms they stay unique beside the row or use
+  `exact`.
 - The pinned form's read-only "Room id" field goes; no case reads it there.
-- The not-a-room page: `APISpec.scala`'s two assertions on `Did you mean <a
-  href="/x">x</a>?` change, since "Did you mean" becomes a label above a row.
-  `<code>x</code> is not a room name.` stays, as `slug.spec.js` and `APISpec`
-  read it.
+- The not-a-room page: `APISpec.scala` changes its assertion on `Did you mean
+  <a href="/x">x</a>?`, since "Did you mean" becomes plain text above a row,
+  and its assertion on `<a href="/">Create a room</a>`, renamed "Join a
+  different room". `<code>x</code> is not a room name.` stays, as
+  `slug.spec.js` and `APISpec` read it, and "Did you mean" stays absent without
+  a suggestion.
 - New cases: focus on the lobby's `h1` after Dismiss (3b3 decision 5), the
-  `h1` naming the active form, and the suggestion row reading "Join as <name>"
-  with a stored name.
+  `h1` naming the active form, the suggestion row reading "Join as <name>"
+  with a stored name, and "Join a different room" opening `/` on the Join tab.
 - The Create, Join and role controls keep their roles and names; the role group
   and its description are unchanged.
 
 ## The docs' changes
 
-- **Parent** and **3b3**: pointers to this spec, done with the spec.
-- **Parent**: step 3's 3b4 line drops "the lobby's breakpoint" for its
-  arrangement at every width.
-- **Value source**: `--lobby-width` in `tokens.css` and `--card-back`'s purpose
-  comment in `colours.css`, with the reasons in the reference's log; the
-  gate's checks follow.
+- **Parent** and **3b3**: pointers to this spec, and the parent's 3b4 line
+  naming the lobby's arrangement at every width, done with the spec.
+- **Value source**: `--lobby-width` added to `tokens.css`, `--font-serif`
+  removed from it (J7 draws no serif, so nothing uses it), and `--card-back`'s
+  purpose comment in `colours.css`, with the reasons in the reference's log;
+  the gate's checks follow.
 - **Mockup**: `docs/design/lobby.html`, on the same tokens, with parameters for
   the page (the root form, the pinned form or the not-a-room page), the tab,
   the name empty or prefilled, a remembered room (slug, legacy or none), each
   message (the ended message implying the inert look), the typed name and the
-  suggestion, and `rejoin=chip`, the outlined-chip variant of the row's arrow,
-  the plain arrow the default; `docs/design/lobby-cells.html` beside it, as
-  `room-cells.html` is.
+  suggestion, the longest id at phone width, and `rejoin=chip`, the
+  outlined-chip variant of the row's arrow, the plain arrow the default;
+  `docs/design/lobby-cells.html` beside it, as `room-cells.html` is.
 - **Reference**: L9 leaves Open for a section, J13, on the lobby and the
-  not-a-room page; J7's pointer to L9 becomes J13 and says the brand lockup is
-  Inter, with no serif; the Mockups list gains the lobby's two files; the log
-  gains a 3b4 entry. Open gains the Reload button, the "Joining…" look, the
-  pasted URL, the outlined-chip variant, the Join-tab flag and the server
-  page's build, and a decorative element with no text.
+  not-a-room page, including the underline rule (8) and the wrapping (3); J7's
+  pointer to L9 becomes J13 and says the brand lockup is Inter, with no serif;
+  the Mockups list gains the lobby's two files; the log gains a 3b4 entry.
+  Open gains each open Accepted cost, the choice between the two arrow
+  variants, and three row variants deferred for the designer, not rejected: no
+  square with an outlined "Rejoin" button on the right, with the outlined arrow
+  chip on the right, and with it in the square's place on the left.
 - **Known issues**: the repeated identical failure that a screen reader may not
-  announce, and a pasted URL in the Join field.
+  announce, a pasted URL in the Join field, and Create pressed during a create
+  making two rooms.
 
 ## Branches and commits
 
