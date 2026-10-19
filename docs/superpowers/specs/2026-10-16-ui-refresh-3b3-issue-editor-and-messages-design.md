@@ -135,8 +135,9 @@ nothing.
 
 ## Accepted costs
 
-- A link issue wraps differently in the editor than in the heading, and a long
-  issue moves the table when edited, as it does when read.
+- A link issue wraps differently in the editor than in the heading, and the
+  browsers differ on where: Chromium may break it mid-word where Firefox breaks
+  after a slash. A long issue moves the table when edited, as it does when read.
 - With both editor messages shown, the region is read whole, so a failure that
   is stale by then is read before a fresh conflict, and the other way round
   under the old order; neither order avoids a stale case.
