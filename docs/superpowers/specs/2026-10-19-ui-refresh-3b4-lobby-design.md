@@ -28,9 +28,9 @@ binds nothing.
   only form with a stream, so the only one that can be lost or ended. A stored
   name and default role join it at once on load (2c), but the lobby shows until
   the first snapshot.
-- **Not-a-room page**: the server's 404 for a name outside the slug vocabulary
-  (`PageRoutes.notARoom`), with a suggestion when one name is nearest. It is
-  server HTML, not the React app.
+- **Not-a-room page**: the 404 for a name outside the slug vocabulary
+  (`PageRoutes.notARoom`), with a suggestion when one name is nearest. The
+  server decides and answers; the page is a React page (decision 15).
 - **Header bar**: the room page's ground, hairline, height and brand lockup.
   The lobby has no breakpoint, so the room header's narrow-width changes do not
   apply.
@@ -102,9 +102,10 @@ binds nothing.
     second mechanism, and "session ended" does not fit one.
 11. **After "Your session has ended" the panel stays and its three controls are
     inert**: the name, the roles and Join, as `disabled` is today, in 3b3
-    decision 10's look (the saving look, extended to the fields and the
-    radios, with no new token). An inert control's edge is exempt from J8's 3:1
-    (WCAG 1.4.11 exempts inactive components); its text stays at the 7:1 floor.
+    decision 10's muted text and edge, extended to the fields and the radios,
+    on `--paper-pale`: `--grey` on `--track` is 6.47:1, under the 7:1 floor, and
+    on `--paper-pale` 7.06:1. No new token. An inert control's edge is exempt
+    from J8's 3:1 (WCAG 1.4.11 exempts inactive components).
     `disabled` is native, so focus falls to the page; the only way out is a
     reload (Accepted costs). Set aside: removing the form, which reads as a
     page that did not load. The message text is unchanged.
@@ -112,21 +113,30 @@ binds nothing.
 **The not-a-room page**
 
 12. **It is drawn in the lobby's regions**: the header bar, then a panel in the
-    same column. Its `h1` is the sentence, the typed name a `<bdi>` in
-    monospace that wraps anywhere and is never cut, so a pasted bidi character
-    cannot reorder it. `<code>x</code> is not a room name.` stays in the
-    markup.
+    same column. Its `h1` is the sentence, the typed name in a `<code>`, in
+    monospace, wrapped in a `<bdi>`, wrapping anywhere and never cut, so a
+    pasted bidi character cannot reorder it.
 13. **A suggestion is the lobby's own widget.** "Did you mean" is plain text,
     then the room row: the suggested name, and "Join as <name>" below, the
     whole row a link to `/<suggestion>`. The name is the browser's stored name,
-    which the pinned form prefills, set by a few lines of inline script with
-    `textContent`; an empty stored name counts as none. With none, or without
-    the script, the line reads "Join". The row is the page's primary (9).
+    which the pinned form prefills; an empty stored name counts as none. With
+    none the line reads "Join". The row is the page's primary (9).
 14. **The secondary action is "Join a different room"**, not "Create a room",
     since the user came to join. With a suggestion it is an outlined button;
     with none it is the burgundy primary (9) and the page's only action. It
     leads to `/` open on the Join tab, by a URL flag read at load that step 4
     builds, such as `?tab=join`.
+15. **The not-a-room page is built in React.** The lobby's room row is one
+    component, so the page imports it with the lobby's tokens and fonts, and
+    the row's markup is written once. The server keeps deciding
+    (`PageRoutes.notARoom`, `Suggestion`) and answers 404, a status that must
+    survive for crawlers and link previews. Set aside: the server writing the
+    page's HTML, which keeps a second copy of the row's markup and styles and
+    needs a script to read the stored name. Whether the page is an entry point
+    of its own or a view of the room app, and how the server hands over the
+    typed name and the suggestion, are open: step 4's brainstorm raises them
+    first. A visitor reaches the page through the lobby's Join or a mistyped
+    link, so JavaScript is there.
 
 ## States and events
 
@@ -185,10 +195,6 @@ which drops when the room mounts; it needs one human within a round trip.
 - The rejoin link follows the typed name, but the next page joins with the
   stored one: with Alice stored and Bob typed it reads "Rejoin as Bob" and
   joins as Alice, as today.
-- The not-a-room page is server HTML, so building it means getting the styles
-  into a page the server writes, and a script into a page that has none. No
-  content-security-policy header is set today; step 4 confirms an inline script
-  still runs.
 
 ## Contract
 
@@ -205,12 +211,16 @@ contract changes, as principle 9 asks:
   substrings, so step 4 confirms they stay unique beside the row or use
   `exact`.
 - The pinned form's read-only "Room id" field goes; no case reads it there.
-- The not-a-room page: `APISpec.scala` changes its assertion on `Did you mean
-  <a href="/x">x</a>?`, since "Did you mean" becomes plain text above a row,
-  and its assertion on `<a href="/">Create a room</a>`, renamed "Join a
-  different room". `<code>x</code> is not a room name.` stays, as
-  `slug.spec.js` and `APISpec` read it, and "Did you mean" stays absent without
-  a suggestion.
+- The not-a-room page is React, so `APISpec.scala`'s assertions on its markup
+  (`<code>x</code> is not a room name.`, `Did you mean <a href="/x">x</a>?`,
+  `<a href="/">Create a room</a>`) move to e2e cases on the rendered page: the
+  sentence with the typed name, "Did you mean" absent without a suggestion, and
+  "Join a different room". `APISpec` keeps the 404 status and what the server
+  hands over (the typed name and the suggestion), and its case "escape the
+  refused name before echoing it" stays, rewritten for the hand-over: in
+  whatever form the name travels, it cannot inject markup or script (a
+  `</script>` in inline JSON included). `slug.spec.js` keeps reading "is not a
+  room name".
 - New cases: focus on the lobby's `h1` after Dismiss (3b3 decision 5), the
   `h1` naming the active form, the suggestion row reading "Join as <name>"
   with a stored name, and "Join a different room" opening `/` on the Join tab.
@@ -239,7 +249,9 @@ contract changes, as principle 9 asks:
   Open gains each open Accepted cost, the choice between the two arrow
   variants, and three row variants deferred for the designer, not rejected: no
   square with an outlined "Rejoin" button on the right, with the outlined arrow
-  chip on the right, and with it in the square's place on the left.
+  chip on the right, and with it in the square's place on the left. Open also
+  gains the not-a-room page's React shape (15) and the saving look's text
+  contrast (the inert look's correction).
 - **Known issues**: the repeated identical failure that a screen reader may not
   announce, a pasted URL in the Join field, and Create pressed during a create
   making two rooms.
