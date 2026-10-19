@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Room mockup (ui refresh steps 3b1 and 3b2)</title>
+<title>Room mockup (ui refresh steps 3b1 to 3b3)</title>
 <link rel="stylesheet" href="../../frontend/src/colours.css">
 <link rel="stylesheet" href="../../frontend/src/tokens.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -205,17 +205,31 @@
     border-radius: var(--radius); box-shadow: var(--shadow) var(--shadow-colour); font-weight: var(--weight-medium);
   }
   .msg p { flex: 1; margin: 0; }
-  .msg .quiet { color: inherit; padding: var(--space-2); }
+  .msg .quiet { color: inherit; padding: var(--space-2); min-width: var(--target-min); justify-content: center; }
   .msg.problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-left-color: var(--burgundy-deep); }
   .msg.notice { background: var(--notice-ground); color: var(--notice-ink); border-left-color: var(--notice-bar); }
   .msg.notice svg { color: var(--notice-bar); }
-  /* The editing view is 3b3's, drawn dashed only to hold its messages */
-  .issue-edit { display: flex; flex-direction: column; gap: var(--space-2); }
-  .issue-edit .msg { box-shadow: none; }
-  .issue-edit input {
-    font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans); padding: var(--space-1) var(--space-2);
-    border: var(--line-control) solid var(--mute-soft); border-radius: var(--radius-card); width: 100%;
+  /* 3b3: the editing view (decisions 7 to 11): the field, Save and Cancel, then the messages; the buttons beside the field here, below it on a phone */
+  .issue-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); align-items: start; }
+  .issue-edit > .field, .edit-actions { margin-block: calc(-1 * (var(--panel-inline) - var(--space-2))); }   /* as Edit: the panel keeps its read height */
+  .field {
+    display: block; width: 100%; min-height: var(--target-min); resize: none; overflow: hidden; overflow-wrap: anywhere;
+    field-sizing: content;   /* grows with its wrapped text, so the whole issue stays visible (decision 7) */
+    font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans); color: var(--ink); background: var(--paper-warm);
+    padding-inline: var(--space-2); padding-block: calc((var(--target-min) - var(--text-lg) * var(--leading-tight)) / 2 - var(--line-control));
+    border: var(--line-control) solid var(--mute-soft); border-radius: var(--radius-card);
   }
+  .edit-actions { display: flex; gap: var(--space-2); }
+  .edit-actions .btn { display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: var(--target-min); padding-inline: var(--space-3); }
+  .edit-actions .btn svg { display: block; }
+  /* The one editor region, always rendered; its panels clear the field's overhang and lose the banners' shadow */
+  .issue-status { display: flex; flex-direction: column; gap: var(--space-2); grid-column: 1 / -1; }
+  .issue-status:not(:empty) { margin-top: var(--panel-inline); }
+  .issue-status .msg { box-shadow: none; }
+  /* While saving: aria-disabled keeps focus, the look says a save is in flight (decision 10) */
+  .edit-actions [aria-disabled="true"] { cursor: default; }
+  .edit-actions .btn.primary[aria-disabled="true"] { background: var(--track); color: var(--grey); }
+  .edit-actions .btn.secondary[aria-disabled="true"] { border-color: var(--hairline-colour); color: var(--grey); }
   .sr { position: absolute; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
   /* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
@@ -291,6 +305,11 @@
     .main { display: flex; flex-direction: column; padding-inline: var(--space-3); }
     .col, .side { display: contents; }
     .issue-panel { order: 1; }
+    /* 3b3: Save and Cancel below the field, at its start (decision 8) */
+    .issue-edit { grid-template-columns: minmax(0, 1fr); }
+    .issue-edit > .field, .edit-actions { margin-block: 0; }
+    .edit-actions { margin-top: var(--space-2); }
+    .issue-status:not(:empty) { margin-top: var(--space-2); }
     .people { order: 2; flex: none; overflow: visible; }
     .people.reserve { min-height: var(--table-min); }   /* no room held for the facilitator's slot (3b2 decision 11) */
     .round { order: 3; }
@@ -315,7 +334,7 @@
     @container page (width < 51.75rem) {
       .round { position: sticky; bottom: calc(var(--target-min) + 2 * var(--space-2) + var(--line-hairline)); }
       .controls { position: sticky; bottom: 0; }
-      .header :is(a, button), .issue-panel :is(a, button, input), .people { scroll-margin-bottom: var(--sheet-clearance); }
+      .header :is(a, button), .issue-panel :is(a, button, input, textarea), .people { scroll-margin-bottom: var(--sheet-clearance); }
     }
   }
 
@@ -328,7 +347,7 @@
 <div id="root"></div>
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
-// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, ended, restarted, moved, conflict, save-failed),
+// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
 // menu=1 (☰'s row open), room (the room id), facilitators (1 to 5).
 const q = new URLSearchParams(location.search)
 const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
@@ -370,11 +389,10 @@ let copied = false   // as today: each copy hides the hint 2 s later, so it last
 const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
 const messages = (q.get('message') || '').split(',').filter(Boolean)
 const alertIcon = icon('M12 3l10 18H2zM12 10v5M12 18v.5'), infoIcon = icon('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v6M12 7.5v.5'), close = icon('M6 6l12 12M18 6L6 18')
-const msg = (tone, text, dismiss) => `<div class="msg ${tone}" role="${tone === 'problem' ? 'alert' : 'status'}">${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
+const msg = (tone, text, dismiss, live = true) => `<div class="msg ${tone}"${live ? ` role="${tone === 'problem' ? 'alert' : 'status'}"` : ''}>${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
   dismiss ? `<button class="quiet" type="button" aria-label="Dismiss">${close}</button>` : ''}</div>`
 const banners = {
   lost: msg('problem', 'Connection to the room was lost'),
-  ended: msg('problem', 'Your session has ended. Please reload the page to rejoin.'),
   restarted: msg('notice', 'Reconnected. Please check your vote.', true),
   moved: msg('notice', 'The old link you followed now opens this address. Please update your invitation or bookmark to use it.', true)
 }
@@ -427,11 +445,17 @@ function draw() {
     ${menuShown ? `<div class="menu panel"><span class="menu-role">You are a ${role}.</span><button class="quiet" type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button><a class="quiet" href="#">${exit}Leave</a></div>` : ''}</header>`
   const issueHtml = /^https?:\/\//.test(issue)
     ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${i ? seg : seg.replace(/\./g, '.<wbr>')}</span>`).join('')}</a>` : issue
-  const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
-    : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
-  const issueBlock = editorMsg ? `<section class="panel issue-panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
-    : `<section class="panel issue-panel"><div class="issue"><h2${issue ? '' : ' class="empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div></section>`
-  const bannerList = messages.filter(m => banners[m]).map(m => banners[m]).join('')
+  const saving = q.get('edit') === 'saving'
+  const editing = saving || q.get('edit') === '1' || messages.includes('conflict') || messages.includes('save-failed')
+  const failure = messages.includes('save-failed') ? msg('problem', 'Could not save the issue', false, false) : ''
+  const conflict = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>', false, false) : ''
+  const status = `<div class="issue-status" role="status">${failure}${conflict}</div>`
+  const aria = saving ? ' aria-disabled="true"' : ''
+  const issueBlock = editing
+    ? `<section class="panel issue-panel"><div class="issue-edit"><textarea class="field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
+      <div class="edit-actions"><button class="btn primary" type="button" aria-label="Save issue"${aria}>${icon('M5 12l5 5L20 7')}<span class="word">Save</span></button><button class="btn secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="word">Cancel</span></button></div>${status}</div></section>`
+    : `<section class="panel issue-panel"><div class="issue"><h2${issue ? '' : ' class="empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
+  const bannerList = ['lost', 'moved', 'restarted'].filter(m => messages.includes(m)).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="messages" aria-label="Messages">${bannerList}</section>`
 
   const phaseLine = `<div class="phase" data-testid="phase-line"><h2 class="label">${revealed ? 'Revealed' : 'Voting'}</h2></div>`
@@ -495,6 +519,7 @@ function draw() {
   if (onMenu) document.querySelector('.menu-btn').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.people'))
+  fitField()
 }
 
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
@@ -532,6 +557,19 @@ function moveTo(next) {
   draw()
 }
 document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('.controls') && e.preventDefault())
+document.addEventListener('keydown', e => e.key === 'Enter' && e.target.matches('.field') && e.preventDefault())
+// Without field-sizing (Firefox ESR 140) script sets the field's height from its text.
+const nativeGrow = CSS.supports('field-sizing', 'content')
+function fitField() {
+  const f = document.querySelector('.field')
+  if (nativeGrow || !f) return
+  f.style.height = 'auto'; f.style.height = `${f.scrollHeight + f.offsetHeight - f.clientHeight}px`
+}
+let fitQueued = false   // resize and font events fit once per frame; a fit forces a full layout
+const fitSoon = () => { if (!fitQueued) { fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitField() }) } }
+document.addEventListener('input', e => e.target.matches('.field') && fitField())
+window.addEventListener('resize', fitSoon)
+document.fonts.addEventListener('loadingdone', fitSoon)
 document.addEventListener('click', e => {
   if (e.target.closest('[aria-disabled="true"]')) return
   const act = e.target.closest('[data-do]')?.dataset.do, vote = e.target.closest('[data-vote]')?.dataset.vote
