@@ -198,6 +198,7 @@ await run('4 spill', async () => {
   const p = await open(b, 1180, 900, { issue: LONG, message: 'lost,moved,restarted,save-failed,conflict' })
   const fitted = await p.evaluate(() => { const f = document.querySelector('.field'); return f.scrollHeight <= f.clientHeight + 1 })
   check(fitted, '4: the field is not fitted to its text before any resize')
+  await p.evaluate(() => { document.querySelector('.issue-status .msg p').firstChild.textContent = 'Changed by someone else to: "https://lunatech.atlassian.net/browse/PP-1234" ' })
   for (let w = 1180; w >= 320; w -= 4) {
     await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(40)
     const r = await p.evaluate(() => {
@@ -298,6 +299,16 @@ await run('11 fallback', async () => {
   }
 })
 
+// 12. Forced colours: aria-disabled Save keeps a look that differs from the active one.
+await run('12 forced colours', async () => {
+  const colour = async edit => {
+    const p = await b.newPage({ viewport: { width: 1280, height: 800 }, forcedColors: 'active' }); p.setDefaultTimeout(1500)
+    await p.goto(`${base}?edit=${edit}`); await p.waitForTimeout(150)
+    const c = await p.locator(SAVE).evaluate(e => getComputedStyle(e).color); await p.close(); return c
+  }
+  check(await colour('1') !== await colour('saving'), '12: under forced colours Save looks the same editing and saving')
+})
+
 await b.close()
 for (const e of errors) failures.push(`page error ${e}`)
 console.log(failures.length ? failures.join('\n') : 'every check passes')
@@ -357,6 +368,8 @@ const msg = (tone, text, dismiss, live = true) => `<div class="msg ${tone}"${liv
   .edit-actions [aria-disabled="true"] { cursor: default; }
   .edit-actions .btn.primary[aria-disabled="true"] { background: var(--track); color: var(--grey); }
   .edit-actions .btn.secondary[aria-disabled="true"] { border-color: var(--hairline-colour); color: var(--grey); }
+  .msg p { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }   /* a long link in a quote wraps instead of widening the page */
+  @media (forced-colors: active) { .edit-actions .btn.primary[aria-disabled="true"], .edit-actions .btn.secondary[aria-disabled="true"] { color: GrayText; border-color: GrayText; } }   /* system colours drop the muted fill */
 ```
 
   - In the same `<style>`, make Dismiss and Use theirs reach the target: replace `.msg .quiet { color: inherit; padding: var(--space-2); }` with:

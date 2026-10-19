@@ -64,7 +64,8 @@ step 4 builds the page, and step 1a's editor region contract stays (parent,
 
 7. **The field is a wrapping `<textarea>` that grows to fit**, at `--text-lg`,
    role `textbox` named "Current issue". The whole issue stays visible while it
-   is edited. It wraps at spaces as the read view does, but a link issue wraps
+   is edited. It grows by `field-sizing: content`, with a script fit where that
+   is unsupported (Firefox ESR 140; Safari unchecked). It wraps at spaces as the read view does, but a link issue wraps
    differently once edited: a textarea cannot take the heading's breaks before
    a slash and after a dot (3b1 decision 4, 3b2 decision 12).
    - **One line only.** `oneLine`, a pure function in `room/issueEditor.ts`,
