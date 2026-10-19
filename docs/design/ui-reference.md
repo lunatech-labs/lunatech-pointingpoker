@@ -43,13 +43,14 @@ the decisions log at the end.
   4 leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
-- `room.html`, the room page at every width (J10, J11). Its parameters,
+- `room.html`, the room page at every width (J10, J11, J12). Its parameters,
   listed at the top of its script: `role`, `phase` (`voting`, `revote`,
   `revealed`, `revealed-revote`), `later`, `layout` (f, the default, or g),
   `votes` (`sample`, `tie3`, `tie4`, `0`), `voters`, `issue` (empty draws "No
   issue yet"), `me`, `name0`, `brand`, `message` (today's banners and the
-  editor's messages), `menu` (☰'s row open), `room` (the room id),
-  `facilitators` (1 to 5) and `probe` (the root and the width in `rem`).
+  editor's messages), `edit` (`1` the editing view, `saving` its saving
+  look), `menu` (☰'s row open), `room` (the room id), `facilitators` (1 to 5)
+  and `probe` (the root and the width in `rem`).
 - `room-cells.html`, its layout cells side by side at a chosen width (1280,
   1000, 800 or 392 px) and height, each with a link that opens it alone at
   the window's size.
@@ -261,8 +262,8 @@ bar only reinforce them.
 | Confirmation | the user's own action done: "Link copied" | plain text beside its cause, no box |
 
 On the room page the banners sit full width under the header, each message a
-panel of its own with the common hairline, and no panel around them. How they
-stack and their Dismiss are 3b3's.
+panel of its own with the common hairline, and no panel around them. Their stacking, Dismiss and
+mounting are J12's.
 
 ### J7. Type, self-hosted
 
@@ -379,6 +380,34 @@ and `room.html` draws them.
   `rem` resolve against the reader's default size, not the fluid root; a
   container query reads the root.
 
+### J12. The issue editor and the messages
+
+Step 3b3's spec holds its rules,
+`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
+`conflict` and `save-failed`).
+
+- **The banners** stack by tone: the lost connection, then the moved link, then
+  the restart. Only the notices have a Dismiss, an × alone named "Dismiss" at
+  the panel's right, which moves focus to the page's `h1` (`tabindex="-1"`, so it
+  takes focus without joining the tab order). The Messages section mounts only
+  while a banner shows.
+- **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
+  issue", which grows to fit. Enter saves and never inserts a line break;
+  `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
+  beside the field in the wide layout and below it in the phone layout, in the
+  DOM order field, Save, Cancel, messages at every width. When the editing view
+  closes (Escape, Cancel, a save that succeeded), focus returns to Edit if it was
+  inside the panel or had dropped; focus the user moved elsewhere is left alone.
+- **While saving**, Save and Cancel are `aria-disabled`, keep focus and look
+  muted; the field is read-only. After a failure the field takes focus only if
+  focus fell to the page.
+- **The editor's two messages** are message panels under the buttons, inside
+  the editor region (step 1a's `issue-status`, always rendered and never
+  `display: none`), the problem above the notice, with no role of their own.
+- A banner arriving on a scrolled page stays above the view, by the browser's
+  scroll anchoring (3b1 decision 3).
+
 ## Tokens
 
 The value source (Terms) holds every token's value and purpose; this section
@@ -418,6 +447,11 @@ read a token.
 
 The test contract (principle 9) reads these today, in `e2e/fixtures.js` and
 the cases. A look that changes one lists it in step 4's contract changes.
+
+Step 3b3's contract changes, for the editing view and the banners, are listed
+in its spec
+(`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+Contract).
 
 - The text "Facilitator" inside a facilitator's entry (`facilitatorMark`), and
   one list holding every participant (`participantEntries`). The roster changes
@@ -463,15 +497,12 @@ The layout questions 3b decides, on mockups of each layout cell, in the four
 steps the UI refresh design's step 3 groups them into.
 
 L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
-settled by 3b1 (J10), and L5, L10 and L11 for the room page by 3b2 (J11).
+settled by 3b1 (J10), L5, L10 and L11 for the room page by 3b2 (J11), and L7
+and L8 by 3b3 (J12).
 
-- **L7. The issue editor** and its messages; the read view is 3b1's heading
-  (3b3).
-- **L8. The banners**: on the room page, full width under the header, each
-  its own panel (J6); their stacking, Dismiss and how their region mounts
-  (3b3). A banner arriving on a scrolled page stays above the view, by the
-  browser's scroll anchoring (3b1 decision 3).
-- **L9. The lobby** (3b4).
+- **L9. The lobby** (3b4), with the lobby's messages: the join and create
+  failures and "Your session has ended", which show only over the lobby (3b3
+  decision 1), and the lobby's own `h1`, where Dismiss's focus lands.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -785,6 +816,24 @@ The reasons behind each rule, and what was set aside.
   a single column from 46.75 rem; pinning at 47 rem tall; `scroll-padding` on
   `html`; Clear as an icon in the wide layout; no cap, and 120 or 140 rem;
   hiding "https://".
+- **3b3.** The issue editor and the messages came with their own spec,
+  `docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`.
+  The lobby's messages (the join and create failures, "Your session has
+  ended") are 3b4's: each shows only over the lobby, which the product owner
+  judges there. The stack follows the tone, as today's order did, with no
+  arrival tracked; the editor's messages follow it too, the problem above the
+  notice, where step 1a's code had the notice first by no rule. The field is a
+  wrapping textarea so the whole issue stays visible, with Enter saving and a
+  `oneLine` draft; Save and Cancel are beside it where Edit was and below it
+  on a phone, where 360 to 430 px left the field 178 to 248 px beside them.
+  Saving keeps focus on the buttons (`aria-disabled`), which closes the Save
+  button's screen reader issue. Set aside: Dismiss on problems, and an
+  always-rendered Messages section, which nothing today needs; the next
+  banner's Dismiss as the focus target, dead outside a typed URL; a one-line
+  input and a two-line capped field; the buttons below the field at every
+  width, or beside it at every width; the editor's messages as banners in the
+  Messages section, or as plain text under the field; and the notice above the
+  problem.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
