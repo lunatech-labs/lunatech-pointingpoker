@@ -54,6 +54,15 @@ the decisions log at the end.
 - `room-cells.html`, its layout cells side by side at a chosen width (1280,
   1000, 800 or 392 px) and height, each with a link that opens it alone at
   the window's size.
+- `lobby.html`, the lobby's three pages (J13). Its parameters, listed at the top
+  of its script: `page` (`root`, `pinned`, `notaroom`), `tab` (`create`,
+  `join`), `name`, `remembered` (`slug`, `legacy`, `none`), `rejoin` (`chip`
+  outlines the row's arrow), `role`, `message` (the join and create failures,
+  the lost connection, the ended session, the moved and restart notices),
+  `room`, `typed`, `suggestion`, `stored`, `longest` (the longest valid id) and
+  `probe`.
+- `lobby-cells.html`, the lobby's pages side by side at a chosen width
+  (1280, 800, 392 or 320 px), each with a link that opens it alone.
 
 ## Brand source
 
@@ -269,7 +278,8 @@ stacking, Dismiss and mounting are J12's.
 
 - Inter for all text, figures included (3b1's second look); JetBrains Mono for
   the room id.
-- Instrument Serif at most for the app's name in the lobby (L9).
+- The brand lockup, in the room header and the lobby (J13), is Inter bold; no
+  serif is drawn, so the value source has no serif token.
 - The app serves the fonts, not Google's CDN. The families are SIL OFL 1.1
   with no Reserved Font Name (google/fonts, `OFL.txt` and `METADATA.pb`), so
   subsetting and woff2 need no renaming, and the licence text ships beside
@@ -412,6 +422,44 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 - A banner arriving on a scrolled page stays above the view, by the browser's
   scroll anchoring (3b1 decision 3).
 
+### J13. The lobby
+
+Step 3b4's spec holds its rules,
+`docs/superpowers/specs/2026-10-19-ui-refresh-3b4-lobby-design.md`, and
+`lobby.html` draws them.
+
+- **The regions** are the room page's: the header bar with the brand lockup,
+  then one centred column that the header's content, the banners and the panel
+  share a left edge with. The column is `--lobby-width`, 24 rem until judged,
+  and `min(--lobby-width, 100% - 2 × --page-edge)` on a narrow screen; one
+  column at every width, no breakpoint and no hero.
+- **The `h1` names the form**: "Create room" or "Join room". Dismiss's focus
+  lands on it. The tabs are links, the active one `aria-current="true"` and
+  marked by weight and a bar, the others underlined (J4); the pinned form has
+  none, its room fixed in a badge.
+- **The room row** is a link as a whole: a plain `--card-back` square, the room
+  id in monospace, a second line, an ink arrow. Its name is its content in
+  visible order, `<id> <line 2>`, with no `aria-label`, a literal space between
+  the two lines so the name reads the same in any layout. Line 2 reads "Rejoin"
+  alone when the typed name is empty or only spaces. Line 2 is underlined, J4's
+  cue; a link drawn as a button is not. An id wraps at its hyphens and is never
+  cut, in a row and in the badge.
+- **One burgundy-filled control per page**: the primary button, or, where the
+  row is the page's primary, as on the not-a-room page, the row's arrow as a
+  small burgundy chip.
+- **The messages** are banners above the panel, one problem at a time (ended,
+  then lost, then a failure) and the notices by tone. A form shows only the
+  messages it can have: the lost connection and the ended session on the pinned
+  form, the only one with a stream, and the create failure on the root form. After "Your session has
+  ended" the panel stays, its name, roles and Join inert in the saving look's
+  muted text on `--paper-pale`, since grey on `--track` is 6.47:1 and J8 asks
+  7:1 for text; an inert control's edge is exempt from J8's 3:1.
+- **The not-a-room page** is drawn in the same regions. Its `h1` reads
+  `<code><bdi>x</bdi></code> is not a room name.`, the typed name wrapping
+  anywhere and isolated by the `<bdi>`. A suggestion is a room row under the
+  plain text "Did you mean", reading "Join as <name>" from the stored name; the
+  secondary action is "Join a different room", which opens `/` on the Join tab.
+
 ## Tokens
 
 The value source (Terms) holds every token's value and purpose; this section
@@ -430,7 +478,7 @@ read a token.
 | Spacing | one scale |
 | Shape | the radii (J9); the least target size; the shadows' lengths (J9) |
 | Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
-| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11) |
+| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11); from 3b4, the lobby's column (J13) |
 | Motion | the one duration (J9) |
 
 - Nothing imports the value source before step 4; 3b's mockups link both
@@ -502,11 +550,26 @@ steps the UI refresh design's step 3 groups them into.
 
 L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
 settled by 3b1 (J10), L5, L10 and L11 for the room page by 3b2 (J11), and L7
-and L8 by 3b3 (J12).
+and L8 by 3b3 (J12), and L9 by 3b4 (J13).
 
-- **L9. The lobby** (3b4), with the lobby's messages: the join and create
-  failures and "Your session has ended", which show only over the lobby (3b3
-  decision 1), and the lobby's own `h1`, where Dismiss's focus lands.
+- **The lobby's column width**: `--lobby-width` is 24 rem until the product
+  owner judges `lobby.html` (J13).
+- **The rejoin row's arrow**: the plain ink arrow (the default) or the outlined
+  chip (`rejoin=chip`), after the product owner and the designer have seen both.
+- **Three rejoin-row variants, deferred for the designer and not rejected**:
+  no square with an outlined "Rejoin" button on the right, with the outlined
+  arrow chip on the right, and with it in the square's place on the left.
+- **The lobby's open costs** (3b4's Accepted costs): a Reload button on "Your
+  session has ended"; a "Joining…" look from a press to the first snapshot;
+  accepting a full URL pasted into Join.
+- **The not-a-room page's React shape** (3b4 decision 15), which step 4's
+  brainstorm raises first: an entry point of its own or a view of the room app,
+  and how the server hands over the typed name and the suggestion, keeping its
+  404 status.
+- **The saving look's text contrast**: Save in `--grey` on `--track` is 6.47:1
+  (3b3 decision 10), under J8's 7:1 for text, though an inactive control is
+  exempt (WCAG 1.4.3 and 1.4.6). The lobby's inert look uses `--paper-pale` (7.06:1);
+  whether the editor follows it is for the product owner.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -839,6 +902,27 @@ The reasons behind each rule, and what was set aside.
   width, or beside it at every width; the editor's messages as banners in the
   Messages section, or as plain text under the field; and the notice above the
   problem.
+- **3b4.** The lobby came with its own spec,
+  `docs/superpowers/specs/2026-10-19-ui-refresh-3b4-lobby-design.md`, and folded
+  in the not-a-room page, which is the same user's next screen. The
+  lobby takes the room page's regions in one centred column of `--lobby-width`,
+  a token added to the value source; `--card-back`'s comment names the row's
+  square, a shape without text, which is why the square is not `--burgundy`;
+  `--font-serif` left it with the gate's serif allowance, since J7 draws no
+  serif and nothing used it. The tabs stay: nobody reaches `/` often, so
+  restructuring them is its own step. The messages are banners, since a message
+  inside the panel needs a second mechanism and "session ended" does not fit
+  one; after it the panel stays and is inert, on `--paper-pale`, because the
+  saving look's `--track` ground leaves grey text at 6.47:1. The rejoin row's
+  name is its content, which keeps Label in Name with two lines; its arrow is
+  ink, and burgundy only where the row is the page's one primary, so J4 and J8
+  hold. The not-a-room page is built in React, so the row is one component and
+  the lobby's tokens and fonts are shared, its entry shape left to step 4; the
+  typed name is wrapped in a `<bdi>`. Set aside: a hero panel; restructured
+  tabs; a segmented role bar; messages inside the panel; removing the form
+  after "session ended"; burgundy links and arrows; a Reload button, a
+  "Joining…" look and an accepted pasted URL (each its own decision); the
+  rejoin row without its square (the three deferred variants, Open).
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

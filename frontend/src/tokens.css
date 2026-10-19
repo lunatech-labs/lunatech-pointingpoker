@@ -5,7 +5,6 @@
 
   --font-sans: 'Inter', system-ui, sans-serif; /* all text but the room id (J7) */
   --font-mono: 'JetBrains Mono', ui-monospace, monospace; /* the room id (J7) */
-  --font-serif: 'Instrument Serif', ui-serif, serif; /* at most the app's name in the lobby (J7) */
   --text-tag: 0.6875rem; /* the kept tag, a note beside a value, an avatar's initials */
   --text-xs: 0.75rem; /* labels, pills and small notes */
   --text-sm: 0.875rem; /* labels */
@@ -60,6 +59,7 @@
   --brand-height: 1.875rem; /* the header mark */
   --sidebar: 18.125rem; /* the participants sidebar */
   --page-max: 106rem; /* the page's width cap, a 1080p monitor's page, above the 65.75 rem switch (3b2 decision 13) */
+  --lobby-width: 24rem; /* the lobby's column, provisional until its mockup is judged (3b4 decision 3) */
   --sheet-clearance: 24rem; /* focus's clearance above the phone's pinned sheet, at most 23.75 rem tall (3b2 decision 7) */
   --icon: 1.125rem; /* an icon beside its words */
   --avatar: 1.375rem; /* a roster avatar */
