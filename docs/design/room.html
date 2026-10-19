@@ -283,6 +283,11 @@
     .controls .btn.secondary { flex: none; min-width: var(--target-min); padding-inline: var(--space-2); }
     .controls .btn.secondary svg { display: block; }
     .controls .btn.secondary .word { display: none; }
+    /* 3b3: Save and Cancel below the field, at its start, below 65.75 rem (decision 8) */
+    .issue-edit { grid-template-columns: minmax(0, 1fr); }
+    .issue-edit > .field, .edit-actions { margin-block: 0; }
+    .edit-actions { margin-top: var(--space-2); }
+    .issue-status:not(:empty) { margin-top: var(--space-2); }
   }
 
   /* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
@@ -306,11 +311,6 @@
     .main { display: flex; flex-direction: column; padding-inline: var(--space-3); }
     .col, .side { display: contents; }
     .issue-panel { order: 1; }
-    /* 3b3: Save and Cancel below the field, at its start (decision 8) */
-    .issue-edit { grid-template-columns: minmax(0, 1fr); }
-    .issue-edit > .field, .edit-actions { margin-block: 0; }
-    .edit-actions { margin-top: var(--space-2); }
-    .issue-status:not(:empty) { margin-top: var(--space-2); }
     .people { order: 2; flex: none; overflow: visible; }
     .people.reserve { min-height: var(--table-min); }   /* no room held for the facilitator's slot (3b2 decision 11) */
     .round { order: 3; }

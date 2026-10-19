@@ -19,7 +19,7 @@
 ## Rulings this plan makes, for the user's review
 
 - **R1. The editor's panels carry no role of their own.** Today's `msg()` in `room.html` gives a problem `role="alert"` and a notice `role="status"`. Inside the editor region, which is already `role="status"`, that would nest live regions and split the announcement the spec's Contract reads as one string (decision 11). The editor's panels are plain boxes; the banners keep their roles (3b1).
-- **R2. A one-line issue keeps its read height on the wide layout.** The spec is silent on whether entering Edit moves the table for a short issue. The field and the buttons take the negative margin Edit already has, so the panel is as tall editing as reading; Check 5 proves it. On the phone layout the buttons' row adds height, which decision 8 accepts by putting them below the field.
+- **R2. A one-line issue keeps its read height on the wide layout.** The spec is silent on whether entering Edit moves the table for a short issue. The field and the buttons take the negative margin Edit already has, so the panel is as tall editing as reading; Check 5 proves it. Below 65.75 rem the buttons' row adds height, which decision 8 accepts by putting them below the field.
 - **R3. The muted saving look uses tokens that exist.** Save is `--track` ground with `--grey` text, Cancel is `--grey` text on the hairline edge. No new token.
 - **R4. The mockup's `edit` parameter.** `edit=1` draws the editing view, `edit=saving` its saving look; `message=conflict` or `save-failed` imply `edit=1`, as the mockup already drew them in a dashed editor.
 
@@ -148,13 +148,13 @@ const both = { message: 'save-failed,conflict' }
 const LONG = 'Rework the login page so that a returning user lands on their last room, and keep the room list in sync with the rooms they were invited to since their last visit, including the rooms that were renamed or archived meanwhile by a facilitator'
 const b = await chromium.launch()
 
-// 1. The order: field, Save, Cancel, the messages; beside the field wide, below it on a phone; the DOM says the same.
+// 1. The order: field, Save, Cancel, the messages; beside the field from 65.75 rem, below it under (1000 px is 60.8 rem, 1280 px 77 rem); the DOM says the same.
 await run('1 order', async () => {
-  for (const [w, wide] of [[1280, true], [390, false]]) {
+  for (const [w, wide] of [[1280, true], [1000, false], [390, false]]) {
     const p = await open(b, w, 800, both)
     const f = await box(p, '.field'), s = await box(p, SAVE), c = await box(p, CANCEL), r = await box(p, '.issue-status')
-    if (wide) check(Math.abs(s.y - f.y) <= 1 && s.x >= f.x + f.width, `1 wide: Save is not beside the field's first line at ${w}`)
-    else check(s.y >= f.y + f.height - 1 && Math.abs(s.x - f.x) <= 1, `1 phone: Save is not below the field, at its start, at ${w}`)
+    if (wide) check(Math.abs(s.y - f.y) <= 1 && s.x >= f.x + f.width, `1 beside: Save is not beside the field's first line at ${w}`)
+    else check(s.y >= f.y + f.height - 1 && Math.abs(s.x - f.x) <= 1, `1 below: Save is not below the field, at its start, at ${w}`)
     check(c.x >= s.x + s.width && Math.abs(c.y - s.y) <= 1, `1: Cancel does not follow Save on one row at ${w}`)
     check(r.y >= s.y + s.height - 1 && r.y >= f.y + f.height - 1, `1: the messages are not below the field and the buttons at ${w}`)
     const dom = await p.evaluate(sels => {
@@ -251,9 +251,9 @@ await run('7 order', async () => {
   await e.close()
 })
 
-// 8. Tab from the field: Save, Cancel, Use theirs, in Chromium and Firefox, wide and phone.
+// 8. Tab from the field: Save, Cancel, Use theirs, in Chromium and Firefox, beside, in the band and below.
 await run('8 tab order', async () => {
-  for (const browser of [b, await firefox.launch()]) for (const w of [1280, 390]) {
+  for (const browser of [b, await firefox.launch()]) for (const w of [1280, 1000, 390]) {
     const p = await open(browser, w, 800, both)
     await p.locator('.field').focus()
     const seen = []
@@ -347,7 +347,7 @@ const msg = (tone, text, dismiss, live = true) => `<div class="msg ${tone}"${liv
   - Replace the block from `/* The editing view is 3b3's, drawn dashed only to hold its messages */` to the closing brace of `.issue-edit input { … }` with:
 
 ```css
-  /* 3b3: the editing view (decisions 7 to 11): the field, Save and Cancel, then the messages; the buttons beside the field here, below it on a phone */
+  /* 3b3: the editing view (decisions 7 to 11): the field, Save and Cancel, then the messages; the buttons beside the field here, below it under 65.75 rem */
   .issue-edit { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--space-3); align-items: start; }
   .issue-edit > .field, .edit-actions { margin-block: calc(-1 * (var(--panel-inline) - var(--space-2))); }   /* as Edit: the panel keeps its read height */
   .field {
@@ -378,10 +378,10 @@ const msg = (tone, text, dismiss, live = true) => `<div class="msg ${tone}"${liv
   .msg .quiet { color: inherit; padding: var(--space-2); min-width: var(--target-min); justify-content: center; }
 ```
 
-  - In the phone block (`@container page (width < 51.75rem) {`), after `.issue-panel { order: 1; }` add:
+  - In the compact block (`@container page (width < 65.75rem) {`), after `.controls .btn.secondary .word { display: none; }` add:
 
 ```css
-    /* 3b3: Save and Cancel below the field, at its start (decision 8) */
+    /* 3b3: Save and Cancel below the field, at its start, below 65.75 rem (decision 8) */
     .issue-edit { grid-template-columns: minmax(0, 1fr); }
     .issue-edit > .field, .edit-actions { margin-block: 0; }
     .edit-actions { margin-top: var(--space-2); }
@@ -445,7 +445,7 @@ document.fonts.addEventListener('loadingdone', fitSoon)
 Run: `node ~/Documents/pointing-poker-3b3/scripts/checks.mjs`
 Expected: `every check passes`, exit 0. If check 5 fails, the editing view's panel differs from the read view's: adjust only the negative margin's expression in `.issue-edit > .field, .edit-actions` until the heights agree, then say so in the commit body.
 
-- [ ] **Step 7: The product owner's look.** Open `docs/design/room-cells.html` in a browser, choose Editing, then Saving, then "Both editor messages", at the widths 1280 and 392. Expected: the buttons beside the field wide and below it on the phone, the problem above the notice, Save and Cancel muted while saving. The product owner judges these cells; do not commit before the user has looked.
+- [ ] **Step 7: The product owner's look.** Open `docs/design/room-cells.html` in a browser, choose Editing, then Saving, then "Both editor messages", at the widths 1280, 1000 and 392. Expected: the buttons beside the field at 1280 and below it at 1000 and 392, the problem above the notice, Save and Cancel muted while saving. The product owner judges these cells; do not commit before the user has looked.
 
 - [ ] **Step 8: Commit.**
 
@@ -484,10 +484,13 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 - **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
   issue", which grows to fit. Enter saves and never inserts a line break;
   `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
-  beside the field in the wide layout and below it in the phone layout, in the
-  DOM order field, Save, Cancel, messages at every width. When the editing view
-  closes (Escape, Cancel, a save that succeeded), focus returns to Edit if it was
-  inside the panel or had dropped; focus the user moved elsewhere is left alone.
+  beside the field at and above 65.75 rem and below it under 65.75 rem, in both
+  layouts (J11's compact switch), in the DOM order field, Save, Cancel,
+  messages at every width. In the band between 51.75 and 65.75 rem a panel
+  with a narrow arrangement uses it unless measured otherwise. When the
+  editing view closes (Escape, Cancel, a save that succeeded), focus returns to
+  Edit if it was inside the panel or had dropped; focus the user moved elsewhere
+  is left alone.
 - **While saving**, Save and Cancel are `aria-disabled`, keep focus and look
   muted; the field is read-only. After a failure the field takes focus only if
   focus fell to the page.
@@ -518,10 +521,11 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   arrival tracked; the editor's messages follow it too, the problem above the
   notice, where step 1a's code had the notice first by no rule. The field is a
   wrapping textarea so the whole issue stays visible, with Enter saving and a
-  `oneLine` draft; Save and Cancel are beside it where Edit was and below it
-  on a phone, where 360 to 430 px left the field 178 to 248 px beside them.
-  Saving keeps focus on the buttons (`aria-disabled`), which closes the Save
-  button's screen reader issue. Set aside: Dismiss on problems, and an
+  `oneLine` draft; Save and Cancel are beside it at and above 65.75 rem, where
+  Edit was, and below it under, where 360 to 430 px left the field 178 to 248
+  px beside them, as did the band's 232 px at 51.75 rem. Saving keeps focus on
+  the buttons (`aria-disabled`), which closes the Save button's screen reader
+  issue. Set aside: Dismiss on problems, and an
   always-rendered Messages section, which nothing today needs; the next
   banner's Dismiss as the focus target, dead outside a typed URL; a one-line
   input and a two-line capped field; the buttons below the field at every

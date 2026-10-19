@@ -78,15 +78,23 @@ step 4 builds the page, and step 1a's editor region contract stays (parent,
    - **Keys.** Enter saves and never inserts a line break, Escape cancels, and
      an input method's Enter is not a save (today's keys). The field sets
      `enterkeyhint="done"`.
-8. **Save and Cancel sit beside the field in the wide layout**, where Edit was,
-   as an icon and its word, and **below it in the phone layout**, at the start
-   of the row, as icon and word, the switch being 3b2's 51.75 rem: a wider
-   column for the text where width is scarcest (checked at 360, 390 and 430 px).
+8. **Save and Cancel sit beside the field at and above 65.75 rem**, where Edit
+   was, as an icon and its word, and **below it under 65.75 rem, in both
+   layouts**, at the start of the row, as icon and word, the switch being 3b2's
+   compact one, the one the foot follows: a wider column for the text where
+   width is scarce. Checked at 360, 390 and 430 px, where beside the buttons
+   the field got 178 to 248 px, and in the band from 51.75 to 65.75 rem, where
+   the wide layout's issue panel is 484 to 692 px and the field beside them
+   gets 232 px at 51.75 rem (349 at 960 px, 426 at 1067 px), the same short
+   lines. In the band between the two switches a panel with a distinct narrow
+   arrangement uses it, unless a measurement shows the wide one fits (the
+   header's wide form holds from 51.75 rem because 3b2 measured the longest
+   room id fitting there; the banners have one arrangement).
    The names "Edit issue", "Save issue" and "Cancel editing" stay, the visible
    words being "Save" and "Cancel" (WCAG 2.5.3). The DOM and tab order are Save
    then Cancel at every width, so the screen order never differs from the
-   reading order (WCAG 2.4.3). In the wide layout the buttons align to the
-   field's first line while it grows.
+   reading order (WCAG 2.4.3). Beside the field, the buttons align to its first
+   line while it grows.
 9. **When the editing view closes** (Escape, Cancel, a save that succeeded),
    focus returns to Edit, if it was inside the editor panel or had dropped (on
    the body or nowhere); focus the user moved elsewhere is left alone.
