@@ -39,12 +39,21 @@ roadmap item instead of leaving it here as stale history.
 - **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
   virtual keyboard rises over it. With the keyboard open, the field, Save and
   Cancel and the editor's messages may have little room to show (inferred, not
-  checked on a phone). The mockup's field grows by CSS `field-sizing: content`,
-  which Firefox ESR 140 lacks (confirmed by hand); step 4 needs a script fit
-  there, as the mockup has, and Safari's support is unchecked.
+  checked on a phone).
 - **Resolution:** Stays open until a phone is at hand on the deployed app
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   Accepted costs); never a merge gate.
+
+### The issue editor's field needs a script fit where `field-sizing` is unsupported
+
+- **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
+  in step 4.
+- **Issue:** The mockup's field grows by CSS `field-sizing: content`, which
+  Firefox ESR 140 lacks (confirmed by hand) and Safari's support is unchecked.
+  The mockup fits the field by script there; the app needs the same.
+- **Resolution:** Built in step 4; remove this entry when step 4 lands the fit
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  decision 7).
 
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 

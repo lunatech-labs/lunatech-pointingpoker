@@ -262,8 +262,8 @@ bar only reinforce them.
 | Confirmation | the user's own action done: "Link copied" | plain text beside its cause, no box |
 
 On the room page the banners sit full width under the header, each message a
-panel of its own with the common hairline, and no panel around them. Their stacking, Dismiss and
-mounting are J12's.
+panel of its own with the common hairline, and no panel around them. Their
+stacking, Dismiss and mounting are J12's.
 
 ### J7. Type, self-hosted
 
@@ -393,7 +393,8 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   takes focus without joining the tab order). The Messages section mounts only
   while a banner shows.
 - **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
-  issue", which grows to fit. Enter saves and never inserts a line break;
+  issue", which grows to fit (by `field-sizing: content`, with a script fit in
+  Firefox ESR 140, which lacks it). Enter saves and never inserts a line break;
   `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
   beside the field in the wide layout and below it in the phone layout, in the
   DOM order field, Save, Cancel, messages at every width. When the editing view
