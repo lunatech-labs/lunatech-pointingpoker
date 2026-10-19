@@ -55,6 +55,20 @@ roadmap item instead of leaving it here as stale history.
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   decision 7).
 
+### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
+
+- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
+  step 4.
+- **Issue:** With the root font at 400% (text-only zoom) and a viewport under
+  about 400 px, Save and Cancel overflow the issue panel in Firefox; Chromium
+  fits them. The page already scrolls sideways there on the plain read view
+  (checked on the mockup). Page zoom, which WCAG's reflow case uses, is not
+  affected.
+- **Resolution:** Step 4 lets the buttons wrap onto two rows or keep only
+  their words at that size, or accepts the limit with the rest of the page
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  decision 8); never a merge gate.
+
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
