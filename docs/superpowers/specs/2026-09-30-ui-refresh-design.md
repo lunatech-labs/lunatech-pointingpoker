@@ -69,7 +69,8 @@ document as a whole stays in discussion.
    real phone happen on the deployed app only and never gate a merge; phone
    risks go to `docs/known-issues.md`.
 4. **Degrade gradually with room size** (settled; steps 3b1 and 3b2
-   reopened its table). Nothing ever scrolls horizontally. Whether the page scrolls
+   reopened its table, and step 3b3 closed its last cell).
+   Nothing ever scrolls horizontally. Whether the page scrolls
    vertically depends on the viewport, zoom included, since zoom only shrinks
    the viewport in CSS px, and in the wide layout on the issue's length and the
    notices shown:
@@ -77,7 +78,7 @@ document as a whole stays in discussion.
    | Viewport | The page | The participant area | The reference's open question |
    | --- | --- | --- | --- |
    | The wide layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
-   | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | the banners (L8), the issue editor's messages (L7) |
+   | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | none: step 3b3 |
    | The narrow layout, a phone among them | may scroll vertically | flows with the page | none: step 3b2's phone layout |
    | The shared screen | the wide layout: a larger screen matches the laptop target at about 125 to 170% zoom; zoom past that may degrade the layout but never breaks it | as in the wide layout | none: step 3b2 |
 
@@ -257,9 +258,11 @@ the questions that divide its height go together:
   breakpoint
   (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`);
 - 3b3, the issue editor and the messages: L7 and L8; the editing view, the read
-  view being 3b1's heading; the banners' panel's place, stacking and Dismiss;
-- 3b4, the lobby: L9, whose join and create failures are 3b3's messages, and
-  the lobby's breakpoint.
+  view being 3b1's heading; the banners' stacking, Dismiss and mounting
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`);
+- 3b4, the lobby: L9 and the lobby's messages, the join and create failures and
+  "Your session has ended", which show only over the lobby, and the lobby's
+  breakpoint.
 
 Each step works on the pages the steps before it drew. One that finds an
 earlier decision does not hold reopens it, said so in the reference's log, as
