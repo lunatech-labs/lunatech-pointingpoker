@@ -1095,6 +1095,39 @@ roadmap item instead of leaving it here as stale history.
   5.9 ships no ES2025 lib, which would bring Set operations and iterator
   helpers.
 
+### A failure that repeats unchanged is not announced twice by a screen reader
+
+- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+  `frontend/src/components/App.tsx` (`joinError`, `joinHere`, `doCreate`).
+- **Issue:** The join and create failures show in a `role="alert"`. When a second
+  attempt fails with the same text, the text does not change, so a screen reader
+  may not announce it again and the user hears nothing for the second failure.
+  Inferred from how live regions announce changes, not heard.
+- **Resolution:** Stays open until a user asks for it. The fix is app code, such
+  as clearing the message when a new attempt starts; step 3b4's spec lists it
+  under Accepted costs.
+
+### A full URL pasted into the Join field gets the not-a-room page
+
+- **Where:** `frontend/src/components/App.tsx` (`doJoin`, which only trims).
+- **Issue:** Pasting `https://host/brave-golden-otter` into Room id and pressing
+  Join goes to `/https%3A...`, which the server answers with the not-a-room page,
+  though the room is in the text.
+- **Resolution:** Stays open. Accepting a pasted URL is a behaviour change with
+  its own decisions, such as which hosts and forms to take; step 3b4's spec lists
+  it under Accepted costs.
+
+### Create pressed twice in flight makes two rooms
+
+- **Where:** `frontend/src/components/App.tsx` (`doCreate`, which has no
+  in-flight guard).
+- **Issue:** Pressing Create again before the first request answers sends a
+  second request and creates a second room, and the page goes to whichever
+  answers last. The first room is empty and ends by the idle stop.
+- **Resolution:** Stays open since the cost is an empty room that expires. A
+  guard that ignores a press while a create is in flight is a small app change
+  for step 4 or later.
+
 ## Traceability note
 
 The original source for the phased roadmap was a planning conversation kept outside
