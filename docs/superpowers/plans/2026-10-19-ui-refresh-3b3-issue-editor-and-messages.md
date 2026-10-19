@@ -280,6 +280,24 @@ await run('10 cells', async () => {
   await p.close()
 })
 
+// 11. Without field-sizing (Firefox ESR 140) script fits the field: on load, after typing, after a resize.
+await run('11 fallback', async () => {
+  for (const w of [1000, 392]) {
+    const p = await b.newPage({ viewport: { width: w, height: 800 } }); p.setDefaultTimeout(1500)
+    await p.addInitScript(() => {
+      const s = CSS.supports.bind(CSS); CSS.supports = (...a) => a[0] === 'field-sizing' ? false : s(...a)
+      const add = () => { const st = document.createElement('style'); st.textContent = '.field { field-sizing: fixed !important }'; document.documentElement.append(st) }
+      if (document.documentElement) add(); else new MutationObserver((_, o) => { if (document.documentElement) { add(); o.disconnect() } }).observe(document, { childList: true })
+    })
+    await p.goto(`${base}?edit=1&issue=${encodeURIComponent(LONG)}`); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(150)
+    const fits = () => p.locator('.field').evaluate(f => ({ fixed: getComputedStyle(f).fieldSizing === 'fixed', ok: f.scrollHeight <= f.clientHeight + 1, lines: f.clientHeight }))
+    let r = await fits(); check(r.fixed, `11: the fallback is not isolated at ${w}`); check(r.ok && r.lines > 90, `11: not fitted on load at ${w}: ${JSON.stringify(r)}`)
+    await p.locator('.field').fill(`${LONG} ${LONG}`); r = await fits(); check(r.ok, `11: not fitted after typing at ${w}`)
+    await p.setViewportSize({ width: 560, height: 800 }); await p.waitForTimeout(150); r = await fits(); check(r.ok, `11: not fitted after a resize from ${w}`)
+    await p.close()
+  }
+})
+
 await b.close()
 for (const e of errors) failures.push(`page error ${e}`)
 console.log(failures.length ? failures.join('\n') : 'every check passes')
@@ -378,6 +396,25 @@ const msg = (tone, text, dismiss, live = true) => `<div class="msg ${tone}"${liv
 ```js
 document.addEventListener('keydown', e => e.key === 'Enter' && e.target.matches('.field') && e.preventDefault())
 ```
+
+  - Firefox ESR 140 lacks `field-sizing`, so the field would stay one row there; a script fits it where the CSS does not. Define it with the other top-level functions, before `draw()` first runs:
+
+```js
+// Without field-sizing (Firefox ESR 140) script sets the field's height from its text.
+const nativeGrow = CSS.supports('field-sizing', 'content')
+function fitField() {
+  const f = document.querySelector('.field')
+  if (nativeGrow || !f) return
+  f.style.height = 'auto'; f.style.height = `${f.scrollHeight + f.offsetHeight - f.clientHeight}px`
+}
+let fitQueued = false   // resize and font events fit once per frame; a fit forces a full layout
+const fitSoon = () => { if (!fitQueued) { fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitField() }) } }
+document.addEventListener('input', e => e.target.matches('.field') && fitField())
+window.addEventListener('resize', fitSoon)
+document.fonts.addEventListener('loadingdone', fitSoon)
+```
+
+  and call `fitField()` at the end of `draw()`, after `watched.disconnect(); watched.observe(document.querySelector('.people'))`.
 
 - [ ] **Step 5: The cells.** In `docs/design/room-cells.html`:
   - In `options.message`, delete `['ended', 'Session ended']` and, after `['conflict', …]`, add `['conflict,save-failed', 'Both editor messages']`.
@@ -488,7 +525,7 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 
 - [ ] **Step 6: Known issues.**
   - In "The issue editor's phone keyboard behaviour is unverified", add to **Issue:** after its last sentence: "Step 3b3 makes Enter always save and never insert a line break (`oneLine` in `room/issueEditor.ts`), so a swallowed Gboard Enter at the end of the draft does nothing, as today, and one inside the text becomes a space and moves the caret to the end." And to **Resolution:**, after "narrow the guard then.": "The narrowing, if needed, is to treat a `beforeinput` of `insertLineBreak` as the save, which a composition commit never produces (inferred, not checked on a phone)."
-  - After that entry add a new entry (its **Issue** also names `field-sizing: content`, whose Safari support is unchecked, for step 4 to settle):
+  - After that entry add a new entry (its **Issue** also names `field-sizing: content`, which Firefox ESR 140 lacks, confirmed, and Safari's support is unchecked, for step 4 to settle):
 
 ```markdown
 ### On a phone, the virtual keyboard and the pinned sheet may leave the editing view little room
@@ -497,9 +534,9 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 - **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
   virtual keyboard rises over it. With the keyboard open, the field, Save and
   Cancel and the editor's messages may have little room to show (inferred, not
-  checked on a phone). The mockup's field grows by CSS `field-sizing: content`;
-  Safari's support is unchecked, and step 4 needs a fallback if an older Safari
-  is supported.
+  checked on a phone). The mockup's field grows by CSS `field-sizing: content`,
+  which Firefox ESR 140 lacks (confirmed by hand); step 4 needs a script fit
+  there, as the mockup has, and Safari's support is unchecked.
 - **Resolution:** Stays open until a phone is at hand on the deployed app
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   Accepted costs); never a merge gate.
