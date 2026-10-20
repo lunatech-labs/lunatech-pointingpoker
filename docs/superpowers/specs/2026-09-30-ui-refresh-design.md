@@ -181,8 +181,8 @@ document as a whole stays in discussion.
 | 3b4 | The lobby | 3b3 | The product owner, then the specialist on all four |
 | 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
 | 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
-| 4b2 | The editor's save guard | 4b | Its cases |
-| 4c1 | The room page's look | 4b2, 3b4 | By eye, and the existing cases unchanged but for its listed contract changes |
+| 4b2 | The editor's save guard | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1 | The room page's look | 4b2, 3b4 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1 | Its cases |
@@ -318,7 +318,8 @@ and the result placed as step 3b1 decides: in the deck's place on the voter's
 page, and below the table on the facilitator's page (layout f), the table
 giving it its height, which narrows that entry in `docs/known-issues.md`, and the
 "Link copied" hint moved beside the "Copy link" link (principle 4; Appendix A,
-improve 10), and the round bar's toggle and guard (4b). It keeps
+improve 10), and the round bar's toggle and guard (4b) and the editor's save
+guard (4b2). It keeps
 the interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:

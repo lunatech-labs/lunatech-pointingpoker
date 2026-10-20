@@ -78,12 +78,14 @@ actions per phase.
    that check and the click: a case first waits on the pressing page's own
    phase, as every case does but 'a facilitator's page has no deck, and keeps
    Show, Re-vote and Clear', whose Clear follows a wait on Bob's page. That case
-   gains a wait on Alice's Re-vote. Step 5's cases follow the same rule.
+   gains a wait for Alice's toggle to read Re-vote, before its Clear. Step 5's
+   cases follow the same rule.
 6. **A case proves an effect, not an attribute.** A press acts when its request
    is sent and is dropped when none is, counted on
-   `/rooms/{id}/(show|revote|clear)` after a later frame, as 'a double-clicked
-   Save issue posts once' does; `click({ force: true })` makes the press
-   without Playwright's wait. "Unguarded" is a forced press that acts at once.
+   `/rooms/{id}/(show|revote|clear)` after a later snapshot, as 'a double-clicked
+   Save issue posts once' does; `click({ force: true })` makes a single press
+   without Playwright's wait. A case shows the bar unguarded by a forced press
+   that acts at once.
    A retrying read of `aria-disabled` would wait out the 1 s and pass whatever
    the code does.
 7. **This reopens J5's "a separate step to hide Show"**, set aside because
@@ -101,7 +103,7 @@ actions per phase.
 | Snapshot with a flip: a Show, Re-vote, or Clear while revealed, from any page; the last vote's auto-reveal; a switch to facilitator completing the round | the label flips on the same element in the same render; becomes guarded | the label flips; the 1 s restarts |
 | Snapshot without a flip: a vote, a join or leave, an issue edit, a Clear while voting | unchanged | unchanged; the timer runs on |
 | The 1 s elapses | cannot happen | becomes unguarded |
-| Stream lost | unchanged; a press is still sent over HTTP, and its flip shows at the reconnect | unchanged; the timer runs on |
+| Stream lost | unchanged; a press is still sent over HTTP, and a flip it causes shows at the reconnect | unchanged; the timer runs on |
 | Reconnect, the phase changed meanwhile | a flip | a flip |
 | Reconnect, the phase changed and changed back | unchanged | unchanged |
 | A command fails | today's error handling; no flip | today's error handling; the timer runs on |
@@ -117,8 +119,9 @@ actions per phase.
   Re-vote clears the votes cast in between (known issues, new). Each needs two
   people within a round trip, and each is today's behaviour.
 - Two quick Enters, not held, before the flip send the command twice, as a
-  double-click would without the `detail` rule; keyboard clicks carry no
-  `detail`.
+  double-click would without the `detail` rule: keyboard clicks carry `detail`
+  0. A fast double-tap a browser reports as two single clicks does the same
+  (inferred for iOS), a phone risk held in known issues.
 - A deliberate second click on the same spot within the double-click time is
   ignored, the role line's known issue extended to the bar.
 - A press aimed at the old phase more than 1 s after the flip acts on the new
@@ -143,18 +146,19 @@ the `detail` rule, on today's page, then reverted.
 | Mutation: no Enter rule | the held Enter fails |
 | Mutation: no restart | the restart fails |
 | A literal double-click with no guard, read by the round's state | passes: both clicks land before the flip |
+| A held Space and a held Enter on a plain button | one click and one per repeat, in both browsers |
 
 ## Contract
 
-Contract changes: Show votes is absent while revealed, and no existing case
+Contract change: Show votes is absent while revealed, and no existing case
 reads it there (step 1c), so `'Re-vote is offered only while the round is
-revealed'` still holds; one wait in `e2e/roles.spec.js` (decision 5).
+revealed'` still holds. One case gains a wait (decision 5).
 
 New cases, in `e2e/room.spec.js`, each shown to fail by the mutation beside it:
 
 | Case | Mutation |
 | --- | --- |
-| A double-click's second click, landing after the flip, sends nothing, and a press after the 1 s acts | no guard; the drop removed, `aria-disabled` kept |
+| A forced single press just after a flip sends nothing, and one after the 1 s acts | no guard; the drop removed, `aria-disabled` kept |
 | A double-click sends one request | no `detail` rule |
 | Someone else's Show guards my bar | the guard started only by this page's own press |
 | A held Enter fires once, and focus stays on the toggle across the flip | no Enter rule; the toggle as two elements |
@@ -164,12 +168,12 @@ New cases, in `e2e/room.spec.js`, each shown to fail by the mutation beside it:
 
 ## The docs' changes
 
-- **Parent**: step 4's entry, the Steps table and the order (this commit).
+- **Parent**: the Steps table, the order, and step 4's and 4a's entries.
 - **Reference**: J5's Show line points to 4b; the log gains a 4b entry for
   decision 7; Open's not-a-room line moves to step 4d's brainstorm.
 - **Known issues**: a late Clear discards the votes cast in the round a Re-vote
   reopened, beside the late Re-vote entry; the role line's re-click entry
-  extends to the bar.
+  extends to the bar; the double-tap phone risk.
 
 ## Branches and commits
 
