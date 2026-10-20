@@ -747,8 +747,8 @@ both notices show, a change to either reads both. One going is a removal, which
 - A failed save by mouse on the Save issue button goes unheard in Orca with
   Firefox, and Space or Enter on the button is expected to behave the same: Save
   is disabled while saving, so the editor moves focus back to the box, and
-  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. See
-  `docs/known-issues.md`.
+  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. Step
+  4b2 removes it (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`).
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
 ## Step 1b. Alphabetical participants
