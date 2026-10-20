@@ -78,9 +78,11 @@ test('a room remembered from before the cutover reopens under its derived name',
   const page = await visitor({ roomId: crypto.randomUUID(), name: 'Alice', defaultRole: 'Voter' })
   await page.goto('/')
   // The lobby offers it rather than joining it: only a room's own path joins.
-  await page.getByRole('link', { name: 'Rejoin your last room as Alice' }).click()
+  const rejoin = page.getByRole('link', { name: 'your last room' })
+  await expect(rejoin).toContainText('as Alice')
+  await rejoin.click()
   await expect(page).toHaveURL(ROOM_URL)
-  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(page)).toBeVisible()
 })
 
 test('a refused room creation says so', async ({ page, origin }) => {
