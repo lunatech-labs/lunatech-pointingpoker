@@ -210,20 +210,16 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
 
 test('the reveal notice claims its space before the reveal', async ({ join }) => {
   const alice = await join('Alice')
-  const showVotes = alice.page.getByRole('button', { name: 'Show votes' })
-  // Two rows, since a reveal adds the notice to one and the Re-vote button to the other. Neither
-  // may take height: the notice's row also sizes the estimation card.
-  const tops = async () => [
-    (await showVotes.boundingBox()).y,
-    (await participantEntries(alice.page).first().boundingBox()).y
-  ]
+  // The notice and the Re-vote button both appear above the list, so its first entry stays put
+  // only if neither takes height: the notice's row also sizes the estimation card.
+  const top = async () => (await participantEntries(alice.page).first().boundingBox()).y
 
   // Nobody votes, so no summary block appears and what is left is the two in-place appearances.
-  const before = await tops()
-  await showVotes.click()
+  const before = await top()
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(frozenNotice(alice.page)).toBeVisible()
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
-  expect(await tops()).toEqual(before)
+  expect(await top()).toEqual(before)
 })
 
 // A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
@@ -345,9 +341,10 @@ test('two tabs on one room are one participant', async ({ join }) => {
   await expect(participantEntries(alice.page)).toHaveCount(2)
 
   await second.close()
-  // The surviving tab keeps the member: only its own ref went.
+  // The surviving tab keeps the member: only its own ref went. Alice's vote reveals the round,
+  // so her value is what reaches the surviving tab.
   await vote(alice.page, '3')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(revealedEstimation(participantEntry(bob.page, 'Alice'))).toHaveText('3')
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1)
 })
 
@@ -429,7 +426,8 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
   // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
   // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
-  await expect(results(alice.page)).toBeHidden()
+  // No entry rather than no region, so a region saying nobody voted still passes.
+  await expect(tallyEntries(alice.page)).toHaveCount(0)
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -471,11 +469,12 @@ test('a vote survives its own reconnect', async ({ join }) => {
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // The room's own state, not Bob's stale copy: Alice never disconnected, so her entry for
-  // Bob is redrawn from a snapshot published after the reconnect.
+  // The room's own state, not Bob's stale copy: Alice never disconnected, and her vote reveals
+  // the round, so Bob's value on her page comes from a snapshot published after the reconnect.
   await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1, { timeout: 10_000 })
-  await expect(participantEntry(alice.page, 'Bob')).toContainText('8')
+  await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveText('8', {
+    timeout: 10_000
+  })
 })
 
 test('a disconnection outlasting the grace period comes back without a reload', async ({
