@@ -165,7 +165,7 @@ New cases, in `e2e/room.spec.js`, each shown to fail by the mutation beside it:
 | A second flip restarts the guard, the second command sent to the API, on a paused clock | no restart; the guard at 500 ms; the guard at 1500 ms |
 | A Clear while voting starts no guard | any snapshot starts the guard |
 | The first snapshot mounts the bar unguarded | the guard started on mount |
-| The guard lasts 1 s from the flip, on a paused clock | the guard at 500 ms; the guard at 1500 ms; the timer restarted by every render |
+| The guard lasts 1 s from the flip, on a paused clock | the guard at 500 ms; the guard at 1500 ms; the timer restarted by every render; the guard cleared by a snapshot without a flip |
 
 ## The docs' changes
 

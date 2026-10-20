@@ -953,9 +953,10 @@ test('the guard lasts 1 s from the flip', async ({ join, room }) => {
   await toggle(alice.page).click()
   await expect(toggle(alice.page)).toHaveText('Re-vote')
   await alice.page.clock.runFor(999)
-  await toggle(alice.page).click({ force: true })
-  // Also a snapshot without a flip, which must not restart the guard.
+  // A snapshot without a flip, which must neither end nor restart the guard.
   await laterSnapshot(bob, alice, 'PP-1')
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-2')
   expect(sent).toEqual(['show'])
   await alice.page.clock.runFor(1)
   await toggle(alice.page).click({ force: true })
