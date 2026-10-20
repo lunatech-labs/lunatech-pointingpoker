@@ -6,11 +6,11 @@ Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 4
 
 ## Purpose
 
-Step 4 runs as four steps, sliced by how each is judged (the parent's Steps).
-4b is its one behaviour change: Show votes and Re-vote become one button, and
-the round bar ignores presses for 1 s after the phase changes. It builds 3b1
-decision 6 and the reference's J5 on today's look, as step 2 built roles; 4c1
-restyles it.
+Step 4 runs as five steps, sliced by how each is judged (the parent's Steps).
+4b is the round bar's behaviour change: Show votes and Re-vote become one
+button, guarded as 3b1 decision 6 and the reference's J5 define. It is built on
+today's look, the toggle in Show's place; 4c1 restyles the bar and orders its
+actions.
 
 The toggle cannot ship without the guard. It puts Re-vote under the pointer
 that pressed Show, so a double-click's second click, or a click meant for Show
@@ -28,15 +28,13 @@ landing after someone else's, would reopen the round.
   while revealed.
 - **Guarded**: the 1 s after the latest flip. While guarded every action in the
   bar is `aria-disabled` and a press on it is dropped.
-- **Press**: a click on a bar button, by mouse, touch, Enter or Space.
+- **Press**: a click on a bar button, by mouse, touch, Enter or Space, judged
+  when the click fires: at release for a mouse, a touch or Space.
 
 ## Decisions
 
-Settled before this step (3b1 decision 6, J5): the toggle at the bar's edge
-and Clear votes set apart; Show votes absent while revealed; the guard on the
-bar, not on a button, for 1 s after a flip whoever caused it, the look kept and
-focus left where it is; a Clear while voting starts no guard; a held Enter
-fires once, as on the role line.
+Settled before this step: 3b1 decision 6, the guard's rule, and J5, the
+actions per phase.
 
 1. **A flip starts the guard, and only a flip.** The first snapshot mounts the
    bar unguarded: nobody has aimed at it yet. A reconnect whose first snapshot
@@ -44,56 +42,71 @@ fires once, as on the role line.
    back is not. `snapshot` is never reset to `null` once set (`connection.ts`),
    so the comparison spans a lost stream. Set aside: guarding the first
    snapshot too, an inert first second that prevents no misfire.
-2. **A flip while guarded restarts the 1 s.** The guard ends 1 s after the
-   latest flip, one timer cleared and restarted, no extra state. Set aside:
-   1 s from the first flip, which needs an "unless running" rule and ends the
-   guard 1 s after a flip it ignored. A second flip within the 1 s needs pages
-   that saw the first at very different times, or a command sent outside the
-   bar, since every other page is guarded too.
+2. **A flip while guarded restarts the 1 s.** One timer, cleared and restarted.
+   Set aside: 1 s from the first flip, which needs an "unless running" rule.
+   Every page is guarded after a flip, so a second flip within the 1 s comes
+   from outside the bars: a vote that completes a reopened round, a switch to
+   facilitator, a page that saw the first flip late, or a command sent
+   directly.
 3. **One hook, `useRoundGuard(revealed: boolean): boolean`, in
-   `components/`, called by `Controls`.** It turns guarded in the same render
-   that shows the flip, not in an effect after it, or the new label is
-   pressable for a frame. Tested by browser cases only: the logic is a
-   comparison and a timer, and its risks (the first render, StrictMode's
-   double effects, the timer's cleanup, keys and focus) only a browser shows.
-   Set aside: a pure `room/roundGuard.ts` with unit tests, which cannot reach
-   those risks; `@testing-library/react`, a dependency for one hook, in jsdom.
+   `components/`, called by `Controls`.** Guarded is computed in the render
+   that shows the flip; an effect would leave the new label pressable for a
+   frame. It is safe under StrictMode by construction: the last phase is kept
+   in state and compared during render, a flip counter is the timer effect's
+   only dependency, and the effect's cleanup clears the timer; no ref is
+   written during render. Tested by browser cases, whose risks are keys, focus
+   and timing; the suite runs the production build, so StrictMode gets one hand
+   check under `npm run dev`, recorded in the PR. Set aside: a pure
+   `room/roundGuard.ts` with unit tests, which cannot reach those risks;
+   `@testing-library/react` and `jsdom`, two dependencies for one hook.
 4. **One rule on the bar, not per button.** A click-capture handler on the bar
-   drops every click while guarded; a key handler on the bar drops every
-   repeated Enter, guarded or not; each button carries `aria-disabled="true"`
-   while guarded, never `disabled`, which would drop focus. The toggle's label
-   changes on the same element, so focus stays across a flip. Step 5's Next
-   issue inherits all of it. No double-click filter (`e.detail`): a second
-   click after the flip meets the guard, and one before it repeats the same
-   command (Accepted costs). The Enter filter covers every action: a held
-   Enter on Clear while revealed would reopen the round, outlast the 1 s and
-   clear the new round's votes. Set aside: the role line's per-button
+   drops a click while guarded or whose `detail` is above 1; a key handler on
+   the bar drops a repeated Enter, guarded or not; each button carries
+   `aria-disabled="true"` while guarded, never `disabled`, which would drop
+   focus. The toggle's label changes on the same element, so focus stays across
+   a flip. A held Space fires once by itself (checked in both browsers), so the
+   key rule is Enter's alone. The `detail` rule closes what 3b1 decision 6
+   promises, a double-click's second click landing before the flip, which
+   would repeat the command; after a flip the guard already covers it. The
+   Enter rule covers every action: a held Enter on Clear while revealed would
+   reopen the round, outlast the 1 s and clear the new round's votes. Step 5's
+   Next issue inherits the rule. Set aside: the role line's per-button
    handlers, repeated on each action.
-5. **The existing cases stay unchanged.** Playwright's click waits while a
-   button is `aria-disabled`, so a case pressing the toggle right after a flip
-   waits up to 1 s instead of failing; the spike found no flake and no cost.
-6. **The double-click case is the forced press.** A double-click endangers the
-   round only when the flip lands between its clicks. Playwright's two clicks
-   land before the snapshot, so a literal `dblclick()` passes with the guard
-   removed. The case presses, waits for the flip, and presses again at once.
+5. **The existing cases stay unchanged but for one wait.** Playwright's click
+   waits while a button is `aria-disabled`, so a press right after a flip waits
+   up to 1 s. A press can still be dropped when the pressing page flips between
+   that check and the click: a case first waits on the pressing page's own
+   phase, as every case does but 'a facilitator's page has no deck, and keeps
+   Show, Re-vote and Clear', whose Clear follows a wait on Bob's page. That case
+   gains a wait on Alice's Re-vote. Step 5's cases follow the same rule.
+6. **A case proves an effect, not an attribute.** A press acts when its request
+   is sent and is dropped when none is, counted on
+   `/rooms/{id}/(show|revote|clear)` after a later frame, as 'a double-clicked
+   Save issue posts once' does; `click({ force: true })` makes the press
+   without Playwright's wait. "Unguarded" is a forced press that acts at once.
+   A retrying read of `aria-disabled` would wait out the 1 s and pass whatever
+   the code does.
+7. **This reopens J5's "a separate step to hide Show"**, set aside because
+   hiding Show is presentation. Show is now hidden by becoming the toggle, and
+   the toggle needs the guard, a behaviour judged by its cases.
 
 ## States and events
 
 | Event | Unguarded | Guarded |
 | --- | --- | --- |
-| Press on the toggle | sends Show (voting) or Re-vote (revealed); nothing changes until a snapshot | dropped; focus stays |
-| Press on Clear | sends Clear | dropped; focus stays |
+| Press on the toggle | sends Show (voting) or Re-vote (revealed); nothing changes until a snapshot | dropped; the guard moves no focus |
+| Press on Clear | sends Clear | dropped; the guard moves no focus |
+| A click with `detail` above 1 | dropped | dropped |
 | A repeated Enter on any bar button | dropped | dropped |
-| A held Space | fires once, on release (native) | dropped |
 | Snapshot with a flip: a Show, Re-vote, or Clear while revealed, from any page; the last vote's auto-reveal; a switch to facilitator completing the round | the label flips on the same element in the same render; becomes guarded | the label flips; the 1 s restarts |
 | Snapshot without a flip: a vote, a join or leave, an issue edit, a Clear while voting | unchanged | unchanged; the timer runs on |
 | The 1 s elapses | cannot happen | becomes unguarded |
-| Stream lost | unchanged; a press takes today's error path | unchanged; the timer runs on |
+| Stream lost | unchanged; a press is still sent over HTTP, and its flip shows at the reconnect | unchanged; the timer runs on |
 | Reconnect, the phase changed meanwhile | a flip | a flip |
 | Reconnect, the phase changed and changed back | unchanged | unchanged |
-| A command fails | today's error handling; no flip | cannot happen: no press was sent |
+| A command fails | today's error handling; no flip | today's error handling; the timer runs on |
 | First snapshot: a join, a reload, the reload after a refusal | the bar mounts unguarded | cannot happen |
-| Unmount: Leave, a reload | nothing to clear | the timer is cleared |
+| Leave, a reload | the page unloads | the page unloads |
 
 ## Accepted costs
 
@@ -103,10 +116,15 @@ fires once, as on the role line.
   reopened"; a Clear aimed at a revealed round that lands after someone's
   Re-vote clears the votes cast in between (known issues, new). Each needs two
   people within a round trip, and each is today's behaviour.
-- A double-click whose second click lands before the snapshot repeats the same
-  command, which changes nothing, or is that late Re-vote at its narrowest.
+- Two quick Enters, not held, before the flip send the command twice, as a
+  double-click would without the `detail` rule; keyboard clicks carry no
+  `detail`.
+- A deliberate second click on the same spot within the double-click time is
+  ignored, the role line's known issue extended to the bar.
 - A press aimed at the old phase more than 1 s after the flip acts on the new
-  one. The 1 s is decision 6's bound.
+  one. The 1 s is 3b1 decision 6's bound.
+- A background tab's throttled timers can stretch the guard towards 2 s, unseen
+  (inferred).
 - A screen reader may or may not speak the toggle's new name while it has
   focus. Step 4a's phase line is the announcement.
 - The deck is not in the bar. A revealed round already disables its cards, and
@@ -114,52 +132,44 @@ fires once, as on the role line.
 
 ## The spike
 
-Run on 2026-10-20 against a throwaway guard built as decisions 1 to 4, on
-today's page, then reverted.
+Run on 2026-10-20 against a throwaway guard built as decisions 1 to 4, without
+the `detail` rule, on today's page, then reverted.
 
 | What | Result |
 | --- | --- |
 | The suite, three runs in Chromium and Firefox | every case passed in every run, none flaky |
 | Run time | 3.8 min a run, against 4.0 on today's page: noise |
-| Draft guard cases, three runs in both browsers | all passed |
 | Mutation: no guard | the forced press, someone else's Show and the restart fail |
-| Mutation: no Enter filter | the held Enter fails |
+| Mutation: no Enter rule | the held Enter fails |
 | Mutation: no restart | the restart fails |
-| A literal double-click, guard removed | passes (decision 6) |
-| A held Space and a held Enter on a plain button | one click and one per repeat, in both browsers |
+| A literal double-click with no guard, read by the round's state | passes: both clicks land before the flip |
 
 ## Contract
 
-Contract change: Show votes is absent while revealed. No existing case reads it
-there (step 1c), so none changes, and `'Re-vote is offered only while the
-round is revealed'` still holds: while voting the toggle is named "Show
-votes".
+Contract changes: Show votes is absent while revealed, and no existing case
+reads it there (step 1c), so `'Re-vote is offered only while the round is
+revealed'` still holds; one wait in `e2e/roles.spec.js` (decision 5).
 
 New cases, in `e2e/room.spec.js`, each shown to fail by the mutation beside it:
 
 | Case | Mutation |
 | --- | --- |
-| A press while guarded is dropped, and acts once the 1 s is over (a forced click) | no guard |
-| A double-click's second click, landing after the flip, does nothing | no guard |
+| A double-click's second click, landing after the flip, sends nothing, and a press after the 1 s acts | no guard; the drop removed, `aria-disabled` kept |
+| A double-click sends one request | no `detail` rule |
 | Someone else's Show guards my bar | the guard started only by this page's own press |
-| A held Enter fires once, and focus stays on the toggle across the flip | no Enter filter; the toggle as two elements |
+| A held Enter fires once, and focus stays on the toggle across the flip | no Enter rule; the toggle as two elements |
 | A second flip restarts the guard, the second command sent to the API | no restart |
 | A Clear while voting starts no guard | any snapshot starts the guard |
 | The first snapshot mounts the bar unguarded | the guard started on mount |
 
-A case reads guarded as `aria-disabled="true"` on the bar's buttons, and proves
-a press dropped with `click({ force: true })`, which skips Playwright's wait.
-
 ## The docs' changes
 
-- **Parent**: the Steps table runs step 4 as 4b, 4c1 (the room page's look),
-  4c2 (the lobby's look, Bootstrap and its Dependabot pin removed) and 4d (the
-  not-a-room page in React, and `?tab=join`), each with its own spec; step 4's
-  entry says so and points here for the toggle and the guard; its double-click
-  guarantee becomes decision 6's case.
-- **Reference**: Open's not-a-room line moves to step 4d's brainstorm.
+- **Parent**: step 4's entry, the Steps table and the order (this commit).
+- **Reference**: J5's Show line points to 4b; the log gains a 4b entry for
+  decision 7; Open's not-a-room line moves to step 4d's brainstorm.
 - **Known issues**: a late Clear discards the votes cast in the round a Re-vote
-  reopened, beside the late Re-vote entry.
+  reopened, beside the late Re-vote entry; the role line's re-click entry
+  extends to the bar.
 
 ## Branches and commits
 
