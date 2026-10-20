@@ -44,6 +44,18 @@ roadmap item instead of leaving it here as stale history.
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   Accepted costs); never a merge gate.
 
+### A fast double-tap on the round bar may send its command twice
+
+- **Where:** `frontend/src/components/Controls.tsx` (the bar's
+  `onClickCapture`).
+- **Issue:** The bar drops a click whose `detail` is above 1. A browser that
+  reports a fast double-tap as two single clicks lets the second through if it
+  lands before the flip reaches the page (inferred for iOS, not checked on a
+  phone). The second command acts on the phase it was aimed at, as a second
+  Show does.
+- **Resolution:** Stays open until a phone is at hand on the deployed app; never
+  a merge gate.
+
 ### The issue editor's field needs a script fit where `field-sizing` is unsupported
 
 - **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
@@ -846,9 +858,10 @@ roadmap item instead of leaving it here as stale history.
   travels a slow link; Alice's lands first and reopens the round, Carol votes,
   then Bob's lands and turns Carol's fresh vote into a previous one, not
   confirmed, so the auto-reveal waits for her. She recovers with one click, and
-  nothing is lost. Step 3b1's round bar guard
+  nothing is lost. The round bar's guard
   (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
-  decision 6) acts on one page only, so it cannot stop a press already sent.
+  decision 6, built in step 4b) acts on one page only, so it cannot stop a
+  press already sent.
 - **Resolution:** Guard `reVote` server-side: it applies only while the round
   is revealed, and is otherwise a no-op, as a second `show` is. It leaves a
   Re-vote late by a whole round, and a late Show that re-reveals a round just
@@ -856,6 +869,18 @@ roadmap item instead of leaving it here as stale history.
   number in the command would close. A backend
   change, so its own step with a case shown to fail first. Remove this entry
   when that lands.
+
+### A late Clear discards the votes cast in the round a Re-vote reopened
+
+- **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
+  (`RoomData.clear`, which applies whatever the phase).
+- **Issue:** Alice presses Clear votes on a revealed round while Bob presses
+  Re-vote. Bob's lands first and reopens the round, and Carol votes. Then
+  Alice's lands and clears Carol's fresh vote. The round bar's guard (step 4b)
+  acts on one page only, so it cannot stop a press already sent. It needs two
+  people within a round trip, and it is the page's behaviour before 4b.
+- **Resolution:** Stays open. Only a round number in the command would close
+  it, as for the late Re-vote above.
 
 ### A reveal with votes still pushes the participants list down
 
@@ -1066,14 +1091,18 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
-### A deliberate re-click on the role line within the double-click time is ignored
+### A deliberate re-click on the role line or the round bar within the double-click time is ignored
 
-- **Where:** `frontend/src/components/RoleLine.tsx` (the button's `onClick`).
+- **Where:** `frontend/src/components/RoleLine.tsx` (the button's `onClick`),
+  `frontend/src/components/Controls.tsx` (the bar's `onClickCapture`).
 - **Issue:** The line ignores a click whose `detail` is above 1, so a double-click
   switches once. A browser counts any click within the OS double-click time and
   without a mouse move as part of the same run, so switching and then switching
   back at once, on the same spot, is ignored until a pause or a move. The line
-  keeps showing the role held, so nothing wrong is shown.
+  keeps showing the role held, so nothing wrong is shown. The round bar does
+  the same since step 4b. There it matters only for a press that flips
+  nothing, such as Clear votes pressed twice while voting; after a flip, the
+  1 s guard ignores the second click anyway.
 - **Resolution:** Stays open, since the cost is a pause before the second click.
 
 ### The frontend's type check stops at ES2022 APIs
