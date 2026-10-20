@@ -180,13 +180,16 @@ document as a whole stays in discussion.
 | 3b3 | The issue editor and the messages | 3b2 | The product owner |
 | 3b4 | The lobby | 3b3 | The product owner, then the specialist on all four |
 | 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
-| 4 | Restyle | 1b, 1c, 2c, 3b4 | By eye, and the existing cases unchanged but for its listed contract changes |
-| 4a | The round's live region | 4 | Its cases |
-| 5 | Next issue | 4 | Its cases |
-| 5+ | One step per feature | 4 | Each one's spec |
+| 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged |
+| 4c1 | The room page's look | 4b, 3b4 | By eye, and the existing cases unchanged but for its listed contract changes |
+| 4c2 | The lobby's look | 4c1 | By eye, and the existing cases unchanged but for its listed contract changes |
+| 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
+| 4a | The round's live region | 4c1 | Its cases |
+| 5 | Next issue | 4c1 | Its cases |
+| 5+ | One step per feature | 4d | Each one's spec |
 
 **Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
-2c likewise, then 1c, 4 and 4a stacked, while 3 runs alongside from now, and 5
+2c likewise, then 1c, step 4's four steps and 4a stacked, while 3 runs alongside from now, and 5
 after 4.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
@@ -300,7 +303,13 @@ step 4. It may share a line with the
 progress, as a separate element (Appendix B). Step 4a makes it the round's live
 region.
 
-**Step 4. Restyle.** The step 3 reference applied, the CSS library chosen,
+**Step 4. Restyle.** It runs as four steps, sliced by how each is judged, each
+with its own spec: 4b, the round bar's toggle and guard, built on today's look
+(`docs/superpowers/specs/2026-10-20-ui-refresh-4b-round-toggle-design.md`);
+4c1, the room page's look, which chooses the CSS library; 4c2, the lobby's
+look, which removes Bootstrap and its pin; and 4d, the not-a-room page in React
+with the Join tab's URL flag (3b4 decision 15). What follows is the whole of
+step 4, each step's spec taking its part. The step 3 reference applied, the CSS library chosen,
 Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
 and the result placed as step 3b1 decides: in the deck's place on the voter's
 page, and below the table on the facilitator's page (layout f), the table
@@ -326,8 +335,8 @@ element lists step 3's layouts give:
 - A reveal with no votes shows the result, "Nobody voted" in place of the most
   voted value, and the slot keeps its height.
 - Every action in the round bar is `aria-disabled` for 1 s after the phase
-  changes, keeping focus, and acts after; a double-click on Show votes leaves
-  the round revealed, and a held Enter fires it once.
+  changes, keeping focus, and acts after; a double-click's second click,
+  landing after the flip, does nothing, and a held Enter fires once (4b).
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
 - The facilitator's page, zoomed to 150%, keeps the issue in view, and in each
