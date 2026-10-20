@@ -858,9 +858,10 @@ roadmap item instead of leaving it here as stale history.
   travels a slow link; Alice's lands first and reopens the round, Carol votes,
   then Bob's lands and turns Carol's fresh vote into a previous one, not
   confirmed, so the auto-reveal waits for her. She recovers with one click, and
-  nothing is lost. Step 3b1's round bar guard
+  nothing is lost. The round bar's guard
   (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
-  decision 6) acts on one page only, so it cannot stop a press already sent.
+  decision 6, built in step 4b) acts on one page only, so it cannot stop a
+  press already sent.
 - **Resolution:** Guard `reVote` server-side: it applies only while the round
   is revealed, and is otherwise a no-op, as a second `show` is. It leaves a
   Re-vote late by a whole round, and a late Show that re-reveals a round just

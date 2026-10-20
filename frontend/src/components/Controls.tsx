@@ -16,7 +16,7 @@ export function Controls({ revealed, onShow, onRevote, onClear }: Props) {
               e.preventDefault()
             }
           }}
-          // A held Enter repeats its click the same way.
+          // A held Enter's repeats are dropped, guarded or not.
           onKeyDownCapture={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
         >
           <div className="mr-auto">
