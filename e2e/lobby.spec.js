@@ -27,12 +27,13 @@ test('a room name pasted with spaces into the Join form still joins', async ({
 test('the lobby offers the remembered room rather than joining it', async ({ join, room }) => {
   const alice = await join('Alice')
   await alice.page.goto('/')
-  const rejoin = alice.page.getByRole('link', { name: `Rejoin ${room} as Alice` })
-  await expect(rejoin).toBeVisible()
-  await expect(alice.page.getByRole('button', { name: 'Show votes' })).toBeHidden()
+  // By the room id and the name it rejoins as, whatever their order in the link.
+  const rejoin = alice.page.getByRole('link', { name: room })
+  await expect(rejoin).toContainText('as Alice')
+  await expect(inRoom(alice.page)).toBeHidden()
   await rejoin.click()
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
-  await expect(alice.page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(alice.page)).toBeVisible()
 })
 
 test('Create, Leave and Join change the address, and Leave keeps the name', async ({
