@@ -146,8 +146,8 @@ async function departureWhileCut(join) {
   const aliceOnBob = participantEntry(bob.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnBob)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnBob)).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
@@ -488,12 +488,12 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
   // Detection rides on the room's own traffic, so two writes to Bob's dead stream start his
-  // grace period; both are asserted on Alice's entry, since Bob's page is stale while cut.
+  // grace period; both are asserted on Alice's page, since Bob's page is stale while cut.
   const aliceOnAlice = participantEntry(alice.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnAlice)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnAlice)).toHaveCount(0)
+  await vote(alice.page, '8')
+  await expect(ownEstimation(alice.page)).toHaveText('8')
   // Bob's own entry going is the grace period expiring, which is what this case needs and what
   // departureWhileCut's reconnect stays inside: restoring sooner would prove nothing.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
@@ -509,8 +509,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await expect(participantEntries(bob.page)).toHaveCount(2, { timeout: 10_000 })
 
   // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
-  await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1', { timeout: 10_000 })
   expect(await bob.page.evaluate(() => window.sameLoad)).toBe(true)
   await expect(restartNotice(bob.page)).toHaveCount(0)
 })
@@ -537,8 +537,8 @@ test('a stream frozen without an error is noticed and reopened on its own', asyn
 
   // The reopened stream's first snapshot, then a frame sent after it.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
 })
 
 test('a draft survives blur and room activity', async ({ join }) => {
@@ -556,9 +556,9 @@ test('a draft survives blur and room activity', async ({ join }) => {
 
   // Edit mode, not focus, guards the draft, so alt-tabbing away to copy a title loses nothing.
   await issueBox(alice.page).blur()
-  // Clear, not a re-vote: Bob's mark only disappears once the frame lands.
-  await bob.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
+  // A join, since Carol's entry only appears once the frame lands.
+  await join('Carol')
+  await expect(participantEntry(alice.page, 'Carol')).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 })
 
@@ -732,11 +732,11 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   })
 
   await setIssue(alice, 'mine')
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.focus()
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
-  await expect(clear).toBeFocused()
+  await expect(elsewhere).toBeFocused()
 })
 
 // Read by its own text throughout, since a region's text is announced as a whole.
