@@ -861,6 +861,81 @@ test('a held Enter fires once, and focus stays on the toggle across the flip', a
   expect(sent).toEqual(['show'])
 })
 
+test('a forced single press just after a flip sends nothing, and one after the 1 s acts', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  // Forced, since a plain click waits while the button is aria-disabled.
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+
+  await expect(toggle(alice.page)).not.toHaveAttribute('aria-disabled')
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Show votes')
+  expect(sent).toEqual(['show', 'revote'])
+})
+
+test("someone else's Show guards my bar", async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(bob.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await toggle(alice.page).click({ force: true })
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual([])
+})
+
+test('a second flip restarts the guard', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await alice.page.waitForTimeout(600)
+  // Straight to the API: every bar is guarded, so a second flip comes from outside them.
+  expect((await bob.page.request.post(`/rooms/${room}/revote`)).ok()).toBe(true)
+  await expect(toggle(alice.page)).toHaveText('Show votes')
+  // Past the first flip's 1 s, within the second's.
+  await alice.page.waitForTimeout(500)
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+})
+
+test('a Clear while voting starts no guard', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await vote(bob.page, '5')
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['clear', 'show'])
+})
+
+test('the first snapshot mounts the bar unguarded', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['show'])
+})
+
 test('the copy hint lasts 2 s from the first copy, not the last', async ({ join }) => {
   const alice = await join('Alice')
   const page = alice.page

@@ -92,6 +92,8 @@ test("a facilitator's page has no deck, and keeps Show, Re-vote and Clear", asyn
   await expect(unconfirmedCard(bob.page)).toHaveText('5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(frozenNotice(bob.page)).toBeVisible()
+  // Alice's own page must have flipped, or her Clear can land as the flip guards it.
+  await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
   await alice.page.getByRole('button', { name: 'Clear votes' }).click()
   await expect(frozenNotice(bob.page)).toBeHidden()
   await expect(ownEstimation(bob.page)).toHaveCount(0)
