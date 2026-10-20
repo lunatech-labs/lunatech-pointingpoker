@@ -808,6 +808,59 @@ test('Re-vote is offered only while the round is revealed', async ({ join }) => 
   await expect(reVote).toHaveCount(0)
 })
 
+// The round bar's toggle: Show votes while voting, Re-vote while revealed, one element.
+const toggle = page => page.getByRole('button', { name: /^(Show votes|Re-vote)$/ })
+
+// The round commands a page sends, in order; read only once a later snapshot has landed.
+const commandsSent = (page, room) => {
+  const sent = []
+  const command = new RegExp(`/rooms/${room}/(show|revote|clear)$`)
+  page.on('request', request => {
+    const match = request.url().match(command)
+    if (match) sent.push(match[1])
+  })
+  return sent
+}
+
+// By the time this shows on the other page, a press made before it would have sent its request.
+const laterSnapshot = async (from, to, issue) => {
+  await setIssue(from, issue)
+  await expect(issueBox(to.page)).toHaveValue(issue)
+}
+
+// Both clicks usually land before the flip, so only the detail rule drops the second.
+test('a double-click sends one request', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).dblclick()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+})
+
+test('a held Enter fires once, and focus stays on the toggle across the flip', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).focus()
+  await alice.page.keyboard.down('Enter')
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await expect(toggle(alice.page)).toBeFocused()
+  // Past the guard, so only the Enter rule drops them; a down without an up is a repeat.
+  await expect(toggle(alice.page)).not.toHaveAttribute('aria-disabled')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+})
+
 test('the copy hint lasts 2 s from the first copy, not the last', async ({ join }) => {
   const alice = await join('Alice')
   const page = alice.page
