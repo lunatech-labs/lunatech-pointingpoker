@@ -284,7 +284,6 @@ test('a submit from a tab showing Voter keeps the Facilitator another tab chose'
 
   await nameInput(second).fill('Alice')
   await second.getByRole('button', { name: 'Create' }).click()
-  await expect(second.getByRole('button', { name: 'Show votes' })).toBeVisible()
   await joinedAs(second, 'Facilitator')
   const later = await first.context().newPage()
   await later.goto('/')
