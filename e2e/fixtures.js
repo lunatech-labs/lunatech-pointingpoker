@@ -120,7 +120,7 @@ export const test = base.extend({
       const newTab = async () => {
         const tab = await context.newPage()
         await tab.goto(`/${room}`)
-        await expect(tab.getByRole('button', { name: 'Show votes' })).toBeVisible()
+        await expect(inRoom(tab)).toBeVisible()
         return tab
       }
       const participant = {
@@ -139,7 +139,7 @@ export const test = base.extend({
       await defaultRoleRadio(page, role).check()
       await page.getByRole('button', { name: 'Join' }).click()
       // The room renders on the first SSE message, so the room view proves the stream arrived.
-      await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+      await expect(inRoom(page)).toBeVisible()
       return participant
     }
     await use(join)
@@ -161,6 +161,8 @@ export const test = base.extend({
 // The test contract: roles, names, text and test ids only (ui refresh design, step 1).
 export const nameInput = page => page.getByLabel('User name')
 export const roomIdInput = page => page.getByLabel('Room id')
+// The room's marker: the room view's root, rendered on the first snapshot, never before.
+export const inRoom = page => page.getByTestId('room')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })

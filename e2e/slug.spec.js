@@ -2,6 +2,7 @@ import {
   test,
   expect,
   deck,
+  inRoom,
   movedBanner,
   nameInput,
   ownEstimation,
@@ -15,7 +16,7 @@ const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 const joinAs = async (page, name) => {
   await nameInput(page).fill(name)
   await page.getByRole('button', { name: 'Join' }).click()
-  await expect(page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(page)).toBeVisible()
 }
 
 test('an old UUID link opens its derived room under a banner that covers no card', async ({
