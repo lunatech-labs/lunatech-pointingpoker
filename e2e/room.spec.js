@@ -18,6 +18,7 @@ import {
   markRegion,
   expectLiveRegion,
   issueEdit,
+  inRoom,
   votedMark,
   hiddenMark,
   vote,
@@ -358,7 +359,7 @@ test('a reload keeps its identity and its vote', async ({ join }) => {
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 
   await bob.page.reload()
-  await expect(bob.page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(bob.page)).toBeVisible()
 
   // One Bob, not two, and the estimation came back with him rather than being recast.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
