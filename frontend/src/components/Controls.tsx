@@ -1,14 +1,17 @@
+import { useRoundGuard } from './useRoundGuard'
+
 type Props = { revealed: boolean; onShow: () => void; onRevote: () => void; onClear: () => void }
 
 export function Controls({ revealed, onShow, onRevote, onClear }: Props) {
+  const guarded = useRoundGuard(revealed)
   return (
     <div className="row mt-4">
       <div className="col">
         <div
           className="d-flex flex-row align-items-start"
-          // A double-click's second click would repeat the command before the flip re-renders.
+          // Drops a press while guarded, and a double-click's second click before the flip.
           onClickCapture={e => {
-            if (e.detail > 1) {
+            if (guarded || e.detail > 1) {
               e.stopPropagation()
               e.preventDefault()
             }
@@ -20,13 +23,19 @@ export function Controls({ revealed, onShow, onRevote, onClear }: Props) {
             <button
               type="button"
               className={revealed ? 'btn revote-bt' : 'btn show-bt'}
+              aria-disabled={guarded || undefined}
               onClick={revealed ? onRevote : onShow}
             >
               {revealed ? 'Re-vote' : 'Show votes'}
             </button>
           </div>
           <div className="ml-auto">
-            <button type="button" className="btn clear-bt" onClick={onClear}>
+            <button
+              type="button"
+              className="btn clear-bt"
+              aria-disabled={guarded || undefined}
+              onClick={onClear}
+            >
               Clear votes
             </button>
           </div>
