@@ -895,22 +895,28 @@ test("someone else's Show guards my bar", async ({ join, room }) => {
   expect(sent).toEqual([])
 })
 
+// On a paused clock, so both bounds are exact rather than raced.
 test('a second flip restarts the guard', async ({ join, room }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
   const sent = commandsSent(alice.page, room)
+  await alice.page.clock.install()
+  await alice.page.clock.pauseAt(Date.now() + 2000)
 
   await toggle(alice.page).click()
   await expect(toggle(alice.page)).toHaveText('Re-vote')
-  await alice.page.waitForTimeout(700)
+  await alice.page.clock.runFor(700)
   // Straight to the API: every bar is guarded, so a second flip comes from outside them.
   expect((await bob.page.request.post(`/rooms/${room}/revote`)).ok()).toBe(true)
   await expect(toggle(alice.page)).toHaveText('Show votes')
-  // Past the first flip's 1 s, within the second's even if the flip was seen late.
-  await alice.page.waitForTimeout(300)
+  await alice.page.clock.runFor(999)
   await toggle(alice.page).click({ force: true })
   await laterSnapshot(bob, alice, 'PP-1')
   expect(sent).toEqual(['show'])
+  await alice.page.clock.runFor(1)
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['show', 'show'])
 })
 
 test('a Clear while voting starts no guard', async ({ join, room }) => {

@@ -162,7 +162,7 @@ New cases, in `e2e/room.spec.js`, each shown to fail by the mutation beside it:
 | A double-click sends one request | no `detail` rule |
 | Someone else's Show guards my bar | the guard started only by this page's own press |
 | A held Enter fires once, and focus stays on the toggle across the flip | no Enter rule; the toggle as two elements |
-| A second flip restarts the guard, the second command sent to the API | no restart |
+| A second flip restarts the guard, the second command sent to the API, on a paused clock | no restart; the guard at 500 ms; the guard at 1500 ms |
 | A Clear while voting starts no guard | any snapshot starts the guard |
 | The first snapshot mounts the bar unguarded | the guard started on mount |
 | The guard lasts 1 s from the flip, on a paused clock | the guard at 500 ms; the guard at 1500 ms; the timer restarted by every render |
