@@ -90,7 +90,7 @@ Focus is unchanged unless the cell says otherwise.
 | --- | --- | --- | --- |
 | Press on Edit | to editing; the field takes focus (today) | cannot happen: no Edit | cannot happen: no Edit |
 | Press on Save, or Enter in the field | Enter ignored (today); no Save | to saving; Save and Cancel `aria-disabled` and faded | ignored |
-| Press on Cancel, or Escape in the field | Escape ignored (today); no Cancel | a close | ignored |
+| Press on Cancel, or Escape in the field | Escape ignored (today); no Cancel | a close | ignored; a mouse press moves focus to Cancel, as any click does |
 | Typing in the field | ignored: read-only | the draft changes | ignored: read-only |
 | Press on Use theirs | cannot happen: no notice | the draft takes the room's issue; the field takes focus (today) | cannot happen: no notice while saving |
 | A button's click or mousedown with `detail` above 1 | dropped | dropped | dropped |
@@ -114,6 +114,10 @@ Focus is unchanged unless the cell says otherwise.
   behaviour.
 - A click on the page's background during a save leaves focus fallen, so the
   close puts it on Edit (decision 3's own rule).
+- A double-click on Save whose save lands between the clicks ends with focus
+  in the read-only field, not on Edit, and may select a word: the second
+  mousedown lands on the field, which the mousedown rule exempts (inferred).
+  Nothing is sent.
 
 ## The spike
 
@@ -128,13 +132,13 @@ document.
 | The same, with the click rule | the editor stays open; focus on Cancel |
 | The same, with the click and mousedown rules | the editor stays open; focus in the field |
 | A double-click on a word in the field, with the click rule | the word is selected |
-| A double-click on Save whose save lands between the clicks | the second click lands on the read-only field; nothing happens |
+| A double-click on Save whose save lands between the clicks, before decision 3 | the second click lands on the read-only field; nothing happens |
 
 ## Contract
 
 Contract change: 'a save the network drops keeps the draft and says so'
 expects focus on Save after the failure, not on the field, and retries with
-Enter on Save; its comment changes with it. Every other case is unchanged.
+Enter on Save; its comment changes with it, and the effect's old rule fails it. Every other case is unchanged.
 'a double-clicked Save issue posts once' passed by `disabled`; it now passes
 by decision 4 and `submit`'s check alike.
 
@@ -147,11 +151,10 @@ both call `editor.cancel`. A held Enter is successive `keyboard.down`s, as in
 
 | Case | Mutation |
 | --- | --- |
-| A mouse save keeps focus on Save and the field read-only; then forced presses on Save and Cancel send nothing and change nothing | `disabled` kept; `submit`'s check removed; `step` accepting `cancel` while saving; the field read-only only while viewing |
-| A failure read from Save leaves focus on Save (the changed case) | the effect's old rule |
+| A mouse save keeps focus on Save and the field read-only; then forced presses on Save and Cancel send nothing and change nothing but focus | `disabled` kept; `submit`'s check removed; `step` accepting `cancel` while saving; the field read-only only while viewing |
 | Escape, Cancel and a save each end with focus on Edit | no close rule |
 | Focus moved elsewhere during a save stays there after it succeeds | the close rule ignoring where focus is |
-| A page load leaves focus off Edit | the close rule run on mount |
+| A page load leaves focus off Edit, checked after a later snapshot | the close rule run on mount |
 | A double-click on Edit leaves the editor open, focus in the field | no click rule; no mousedown rule |
 | A held Enter in the field saves once and the editor stays closed, repeats sent once Edit has focus | no button Enter rule |
 | A held Enter on Edit opens the editor and saves nothing, repeats sent once the field has focus | no field Enter rule |
