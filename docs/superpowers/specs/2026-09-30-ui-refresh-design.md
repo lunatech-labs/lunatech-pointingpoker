@@ -208,24 +208,37 @@ unchanged look literally true.
 
 **Step 1c. Test contract audit.** Each case keeps the behaviour it guards and
 loses the elements it reaches it through by chance, so step 4 and step 5 can
-change which controls show. Known so far:
+change which controls show. Its list, completed from step 3b's layouts:
 
 - Show votes read while revealed, the cases step 4 would fail: the reveal's
   layout-shift case ('the reveal notice claims its space before the reveal'),
-  and 'a Show survives someone joining' and 'an auto-revealed round stays
-  revealed when a straggler arrives', whose `join` enters a revealed room.
+  which measures the first participant entry alone, and 'a Show survives
+  someone joining' and 'an auto-revealed round stays revealed when a straggler
+  arrives', whose `join` enters a revealed room.
 - Show votes as the sign a join or rejoin succeeded, in every helper and case
-  that waits for it (`join`, `newTab`, `joinAs`, the lobby, smoke and reload
+  that waited for it (`join`, `newTab`, `joinAs`, the lobby, smoke and reload
   cases, 'a submit from a tab showing Voter keeps the Facilitator another tab
   chose', and 'a room remembered from before the cutover reopens under its
-  derived name'); Leave or the role line serve in every phase and role.
-- Clear votes clicked only to send traffic or to hold focus.
+  derived name'). The room's marker serves (the reference's "Contract reads").
+  Leave and the role line, chosen first, sit behind ☰ in the phone layout
+  (3b2), where the moved-banner case joins; a room id heading would pass in a
+  lobby that gave the id a heading.
+- Clear votes clicked only to send traffic or to hold focus. An issue edit
+  sends it where another page reads it (`departureWhileCut`, the grace-period
+  and frozen-stream cases), a second vote where only the sender's page is
+  live, and a join in 'a draft survives blur and room activity'; a card holds
+  the focus in 'a failed save leaves focus the user moved elsewhere'.
 - Every "Voted" mark read on a revealed entry, where the revealed value serves
-  (the reference's "Contract reads"): each `votedMark` read expecting a mark
-  after a reveal. Found today: 'a vote survives its own reconnect' and 'two
-  tabs on one room are one participant', whose last vote reveals the round.
+  (the reference's "Contract reads"): 'a vote survives its own reconnect' and
+  'two tabs on one room are one participant'.
+- 'a Show in a room where nobody voted renders no summary' reads no tally entry
+  rather than a hidden region (3b1's Contract).
+- The rejoin link is found by the room id, or "your last room", with "as
+  <name>" in its text, so 3b4's `<id> Rejoin as <name>` passes unchanged.
 
-Its list is completed from step 3b's layouts, hence its place after 3b.
+Simulated on today's page and not kept: with Show hidden while revealed every
+case passes, where the first item's cases failed before; with Clear removed
+only the cases step 5 names below fail; 3b4's rejoin name passes.
 
 **Step 2. Roles: voter and facilitator.** Product owners who facilitate and
 never vote keep the round from completing, so auto-reveal never fires
