@@ -8,6 +8,8 @@ type Props = {
   onSave: (issue: string) => Promise<void>
 }
 
+const focusFell = () => document.activeElement === null || document.activeElement === document.body
+
 export function IssueEditor({ issue, onSave }: Props) {
   const editor = useIssueEditor(issue, onSave)
   const box = useRef<HTMLInputElement>(null)
@@ -18,11 +20,9 @@ export function IssueEditor({ issue, onSave }: Props) {
     flushSync(() => editor.pencil())
     box.current?.focus()
   }
-  // The check was disabled while saving, which dropped focus; take it back so Enter retries.
+  // After a failed save, the field takes focus only if focus fell to the page.
   useEffect(() => {
-    const at = document.activeElement
-    const dropped = at === null || at === document.body || group.current?.contains(at)
-    if (editor.failed && dropped) box.current?.focus()
+    if (editor.failed && focusFell()) box.current?.focus()
   }, [editor.failed])
   const takeTheirs = () => {
     editor.takeTheirs()
@@ -63,19 +63,19 @@ export function IssueEditor({ issue, onSave }: Props) {
             ) : (
               <>
                 <button
-                  className="btn btn-outline-secondary"
+                  className={`btn btn-outline-secondary${editing ? '' : ' disabled'}`}
                   type="button"
                   aria-label="Save issue"
-                  disabled={!editing}
+                  aria-disabled={!editing || undefined}
                   onClick={editor.submit}
                 >
                   <Check size={20} />
                 </button>
                 <button
-                  className="btn btn-outline-secondary"
+                  className={`btn btn-outline-secondary${editing ? '' : ' disabled'}`}
                   type="button"
                   aria-label="Cancel editing"
-                  disabled={!editing}
+                  aria-disabled={!editing || undefined}
                   onClick={editor.cancel}
                 >
                   <X size={20} />

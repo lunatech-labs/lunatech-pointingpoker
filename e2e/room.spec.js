@@ -714,8 +714,8 @@ test('a save the network drops keeps the draft and says so', async ({ join, room
   await expect(issueBox(alice.page)).toHaveValue('mine')
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 
-  // The disabled Save issue dropped focus, so the box takes it back and Enter retries.
-  await expect(issueBox(alice.page)).toBeFocused()
+  // Save issue keeps focus through the failure, so the failure is read from it and Enter retries.
+  await expect(issueSave(alice.page)).toBeFocused()
   await alice.page.unroute(editIssue)
   await alice.page.keyboard.press('Enter')
   await expect(issueBox(bob.page)).toHaveValue('mine')
@@ -737,6 +737,62 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
   await expect(elsewhere).toBeFocused()
+})
+
+// The issue saves a page sends; read only once a later frame has landed.
+const issueSaves = (page, room) => {
+  const sent = []
+  page.on('request', request => {
+    if (request.url().endsWith(`/rooms/${room}/edit-issue`)) sent.push(request.postData())
+  })
+  return sent
+}
+
+// Holds every issue save in flight until the returned release is called.
+const holdSaves = async (page, room) => {
+  let release
+  const held = new Promise(resolve => (release = resolve))
+  await page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await held
+    await route.continue()
+  })
+  return release
+}
+
+// By the time the voter's vote shows on the watcher's page, an earlier press has sent its request.
+const laterVote = async (voter, watcher) => {
+  await vote(voter.page, '5')
+  await expect(votedMark(participantEntry(watcher.page, voter.name))).toHaveCount(1)
+}
+
+test('a mouse save keeps focus on Save issue, and presses on it or Cancel mid-save do nothing', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  const release = await holdSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueSave(alice.page).click()
+  await expect(issueSave(alice.page)).toHaveAttribute('aria-disabled', 'true')
+  await expect(issueSave(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  // Forced, since a plain click waits while the button is aria-disabled.
+  await issueSave(alice.page).click({ force: true })
+  await issueCancel(alice.page).click({ force: true })
+  await expect(issueCancel(alice.page)).toBeFocused()
+  await expect(issueEdit(alice.page)).toHaveCount(0)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  release()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await laterVote(bob, alice)
+  expect(saves).toHaveLength(1)
 })
 
 // Read by its own text throughout, since a region's text is announced as a whole.
