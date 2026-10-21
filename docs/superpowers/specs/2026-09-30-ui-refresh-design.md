@@ -181,7 +181,7 @@ document as a whole stays in discussion.
 | 3b4 | The lobby | 3b3 | The product owner, then the specialist on all four |
 | 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
 | 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
-| 4b2 | The editor's save guard | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
+| 4b2 | The editor's save guard and closing focus | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1 | The room page's look | 4b2, 3b4 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
@@ -307,8 +307,10 @@ region.
 **Step 4. Restyle.** It runs as five steps, sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
 (`docs/superpowers/specs/2026-10-20-ui-refresh-4b-round-toggle-design.md`);
-4b2, the editor's save guard (3b3 decision 10), likewise; 4c1, the room page's
-look, which chooses the CSS library; 4c2, the lobby's look, which removes
+4b2, the editor's save guard and closing focus (3b3 decisions 9 and 10),
+likewise (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`);
+4c1, the room page's look, which chooses the CSS library and re-challenges
+4b2's muted Save and Cancel against the contrast gate; 4c2, the lobby's look, which removes
 Bootstrap and its pin; and 4d, the not-a-room page in React with the Join
 tab's URL flag (3b4 decision 15). What follows is the whole of step 4, each
 step's spec taking its part. The step 3 reference applied, the CSS library
@@ -319,7 +321,7 @@ page, and below the table on the facilitator's page (layout f), the table
 giving it its height, which narrows that entry in `docs/known-issues.md`, and the
 "Link copied" hint moved beside the "Copy link" link (principle 4; Appendix A,
 improve 10), and the round bar's toggle and guard (4b) and the editor's save
-guard (4b2). It keeps
+guard and closing focus (4b2). It keeps
 the interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:
@@ -745,8 +747,8 @@ both notices show, a change to either reads both. One going is a removal, which
 - A failed save by mouse on the Save issue button goes unheard in Orca with
   Firefox, and Space or Enter on the button is expected to behave the same: Save
   is disabled while saving, so the editor moves focus back to the box, and
-  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. See
-  `docs/known-issues.md`.
+  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. Step
+  4b2 removes it (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`).
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
 ## Step 1b. Alphabetical participants

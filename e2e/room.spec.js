@@ -714,8 +714,8 @@ test('a save the network drops keeps the draft and says so', async ({ join, room
   await expect(issueBox(alice.page)).toHaveValue('mine')
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 
-  // The disabled Save issue dropped focus, so the box takes it back and Enter retries.
-  await expect(issueBox(alice.page)).toBeFocused()
+  // Save issue keeps focus through the failure, so the failure is read from it and Enter retries.
+  await expect(issueSave(alice.page)).toBeFocused()
   await alice.page.unroute(editIssue)
   await alice.page.keyboard.press('Enter')
   await expect(issueBox(bob.page)).toHaveValue('mine')
@@ -737,6 +737,174 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
   await expect(elsewhere).toBeFocused()
+})
+
+// The issue saves a page sends; read only once a later frame has landed.
+const issueSaves = (page, room) => {
+  const sent = []
+  page.on('request', request => {
+    if (request.url().endsWith(`/rooms/${room}/edit-issue`)) sent.push(request.postData())
+  })
+  return sent
+}
+
+// Holds every issue save in flight until the returned release is called.
+const holdSaves = async (page, room) => {
+  let release
+  const held = new Promise(resolve => (release = resolve))
+  await page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await held
+    await route.continue()
+  })
+  return release
+}
+
+// By the time the voter's vote shows on the watcher's page, an earlier press has sent its request.
+const laterVote = async (voter, watcher) => {
+  await vote(voter.page, '5')
+  await expect(votedMark(participantEntry(watcher.page, voter.name))).toHaveCount(1)
+}
+
+test('a mouse save keeps focus on Save issue, and presses on it or Cancel mid-save do nothing', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  const release = await holdSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueSave(alice.page).click()
+  await expect(issueSave(alice.page)).toHaveAttribute('aria-disabled', 'true')
+  await expect(issueSave(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  // Forced, since a plain click waits while the button is aria-disabled.
+  await issueSave(alice.page).click({ force: true })
+  await issueCancel(alice.page).click({ force: true })
+  await expect(issueCancel(alice.page)).toBeFocused()
+  await expect(issueEdit(alice.page)).toHaveCount(0)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  release()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await laterVote(bob, alice)
+  expect(saves).toHaveLength(1)
+})
+
+test('Escape, Cancel and a save each end with focus on Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).click()
+  await alice.page.keyboard.press('Escape')
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  await issueEdit(alice.page).click()
+  await issueCancel(alice.page).click()
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  // Save issue unmounts with the save, which would drop focus to the page.
+  await setIssue(alice, 'PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+})
+
+test('focus moved elsewhere during a save stays there after it succeeds', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const release = await holdSaves(alice.page, room)
+
+  await setIssue(alice, 'mine')
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
+  release()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  // The close's effect has run by a later frame, so a focus it moved would show.
+  await laterVote(bob, alice)
+  await expect(elsewhere).toBeFocused()
+})
+
+test('a page load leaves focus off Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).not.toBeFocused()
+})
+
+// Cancel editing takes Edit issue's place, under the second click.
+test('a double-click on Edit issue leaves the editor open, focus in the field', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).dblclick()
+  await expect(issueCancel(alice.page)).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+})
+
+test('a held Enter in the field saves once and leaves the editor closed', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('PP-1')
+  await alice.page.keyboard.down('Enter')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+  // A down without an up is a repeat, sent where it could reopen the editor.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).toBeVisible()
+  expect(saves).toHaveLength(1)
+})
+
+test('a held Enter on Edit issue opens the editor and saves nothing', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).focus()
+  await alice.page.keyboard.down('Enter')
+  await expect(issueBox(alice.page)).toBeFocused()
+  // Sent once the field has focus, where a repeat would save the unchanged text.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  expect(saves).toHaveLength(0)
+})
+
+test('a held Enter in the field while saves fail sends one request', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), route => route.abort())
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await alice.page.keyboard.down('Enter')
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  // Sent after the failure, where each repeat would retry.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  expect(saves).toHaveLength(1)
 })
 
 // Read by its own text throughout, since a region's text is announced as a whole.
