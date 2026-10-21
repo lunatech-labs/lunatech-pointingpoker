@@ -48,14 +48,15 @@ where the product owner rules it.
    `a { color: var(--ink) }`, `button, input { font: inherit; color: inherit }`,
    `button { cursor: pointer }`, `svg` and `:focus-visible`. Each value is
    kept even where the reset says the same, since it states the page's
-   intent; until 4c2 it also beats Bootstrap's base rules, which sit above
-   the reset (foundation decision 3). Every stylesheet lands in one bundle,
-   so each rule applies on both pages. The merge fixes the room's phone menu
+   intent. It goes into the `base` layer after the reset (foundation decision
+   3), so it beats Bootstrap's base rules on the new markup and the fence
+   undoes it on today's. Every stylesheet lands in one bundle, so each rule
+   applies on both pages. The merge fixes the room's phone menu
    Leave, drawn in the browser's default blue because no rule set its colour.
 4. **The mockups link the app's files.** Each mockup's `<style>` opens with
-   `@import url(../../frontend/src/reset.css) layer(reset);`, a `<link>`
-   setting no layer, then the mockup links `colours.css`, `tokens.css`,
-   `page.css` and its area files. Its own `<style>` keeps only the rules
+   `@import url(../../frontend/src/reset.css) layer(base);` and the same for
+   `page.css`, since a `<link>` cannot set a layer, and the mockup links
+   `colours.css`, `tokens.css` and its area files. Its own `<style>` keeps only the rules
    matching nothing but what `later=1` adds, the probe and the parameter
    switches (my call); a rule `later=1` merely changes moves. Bootstrap is not
    loaded, and the fonts still come from Google.
@@ -94,8 +95,8 @@ rules whether it moves or the move is fixed. Expected ones:
 ## The docs' changes
 
 - **Parent**: none; 4c1-foundation's change adds this step's row and text.
-- **Reference**: the Mockups section says the mockups link the app's
-  `page.css` and area files and import the reset into its layer, their
+- **Reference**: the Mockups section says the mockups link the app's area
+  files and import the reset and `page.css` into the `base` layer, their
   `<style>` keeping only their own parts.
 
 ## Branches and commits
