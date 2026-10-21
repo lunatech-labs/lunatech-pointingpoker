@@ -44,9 +44,12 @@ today's pages in Inter, the room id in JetBrains Mono.
    would lose their centring, gutters and button sizes (the spike). So
    `App.tsx` wraps today's markup, the banners, the lobby and the room, in
    `<div class="container legacy-page">`, `container` leaving `index.html`'s
-   root, and `base.css` ends with the fence, `@layer base { .legacy-page,
+   root, and `base.css` holds the fence, `@layer base { .legacy-page,
    .legacy-page *, .legacy-page *::before, .legacy-page *::after { all:
-   revert-layer } }`, after every import, so it is last in `base`.
+   revert-layer } }`, after every import, so it is the last rule in `base`
+   (checked in a Vite build). Rules in `base` stay at or below one class's
+   specificity, using `:where()` otherwise, or they beat the fence on today's
+   markup.
    `revert-layer` there falls back to `legacy`, today's cascade; under another
    layer name it would fall back elsewhere, which its comment says.
    `reset.css` stays as copied. When 4c1-wide has `base.css` import `page.css`
@@ -61,8 +64,8 @@ today's pages in Inter, the room id in JetBrains Mono.
    first.
 4. **The fonts: Fontsource's packages, our own `fonts.css`.**
    `@fontsource-variable/inter` and `@fontsource/jetbrains-mono` as
-   dependencies beside Bootstrap; Fontsource's own CSS, which says `swap` and
-   names the family "Inter Variable", is not imported. `fonts.css` declares
+   dependencies beside Bootstrap; Fontsource's own CSS, which names the family
+   "Inter Variable" and has no preload, is not imported. `fonts.css` declares
    Inter for weights 100 to 900 in each of its subsets, latin, latin-ext,
    vietnamese, greek, greek-ext, cyrillic and cyrillic-ext, each with its
    `unicode-range` as Google's CSS does, so a subset is fetched only when a
@@ -74,9 +77,9 @@ today's pages in Inter, the room id in JetBrains Mono.
 5. **A late font swaps in once** (product owner's ruling, rewording J7's
    "Step 4 keeps a late font load from shifting the page"). The room is one
    page view kept for a whole meeting, so ending in Inter matters more than
-   one early jump. `index.html` preloads the latin Inter and the Mono files
+   one early jump (inferred). `index.html` preloads the latin Inter and the Mono files
    (my call), so a normal load draws them from the first paint and nothing
-   swaps; a slow first load jumps once, before anyone has acted, and a name
+   swaps; a slow first load jumps once, likely before anyone has acted, and a name
    needing a new subset swaps just after the join that brought it, which has
    already refit the table. Each preload is `<link rel="preload" as="font"
    type="font/woff2" crossorigin>`: without `crossorigin` it does not match
@@ -102,7 +105,8 @@ today's pages in Inter, the room id in JetBrains Mono.
 8. **What the foundation applies.** `base.css` sets `body` to `--font-sans`,
     and today's room id `<h5>` takes `room-header-id`, the class 4c1-mockups
     gives the mockup's room id, set to `--font-mono` in `base.css` too. Both
-    rules leave `base.css` when 4c1-wide imports `page.css` and
+    rules are unlayered: the room id is inside the wrapper, so in `base` the
+    fence would revert it. Both leave `base.css` when 4c1-wide imports `page.css` and
     `room-header.css`. No other token is read yet.
 9. **The gate's new rule: no literal colour and no `px` outside the token
     files.** A test in `frontend/src/design/` reads every `.css` under
@@ -127,7 +131,7 @@ The font load, per family and subset.
 | A page view with the font cached | in the font | unchanged |
 | A subset first needed later (a name in Ł joins) | those characters in the fallback | swapped to Inter on arrival, just after the join's own change |
 | Create or join from the lobby at `/` (`goTo`, a page load) | as a page view, cached by now | unchanged |
-| Join on a room's own path (`joinHere`, one document) | the room in what the lobby loaded | as above |
+| Join on a room's own path (`joinHere`, one document) | the room in what the lobby loaded | as a page view |
 
 Accepted race: a slow first load, or the first name in a new subset, jumps
 once when the font arrives.
@@ -140,8 +144,9 @@ once when the font arrives.
   reset sets nothing, such as link colour or `label`'s display; 4c2's diff
   before and after Bootstrap's removal makes each an explicit rule.
 - From 4c1-wide, `page.css`'s `html` and `body` rules, outside the fence,
-  give today's lobby the fluid root and the paper background until 4c2;
-  seen only between slices.
+  give today's lobby the fluid root, the paper background, and the body's
+  colour, size and line height wherever `legacy` sets none, until 4c2; seen
+  only between slices.
 - A slice that forgets to move its markup out of the wrapper gives it
   Bootstrap's spacing; no case fails, the by-eye check against the mockup sees
   it.
@@ -168,6 +173,7 @@ Bootstrap's file.
 | The fonts and licences from `getFromDirectory` | `font/woff2`, `text/plain`, immutable; `/assets/` itself a 404 |
 | Cold loads, five per browser | Inter painted in each |
 | Inter held back 1.5 s, under `optional` | the fallback kept for the page's life; Chromium reports the face "loaded" anyway, Firefox "error" |
+| The same under `swap`, then released | Inter drawn in Chromium, the face "loaded" in Firefox; while held, `document.fonts.ready` never resolves |
 
 ## Contract
 
@@ -179,9 +185,14 @@ font is painted is read in Chromium through the DevTools protocol's
 expected web font with `isCustomFont` true, so neither a second font nor one
 installed on the machine passes; a face's load status does not say whether it
 was drawn (the spike). Firefox reads the face's status instead, which under
-`swap` means drawn. The cases keep `fixtures.js`'s guard: they wait for the
-font rather than race it, so the HTTP cache the guard's route turns off does
-not matter.
+`swap` means some text is drawn in it (the re-review's probe). The cases keep
+`fixtures.js`'s guard: they wait for the font rather than race it, and the
+preload case needs the cache the guard's route turns off, or the cache would
+serve the second fetch and hide a missing `crossorigin`. The held-back case
+cannot wait for `document.fonts.ready`, which never resolves while a font is
+held: it navigates with `waitUntil: 'commit'`, reads the fallback once the
+face is `loading` and the lobby has mounted, then releases the response and
+waits as the others do.
 
 | Case | Mutation |
 | --- | --- |
