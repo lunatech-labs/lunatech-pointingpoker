@@ -837,6 +837,76 @@ test('a page load leaves focus off Edit issue', async ({ join }) => {
   await expect(issueEdit(alice.page)).not.toBeFocused()
 })
 
+// Cancel editing takes Edit issue's place, under the second click.
+test('a double-click on Edit issue leaves the editor open, focus in the field', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).dblclick()
+  await expect(issueCancel(alice.page)).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+})
+
+test('a held Enter in the field saves once and leaves the editor closed', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('PP-1')
+  await alice.page.keyboard.down('Enter')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+  // A down without an up is a repeat, sent where it could reopen the editor.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).toBeVisible()
+  expect(saves).toHaveLength(1)
+})
+
+test('a held Enter on Edit issue opens the editor and saves nothing', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).focus()
+  await alice.page.keyboard.down('Enter')
+  await expect(issueBox(alice.page)).toBeFocused()
+  // Sent once the field has focus, where a repeat would save the unchanged text.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  expect(saves).toHaveLength(0)
+})
+
+test('a held Enter in the field while saves fail sends one request', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), route => route.abort())
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await alice.page.keyboard.down('Enter')
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  // Sent after the failure, where each repeat would retry.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  expect(saves).toHaveLength(1)
+})
+
 // Read by its own text throughout, since a region's text is announced as a whole.
 test("the editor's notices are announced from one live region", async ({ join, room }) => {
   const alice = await join('Alice')
