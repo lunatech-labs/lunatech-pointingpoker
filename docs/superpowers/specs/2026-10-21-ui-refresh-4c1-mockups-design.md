@@ -59,7 +59,8 @@ where the product owner rules it.
    `colours.css`, `tokens.css` and its area files. Its own `<style>` keeps only the rules
    matching nothing but what `later=1` adds, the probe and the parameter
    switches (my call); a rule `later=1` merely changes moves. Bootstrap is not
-   loaded, and the fonts still come from Google.
+   loaded. The fonts still come from Google, their link's `display=block`
+   becoming `display=swap`, the app's mode (foundation decision 5).
 5. **The lobby's room id field at `--weight-medium`,** as every other room id
    is (product owner's ruling): the 400 was unintended, and JetBrains Mono is
    served at 500 only (foundation decision 4).
@@ -68,8 +69,6 @@ where the product owner rules it.
 
 - The mockups keep loading their fonts from Google: they must open from a
   checkout without `npm install`, and the latin Inter file is the same bytes.
-  Their `display=block` hides text up to about 3 s, where the app's
-  `optional` draws the fallback.
 - The area files ship in the repo unused by the app until each slice imports
   them; the gate's rule (foundation decision 9) already reads them.
 - The mockups render without Bootstrap, so where its base rules reach the new
