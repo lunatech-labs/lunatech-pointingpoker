@@ -795,6 +795,48 @@ test('a mouse save keeps focus on Save issue, and presses on it or Cancel mid-sa
   expect(saves).toHaveLength(1)
 })
 
+test('Escape, Cancel and a save each end with focus on Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).click()
+  await alice.page.keyboard.press('Escape')
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  await issueEdit(alice.page).click()
+  await issueCancel(alice.page).click()
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  // Save issue unmounts with the save, which would drop focus to the page.
+  await setIssue(alice, 'PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+})
+
+test('focus moved elsewhere during a save stays there after it succeeds', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const release = await holdSaves(alice.page, room)
+
+  await setIssue(alice, 'mine')
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
+  release()
+  await expect(issueBox(bob.page)).toHaveValue('mine')
+  // The close's effect has run by a later frame, so a focus it moved would show.
+  await laterVote(bob, alice)
+  await expect(elsewhere).toBeFocused()
+})
+
+test('a page load leaves focus off Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).not.toBeFocused()
+})
+
 // Read by its own text throughout, since a region's text is announced as a whole.
 test("the editor's notices are announced from one live region", async ({ join, room }) => {
   const alice = await join('Alice')

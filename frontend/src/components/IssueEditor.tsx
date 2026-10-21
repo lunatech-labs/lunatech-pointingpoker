@@ -14,6 +14,8 @@ export function IssueEditor({ issue, onSave }: Props) {
   const editor = useIssueEditor(issue, onSave)
   const box = useRef<HTMLInputElement>(null)
   const group = useRef<HTMLDivElement>(null)
+  const edit = useRef<HTMLButtonElement>(null)
+  const was = useRef(editor.mode)
   const editing = editor.mode === 'editing'
   const open = () => {
     // Render editable before focusing: iOS shows no keyboard for focus on a readonly input.
@@ -24,6 +26,13 @@ export function IssueEditor({ issue, onSave }: Props) {
   useEffect(() => {
     if (editor.failed && focusFell()) box.current?.focus()
   }, [editor.failed])
+  // On a close, Edit takes focus if focus was in the editor or fell.
+  useEffect(() => {
+    const closed = was.current !== 'viewing' && editor.mode === 'viewing'
+    was.current = editor.mode
+    if (closed && (focusFell() || group.current?.contains(document.activeElement)))
+      edit.current?.focus()
+  }, [editor.mode])
   const takeTheirs = () => {
     editor.takeTheirs()
     // The link-button unmounts with the notice, which would drop focus to the page.
@@ -53,6 +62,7 @@ export function IssueEditor({ issue, onSave }: Props) {
           <div className="input-group-append">
             {editor.mode === 'viewing' ? (
               <button
+                ref={edit}
                 className="btn btn-outline-secondary"
                 type="button"
                 aria-label="Edit issue"
