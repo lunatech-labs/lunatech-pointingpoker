@@ -183,7 +183,8 @@ document as a whole stays in discussion.
 | 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
 | 4b2 | The editor's save guard and closing focus | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and computed-style diffs ruled by the product owner |
-| 4c1-wide | The wide room page's look (J10) | 4c1-foundation | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
+| 4c1-wide | The wide room page's look (J10) | 4c1-mockups | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
@@ -194,7 +195,7 @@ document as a whole stays in discussion.
 
 **Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
 2c likewise, then 1c, step 4's steps and 4a stacked, while 3 runs
-alongside from now, and 5 after 4c1.
+alongside from now, and 5 after 4c1-editor.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
 little or no time. The specialist's critique does not gate step 4: step 3's
@@ -315,13 +316,17 @@ likewise (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md
 4c1, the room page's look, as 4c1-foundation, the stylesheets and the fonts,
 which chooses plain CSS
 (`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-foundation-design.md`),
-then 4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
-Save and Cancel against the contrast gate and taking 4b2's two deferred cases;
+4c1-mockups, the mockups' CSS moved into the app
+(`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-mockups-design.md`), then
+4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
+Save and Cancel against the contrast gate and taking the two cases 4b2's
+final review deferred, a failed save with focus fallen to the page and a
+double-click selecting a word in the field;
 4c2, the lobby's look, which removes
 Bootstrap and its pin; and 4d, the not-a-room page in React with the Join
 tab's URL flag (3b4 decision 15). What follows is the whole of step 4, each
-step's spec taking its part. The step 3 reference applied, the CSS library
-chosen, Bootstrap 4 and its Dependabot major-version pin removed, mobile-first
+step's spec taking its part. The step 3 reference applied in plain CSS
+(4c1-foundation), Bootstrap 4 and its Dependabot major-version pin removed, mobile-first
 layout,
 and the result placed as step 3b1 decides: in the deck's place on the voter's
 page, and below the table on the facilitator's page (layout f), the table
@@ -366,9 +371,8 @@ votes is absent while revealed, facilitators are the roster's last rows rather
 than entries (3b1 decision 17), and the mark reads change
 as the reference's "Contract reads" lists, all listed as contract changes
 (principle 9).
-Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
-Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
-chosen library may or may not ship one. The deck as a `<fieldset>` with a
+An option for the room's specs to weigh, the reset being 4c1-foundation's:
+the deck as a `<fieldset>` with a
 `<legend>`: the same `group` role and name step 1 gives its `div`, so no case
 changes, and `<fieldset disabled>` freezes every card at once. Step 1 keeps
 the `div` for the look (its "Considered and not taken"). Without Bootstrap, a
