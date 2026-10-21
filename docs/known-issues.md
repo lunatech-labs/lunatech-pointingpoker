@@ -1061,20 +1061,21 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a user asks for it. If it is worth fixing, put
   the button outside the live region, or add its name to the notice's text.
 
-### A screen reader does not hear a failed save from the Save issue button
+### A screen reader does not hear a failed save in the issue editor
 
-- **Where:** `frontend/src/components/IssueEditor.tsx` (the Save issue button's
-  `disabled`, and the effect on `editor.failed`).
-- **Issue:** Save issue is disabled while saving, which drops focus, so the
-  editor moves focus back to the box. In Orca with Firefox, reading the box cuts
-  off the polite "Could not save the issue". This was heard with a mouse click
-  on the button, and Space or Enter on it is expected to behave the same, since
-  the same `disabled` drops focus; only Enter in the box is heard.
-- **Resolution:** Decided in step 3b3 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 10) and built in step 4: Save and Cancel are `aria-disabled` while
-  saving and keep focus, and after a failure the field takes focus only if focus
-  fell to the page, so a failure read from the button is not cut off. Remove
-  this entry when step 4 lands it.
+- **Where:** `frontend/src/components/IssueEditor.tsx` (the status region,
+  `data-testid="issue-status"`, and the effect on `editor.failed`).
+- **Issue:** In Orca with Firefox, "Could not save the issue" shows but is not
+  spoken, from every path checked after step 4b2: a mouse click on Save issue,
+  Enter on Save issue reached by Tab once Orca had finished reading it, Enter
+  repeated there, and Enter in the field. Orca speaks only the button or the
+  key. Step 4b2 keeps focus on Save issue through the failure (3b3 decision 10),
+  so focus moving is no longer the cause. The region's markup is unchanged since
+  step 1a, when Enter in the field was heard, so what changed is outside it
+  (inferred: Orca's or Firefox's version, an Orca setting, or the build served).
+- **Resolution:** Stays open. Next check: whether Orca announces any other
+  status on this page, such as the conflict notice in the same region raised
+  from a second browser, and Orca's live region settings.
 
 ### A screen reader hears the connection lost, but never that it came back
 
