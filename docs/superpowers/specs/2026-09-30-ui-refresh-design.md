@@ -182,15 +182,18 @@ document as a whole stays in discussion.
 | 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
 | 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
 | 4b2 | The editor's save guard and closing focus | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
-| 4c1 | The room page's look | 4b2, 3b4 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c2 | The lobby's look | 4c1 | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and computed-style diffs ruled by the product owner |
+| 4c1-wide | The wide room page's look (J10) | 4c1-foundation | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
-| 4a | The round's live region | 4c1 | Its cases |
-| 5 | Next issue | 4c1 | Its cases |
+| 4a | The round's live region | 4c1-editor | Its cases |
+| 5 | Next issue | 4c1-editor | Its cases |
 | 5+ | One step per feature | 4d | Each one's spec |
 
 **Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
-2c likewise, then 1c, step 4's five steps and 4a stacked, while 3 runs
+2c likewise, then 1c, step 4's steps and 4a stacked, while 3 runs
 alongside from now, and 5 after 4c1.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
@@ -304,13 +307,17 @@ step 4. It may share a line with the
 progress, as a separate element (Appendix B). Step 4a makes it the round's live
 region.
 
-**Step 4. Restyle.** It runs as five steps, sliced by how each is judged, each
+**Step 4. Restyle.** It runs as steps sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
 (`docs/superpowers/specs/2026-10-20-ui-refresh-4b-round-toggle-design.md`);
 4b2, the editor's save guard and closing focus (3b3 decisions 9 and 10),
 likewise (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`);
-4c1, the room page's look, which chooses the CSS library and re-challenges
-4b2's muted Save and Cancel against the contrast gate; 4c2, the lobby's look, which removes
+4c1, the room page's look, as 4c1-foundation, the stylesheets and the fonts,
+which chooses plain CSS
+(`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-foundation-design.md`),
+then 4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
+Save and Cancel against the contrast gate and taking 4b2's two deferred cases;
+4c2, the lobby's look, which removes
 Bootstrap and its pin; and 4d, the not-a-room page in React with the Join
 tab's URL flag (3b4 decision 15). What follows is the whole of step 4, each
 step's spec taking its part. The step 3 reference applied, the CSS library
