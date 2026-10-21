@@ -182,7 +182,7 @@ document as a whole stays in discussion.
 | 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
 | 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
 | 4b2 | The editor's save guard and closing focus | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
-| 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and computed-style diffs ruled by the product owner |
+| 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and a computed-style diff of today's pages |
 | 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
 | 4c1-wide | The wide room page's look (J10) | 4c1-mockups | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |

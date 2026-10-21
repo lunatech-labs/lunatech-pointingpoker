@@ -34,24 +34,31 @@ today's pages in Inter, the room id in JetBrains Mono.
    `-webkit-font-smoothing` (a macOS-only rendering hint nobody judged), its
    `#root` kept. The page's root element becomes `#root`: `#app` was inherited
    from the 2020 Vue page, and only `main.tsx` reads it.
-3. **Layers: `bootstrap` < `reset` < our CSS, unlayered, and today's markup
-   fenced off from the reset** (product owner's design). `base.css` declares
-   `@layer bootstrap, reset;`, imports Bootstrap and the reset into them, then
-   `colours.css` and `tokens.css`; `main.tsx` no longer imports Bootstrap
-   itself. The reset beats Bootstrap wherever it sets a property, not only in
-   Reboot, so today's pages would lose their centring, gutters and button
-   sizes (the spike). So `App.tsx` wraps today's markup, the banners, the
-   lobby and the room, in `<div class="container legacy-page">`, `container`
-   leaving `index.html`'s root, and `reset.css` ends with one rule, in no
-   `@layer` block of its own: `.legacy-page, .legacy-page *, .legacy-page
-   *::before, .legacy-page *::after { all: revert-layer }`. Inside the reset's
-   layer `revert-layer` falls back to Bootstrap's value; in a layer of its own
-   it would fall back to the reset's, which its comment says. Each slice moves
-   the markup it replaces out of the wrapper; 4c2 deletes the wrapper, the rule
-   and Bootstrap. Set aside: the reset beneath Bootstrap until 4c2, which
-   leaves Bootstrap's base rules over the new markup; `@scope`, which Firefox
-   ESR 140 likely lacks (inferred). Lightning CSS, Vite's minifier, drops the
-   order statement; the order holds as Bootstrap's rules come first.
+3. **Layers: `legacy` < `base` < our CSS, unlayered, and today's markup
+   fenced off from `base`** (product owner's design). `base.css` declares
+   `@layer legacy, base;`, imports Bootstrap then `styles.css` into `legacy`,
+   where specificity and order decide between them as they do today, and
+   `reset.css` into `base`, then `colours.css` and `tokens.css`; `main.tsx`
+   imports neither Bootstrap nor `styles.css` itself. The reset beats
+   Bootstrap wherever it sets a property, not only in Reboot, so today's pages
+   would lose their centring, gutters and button sizes (the spike). So
+   `App.tsx` wraps today's markup, the banners, the lobby and the room, in
+   `<div class="container legacy-page">`, `container` leaving `index.html`'s
+   root, and `base.css` ends with the fence, `@layer base { .legacy-page,
+   .legacy-page *, .legacy-page *::before, .legacy-page *::after { all:
+   revert-layer } }`, after every import, so it is last in `base`.
+   `revert-layer` there falls back to `legacy`, today's cascade; under another
+   layer name it would fall back elsewhere, which its comment says.
+   `reset.css` stays as copied. When 4c1-wide imports `page.css` into `base`,
+   the fence undoes it too for today's markup. Each slice moves the markup it
+   replaces out of the wrapper; 4c2 deletes the wrapper, the fence and
+   `legacy`. Set aside: the reset beneath Bootstrap until 4c2, which leaves
+   Bootstrap's base rules over the new markup; `@scope`, which Firefox ESR 140
+   likely lacks (inferred); Bootstrap alone in a layer, which hands
+   `styles.css` every tie today's specificity settles (the re-review: a
+   revealed card under the pointer stays red). Lightning CSS, Vite's
+   minifier, drops the order statement; the order holds as `legacy` comes
+   first.
 4. **The fonts: Fontsource's packages, our own `fonts.css`.**
    `@fontsource-variable/inter` and `@fontsource/jetbrains-mono` as
    dependencies beside Bootstrap; Fontsource's own CSS, which says `swap` and
@@ -76,8 +83,7 @@ today's pages in Inter, the room id in JetBrains Mono.
    and `assets/jetbrains-mono-OFL.txt`, and `fonts.css` opens with a `/*! */`
    comment naming both paths, for anyone who saves the fonts from the page.
    Lightning CSS keeps such a comment only at the very start of the stylesheet,
-   so `main.tsx` imports `fonts.css` first, then `base.css`, then
-   `styles.css`. Set aside: the plugin prepending the comment after the build,
+   so `main.tsx` imports `fonts.css` first, then `base.css`. Set aside: the plugin prepending the comment after the build,
    which leaves the CSS file's hash naming other bytes.
 7. **Dev paints the fonts too.** Vite's dev server leaves the preload href
    alone, and dev then never paints Inter, even on a reload (the spike). The
@@ -123,6 +129,9 @@ throughout, and the next visit in Inter.
 - Until 4c2, Bootstrap's base rules still reach the new markup wherever the
   reset sets nothing, such as link colour or `label`'s display; 4c2's diff
   before and after Bootstrap's removal makes each an explicit rule.
+- From 4c1-wide, `page.css`'s `html` and `body` rules, outside the fence,
+  give today's lobby the fluid root and the paper background until 4c2;
+  seen only between slices.
 - A slice that forgets to move its markup out of the wrapper gives it
   Bootstrap's spacing; no case fails, the by-eye check against the mockup sees
   it.
@@ -141,7 +150,10 @@ Bootstrap's file.
 | What | Result |
 | --- | --- |
 | The reset above Bootstrap: `.container`, `.row`, `.form-group`, `.btn-sm`, an icon, a paragraph | the reset's value on each: no centring, no gutters, no margins, a 16 px font, a block icon |
-| The same inside `.legacy-page` with decision 3's rule | Bootstrap's value on each; outside it, the reset's |
+| The same inside `.legacy-page` with the fence | Bootstrap's value on each; outside it, the reset's |
+| Decision 3's layers against today's cascade: a primary button, a revealed card at rest and under the pointer | today's value on each; with Bootstrap alone layered, the card stays red under the pointer |
+| Preload href as a bare package path, as `../node_modules/…` | left broken; rewritten to the hashed file the CSS names |
+| Dev, preload unrewritten | the fallback on every load, a reload included |
 | A `/*! */` comment not at the stylesheet's start | removed, Bootstrap's banner included |
 | The fonts and licences from `getFromDirectory` | `font/woff2`, `text/plain`, immutable; `/assets/` itself a 404 |
 | Cold loads, five per browser | Inter painted in each |
@@ -154,24 +166,29 @@ said, each shown to fail by the mutation beside it. Which font is painted is
 read in Chromium through the DevTools protocol's `CSS.getPlatformFontsForNode`,
 with `isCustomFont` true, so a font installed on the machine does not pass: a
 face's load status does not say whether it was drawn (the spike). Firefox
-skips the paint case. Playwright turns the HTTP cache off in any context with
-a route, so this file's contexts have none: a listener records off-origin
-requests and each case asserts there were none, the one exception to
-`fixtures.js`'s guard, said in its comment.
+skips the paint case. Every entry the protocol returns for a node must be the
+expected web font, since a node drawn in two fonts returns both. Playwright
+turns the HTTP cache off in any context with a route, so this file's contexts
+have none but the held-back case's, whose delay is a route and needs no cache:
+a listener records off-origin requests and each case asserts there were none,
+the one exception to `fixtures.js`'s guard, said in its comment.
 
 | Case | Mutation |
 | --- | --- |
 | The lobby's text and the room's are painted in Inter, a name with "Ł" too, the room id in JetBrains Mono, after a first load warms the cache | `fonts.css` not imported; the body rule removed; the room id's class removed; the latin-ext face removed |
-| Each preload names a file the stylesheet's `@font-face` uses, served as `font/woff2`, and each font file is requested once per load | a bare package href; a preload removed; `crossorigin` removed |
-| A held-back Inter leaves every element of the room header and the round where it was, measured after `document.fonts.ready` and two animation frames, and the page in the fallback; both browsers | `font-display: swap` |
+| Exactly two preloads, each naming a file the stylesheet's `@font-face` uses, served as `font/woff2`, and each font file requested once per load | a bare package href; a preload removed; `crossorigin` removed |
+| A held-back Inter leaves every element of the room header and the round where it was, measured once the held response is released and has arrived, then `document.fonts.ready` and two animation frames, and the page in the fallback; both browsers | `font-display: swap` |
 | The stylesheet opens with the licence comment, and each path it names is served as `text/plain` holding the SIL Open Font License | `base.css` imported before `fonts.css`; the plugin removed |
-| Today's lobby stays centred and its form keeps Bootstrap's spacing; both browsers | decision 3's rule removed; the rule in a layer of its own |
+| Today's lobby stays centred and its form keeps Bootstrap's spacing; both browsers | the fence removed; the fence under another layer name |
 | The gate's rule (vitest, beside the contrast gate) | a planted `px`; a planted hex; a planted named colour |
 
 Judged also by a computed-style diff of today's lobby and room before and
-after, every element paired by its path from the root, in Chromium: every
-difference is the fonts', but for the root's `isolation` and the inherited
-`interpolate-size`, both from the reset, and the wrapper itself. The mockups
+after, in Chromium, at rest and with each button and card hovered and
+focused. Elements pair by their path from the root, the wrapper's level
+dropped; the old root's box is compared with the wrapper's, and an element
+without a pair is a difference. Every difference is the fonts', but for the
+root's `isolation` and the inherited `interpolate-size`, both from the reset,
+and the root losing `container`'s width, padding and margin to the wrapper. The mockups
 are untouched. And by a hand check under `npm run dev`
 that the room id and the text are in their fonts, recorded in the PR.
 
