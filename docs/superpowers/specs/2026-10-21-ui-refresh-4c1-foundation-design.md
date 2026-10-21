@@ -49,8 +49,8 @@ today's pages in Inter, the room id in JetBrains Mono.
    revert-layer } }`, after every import, so it is last in `base`.
    `revert-layer` there falls back to `legacy`, today's cascade; under another
    layer name it would fall back elsewhere, which its comment says.
-   `reset.css` stays as copied. When 4c1-wide imports `page.css` into `base`,
-   the fence undoes it too for today's markup. Each slice moves the markup it
+   `reset.css` stays as copied. When 4c1-wide has `base.css` import `page.css`
+   into `base`, before the fence, the fence undoes it too for today's markup. Each slice moves the markup it
    replaces out of the wrapper; 4c2 deletes the wrapper, the fence and
    `legacy`. Set aside: the reset beneath Bootstrap until 4c2, which leaves
    Bootstrap's base rules over the new markup; `@scope`, which Firefox ESR 140
@@ -68,16 +68,26 @@ today's pages in Inter, the room id in JetBrains Mono.
    `unicode-range` as Google's CSS does, so a subset is fetched only when a
    character in it is shown (product owner's ruling); and JetBrains Mono at
    500, latin only, room ids being three words from `Slug`'s vocabulary (my
-   call). `font-display: optional` throughout, each `url()` a bare package
-   path. The latin Inter file is byte-identical to the one the mockups load
+   call). `font-display: swap` throughout (decision 5), each `url()` a bare
+   package path. The latin Inter file is byte-identical to the one the mockups load
    from Google (checked).
-5. **A late font never shifts the page.** `optional` lets the browser wait
-   briefly, then keep the fallback for the page's life. `index.html` preloads
-   the latin Inter and the Mono files (my call), each `<link rel="preload"
-   as="font" type="font/woff2" crossorigin>`: without `crossorigin` the
-   preload does not match the font request and the file is fetched twice. The
-   href is the relative path `../node_modules/…`, the only form Vite rewrites
-   to the hashed file the CSS names (the spike).
+5. **A late font swaps in once** (product owner's ruling, rewording J7's
+   "Step 4 keeps a late font load from shifting the page"). The room is one
+   page view kept for a whole meeting, so ending in Inter matters more than
+   one early jump. `index.html` preloads the latin Inter and the Mono files
+   (my call), so a normal load draws them from the first paint and nothing
+   swaps; a slow first load jumps once, before anyone has acted, and a name
+   needing a new subset swaps just after the join that brought it, which has
+   already refit the table. Each preload is `<link rel="preload" as="font"
+   type="font/woff2" crossorigin>`: without `crossorigin` it does not match
+   the font request and the file is fetched twice. The href is the relative
+   path `../node_modules/…`, the only form Vite rewrites to the hashed file
+   the CSS names (the spike). Set aside: `optional`, which keeps the fallback
+   for the rest of the page view, a whole meeting here, and in Chromium draws
+   a subset that is not preloaded in the fallback on every first view (the
+   re-review); `block`, which hides late text up to about 3 s and jumps just
+   the same; a fallback scaled to Inter's size, which narrows the jump
+   without removing it.
 6. **Licence texts ship beside the files (J7 as written).** A plugin in
    `vite.config.ts` emits each package's `LICENSE` as `assets/inter-OFL.txt`
    and `assets/jetbrains-mono-OFL.txt`, and `fonts.css` opens with a `/*! */`
@@ -111,16 +121,16 @@ The font load, per family and subset.
 
 | Event | The page is drawn | Later |
 | --- | --- | --- |
-| The font arrives within the browser's wait | in the font | unchanged |
-| The font is held back | in the fallback | unchanged when it arrives: no swap, no shift |
+| The font arrives before first paint (preloaded) | in the font | unchanged |
+| The font is late | in the fallback | swapped to Inter on arrival: one jump, the table refit |
 | The font fails (404, network down) | in the fallback | unchanged |
 | A page view with the font cached | in the font | unchanged |
-| A subset first needed after the first paint (a name in Ł joins) | those characters in the fallback, unless the file comes within the wait | unchanged; the next page view draws them in Inter |
+| A subset first needed later (a name in Ł joins) | those characters in the fallback | swapped to Inter on arrival, just after the join's own change |
 | Create or join from the lobby at `/` (`goTo`, a page load) | as a page view, cached by now | unchanged |
-| Join on a room's own path (`joinHere`, one document) | the room in what the lobby settled for | unchanged |
+| Join on a room's own path (`joinHere`, one document) | the room in what the lobby loaded | as above |
 
-Accepted race: on a slow network the first visit is drawn in the fallback
-throughout, and the next visit in Inter.
+Accepted race: a slow first load, or the first name in a new subset, jumps
+once when the font arrives.
 
 ## Accepted costs
 
@@ -157,27 +167,27 @@ Bootstrap's file.
 | A `/*! */` comment not at the stylesheet's start | removed, Bootstrap's banner included |
 | The fonts and licences from `getFromDirectory` | `font/woff2`, `text/plain`, immutable; `/assets/` itself a 404 |
 | Cold loads, five per browser | Inter painted in each |
-| Inter held back 1.5 s | the fallback kept for the page's life; Chromium reports the face "loaded" anyway, Firefox "error" |
+| Inter held back 1.5 s, under `optional` | the fallback kept for the page's life; Chromium reports the face "loaded" anyway, Firefox "error" |
 
 ## Contract
 
 Every existing case is unchanged. New cases, in `e2e/fonts.spec.js` unless
-said, each shown to fail by the mutation beside it. Which font is painted is
-read in Chromium through the DevTools protocol's `CSS.getPlatformFontsForNode`,
-with `isCustomFont` true, so a font installed on the machine does not pass: a
-face's load status does not say whether it was drawn (the spike). Firefox
-skips the paint case. Every entry the protocol returns for a node must be the
-expected web font, since a node drawn in two fonts returns both. Playwright
-turns the HTTP cache off in any context with a route, so this file's contexts
-have none but the held-back case's, whose delay is a route and needs no cache:
-a listener records off-origin requests and each case asserts there were none,
-the one exception to `fixtures.js`'s guard, said in its comment.
+said, each shown to fail by the mutation beside it, each waiting for
+`document.fonts.ready` and two animation frames before it reads a font. Which
+font is painted is read in Chromium through the DevTools protocol's
+`CSS.getPlatformFontsForNode`, every entry it returns for a node being the
+expected web font with `isCustomFont` true, so neither a second font nor one
+installed on the machine passes; a face's load status does not say whether it
+was drawn (the spike). Firefox reads the face's status instead, which under
+`swap` means drawn. The cases keep `fixtures.js`'s guard: they wait for the
+font rather than race it, so the HTTP cache the guard's route turns off does
+not matter.
 
 | Case | Mutation |
 | --- | --- |
-| The lobby's text and the room's are painted in Inter, a name with "Ł" too, the room id in JetBrains Mono, after a first load warms the cache | `fonts.css` not imported; the body rule removed; the room id's class removed; the latin-ext face removed |
+| The lobby's text and the room's are painted in Inter, a name with "Ł" too, the room id in JetBrains Mono; both browsers | `fonts.css` not imported; the body rule removed; the room id's class removed; the latin-ext face removed |
 | Exactly two preloads, each naming a file the stylesheet's `@font-face` uses, served as `font/woff2`, and each font file requested once per load | a bare package href; a preload removed; `crossorigin` removed |
-| A held-back Inter leaves every element of the room header and the round where it was, measured once the held response is released and has arrived, then `document.fonts.ready` and two animation frames, and the page in the fallback; both browsers | `font-display: swap` |
+| A held-back Inter draws the page in the fallback, then in Inter once the held response is released and has arrived; both browsers | `font-display: optional` |
 | The stylesheet opens with the licence comment, and each path it names is served as `text/plain` holding the SIL Open Font License | `base.css` imported before `fonts.css`; the plugin removed |
 | Today's lobby stays centred and its form keeps Bootstrap's spacing; both browsers | the fence removed; the fence under another layer name |
 | The gate's rule (vitest, beside the contrast gate) | a planted `px`; a planted hex; a planted named colour |
@@ -198,6 +208,9 @@ that the room id and the text are in their fonts, recorded in the PR.
   among them; rows that waited on 4c1 wait on 4c1-editor. Step 4's text names them and plain
   CSS, drops the reset as an open option, and moves the muted Save and Cancel's
   re-challenge and 4b2's two deferred cases, named, to 4c1-editor.
+- **Reference**: J7's last line becomes "A late font swaps in once; the latin
+  file is preloaded, so a normal load draws Inter from the first paint", with
+  the reason in its log entry, a reopening.
 - **Code comments**: `PageRoutes`' `immutable` comment and
   `.github/dependabot.yml`'s Bootstrap pin comment ("step 4 decides the
   library") are reworded with the code.
