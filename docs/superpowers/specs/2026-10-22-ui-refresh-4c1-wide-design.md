@@ -49,7 +49,7 @@ cases it writes.
    legacy-page` until 4c2. `base.css` imports `page.css` into `base`, before
    the fence (4c1-foundation decision 3), then `looks.css` unlayered, so the
    shared looks come before every area file whatever order the components
-   load them in (4c1-mockups' plan, Review Focus 3; decision 10's diff
+   load them in (4c1-mockups' plan, Review Focus 3; decision 11's diff
    checks it). Its unlayered `body` and `.room-header-id` rules leave it, now
    said by `page.css` and `room-header.css`.
 4. **The entries' scale is a hook, `useFitEntries`** (product owner's
@@ -60,9 +60,13 @@ cases it writes.
    the facilitator's page while voting (3b1 decision 5), and narrows the list
    so wrapped rows come out even. In the phone layout it clears its inline
    values, so the phone's fixed scale applies (moved here from 4c1-narrow by
-   the product owner's ruling). Set aside: CSS alone, which cannot solve for
-   the rows; a scale computed from the tokens, which a font or a long name
-   breaks.
+   the product owner's ruling). The search, given whether a scale fits, and
+   the rows' balance are pure functions with scenario tests, 0, 1 and 14
+   voters among them, as 3b1's Accepted costs ask; the hook only measures
+   (product owner's ruling). `room.html`'s script served as the spike, and
+   its throw with no voter is fixed in the mockup too. Set aside: CSS alone,
+   which cannot solve for the rows; a scale computed from the tokens, which a
+   font or a long name breaks.
 5. **lucide's icons, from `lucide-react`**, the names 4c1-wide-prep gave the
    mockups; the brand glyph is the mockups' SVG.
 6. **The avatar's colours from the tokens.** `Roster` hashes the name as
@@ -78,13 +82,17 @@ cases it writes.
    slot below the table, as `room.html`'s default; g stays the open swap, the
    progress, Next issue and the recent rounds their steps'. The most voted
    keeps today's tie-break, the first of `votesSummary`.
-10. **Also judged by a computed-style diff of the app against `room.html`**
+10. **An issue that is a link is not clickable yet** (product owner's
+    ruling): it keeps its segments, so it breaks only before a slash (3b1
+    decision 4), as plain text; making it a link is the parent's improve 8,
+    a step of its own.
+11. **Also judged by a computed-style diff of the app against `room.html`**
     (my call): the app driven to the mockup's default states (its names, its
     issue, its sample votes, through protocol voters), each element paired by
     its path from `.room-page`, in Chromium at the cells pages' wide widths,
     1280 and 1000 px. The product owner rules on each difference, as in
-    4c1-mockups. Expected ones: the text the mockup fakes, and the editing
-    view and the banners, still today's.
+    4c1-mockups. Expected ones: the text the mockup fakes, the issue's link
+    (decision 10), and the editing view and the banners, still today's.
 
 ## Accepted costs
 
@@ -107,6 +115,10 @@ summary honest across them', only Alice's and Bob's entries carry the kept
 mark, and only Dave's the no-vote mark, each by J3's name. The reads the look
 keeps stay as they are: `tally-value` and `tally-count`, the cards' names
 ("0.5" included), "Copy link" as a link, the role switches and Edit's name.
+One more, written after 3b1's list: 'the room is drawn in Inter…'
+(`fonts.spec.js`) reads the name as a table `cell`, and reads the entry's
+name element instead. A change the build turns up beyond these joins this
+list in the commit that rewrites its case, and the PR names it.
 
 New cases, at the floor and the comfort target unless said, on the voter's
 and the facilitator's pages, in both browsers, the room filled with protocol
@@ -117,11 +129,13 @@ voters, each case shown to fail against a layout breaking it (parent's step
   values once revealed, an issue of two lines and no banner, the page does
   not scroll and the header, the issue, the slot and the round bar are
   wholly in view; at the comfort target every entry is too.
-- **A longer issue scrolls the page and cuts nothing**: an issue of three
-  lines at the floor scrolls the page, the table keeps its 5 rem, and the
+- **A longer issue scrolls the page and cuts nothing**: at the floor, an
+  issue long enough to bring the table to its 5 rem (3b1's Measured: 240
+  characters are not) scrolls the page, the table keeps its 5 rem, and the
   slot and the round bar scroll wholly into view.
 - **The entries' scale**: it does not change through a reveal, never puts an
-  entry past a deck card's height, and a room of 0 or 1 voters gets one.
+  entry past `--deck-card`'s height (3b1 decision 10's 5.5 / 3.85), and a
+  room of 0 or 1 voters gets one.
 - **Nobody voted**: a reveal with no votes shows "Nobody voted" and no tally
   entry, and the slot keeps its height.
 - **Nothing moves with the room's size**: the header, the issue, the slot and
