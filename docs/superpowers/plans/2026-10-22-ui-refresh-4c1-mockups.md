@@ -362,3 +362,41 @@ Expected: every e2e case passes in both browsers, unchanged; the unit tests pass
 git add frontend/src/components/*.css frontend/src/page.css docs/design/room.html docs/design/lobby.html
 git commit -m "fix: apply the product owner's rulings on the mockups' diff (ui refresh step 4c1-mockups)"
 ```
+
+### Task 4: The final review's minors
+
+**Files:**
+- Modify: `frontend/src/components/voters.css`, `round-bar.css`, `round-panel.css`, `lobby-page.css`
+- Modify: `docs/design/room.html`, `docs/design/lobby.html`
+- Modify: `docs/superpowers/specs/2026-10-21-ui-refresh-4c1-mockups-design.md` and this plan
+
+**Interfaces:**
+- Consumes: the tree at Task 3's commit, as `$W/h4` (`git archive HEAD docs/design frontend/src | tar -x -C "$W/h4"`).
+
+- [ ] **Step 1: Prove the diff sees each CSS change**
+
+In a scratch copy, swap the two forced-colours `.voters-mark-confirmed` rules, and separately drop `.lobby-page-inert .lobby-form-label` from the inert rule.
+
+Run: `node $W/mockdiff.mjs "$W/h4" <copy> > "$W/d5m.log"`
+
+Expected: the swap shows the confirmed mark's border colour in forced colours; the drop shows the inert Join labels' colour.
+
+- [ ] **Step 2: Make the changes**
+
+- Merge each same-selector pair into one rule: the forced-colours `.voters-mark-confirmed`, dropping its first `border-color: CanvasText`, which never applies; the phone `.round-bar`; the phone `.round-panel`, under the sheet's comment.
+- Drop `.lobby-page-inert .lobby-form-radios .lobby-form-label`, which `.lobby-page-inert .lobby-form-label` covers.
+- Cite the spec beside each bare decision: "3b1 decision 13" in `room.html`, "3b4 decision 13" in `lobby.html`.
+- In the spec's expected differences, drop the lobby's buttons taking the pointer, which they already did, and add the three looks R4 converges to the room's.
+
+- [ ] **Step 3: Check that nothing draws differently**
+
+Run: `node $W/mockdiff.mjs "$W/h4" . > "$W/d5.log"; grep -c . "$W/d5.log"`
+
+Expected: 0. Then `npm run test:unit && npm run typecheck && npm run lint`: the unit tests pass, and typecheck and lint print nothing.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add frontend/src/components docs/design docs/superpowers
+git commit -m "fix: address the final review's minors (ui refresh step 4c1-mockups)"
+```
