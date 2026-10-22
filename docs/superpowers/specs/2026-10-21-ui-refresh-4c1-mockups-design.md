@@ -86,7 +86,8 @@ cells pages' widths, each parameter value changed alone from the defaults,
 `later=1` included (my call). Each difference goes to the product owner, who
 rules whether it moves or the move is fixed. Expected ones:
 
-- from the reset, which the mockups did not load before;
+- from the reset, which the mockups did not load before, but for the issue's
+  heading, which keeps filling its first line (product owner's ruling);
 - the room's phone menu Leave, from the browser's blue to ink (decision 3);
 - the lobby's panel taking the room's hairline and padding, its Dismiss the
   room's quiet button, and in forced colours its mark the room's, each shared

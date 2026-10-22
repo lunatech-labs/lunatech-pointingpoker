@@ -11,8 +11,10 @@
   min-height: calc(var(--target-min) + 2 * var(--space-2) - 2 * var(--panel-inline));
 }
 
+/* The issue fills its first line, the reset's balance undone (product owner's ruling) */
 .issue-panel-view h2 {
   flex: 1;
+  text-wrap: wrap;
   min-width: 0;
   margin: 0;
   font-size: var(--text-lg);
