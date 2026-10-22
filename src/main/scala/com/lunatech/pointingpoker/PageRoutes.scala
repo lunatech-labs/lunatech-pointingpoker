@@ -45,7 +45,8 @@ class PageRoutes(apiConfig: ApiConfig):
       }
     }
 
-  // Asset names carry a content hash, so a cached copy never goes stale.
+  // Asset names carry a content hash, so a cached copy never goes stale. The font licences keep
+  // fixed names, so a changed one reaches a cached browser late (ui refresh step 4c1-foundation).
   private val immutable =
     `Cache-Control`(
       CacheDirectives.public,
