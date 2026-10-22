@@ -173,3 +173,21 @@ test("today's lobby stays centred and keeps Bootstrap's form spacing", async ({ 
   // The name row's form-group margin, 1rem.
   expect(role.y - name.y - name.height).toBeCloseTo(16, 0)
 })
+
+test('the stylesheet opens with the licence comment, and its files are served', async ({
+  page,
+  origin
+}) => {
+  await page.goto(`${origin}/`)
+  const href = await page.locator('link[rel=stylesheet]').getAttribute('href')
+  const css = await (await page.request.get(new URL(href, origin).href)).text()
+  expect(css.startsWith('/*!')).toBe(true)
+  const named = css.slice(0, css.indexOf('*/')).match(/\/assets\/[a-z-]+-OFL\.txt/g)
+  expect(named).toEqual(['/assets/inter-OFL.txt', '/assets/jetbrains-mono-OFL.txt'])
+  for (const path of named) {
+    const response = await page.request.get(`${origin}${path}`)
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toMatch(/^text\/plain/)
+    expect(await response.text()).toContain('SIL Open Font License')
+  }
+})
