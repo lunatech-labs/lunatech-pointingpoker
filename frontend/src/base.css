@@ -16,3 +16,12 @@
     all: revert-layer;
   }
 }
+
+/* Unlayered, so the fence leaves them; they move to page.css and room-header.css in 4c1-wide. */
+body {
+  font-family: var(--font-sans);
+}
+
+.room-header-id {
+  font-family: var(--font-mono);
+}

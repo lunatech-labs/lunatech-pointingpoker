@@ -290,7 +290,8 @@ stacking, Dismiss and mounting are J12's.
   step. The result's chart, its values and counts, is the one element at the
   3 m step, `--text-2xl`, a value shrinking only where its column is narrower
   (3b1). The issue is at `--text-lg`, a heading's size.
-- Step 4 keeps a late font load from shifting the page.
+- A late font swaps in once; the latin file is preloaded, so a normal load
+  draws Inter from the first paint.
 
 ### J8. Contrast floor
 
@@ -941,6 +942,14 @@ The reasons behind each rule, and what was set aside.
   reopened J5's set-aside "a separate step to hide Show": Show is now hidden
   by becoming the toggle, and the toggle needs the guard, a behaviour judged
   by its own cases. Set aside: hiding Show inside the restyle.
+- **4c1-foundation.** The stylesheets and the fonts (the UI refresh design's
+  step 4c1-foundation) reopened J7's "Step 4 keeps a late font load from
+  shifting the page", which had no recorded reason. The room is one page view
+  kept for a whole meeting, so `font-display: optional` would draw it in the
+  fallback for all of that meeting after one slow load; a late font now swaps in
+  once. Set aside: `optional`; `block`, which hides late text up to about 3 s
+  and jumps just the same; a fallback scaled to Inter's size, which narrows the
+  jump without removing it.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
