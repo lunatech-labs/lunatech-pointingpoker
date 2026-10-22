@@ -26,7 +26,7 @@ export function RoomHeader({ roomId, onCopied, onLeave }: Props) {
         <div className="col">
           <div className="row">
             <div className="col">
-              <h5 className="card-title">{roomId}</h5>
+              <h5 className="card-title room-header-id">{roomId}</h5>
             </div>
           </div>
           <div className="row">
