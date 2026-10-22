@@ -157,6 +157,8 @@ test('a held-back Inter draws the fallback, then Inter once it arrives', async (
   if (browserName === 'chromium') {
     for (const font of await painted(page, heading)) expect(font.isCustomFont).toBe(false)
   }
+  // Past optional's block period of about 100 ms, so an optional face would give up in Firefox too.
+  await page.waitForTimeout(300)
   release()
   await settle(page)
   await expectPainted(page, browserName, heading, 'Inter', 'a')
