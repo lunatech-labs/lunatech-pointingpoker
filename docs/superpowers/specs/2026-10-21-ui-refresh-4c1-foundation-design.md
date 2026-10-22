@@ -95,9 +95,12 @@ today's pages in Inter, the room id in JetBrains Mono.
    plugin prepending the comment after the build, which leaves the CSS file's
    hash naming other bytes.
 7. **Dev paints the fonts too.** Vite's dev server leaves the preload href
-   alone, and dev then never paints Inter, even on a reload (the spike). The
-   same plugin rewrites it to the dev server's `/@fs/` path, in dev only (my
-   call), so by-eye checks under `npm run dev` see the real fonts.
+   alone, so each preload is answered with the page's HTML and goes unused,
+   the CSS fetches the file again, and Inter swaps in late on every load (the
+   dev check, 2026-10-22; the spike's "never paints" was under `optional`).
+   The same plugin rewrites it to the dev server's `/@fs/` path, in dev only
+   (my call) and before Vite's own HTML transform, so by-eye checks under
+   `npm run dev` see the real fonts from the first paint.
 8. **What the foundation applies.** `base.css` sets `body` to `--font-sans`,
    and today's room id `<h5>` takes `room-header-id`, the class 4c1-mockups
    gives the mockup's room id, set to `--font-mono` in `base.css` too. Both
@@ -165,7 +168,7 @@ Bootstrap's file.
 | The same inside `.legacy-page` with the fence | Bootstrap's value on each; outside it, the reset's |
 | Decision 3's layers against today's cascade: a primary button, a revealed card at rest and under the pointer | today's value on each; with Bootstrap alone layered, the card stays red under the pointer |
 | Preload href as a bare package path, as `../node_modules/…` | left broken; rewritten to the hashed file the CSS names |
-| Dev, preload unrewritten | the fallback on every load, a reload included |
+| Dev, preload unrewritten, under `optional` | the fallback on every load, a reload included |
 | A `/*! */` comment not at the stylesheet's start | removed, Bootstrap's banner included |
 | The fonts and licences from `getFromDirectory` | `font/woff2`, `text/plain`, immutable; `/assets/` itself a 404 |
 | Cold loads, five per browser | Inter painted in each |
@@ -188,8 +191,9 @@ preload case needs the cache the guard's route turns off, or the cache would
 serve the second fetch and hide a missing `crossorigin`. The held-back case
 cannot wait for `document.fonts.ready`, which never resolves while a font is
 held: it navigates with `waitUntil: 'commit'`, reads the fallback once the face
-is `loading` and the lobby has mounted, then releases the response and waits as
-the others do.
+is `loading` and the lobby has mounted, holds it 300 ms more, past `optional`'s
+block period of about 100 ms, then releases the response and waits as the
+others do.
 
 | Case | Mutation |
 | --- | --- |
