@@ -1,0 +1,18 @@
+/* Today's CSS sits in legacy, beneath the reset in base; the colours and tokens are unlayered. */
+@layer legacy, base;
+
+@import 'bootstrap/dist/css/bootstrap.min.css' layer(legacy);
+@import './styles.css' layer(legacy);
+@import './reset.css' layer(base);
+@import './colours.css';
+@import './tokens.css';
+
+/* From inside base, revert-layer falls back to legacy, today's cascade; keep this the last rule in base. */
+@layer base {
+  .legacy-page,
+  .legacy-page *,
+  .legacy-page *::before,
+  .legacy-page *::after {
+    all: revert-layer;
+  }
+}
