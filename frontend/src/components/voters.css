@@ -1,0 +1,170 @@
+/* The table: voters as cards, face down while voting, face up once revealed */
+.voters {
+  flex: 1;
+  min-height: var(--table-min);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* B: the facilitator's table keeps the slot's room while voting, so a reveal moves nothing below it */
+.voters-reserve {
+  min-height: calc(var(--table-min) + var(--slot-height) + 3 * var(--panel-gap) + 2 * var(--line-hairline));
+}
+
+.voters-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+/* --s scales every entry alike to fill the table, from 1 up to a deck card's height */
+.voters-entries {
+  --s: 1;
+  list-style: none;
+  margin: auto;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3) 0;
+}
+
+.voters-entries li {
+  width: calc(var(--entry-width) * var(--s));
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+.voters-mark,
+.voters-face {
+  width: calc(var(--entry-mark) * var(--s) * 5 / 7);
+  aspect-ratio: 5 / 7;
+  border-radius: calc(var(--radius-mark) * var(--s));
+}
+
+.voters-mark-confirmed {
+  background: var(--card-back);
+  border: calc(var(--space-1) * var(--s)) solid var(--paper-warm);
+  box-shadow: 0 0 0 var(--line-hairline) var(--hairline-colour);
+  display: grid;
+  place-items: center;
+}
+
+.voters-mark-confirmed::after {
+  content: '◆';
+  color: var(--pip);
+  font-size: calc(var(--text-xs) * var(--s));
+}
+
+.voters-mark-none {
+  border: var(--line-mark) dashed var(--mute-soft);
+}
+
+.voters-mark-kept {
+  border: calc(var(--frame-band) * var(--s)) solid var(--card-back);
+}
+
+.voters-face {
+  display: grid;
+  place-items: center;
+  border: var(--line-mark) solid var(--ink);
+  font-weight: var(--weight-bold);
+  font-size: calc(var(--text-lg) * var(--s));
+}
+
+.voters-face > * {
+  grid-area: 1 / 1;
+}
+
+/* A revealed kept vote: a thinner band than the deck's, outside a paper gap, clear of the name */
+.voters-face-kept {
+  outline: calc(var(--space-1) * var(--s)) solid var(--card-back);
+  outline-offset: var(--focus-gap);
+}
+
+.voters-face-none {
+  border: var(--line-mark) solid var(--hairline-colour);
+  color: var(--grey);
+  font-weight: var(--weight-medium);
+}
+
+.voters-name {
+  font-size: calc(var(--text-sm) * var(--s));
+  line-height: var(--leading-tight);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.voters-name .voters-you {
+  color: var(--grey);
+  font-weight: var(--weight-regular);
+}
+
+/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
+@media (forced-colors: active) {
+  .voters-mark-confirmed {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .voters-mark-confirmed {
+    border-color: Canvas;
+    outline: var(--line-hairline) solid CanvasText;
+  }
+
+  .voters-mark-confirmed::after {
+    color: Canvas;
+  }
+}
+
+.voters-facilitators {
+  display: none;
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  .voters {
+    order: 2;
+    flex: none;
+    overflow: visible;
+  }
+
+  /* no room held for the facilitator's slot (3b2 decision 11) */
+  .voters-reserve {
+    min-height: var(--table-min);
+  }
+
+  .voters-facilitators {
+    display: block;
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--grey);
+    text-align: center;
+  }
+
+  .voters-entries {
+    --s: var(--entry-scale-narrow);
+  }
+
+  .voters-name {
+    font-size: var(--text-xs);
+  }
+}
+
+/* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */
+@media (min-height: 39rem) {
+  @container page (width < 51.75rem) {
+    .voters {
+      scroll-margin-bottom: var(--sheet-clearance);
+    }
+  }
+}

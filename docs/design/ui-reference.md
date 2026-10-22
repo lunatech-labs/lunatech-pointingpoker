@@ -37,7 +37,10 @@ the decisions log at the end.
 ## Mockups
 
 - They live beside this file, under `docs/design/`, as clickable HTML linking
-  the value source.
+  the app's stylesheets: the value source, `looks.css` and their area files in
+  `frontend/src/components/`, with `reset.css` and `page.css` imported into the
+  `base` layer. Their own `<style>` keeps only the later steps' parts and the
+  parameters' design alternatives.
 - They show what step 4 builds and, behind a "later steps" toggle, the parts
   later steps add (progress count, Next issue, recent rounds), dashed, so step
   4 leaves room for them.

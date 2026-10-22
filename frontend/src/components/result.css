@@ -1,0 +1,169 @@
+/* J: Most voted sized to its content, then every deck value in its place */
+.result {
+  flex: 1;
+  display: flex;
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.result-most {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: var(--space-5);
+  border-right: var(--line-hairline) solid var(--hairline-colour);
+}
+
+.result-most .result-figure {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-figure);
+}
+
+.result-most .result-sub {
+  font-size: var(--text-sm);
+  color: var(--grey);
+  margin-top: var(--space-1);
+}
+
+.result-columns {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.result-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  container-type: inline-size;
+}
+
+/* N: the count without its "×", muted but over the top bar */
+.result-count {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+  color: var(--grey);
+}
+
+.result-column-top .result-count {
+  color: var(--ink);
+}
+
+.result-bar {
+  width: 100%;
+  height: calc(var(--chart-bar) * var(--share));
+  min-height: var(--bar-min);
+  border-radius: var(--radius-small) var(--radius-small) 0 0;
+  background: var(--bar-other);
+}
+
+.result-column-top .result-bar {
+  background: var(--card-back);
+}
+
+/* The 3 m step, shrunk only where a column is narrower than "0.5" at that size */
+.result-value {
+  width: 100%;
+  height: var(--chart-value);
+  text-align: center;
+  padding-top: var(--space-1);
+  border-top: var(--line-mark) solid var(--hairline-colour);
+  font-size: min(var(--text-2xl), var(--value-fit));
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-figure);
+}
+
+.result-column-empty .result-value {
+  color: var(--grey);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  padding-top: var(--space-2);
+}
+
+.result-sr {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
+@media (forced-colors: active) {
+  .result-bar,
+  .result-column-top .result-bar {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  .result {
+    flex-direction: column;
+    gap: var(--space-3);
+    justify-content: space-between;
+  }
+
+  .result-most {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+    padding: 0 0 var(--space-2);
+    border-right: 0;
+    border-bottom: var(--line-hairline) solid var(--hairline-colour);
+  }
+
+  .result-most .result-sub {
+    margin: 0;
+    text-align: right;
+  }
+
+  .result-most .result-figure {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: var(--text-3xl);
+  }
+
+  .result-columns {
+    flex: 1;
+    max-height: calc(var(--deck-card) + var(--chart-value) + var(--text-lg) * var(--leading-body));
+  }
+
+  .result-bar {
+    height: auto;
+    flex: 0 0 calc(var(--share) * (100% - var(--chart-value) - var(--text-lg) * var(--leading-body)));
+  }
+
+  .result-value {
+    font-size: min(var(--text-xl), var(--value-fit));
+  }
+
+  .result-column-empty .result-value,
+  .result-count {
+    font-size: min(var(--text-lg), var(--value-fit));
+  }
+}
+
+/* After the compact foot's figure size, which it overrides */
+.result-most .result-figure-list {
+  font-size: var(--text-2xl);
+  white-space: nowrap;
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  .result-columns {
+    gap: var(--space-1);
+    min-height: calc(var(--chart-bar) + var(--chart-value) + var(--text-lg) * var(--leading-body));
+  }
+
+  .result-column-empty .result-value {
+    padding-top: var(--space-1);
+  }
+}
