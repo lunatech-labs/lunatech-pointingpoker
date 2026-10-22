@@ -73,7 +73,7 @@ let phase = q.get('phase') || 'voting'
 let from = phase === 'revealed-revote' ? 'revote' : 'voting'   // the round a reveal shows
 if (phase === 'revealed-revote') phase = 'revealed'
 
-// "0.5" sets its point tight wherever it shows, its text staying "0.5" (decision 13)
+// "0.5" sets its point tight wherever it shows, its text staying "0.5" (3b1 decision 13)
 const fig = v => v === '0.5' ? '<span>0<span class="tight-point">.</span>5</span>' : v
 const deck = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
 const names = [q.get('name0') || 'Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']

@@ -32,12 +32,9 @@
 
 /* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
 @container page (width < 51.75rem) {
-  .round-panel {
-    order: 3;
-  }
-
   /* The sheet: the round panel and the round bar as one, its shadow over the table */
   .round-panel {
+    order: 3;
     z-index: 1;
     box-shadow: 0 calc(-1 * var(--space-1)) var(--space-4) var(--shadow-colour);
     border-bottom: 0;

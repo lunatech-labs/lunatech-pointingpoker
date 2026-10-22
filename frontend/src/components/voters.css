@@ -112,12 +112,8 @@
     forced-color-adjust: none;
     background: CanvasText;
     color: Canvas;
-    border-color: CanvasText;
-    box-shadow: none;
-  }
-
-  .voters-mark-confirmed {
     border-color: Canvas;
+    box-shadow: none;
     outline: var(--line-hairline) solid CanvasText;
   }
 

@@ -88,7 +88,9 @@ rules whether it moves or the move is fixed. Expected ones:
 
 - from the reset, which the mockups did not load before;
 - the room's phone menu Leave, from the browser's blue to ink (decision 3);
-- the lobby's buttons taking the pointer (decision 3);
+- the lobby's panel taking the room's hairline and padding, its Dismiss the
+  room's quiet button, and in forced colours its mark the room's, each shared
+  look converging to the room's version (product owner's ruling);
 - the lobby's room id field at medium (decision 5).
 
 ## The docs' changes

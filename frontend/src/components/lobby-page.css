@@ -69,7 +69,6 @@
   cursor: default;
 }
 
-.lobby-page-inert .lobby-form-radios .lobby-form-label,
 .lobby-page-inert .lobby-form-label {
   color: var(--grey);
 }

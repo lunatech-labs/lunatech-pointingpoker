@@ -97,7 +97,7 @@ function draw() {
   const body = page === 'notaroom' ? notARoom() : page === 'pinned' ? pinnedForm() : rootForm()
   const list = page === 'notaroom' ? '' : banners()
   document.getElementById('root').innerHTML = `${header}<main class="lobby-page-main"><div class="lobby-page-column">${list ? `<section class="lobby-page-banners" aria-label="Messages">${list}</section>` : ''}<div class="panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}">${body}</div></div></main>`
-  // Decision 13: "Join as <name>" from the stored name, textContent only; an empty stored name counts as none
+  // 3b4 decision 13: "Join as <name>" from the stored name, textContent only; an empty stored name counts as none
   const line = document.getElementById('join-line')
   if (line && stored.trim()) line.textContent = 'Join as ' + stored.trim()
 }
