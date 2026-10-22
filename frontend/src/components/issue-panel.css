@@ -1,0 +1,93 @@
+/* H: the issue at heading size, its margin the panel's side margin all round */
+.issue-panel {
+  padding-block: var(--panel-inline);
+}
+
+/* One line matches the round bar's height: its --target-min controls and --space-2 padding */
+.issue-panel-view {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: calc(var(--target-min) + 2 * var(--space-2) - 2 * var(--panel-inline));
+}
+
+.issue-panel-view h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-strong);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.issue-panel-view h2 a {
+  color: var(--ink);
+}
+
+.issue-panel-view .issue-panel-empty {
+  color: var(--grey);
+  font-weight: var(--weight-regular);
+}
+
+/* A link breaks only before a path slash, each segment kept whole (3b1 decision 4) */
+.issue-panel-view .issue-panel-seg {
+  display: inline-block;
+  text-decoration: inherit;
+}
+
+/* Edit's target reaches into the panel's padding, so it does not grow the panel */
+.issue-panel-view .button-quiet {
+  margin-block: calc(-1 * var(--space-3));
+}
+
+/* The one editor region, always rendered; its panels clear the field's overhang and lose the banners' shadow */
+.issue-panel-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  grid-column: 1 / -1;
+}
+
+.issue-panel-status:not(:empty) {
+  margin-top: var(--panel-inline);
+}
+
+.issue-panel-status .message {
+  box-shadow: none;
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  .issue-panel-status:not(:empty) {
+    margin-top: var(--space-2);
+  }
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  .issue-panel {
+    order: 1;
+  }
+
+  .issue-panel-view .button-quiet {
+    font-size: 0;
+    gap: 0;
+    min-width: var(--target-min);
+    justify-content: center;
+  }
+
+  /* the host breaks after its dots too (3b2 decision 12) */
+  .issue-panel-view .issue-panel-seg:first-child {
+    display: inline;
+  }
+}
+
+/* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */
+@media (min-height: 39rem) {
+  @container page (width < 51.75rem) {
+    .issue-panel :is(a, button, input, textarea) {
+      scroll-margin-bottom: var(--sheet-clearance);
+    }
+  }
+}

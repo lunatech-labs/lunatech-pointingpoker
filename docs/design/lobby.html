@@ -6,89 +6,18 @@
 <title>Lobby mockup (ui refresh step 3b4)</title>
 <link rel="stylesheet" href="../../frontend/src/colours.css">
 <link rel="stylesheet" href="../../frontend/src/tokens.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=block">
 <style>
-  * { box-sizing: border-box; }
-  html { font-size: var(--root-size); scrollbar-gutter: stable; }
-  body { margin: 0; background: var(--paper-pale); color: var(--ink); font: var(--weight-regular) var(--text-md)/var(--leading-body) var(--font-sans); }
-  a { color: var(--ink); }
-  button, input { font: inherit; color: inherit; }
-  svg { width: var(--icon); height: var(--icon); flex: none; }
-  :focus-visible { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
-
-  /* Decisions 2 and 3: the room page's header bar, then one centred column that the header's content, the banners and the panel share */
-  .lobby-page-column { width: min(var(--lobby-width), 100% - 2 * var(--page-edge)); margin-inline: auto; }
-  .lobby-page-header { height: var(--header-height); display: flex; align-items: center; background: var(--paper-warm); border-bottom: var(--line-hairline) solid var(--hairline-colour); }
-  .lobby-page-header .lobby-page-column { display: flex; align-items: center; gap: var(--panel-gap); }
-  .brand-logo {
-    height: var(--brand-height); aspect-ratio: 11 / 15; border-radius: var(--radius-mark); background: var(--card-back); color: var(--paper-warm);
-    display: grid; place-items: center; box-shadow: calc(-1 * var(--space-1)) var(--space-1) 0 var(--mark-offset); margin-left: var(--space-1);
-  }
-  .brand-logo svg { width: 62%; height: auto; }
-  .brand-logo-name { font-weight: var(--weight-bold); font-size: var(--text-md); }
-  .lobby-page-main { padding-block: var(--panel-gap) var(--space-6); }
-
-  /* J6's banners, as the room page draws them, in the column (decision 10) */
-  .lobby-page-banners { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--panel-gap); }
-  .message {
-    display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-    background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-left: var(--line-bar) solid var(--ink);
-    border-radius: var(--radius); box-shadow: var(--shadow) var(--shadow-colour); font-weight: var(--weight-medium);
-  }
-  .message p { flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; }
-  .message .button-quiet { display: flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding: var(--space-2); background: none; border: 0; cursor: pointer; }
-  .message-problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-left-color: var(--burgundy-deep); }
-  .message-notice { background: var(--notice-ground); color: var(--notice-ink); border-left-color: var(--notice-bar); }
-  .message-notice svg { color: var(--notice-bar); }
-
-  .panel { background: var(--paper-warm); border-radius: var(--radius); box-shadow: var(--shadow) var(--shadow-colour); padding: var(--space-4) var(--panel-inline) var(--space-5); }
-  .lobby-page-title { margin: 0 0 var(--space-3); font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans); }
-  /* Decision 12: the typed name wraps anywhere; its bdi isolates it, so a pasted bidi character cannot reorder the sentence */
-  .lobby-page-title code { display: block; width: fit-content; max-width: 100%; margin-bottom: var(--space-1); padding: var(--space-1) var(--space-2); background: var(--paper-pale); border-radius: var(--radius-small); font: var(--weight-medium) var(--text-md)/var(--leading-body) var(--font-mono); overflow-wrap: anywhere; }
-
-  /* The room row (Terms): the square, the id and a second line, the arrow; the whole row is the link */
-  .room-row { display: flex; align-items: center; gap: var(--space-3); min-height: var(--target-min); margin-bottom: var(--space-4); padding: var(--space-2) var(--space-3); background: var(--paper-pale); border: var(--line-hairline) solid var(--hairline-colour); border-radius: var(--radius-card); color: var(--ink); text-decoration: none; }
-  .room-row-square { width: var(--space-6); height: var(--space-6); flex: none; border-radius: var(--radius-mark); background: var(--card-back); }
-  .room-row .room-row-text { flex: 1; min-width: 0; }
-  .room-row-id { display: block; font: var(--weight-medium) var(--text-sm)/var(--leading-body) var(--font-mono); overflow-wrap: break-word; }
-  .room-row-line2 { display: block; font-size: var(--text-sm); text-decoration: underline; overflow-wrap: anywhere; }
-  .room-row-go { display: grid; place-items: center; width: var(--space-6); height: var(--space-6); flex: none; margin-left: auto; }
-  /* Decision 9: the arrow is a burgundy chip only where the row is the page's primary; rejoin=chip outlines the root's arrow */
-  .room-row-go-primary { background: var(--burgundy); color: var(--paper-warm); border-radius: var(--radius-card); }
+  @import url(../../frontend/src/reset.css) layer(base);
+  @import url(../../frontend/src/page.css) layer(base);
   .room-row-go-chip { background: var(--paper-warm); border: var(--line-control) solid var(--ink); border-radius: var(--radius-card); }
-  .lobby-page-lead { margin: 0 0 var(--space-2); font-weight: var(--weight-strong); }
-
-  /* Decision 6: links; the active one is bold with a bar, the others underlined (J4) */
-  .lobby-tabs { display: flex; gap: var(--space-1); margin: 0 0 var(--space-4); border-bottom: var(--line-hairline) solid var(--hairline-colour); }
-  .lobby-tabs a { display: flex; align-items: center; min-height: var(--target-min); padding-inline: var(--space-3); }
-  .lobby-tabs a[aria-current] { font-weight: var(--weight-strong); text-decoration: none; border-bottom: var(--line-bar) solid var(--ink); margin-bottom: calc(-1 * var(--line-hairline)); }
-
-  .lobby-form-label { display: block; padding: 0; margin-bottom: var(--space-1); font-size: var(--text-sm); font-weight: var(--weight-strong); }
-  .lobby-form-input { display: block; width: 100%; min-height: var(--target-min); margin-bottom: var(--space-4); padding-inline: var(--space-3); background: var(--paper-warm); border: var(--line-control) solid var(--mute-soft); border-radius: var(--radius-card); }
-  .lobby-form-input-mono { font-family: var(--font-mono); }
-  /* Decision 7: the help line stays against the radios, the larger gap after it */
-  .lobby-form-roles { min-width: 0; margin: 0 0 var(--space-5); padding: 0; border: 0; }
-  .lobby-form-radios { display: flex; flex-wrap: wrap; gap: 0 var(--space-5); }
-  .lobby-form-radios .lobby-form-label { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); margin: 0; font-size: var(--text-md); font-weight: var(--weight-regular); }
-  .lobby-form-radio { width: var(--icon); height: var(--icon); margin: 0; accent-color: var(--ink); }
-  .lobby-form-help { display: block; font-size: var(--text-sm); color: var(--grey); }
-
-  .button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: var(--target-min); padding-inline: var(--space-4); border: var(--line-control) solid transparent; border-radius: var(--radius-control); font-weight: var(--weight-strong); text-decoration: none; cursor: pointer; }
-  .button-primary { background: var(--burgundy); color: var(--paper-warm); }
-  .button-outline { background: var(--paper-warm); border-color: var(--ink); color: var(--ink); }
-  .button + .button { margin-top: var(--space-3); }
-
-  /* Decision 11: inert after "session ended"; the muted look, on the pale ground since grey on the track is 6.47:1, below J8's 7:1 for text */
-  .lobby-page-inert .lobby-form-input:disabled, .lobby-page-inert .button:disabled { background: var(--paper-pale); color: var(--grey); border-color: var(--hairline-colour); cursor: default; }
-  .lobby-page-inert .lobby-form-radios .lobby-form-label, .lobby-page-inert .lobby-form-label { color: var(--grey); }
-  .lobby-page-inert .lobby-form-radio:disabled { accent-color: var(--grey); }
-
-  @media (forced-colors: active) {
-    .room-row-square, .brand-logo, .room-row-go-primary { forced-color-adjust: none; background: CanvasText; color: Canvas; }
-    .lobby-page-inert .lobby-form-input:disabled, .lobby-page-inert .button:disabled { color: GrayText; border-color: GrayText; }
-  }
 </style>
+<link rel="stylesheet" href="../../frontend/src/components/looks.css">
+<link rel="stylesheet" href="../../frontend/src/components/lobby-page.css">
+<link rel="stylesheet" href="../../frontend/src/components/room-row.css">
+<link rel="stylesheet" href="../../frontend/src/components/lobby-tabs.css">
+<link rel="stylesheet" href="../../frontend/src/components/lobby-form.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 </head>
 <body>
 <div id="root"></div>

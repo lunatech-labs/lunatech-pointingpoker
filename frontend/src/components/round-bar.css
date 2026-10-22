@@ -1,0 +1,104 @@
+/* K, O: the phase word and the buttons in their own bar */
+.round-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+}
+
+/* Clear votes set apart (3b1 decision 6) */
+.round-bar .button-quiet {
+  margin-right: var(--space-5);
+}
+
+.round-bar-phase {
+  flex: 1;
+  min-width: 0;
+}
+
+.round-bar-phase .panel-label {
+  color: var(--ink);
+}
+
+.round-bar .button {
+  display: inline-flex;
+  gap: var(--space-2);
+  min-width: var(--action-width);
+  padding-block: 0;
+}
+
+.round-bar [aria-disabled="true"] {
+  cursor: default;
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  /* The round bar: Clear apart, each action at most the action width, the secondary as its icon */
+  .round-bar {
+    gap: var(--space-2);
+  }
+
+  .round-bar-phase {
+    flex: none;
+  }
+
+  .round-bar [data-do="clear"] {
+    margin-left: auto;
+  }
+
+  .round-bar .button {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: var(--action-width);
+    padding-inline: var(--space-3);
+  }
+
+  .round-bar .button-secondary {
+    flex: none;
+    min-width: var(--target-min);
+    padding-inline: var(--space-2);
+  }
+
+  .round-bar .button-secondary svg {
+    display: block;
+  }
+
+  .round-bar .button-secondary .button-word {
+    display: none;
+  }
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  .round-bar {
+    order: 4;
+  }
+
+  .round-bar {
+    z-index: 1;
+    margin-top: calc(-1 * var(--panel-gap));
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  /* Clear and Edit as their icons, their names kept (3b2 decision 10) */
+  .round-bar [data-do="clear"] {
+    font-size: 0;
+    gap: 0;
+    min-width: var(--target-min);
+    justify-content: center;
+  }
+}
+
+/* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */
+@media (min-height: 39rem) {
+  @container page (width < 51.75rem) {
+    .round-bar {
+      position: sticky;
+      bottom: 0;
+    }
+  }
+}
