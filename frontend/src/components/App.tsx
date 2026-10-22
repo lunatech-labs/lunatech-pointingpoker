@@ -126,8 +126,9 @@ export function App({ connection }: { connection: Connection }) {
       ? { href: '/' + encodeURIComponent(remembered), label: rejoinLabel(remembered, name) }
       : null
 
+  // Today's markup, fenced from the reset in base.css; each 4c1 slice moves what it replaces out.
   return (
-    <>
+    <div className="container legacy-page">
       <Alerts
         error={connectionMessage || error}
         copied={copied}
@@ -162,6 +163,6 @@ export function App({ connection }: { connection: Connection }) {
           onSwitched={role => rememberRole(localStorage, pathRoom, role)}
         />
       )}
-    </>
+    </div>
   )
 }

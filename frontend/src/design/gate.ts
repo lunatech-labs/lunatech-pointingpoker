@@ -178,6 +178,50 @@ export const tokenProblems = (
   return [...problems]
 }
 
+// CSS Color 4's named colours (https://www.w3.org/TR/css-color-4/#named-colors); no system colour among them.
+const namedColours = new Set(`aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown
+burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan
+darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred
+darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue
+dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray
+green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen
+lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink
+lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen
+linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue
+mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy
+oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip
+peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown
+seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal
+thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen`.split(/\s+/))
+const literalFunctions = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'])
+const checkedAtRules = new Set(['media', 'container', 'supports'])
+
+// Every stylesheet but the token files and styles.css: no literal colour and no px (4c1-foundation).
+export const literalProblems = (css: string): string[] => {
+  const problems = new Set<string>()
+  const check = (value: string, where: string) => void valueParser(value).walk(node => {
+    const say = (what: string) => problems.add(`${what} in ${where}`)
+    if (node.type === 'function') {
+      const name = node.value.toLowerCase()
+      if (name === 'url') return false
+      if (literalFunctions.has(name)) say(`${node.value}()`)
+    }
+    if (node.type !== 'word') return
+    const unit = valueParser.unit(node.value)
+    if (unit) {
+      if (unit.unit.toLowerCase() === 'px') say('a px')
+    } else if (node.value.startsWith('#')) say('a hex colour')
+    else if (namedColours.has(node.value.toLowerCase())) say(`the colour ${node.value}`)
+  })
+  const root = postcss.parse(css)
+  // A custom property's value keeps its spacing.
+  root.walkDecls(decl => check(decl.value, `${decl.prop}: ${decl.value.trim()}`))
+  root.walkAtRules(rule => {
+    if (checkedAtRules.has(rule.name.toLowerCase())) check(rule.params, `@${rule.name} ${rule.params}`)
+  })
+  return [...problems]
+}
+
 const defaultRoot = 16
 const tallestLaptopVh = 7.57
 const number = String.raw`(\d*\.?\d+)`
