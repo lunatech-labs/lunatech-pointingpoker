@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   INDICATOR,
   TEXT,
+  literalProblems,
   paint,
   pairs,
   parseColours,
@@ -277,5 +278,32 @@ describe("J2's root", () => {
 
   it('checks the root the more block sets', () => {
     expect(root(fine, '--root-size: 2rem;')).toEqual([`${notShape}: 2rem`])
+  })
+})
+
+describe('keeping literals out of the stylesheets', () => {
+  it('passes tokens, rem and the colours a theme cannot set', () => {
+    const css = '.a { color: var(--ink); margin: 1rem; background: transparent; border-color: currentColor; outline-color: CanvasText }'
+    expect(literalProblems(css)).toEqual([])
+  })
+
+  it('ignores comments, strings and url()', () => {
+    const css = "/* 1px red */ .a { content: 'red 1px'; background: url(red-1px.png); font-family: 'Inter' }"
+    expect(literalProblems(css)).toEqual([])
+  })
+
+  it.each([
+    ['.a { margin: 1px }', 'a px in margin: 1px'],
+    ['.a { margin: 1PX }', 'a px in margin: 1PX'],
+    ['@media (max-width: 600px) { }', 'a px in @media (max-width: 600px)'],
+    ['.a { color: #fff }', 'a hex colour in color: #fff'],
+    ['.a { color: Red }', 'the colour Red in color: Red'],
+    ['.a { --x: rgb(0 0 0) }', 'rgb() in --x: rgb(0 0 0)'],
+    ...['rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'].map((f): [string, string] => [
+      `.a { color: ${f}(0 0 0) }`,
+      `${f}() in color: ${f}(0 0 0)`
+    ])
+  ])('reports %s', (css, problem) => {
+    expect(literalProblems(css)).toEqual([problem])
   })
 })
