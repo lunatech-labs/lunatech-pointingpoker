@@ -1,0 +1,76 @@
+.room-page {
+  height: var(--shell-height);
+}
+
+.room-page-stack {
+  height: var(--shell-height);
+  display: flex;
+  flex-direction: column;
+}
+
+.room-page-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar);
+  gap: var(--panel-gap);
+  padding: var(--panel-gap) var(--page-edge) var(--space-4);
+}
+
+.room-page-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  min-height: 0;
+}
+
+/* E, I: the roster, for the reader; facilitators as rows at the bottom */
+.room-page-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  min-height: 0;
+}
+
+/* Q: full width under the header, each message a panel of its own; the icon and the words carry the tone */
+/* The gap below the banners is their own, so no ancestor of the view changes and scroll anchoring holds (3b1 decision 3) */
+.room-page-banners {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--panel-gap) var(--page-edge) 0;
+  margin-bottom: calc(var(--space-2) - var(--panel-gap));
+}
+
+/* 3b2: the page and the round panel are the switches' containers; the phone layout's parts hide elsewhere */
+.room-page {
+  container: page / inline-size;
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  .room-page-stack {
+    height: auto;
+    min-height: var(--shell-height);
+  }
+
+  /* One column: the issue, the table, the sheet; the roster gives way to the facilitators' line */
+  .room-page-main {
+    display: flex;
+    flex-direction: column;
+    padding-inline: var(--space-3);
+  }
+
+  .room-page-column,
+  .room-page-sidebar {
+    display: contents;
+  }
+}
+
+/* 3b2: the width cap (decision 13) */
+.room-page-stack > :not(.room-header) {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+}

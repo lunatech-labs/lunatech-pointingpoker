@@ -1,0 +1,89 @@
+/* 3b3: the editing view (decisions 7 to 11): the field, Save and Cancel, then the messages; the buttons beside the field here, below it on a phone */
+.issue-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-3);
+  align-items: start;
+}
+
+/* as Edit: the panel keeps its read height */
+.issue-editor > .issue-editor-field,
+.issue-editor-actions {
+  margin-block: calc(-1 * (var(--panel-inline) - var(--space-2)));
+}
+
+.issue-editor-field {
+  display: block;
+  width: 100%;
+  min-height: var(--target-min);
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  field-sizing: content; /* grows with its wrapped text, so the whole issue stays visible (3b3 decision 7) */
+  font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans);
+  color: var(--ink);
+  background: var(--paper-warm);
+  padding-inline: var(--space-2);
+  padding-block: calc((var(--target-min) - var(--text-lg) * var(--leading-tight)) / 2 - var(--line-control));
+  border: var(--line-control) solid var(--mute-soft);
+  border-radius: var(--radius-card);
+}
+
+.issue-editor-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.issue-editor-actions .button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: var(--target-min);
+  padding-inline: var(--space-3);
+  padding-block: 0;
+}
+
+.issue-editor-actions .button svg {
+  display: block;
+}
+
+/* While saving: aria-disabled keeps focus, the look says a save is in flight (3b3 decision 10) */
+.issue-editor-actions [aria-disabled="true"] {
+  cursor: default;
+}
+
+.issue-editor-actions .button-primary[aria-disabled="true"] {
+  background: var(--track);
+  color: var(--grey);
+}
+
+.issue-editor-actions .button-secondary[aria-disabled="true"] {
+  border-color: var(--hairline-colour);
+  color: var(--grey);
+}
+
+@media (forced-colors: active) {
+  .issue-editor-actions .button-primary[aria-disabled="true"],
+  .issue-editor-actions .button-secondary[aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  /* 3b3: Save and Cancel below the field, at its start, below 65.75 rem (decision 8) */
+  .issue-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .issue-editor > .issue-editor-field,
+  .issue-editor-actions {
+    margin-block: 0;
+  }
+
+  .issue-editor-actions {
+    margin-top: var(--space-2);
+  }
+}
