@@ -186,7 +186,7 @@ document as a whole stays in discussion.
 | 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
 | 4c1-wide-prep | The mockups' icons and the avatars' tokens | 4c1-mockups | The product owner, on a computed-style diff of the mockups, and its unit tests |
 | 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
-| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
