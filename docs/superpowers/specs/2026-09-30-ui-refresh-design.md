@@ -185,7 +185,8 @@ document as a whole stays in discussion.
 | 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and a computed-style diff of today's pages |
 | 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
 | 4c1-wide-prep | The mockups' icons and the avatars' tokens | 4c1-mockups | The product owner, on a computed-style diff of the mockups, and its unit tests |
-| 4c1-wide | The wide room page's look (J10) | 4c1-wide-prep | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
+| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
@@ -320,7 +321,9 @@ which chooses plain CSS
 4c1-mockups, the mockups' CSS moved into the app
 (`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-mockups-design.md`),
 4c1-wide-prep, the mockups' icons and the avatars' tokens
-(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-prep-design.md`), then
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-prep-design.md`),
+4c1-voters, voters without a browser for the layout cases
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
 4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
 Save and Cancel against the contrast gate and taking the two cases 4b2's
 final review deferred, a failed save with focus fallen to the page and a
