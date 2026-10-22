@@ -104,6 +104,10 @@
     padding: var(--space-2) var(--space-3);
   }
 
+  .room-header .brand-logo {
+    grid-area: 1 / 1;
+  }
+
   .room-header-chip {
     grid-area: 1 / 2;
     min-width: 0;
