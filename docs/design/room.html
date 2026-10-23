@@ -55,6 +55,7 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="icons.js"></script>
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
 // voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
@@ -96,9 +97,8 @@ let ownChoice = null
 let settling = false, settled   // the round bar's 1 s guard and its timer
 let copied = false   // as today: each copy hides the hint 2 s later, so it lasts 2 s from the first
 
-const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
 const messages = (q.get('message') || '').split(',').filter(Boolean)
-const alertIcon = icon('M12 3l10 18H2zM12 10v5M12 18v.5'), infoIcon = icon('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v6M12 7.5v.5'), close = icon('M6 6l12 12M18 6L6 18')
+const alertIcon = icon('triangle-alert'), infoIcon = icon('info'), close = icon('x')
 const msg = (tone, text, dismiss, live = true) => `<div class="message message-${tone}"${live ? ` role="${tone === 'problem' ? 'alert' : 'status'}"` : ''}>${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
   dismiss ? `<button class="button-quiet" type="button" aria-label="Dismiss">${close}</button>` : ''}</div>`
 const banners = {
@@ -106,8 +106,8 @@ const banners = {
   restarted: msg('notice', 'Reconnected. Please check your vote.', true),
   moved: msg('notice', 'The old link you followed now opens this address. Please update your invitation or bookmark to use it.', true)
 }
-const pencil = icon('M4 20h4L19 9l-4-4L4 16v4z'), trash = icon('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')
-const link = icon('M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1'), exit = icon('M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10')
+const pencil = icon('pencil'), trash = icon('trash')
+const link = icon('link'), exit = icon('log-out')
 // I: soft avatars, the hue hashed from the name over the full wheel; decoration only
 const hues = [['#6D28D9', '#EDE9FE'], ['#15803D', '#DCFCE7'], ['#B91C1C', '#FEE2E2'], ['#1D4ED8', '#DBEAFE'], ['#C2410C', '#FFEDD5'], ['#0F766E', '#CCFBF1'], ['#BE185D', '#FCE7F3'],
   ['#4D7C0F', '#ECFCCB'], ['#0369A1', '#E0F2FE'], ['#7C4A1E', '#F3E8DC'], ['#A16207', '#FEF9C3'], ['#4338CA', '#E0E7FF'], ['#A21CAF', '#FAE8FF'], ['#475569', '#E2E8F0']]
@@ -151,7 +151,7 @@ function draw() {
     <span class="room-header-copy-note" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="room-header-role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
     <a class="room-header-leave" href="#">${exit}Leave</a>
-    <button class="room-header-menu-button button-quiet" type="button" aria-expanded="${menuShown}" aria-label="Menu">${icon('M4 7h16M4 12h16M4 17h16')}</button>
+    <button class="room-header-menu-button button-quiet" type="button" aria-expanded="${menuShown}" aria-label="Menu">${icon('menu')}</button>
     ${menuShown ? `<div class="room-header-menu panel"><span class="room-header-menu-role">You are a ${role}.</span><button class="button-quiet" type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button><a class="button-quiet" href="#">${exit}Leave</a></div>` : ''}</header>`
   const issueHtml = /^https?:\/\//.test(issue)
     ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="issue-panel-seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${i ? seg : seg.replace(/\./g, '.<wbr>')}</span>`).join('')}</a>` : issue
@@ -163,7 +163,7 @@ function draw() {
   const aria = saving ? ' aria-disabled="true"' : ''
   const issueBlock = editing
     ? `<section class="panel issue-panel"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
-      <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('M5 12l5 5L20 7')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div>${status}</div></section>`
+      <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div>${status}</div></section>`
     : `<section class="panel issue-panel"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
   const bannerList = ['lost', 'moved', 'restarted'].filter(m => messages.includes(m)).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="room-page-banners" aria-label="Messages">${bannerList}</section>`
@@ -174,8 +174,8 @@ function draw() {
   // M: Clear · toggle · Next issue, right-aligned; the toggle is the primary until Next issue exists (step 5)
   const guard = settling ? ' aria-disabled="true"' : ''
   const nextLeads = later && revealed
-  const toggle = `<button class="button button-${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? icon('M4 4v6h6M4.6 15a8 8 0 1 0 1.9-8.3L4 10') : icon('M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z')}<span class="button-word">${revealed ? 'Re-vote' : 'Show votes'}</span></button>`
-  const next = nextLeads ? `<button class="button button-primary later" type="button"${guard}>${icon('M5 12h14M13 6l6 6-6 6')}<span class="button-word">Next issue</span></button>` : ''
+  const toggle = `<button class="button button-${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? icon('rotate-ccw') : icon('eye')}<span class="button-word">${revealed ? 'Re-vote' : 'Show votes'}</span></button>`
+  const next = nextLeads ? `<button class="button button-primary later" type="button"${guard}>${icon('arrow-right')}<span class="button-word">Next issue</span></button>` : ''
   const actions = `${small}<button class="button-quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
 
   const topProgress = later && voter && !revealed ? `<span class="round-progress round-progress-top later">${voted} of ${people.length} voted</span>` : ''
