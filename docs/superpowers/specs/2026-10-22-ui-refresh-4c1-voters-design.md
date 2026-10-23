@@ -21,21 +21,21 @@ fills a room cheaply while the pages it measures stay real. 4c1-wide's and
 
 ## Decisions
 
-1. **The voters in `testkit/voters.js`, bound to a case by a `voters`
-   fixture in `e2e/fixtures.js`** (product owner's rulings). The testkit holds
-   the tools that talk to the app without a browser, as `app.js` and `stub.js`
-   do, and the fixture only binds one to the case's room and lifetime, as
-   `room` and `join` do; 4c1-wide's diff script imports the testkit as it is.
-   Given the app's address, a room and names, a call joins each as a voter and
+1. **The voters in `testkit/voters.js`, bound to a case by a `voters` fixture
+   in `e2e/fixtures.js`** (product owner's rulings). The testkit holds the
+   tools that talk to the app without a browser, as `app.js` and `stub.js` do,
+   and the fixture only binds one to the case's room and lifetime, as `room`
+   and `join` do; 4c1-wide's diff script imports the testkit as it is. Given
+   the app's address, a room and names, a call joins each as a voter and
    returns, per voter, `vote(value)`, and one `close()` for the voters it
    joined; a case may call it more than once, and teardown closes each. It
    covers what the layout cases do and nothing more: leaving, the round's
    commands, the issue and role switches stay with the pages, whose own paths
-   (the beacon, a closed tab, Leave) the behaviour cases test (product
-   owner's ruling). A step whose cases need more, such as several
-   facilitators, adds it with its case. Set aside: browser voters, about 14 page loads per case; a page
-   rendering fixed snapshots without a server, which tests markup not wired
-   to the live app; the voters inline in `fixtures.js` or beside it in
+   (the beacon, a closed tab, Leave) the behaviour cases test (product owner's
+   ruling). A step whose cases need more, such as several facilitators, adds
+   it with its case. Set aside: browser voters, about 14 page loads per case;
+   a page rendering fixed snapshots without a server, which tests markup not
+   wired to the live app; the voters inline in `fixtures.js` or beside it in
    `e2e/`, testable only through Playwright.
 2. **Each voter is a real session.** The join's answer sets the session
    cookie, which the voter sends on every request, and the voter opens
@@ -44,10 +44,10 @@ fills a room cheaply while the pages it measures stay real. 4c1-wide's and
    period. A session becomes a member only when the server opens its stream,
    which then sends the room's snapshot first, so the call resolves once every
    voter's first frame has arrived. A stream that ends, errors or sends
-   nothing for 5 s before its first frame fails the call, naming the voter
-   (my call on the limit). `close()` only aborts its voters' streams
-   (product owner's ruling): it does not take them out of the room, which a
-   leave would, so a case cannot shrink a room with it.
+   nothing for 5 s before its first frame fails the call, naming the voter (my
+   call on the limit). `close()` only aborts its voters' streams (product
+   owner's ruling): it does not take them out of the room, which a leave
+   would, so a case cannot shrink a room with it.
 3. **The voters talk to the app, not through the stub** (my call), so a case
    that cuts or buffers a page's session leaves the voters alone.
 4. **Every request a voter makes checks its answer**, as `createRoom` does:
@@ -65,9 +65,9 @@ protocol voters in a fresh room. The joins and streams answered in about
 profile's 4 s grace period; 13 distinct votes gave 13 tally entries. A posted
 leave removed its entry in about 0.1 s. A join to an id that is not a room
 name answered 404; a valid but unknown name creates the room. An aborted
-stream still counted 6 s later. A later probe found the server notices only
-at its second write after the abort: two votes removed it 5.5 s later, one
-did not; with no write, the heartbeats are the writes (15 s,
+stream still counted 6 s later. A later probe found the server notices only at
+its second write after the abort: two votes removed it 5.5 s later, one did
+not; with no write, the heartbeats are the writes (15 s,
 `SSE.heartbeatInterval`).
 
 ## Accepted costs
@@ -77,6 +77,9 @@ did not; with no write, the heartbeats are the writes (15 s,
 - A voter's frames are not parsed, so a stream dropped mid-case shows only as
   a missing entry once the server has written to it twice, which with no
   activity takes two heartbeats, and the grace period has passed.
+- The first-frame wait and its 5 s limit go untested (product owner's ruling):
+  they only turn what would be a vote's 403 or a case's bare timeout into a
+  failure naming the voter.
 
 ## Contract
 
@@ -86,7 +89,8 @@ is, each failure matched by the request and status it names:
 
 - every voter's vote succeeds as soon as the call resolves (killed by a call
   that does not wait on its streams: a vote sent before its stream opens
-  answers 403);
+  answers 403; the kill is a race, not certain, though a probe's three runs
+  each had 3 to 9 of the 14 refused);
 - a join refused, to an id that is not a room name, fails the call with the
   join's 404 (killed by ignoring the status);
 - a blank vote fails its call with 400 (killed likewise).
@@ -102,12 +106,12 @@ What a page shows, in `e2e/voters.spec.js`:
 
 - **Parent**: the steps table gains this step's row between 4c1-wide-prep and
   4c1-wide, which now waits on it, and step 4's text names it.
-- **README**: the testkit's paragraph names the voters beside the stub and
-  the harness.
+- **README**: the testkit's paragraph names the voters beside the stub and the
+  harness.
 
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_4c1_voters`, stacked on 4c1-wide-prep's
 `20260930.ui_refresh_4c1_wide_prep`: this document with the parent's change
-first, then the voters with their own cases, then the fixture with its
-browser cases.
+first, then the voters with their own cases, then the fixture with its browser
+cases.
