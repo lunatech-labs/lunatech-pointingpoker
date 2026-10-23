@@ -108,12 +108,11 @@ const banners = {
 }
 const pencil = icon('pencil'), trash = icon('trash')
 const link = icon('link'), exit = icon('log-out')
-// I: soft avatars, the hue hashed from the name over the full wheel; decoration only
-const hues = [['#6D28D9', '#EDE9FE'], ['#15803D', '#DCFCE7'], ['#B91C1C', '#FEE2E2'], ['#1D4ED8', '#DBEAFE'], ['#C2410C', '#FFEDD5'], ['#0F766E', '#CCFBF1'], ['#BE185D', '#FCE7F3'],
-  ['#4D7C0F', '#ECFCCB'], ['#0369A1', '#E0F2FE'], ['#7C4A1E', '#F3E8DC'], ['#A16207', '#FEF9C3'], ['#4338CA', '#E0E7FF'], ['#A21CAF', '#FAE8FF'], ['#475569', '#E2E8F0']]
+// I: soft avatars, the pair hashed from the name, from colours.css's avatar tokens; decoration only
+const avatarPairs = 14   // the --avatar-ink-N and --avatar-ground-N pairs in colours.css
 const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
 const initials = n => n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
-const avatar = n => { const [h, t] = hues[hash(n) % hues.length]; return `<span class="roster-avatar" style="--h:${h};--t:${t}" aria-hidden="true">${initials(n)}</span>` }
+const avatar = n => { const i = hash(n) % avatarPairs + 1; return `<span class="roster-avatar" style="--h:var(--avatar-ink-${i});--t:var(--avatar-ground-${i})" aria-hidden="true">${initials(n)}</span>` }
 const stateName = { none: 'No vote', confirmed: 'Voted', kept: 'Previous vote, not confirmed' }
 
 function draw() {

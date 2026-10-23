@@ -25,6 +25,35 @@
   --mark-offset: #F9C3C6; /* the header mark's pale offset card, decorative */
   --shadow-colour: rgba(28, 25, 23, 0.05); /* a panel's soft shadow, decorative */
   --lift-colour: rgba(220, 47, 60, 0.25); /* the chosen card's glow, decorative */
+  /* the roster's avatars, initials on their ground, picked by a hash of the name; decorative */
+  --avatar-ink-1: #6D28D9;
+  --avatar-ground-1: #EDE9FE;
+  --avatar-ink-2: #15803D;
+  --avatar-ground-2: #DCFCE7;
+  --avatar-ink-3: #B91C1C;
+  --avatar-ground-3: #FEE2E2;
+  --avatar-ink-4: #1D4ED8;
+  --avatar-ground-4: #DBEAFE;
+  --avatar-ink-5: #C2410C;
+  --avatar-ground-5: #FFEDD5;
+  --avatar-ink-6: #0F766E;
+  --avatar-ground-6: #CCFBF1;
+  --avatar-ink-7: #BE185D;
+  --avatar-ground-7: #FCE7F3;
+  --avatar-ink-8: #4D7C0F;
+  --avatar-ground-8: #ECFCCB;
+  --avatar-ink-9: #0369A1;
+  --avatar-ground-9: #E0F2FE;
+  --avatar-ink-10: #7C4A1E;
+  --avatar-ground-10: #F3E8DC;
+  --avatar-ink-11: #A16207;
+  --avatar-ground-11: #FEF9C3;
+  --avatar-ink-12: #4338CA;
+  --avatar-ground-12: #E0E7FF;
+  --avatar-ink-13: #A21CAF;
+  --avatar-ground-13: #FAE8FF;
+  --avatar-ink-14: #475569;
+  --avatar-ground-14: #E2E8F0;
 }
 
 @media (prefers-contrast: more) {
