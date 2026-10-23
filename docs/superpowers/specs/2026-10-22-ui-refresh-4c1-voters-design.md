@@ -25,9 +25,11 @@ fills a room cheaply while the pages it measures stay real. 4c1-wide's and
    fixture in `e2e/fixtures.js`** (product owner's rulings). The testkit holds
    the tools that talk to the app without a browser, as `app.js` and `stub.js`
    do, and the fixture only binds one to the case's room and lifetime, as
-   `stub` does; 4c1-wide's diff script imports the testkit as it is. Given the
-   app's address, a room and names, it joins each as a voter and returns, per
-   voter, `vote(value)`, with one `close()` for them all. It covers what the
+   `room` and `join` do; 4c1-wide's diff script imports the testkit as it is.
+   Given the app's address, a room and names, a call joins each as a voter and
+   returns, per voter, `vote(value)`, and one `close()` for the voters it
+   joined; a case may call it more than once, and teardown closes each. It
+   covers what the
    layout cases do and nothing more: leaving, the round's commands, the issue
    and role switches stay with the pages, whose own paths (the beacon, a
    closed tab, Leave) the behaviour cases test (product owner's ruling). A
@@ -40,17 +42,20 @@ fills a room cheaply while the pages it measures stay real. 4c1-wide's and
    cookie, which the voter sends on every request, and the voter opens
    `/rooms/{roomId}/events` with a fresh `connectionId`, reading and dropping
    its frames: the stream is what keeps a session present past the grace
-   period. A session becomes a member only once its stream is read, so the
-   call resolves once every voter's first frame has arrived. `close()` fails
-   if a stream ended before it, then aborts the rest; the fixture's teardown
-   calls it.
+   period. A session becomes a member only when the server opens its stream,
+   which then sends the room's snapshot first, so the call resolves once every
+   voter's first frame has arrived. A stream that ends or errors before its
+   first frame fails the call, naming the voter; one that ends or errors
+   later fails `close()`, which then aborts the rest.
 3. **The voters talk to the app, not through the stub** (my call), so a case
    that cuts or buffers a page's session leaves the voters alone.
 4. **Every request a voter makes checks its answer**, as `createRoom` does:
-   anything but success fails the call with the status, a vote's 409 during
-   a reveal included, so a case never measures a room short of a voter or a
-   vote. A case lets the page's command land, by the toggle's text, before
-   its voters act.
+   anything but success fails the call, naming the request and its status, a
+   vote's 409 during a reveal included, so a case never measures a room short
+   of a voter or a vote. A case lets the page's command land, by the toggle's
+   text, before its voters act. The vote that leaves every voter confirmed
+   reveals the round by itself, so a case measuring the voting phase leaves
+   one voter unvoted.
 
 ## Spike
 
@@ -61,7 +66,7 @@ profile's 4 s grace period; 13 distinct votes gave 13 tally entries. A posted
 leave removed its entry in about 0.1 s. A join to an id that is not a room
 name answered 404; a valid but unknown name creates the room. An aborted
 stream still counted 6 s later, the server noticing at its next write
-(inferred: the heartbeat is 15 s).
+(the heartbeat is 15 s, `SSE.heartbeatInterval`).
 
 ## Accepted costs
 
@@ -74,21 +79,24 @@ stream still counted 6 s later, the server noticing at its next write
 ## Contract
 
 No case changes. Judged by its cases, each shown to fail. The testkit's own,
-in `test/voters.test.js` against the started app, as the stub's are:
+in `test/voters.test.js` against the started app, as `reproduction.test.js`'s
+is, each failure matched by the request and status it names:
 
-- a join refused, to an id that is not a room name, fails the call (killed
-  by ignoring the status);
-- `close()` after the app has stopped fails (killed by a `close()` that only
-  aborts).
+- every voter's vote succeeds as soon as the call resolves (killed by a call
+  that resolves before the first frames: a vote sent before its stream opens
+  answers 403);
+- a join refused, to an id that is not a room name, fails the call with the
+  join's 404 (killed by ignoring the status);
+- a blank vote fails its call with 400 (killed likewise);
+- `close()` once the app has stopped and every stream has been seen to end,
+  an error counting as an end, fails (killed by a `close()` that only
+  aborts); this case starts its own app.
 
-What a page shows, in a browser case:
+What a page shows, in `e2e/voters.spec.js`:
 
-- a room of 14 shows 14 entries as soon as the call resolves, and 13
-  distinct values give 13 tally entries once revealed (killed by a call that
-  resolves before the first frames, and by a voter that never opens its
-  stream);
-- a vote refused, cast once a facilitator's page has revealed, fails its
-  call (killed by ignoring the status).
+- a room of 14 shows 14 entries, still 14 past the grace period, and 13
+  distinct values give 13 tally entries once revealed (killed by a voter that
+  never opens its stream).
 
 ## The docs' changes
 
