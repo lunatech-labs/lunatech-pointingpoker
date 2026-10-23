@@ -24,34 +24,33 @@ cases it writes.
 ## Decisions
 
 1. **The whole room page at every width, but the editing view and the
-   banners** (product owner's ruling). The area files hold the phone rules
-   too, and below 51.75 rem `room-header.css` hides the role switch and Leave
-   for ☰, so ☰ and its row, opening and closing on a press, come here, as
-   does the phone's line naming the facilitators: no width loses a control.
-   4c1-narrow adds ☰'s other closes (Escape, the window widening), the
-   Firefox scroll above the pinned sheet and its cases; 4c1-editor gives the
-   editing view and the banners J12's look and place. Until then the editing
-   view keeps today's markup in a legacy wrapper inside the issue panel, and
-   the banners stay in `App`'s, above the room page (product owner's ruling,
-   so `Alerts` is not split twice). Set aside, and the fallback if this proves
-   too much for one step: no ☰ until 4c1-narrow, the phone without Switch and
-   Leave in between, as the stack deploys together.
+   banners** (product owner's ruling). Below 51.75 rem `room-header.css`
+   hides the role switch and Leave for ☰, so ☰ and its row come here, as does
+   the phone's line naming the facilitators: no width loses a control. ☰
+   follows 3b2's Disclosure table but for its Escape and width rows, which
+   4c1-narrow adds with the Firefox scroll above the pinned sheet and the
+   row's cases. Until 4c1-editor gives them J12's look and place, the editing
+   view stays legacy inside the issue panel (decision 7) and the banners stay
+   in `App`'s wrapper, above the room page (product owner's ruling, so they
+   get both in one move). Set aside, and the fallback if this proves too much
+   for one step: no ☰ until 4c1-narrow, the phone without Switch and Leave in
+   between, as the stack deploys together.
 2. **One component per CSS prefix, named after it** (product owner's ruling):
    `RoomPage`, `RoomHeader`, `IssuePanel`, `IssueEditor`, `RoundPanel` with
    `Deck` or `Result` in its slot, `RoundBar`, `Voters` and `Roster`, each in
    `frontend/src/components/` beside its area file, which it imports. A panel
    is suffixed only where its noun alone names something else: the issue is
-   the text and the round its state. `Controls` becomes `RoundBar`, keeping
-   4b's guard and press rules; `RoleLine` and its press rules serve the header
-   and ☰'s row; `Participants` and `Results` give way to `Voters` and
-   `Result`; `Room` becomes `RoomPage`. `Figure` (decision 8) is the one
-   component outside the rule, its class `looks.css`'s `tight-point`.
-   `RoleLine` draws the header's sentence and ☰'s row's quiet button, one
-   press rule for both. Set aside: `Panel` on every panel, which renames
-   4c1-mockups' classes.
-3. **Only the room leaves the wrapper.** The lobby keeps `container
-   legacy-page` until 4c2. `base.css` imports `page.css` into `base`, before
-   the fence (4c1-foundation decision 3), then `looks.css` unlayered, so the
+   the text and the round its state. `Room` becomes `RoomPage`, `Controls`
+   `RoundBar`, keeping 4b's guard and press rules, and `Participants` and
+   `Results` give way to `Voters` and `Result`; `RoleLine` draws the header's
+   sentence and ☰'s row's quiet button, one press rule for both. `Figure`
+   (decision 8) is the one component outside the rule, its class
+   `looks.css`'s `tight-point`. Set aside: `Panel` on every panel, which
+   renames 4c1-mockups' classes.
+3. **The room leaves `App`'s wrapper, the lobby does not.** The lobby keeps
+   `container legacy-page` until 4c2. `base.css` imports `page.css` into
+   `base`, then `looks.css` unlayered, both `@import`s before the fence's
+   block (4c1-foundation decision 3), as CSS ignores a later one, so the
    shared looks come before every area file whatever order the components
    load them in (4c1-mockups' plan, Review Focus 3; decision 12's diff
    checks it). Its unlayered `body` and `.room-header-id` rules leave it, now
@@ -82,8 +81,10 @@ cases it writes.
    id `issue-status`) is rendered once, so 'the editor's notices are
    announced from one live region', which marks it while viewing, still finds
    it after Edit, and the double-click and focus-return rules of 4b2 keep one
-   group around Edit, Save and Cancel. Only the field, Save, Cancel and the
-   messages' contents stay legacy. The mockup's markup follows.
+   group around Edit, Save and Cancel. Two legacy wrappers keep today's look:
+   one around the field, Save and Cancel, and one inside the region around the
+   messages, never around the region, which would re-create it. The mockup's
+   markup follows.
 8. **A `Figure` component draws a value** wherever one shows, the deck, the
    result, the entries and the roster, setting "0.5"'s point tight, its text
    still "0.5" (3b1 decision 13).
@@ -92,7 +93,8 @@ cases it writes.
    says, leaving the alerts; `App` keeps its timer. The phone's rule hiding
    the note while empty goes, as `display: none` takes the region out of the
    accessibility tree and the copy would not be announced; nothing shows in
-   its place, which the diff checks.
+   its place, which a before-and-after diff of the mockup at 800 and 392 px
+   checks, the app's diff linking the same file.
 10. **Layout f only, and none of the later steps' parts** (my call): the
    slot below the table, as `room.html`'s default; g stays the open swap, the
    progress, Next issue and the recent rounds their steps'. The most voted
@@ -106,21 +108,24 @@ cases it writes.
     (my call, narrowed by the product owner's ruling): the voter's and the
     facilitator's pages, voting and revealed, at the mockup's default
     parameters, at the cells pages' four widths, 1280, 1000, 800 and 392 px,
-    in Chromium, each element paired by its path from `.room-page`. Ivan's
-    page is the voter's, the other 13 voters are protocol voters, and Peggy
-    and Victor are facilitators the diff's script joins itself, Peggy's page
-    the facilitator's. A throwaway script, as 4c1-mockups' was. The product
-    owner rules on each difference. Expected ones: the text the mockup fakes,
-    the issue not a link (decision 11), and Bootstrap's base rules where the
-    reset sets nothing, such as the labels' line height and Copy link's
-    underline (Accepted costs).
+    680 px tall, in Chromium, each element paired by its path from
+    `.room-page`. Ivan's page is the voter's, the other 13 voters are protocol
+    voters, and Peggy and Victor are facilitators on pages of their own,
+    Peggy's the one compared. The mockup's font request is routed to the app's
+    own font files, and each page is read once it shows its state (the
+    toggle's text, the entry count). A throwaway script, as 4c1-mockups' was.
+    The product owner rules on each difference. Expected ones: the text the
+    mockup fakes, the issue not a link (decision 11), and Bootstrap's base
+    rules where the reset sets nothing, such as the labels' line height and
+    Copy link's underline (Accepted costs).
 
 ## Accepted costs
 
 - Until 4c1-editor the editing view keeps Bootstrap's look inside the new
-  page, and the banners sit above the header rather than below it; until
-  4c1-narrow ☰'s row closes only on a press, and
-  focus outside the phone's pinned sheet can stay behind it in Firefox.
+  page, and the banners sit above the header rather than below it, the page
+  scrolling by a banner's height while one shows; until 4c1-narrow ☰'s row
+  closes only on a press, and focus outside the phone's pinned sheet can stay
+  behind it in Firefox.
 - Until 4c2, Bootstrap's base rules still reach the new markup wherever the
   reset sets nothing, and `page.css`'s `html` and `body` reach the lobby
   (4c1-foundation's Accepted costs).
@@ -146,31 +151,37 @@ so only its text changes. Two more, found after 3b1's list:
   against the root's `clientWidth` instead.
 
 A change the build turns up beyond these joins this list in the commit that
-rewrites its case, and the PR names it. The reads the look keeps stay as they
-are, the new markup carrying each: the room's marker `room`, the room id as a
-heading, `most-voted`, `tally-entry`, `tally-value` and `tally-count`,
-`participant-estimation`, `issue-status`, the cards' names ("0.5" included),
-"Copy link" as a link, the role switches and Edit's name.
+rewrites its case, and the PR names it. Every other read the reference's
+"Contract reads the look keeps" lists stays, the new markup carrying it; this
+step's reference change adds the reads it lacks: `most-voted`, `tally-value`
+and `tally-count`, `issue-status`, the cards' names ("0.5" included), "Copy
+link" as a link, the role switches and Edit's name. 4b2's double-click cases
+are shown to fail again on the new page, by their mutation, since its
+geometry moves the second click.
 
 New cases, at the floor and the comfort target unless said, on the voter's
 and the facilitator's pages, in both browsers, the room filled with protocol
 voters, each case shown to fail against a layout breaking it (parent's step
-4, its list). Every box is read through one helper that first waits for the
-fonts and a frame, so a swap or the fit's rerun lands before the read:
+4, its list). A case first waits, retrying, for the page to show the state
+it measures (the entry count, the toggle's text, a voted mark), then reads
+every box through one helper that waits for the fonts and two frames, so a
+swap or the fit's rerun lands before the read:
 
 - **No scroll at the floor**: in each phase, with 14 voters, 13 distinct
   values once revealed, an issue drawn on two lines in each browser (the case
-  checks it) and no banner, the page does
-  not scroll and the header, the issue, the slot and the round bar are
-  wholly in view; at the comfort target every entry is too.
-- **A longer issue scrolls the page and cuts nothing**: at the floor, an
-  issue long enough to bring the table to its 5 rem (3b1's Measured: 240
-  characters are not) scrolls the page, the table keeps its 5 rem, and the
+  checks it) and no banner, the page does not scroll and the header, the
+  issue, the slot and the round bar are wholly in view; at the comfort target
+  every entry is too.
+- **A longer issue, or a window below the floor, scrolls the page and cuts
+  nothing**: at the floor an issue long enough to bring the table to its 5 rem
+  (3b1's Measured: 240 characters are not), and at 1280 by 560 the floor's
+  two-line issue, each scroll the page, the table keeps its 5 rem, and the
   slot and the round bar scroll wholly into view.
-- **The entries' scale**: it does not change through a reveal, on the
-  facilitator's page from 65.75 rem (below it a reveal refits, 3b2's Accepted
-  costs), never puts an entry's card past `--deck-card`'s height (3b1
-  decision 10's 5.5 / 3.85), and a room of 0 or 1 voters gets one.
+- **The entries' scale**: it does not change through a reveal (at 1280 px
+  the page is past 65.75 rem, below which the facilitator's refits, 3b2's
+  Accepted costs), never puts an entry's card past `--deck-card`'s height
+  (3b1 decision 10's 5.5 / 3.85), and a room of 0 voters, on the
+  facilitator's page, or of 1 gets one.
 - **Nobody voted**: a reveal with no votes shows "Nobody voted" and no tally
   entry, and the slot keeps its height.
 - **Nothing moves with the room's size**: the header, the issue, the slot and
@@ -179,8 +190,10 @@ fonts and a frame, so a swap or the fit's rerun lands before the read:
   Re-vote and after a vote.
 - **The copy hint**: a copy moves none of the header's elements nor the
   round's, its box overlaps none of them, and it is a live region (step 1a's
-  helper); its text and its 2 s stay with 'the copy hint lasts 2 s from the
-  first copy, not the last'.
+  helper, the region marked before the copy). In real time, as a fake clock
+  would stop the helper's frames, its text is checked before and after the
+  reads; its 2 s stay with 'the copy hint lasts 2 s from the first copy, not
+  the last'.
 
 The zoomed page, the switches' crossings, 320 px and the phone's copy hint
 are 4c1-narrow's.
@@ -189,7 +202,8 @@ are 4c1-narrow's.
 
 - **Parent**: none; 4c1-wide-prep's and 4c1-voters' changes name this step.
 - **Reference**: Contract reads moves each change this step makes into the
-  past tense, the "Messages" region left for 4c1-editor.
+  past tense, the "Messages" region left for 4c1-editor, and gains the reads
+  it lacks (Contract).
 - **Known issues**: 'A reveal with votes still pushes the participants list
   down' and 'A tied vote is broken by JavaScript key order' cite today's
   components and the "Most voted estimation" heading; both follow the new
