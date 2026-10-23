@@ -66,6 +66,9 @@ the decisions log at the end.
   `probe`.
 - `lobby-cells.html`, the lobby's pages side by side at a chosen width
   (1280, 800, 392 or 320 px), each with a link that opens it alone.
+- `icons.js`, the icons both mockups draw, lucide's, copied from `lucide-react`
+  by name; `frontend/src/design/icons.test.ts` keeps it equal to the package,
+  and lucide's licence sits beside it as `lucide-LICENSE.txt`.
 
 ## Brand source
 
@@ -307,9 +310,11 @@ stacking, Dismiss and mounting are J12's.
   set: the hairline's pale, and the colours drawn only in a shadow, the soft
   shadow's, the chosen card's glow and the header mark's offset card, since
   forced colours drop shadows and the hairline alone tells surfaces apart
-  (J9). So are the roster's avatars, initials on a pale ground in a hue hashed
-  from the name, `aria-hidden` and incidental: the name beside them carries
-  the information.
+  (J9). So are the roster's avatars, initials on a pale ground, the pair
+  picked by a hash of the name, `aria-hidden` and incidental: the name beside
+  them carries the information. The set lists their tokens by name,
+  `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
+  `--avatar-ground-14`, so a later avatar token is not exempt by its prefix.
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
@@ -476,7 +481,7 @@ read a token.
 
 | Kind | Tokens |
 | --- | --- |
-| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours |
+| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours; from 4c1-wide-prep, the avatars' pairs |
 | Root | the clamp (J2) |
 | Shell | its height (J2) |
 | Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking and the tight point |

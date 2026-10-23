@@ -21,6 +21,7 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="icons.js"></script>
 <script>
 // Parameters: page (root | pinned | notaroom), tab, name, remembered (slug | legacy | none), rejoin=chip, role, message (comma list), room, typed, suggestion,
 // stored, longest=1 (the 26-character id), probe=1; the lobby-cells page lists each with its meaning.
@@ -44,9 +45,8 @@ const flags = (q.get('message') || '').split(',').filter(f => shown.includes(f))
 const ended = flags.includes('ended')
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
-const alertIcon = icon('M12 3l10 18H2zM12 10v5M12 18v.5'), infoIcon = icon('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v6M12 7.5v.5'), close = icon('M6 6l12 12M18 6L6 18')
-const arrow = icon('M5 12h14M13 6l6 6-6 6')
+const alertIcon = icon('triangle-alert'), infoIcon = icon('info'), close = icon('x')
+const arrow = icon('arrow-right')
 const msg = (tone, text, dismiss) => `<div class="message message-${tone}" role="${tone === 'problem' ? 'alert' : 'status'}">${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
   dismiss ? `<button class="button-quiet" type="button" aria-label="Dismiss">${close}</button>` : ''}</div>`
 const texts = {
