@@ -33,26 +33,32 @@ ships.
    `arrow-right`; lucide's `trash` is the lidded bin with two lines. The
    brand mark keeps its own glyph. Set aside: moving the mockups' own drawings
    into the app, which needed two of them fixed (the warning's and the
-   notice's dots draw as dashes, and Leave's arrow points inward, reading as
-   "enter") and an icon file of our own to keep; and each side keeping its own
-   set, which leaves the mockups showing what does not ship.
+   notice's dots draw as dashes, and Leave is lucide's `log-out` mirrored, its
+   frame where `log-in` has it) and an icon file of our own to keep; and each
+   side keeping its own set, which leaves the mockups showing what does not
+   ship.
 2. **One icon file for both mockups,** `docs/design/icons.js`, a classic script
-   each mockup loads, holding each icon's elements and attributes by lucide's
-   name (my call): a `<script src>` works from `file://`, where a module does
-   not, and the mockups must open from a checkout. They cannot load
-   `lucide-react` itself: it ships React components as modules, which a page
-   opened from `file://` cannot import, and a checkout need not have
-   `node_modules`. Lucide's licence, ISC with Feather's MIT for the icons
+   each mockup loads (my call), holding each icon's elements and attributes by
+   lucide's name, lucide's default `<svg>` attributes, and the one function
+   that draws a name, which both mockups call in place of their own `icon`: a
+   `<script src>` works from `file://`, where a module does not, and the
+   mockups must open from a checkout. They cannot load `lucide-react` itself:
+   it ships React components, which a page opened from `file://` cannot
+   import, and a checkout need not have `node_modules`. Lucide's licence, ISC with Feather's MIT for the icons
    derived from it, asks for its notice in every copy: it sits beside the file
    as `docs/design/lucide-LICENSE.txt`, copied from the package, and the
    file's first comment names it (my call).
 3. **A unit test keeps the copies equal to the package.** In `test:unit`,
    which has no DOM, each entry of `icons.js`, held in lucide's own form, a
    list of elements and their attributes, equals the icon data
-   `lucide-react` ships for that name, and the attributes the mockups' drawing
-   gives every `<svg>` (stroke, width, round ends) equal lucide's defaults; a
-   name lucide does not have fails. So a Dependabot bump that redraws an icon
-   fails the suite until the copy follows.
+   `lucide-react` ships for that name, React's `key` attributes dropped, and
+   the `<svg>` attributes the drawing function gives equal lucide's defaults,
+   both read from the package when the test runs; a name lucide does not have
+   fails, and the names are exactly decision 1's. So a Dependabot bump that
+   redraws an icon or changes a default fails the suite until the copy
+   follows. The icon data is not public API, and a deep import fails
+   typecheck: the plan reaches it through the typed
+   `lucide-react/dynamicIconImports`.
 4. **The 14 avatar pairs become tokens** (product owner's ruling),
    `--avatar-1` to `--avatar-14` for the initials and `--avatar-1-ground` to
    `--avatar-14-ground` for their grounds, in `colours.css`, the values and
@@ -62,8 +68,9 @@ ships.
    accepted ones; the pairs as literals in TSX, against principle 6.
 5. **The avatars join the gate's decorative set, by their names exactly**,
    `--avatar-1` to `--avatar-14` and their grounds, so a later avatar token,
-   such as an indicator, is not exempt by its prefix.
-   They are exempt from contrast as incidental text (J8, 3b1 decision 17), so
+   such as an indicator, is not exempt by its prefix; `gate.ts`'s comment on
+   the set names incidental text beside J9's hairlines and shadows. They are
+   exempt from contrast as incidental text (J8, 3b1 decision 17), so
    no pair reaches them. Kept exempt rather than tuned: every pair is under
    7:1 (4.52 to 6.41 under normal vision), and reaching it would bring every
    initial near black.
@@ -84,10 +91,10 @@ and its icons are untouched.
 Judged by the product owner, by eye on both mockups and on a computed-style
 diff of them before and after, as 4c1-mockups' (its Contract); the only
 expected differences are the icons' elements and attributes. And by the new
-unit tests, each shown to fail: by a copy's attribute edited, by an entry
-under a name lucide lacks, by the mockups' drawing without round ends, and,
-for the gate, by an avatar token outside the exempt names, which 'reaches
-every colour token but the decorative set' then reports.
+unit test, shown to fail by a copy's attribute edited, by an entry under a
+name lucide lacks, by an emptied `icons.js`, and by the drawing without round
+ends. The gate gains no case: an avatar token outside the exempt names fails
+the existing 'reaches every colour token but the decorative set'.
 
 ## The docs' changes
 
