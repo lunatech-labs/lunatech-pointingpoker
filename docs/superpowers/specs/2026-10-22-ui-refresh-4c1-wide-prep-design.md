@@ -48,19 +48,17 @@ ships.
    sits beside the file as `docs/design/lucide-LICENSE.txt`, copied from the
    package, and the file's first comment names it (my call).
 3. **A unit test keeps the copies equal to the package.** In `test:unit`,
-   which has no DOM, the test loads `icons.js` through Node's `vm`, which sees
-   only top-level `var`s and functions, so the file holds its table in a
-   `var`. It checks that the table's names are exactly decision 1's, then, for
-   each, compares the markup the drawing function returns with lucide's
-   component of that name, looked up in the typed
-   `lucide-react/dynamicIconImports` and rendered by `react-dom/server`, as
-   exact strings once lucide's `class` is removed. One comparison covers the
-   paths, the `<svg>`'s attributes and lucide's defaults, which the package
-   does not export, so a Dependabot bump that redraws an icon or changes a
-   default fails the suite until the copy follows. Set aside: an HTML parser
-   comparing elements, a dependency the exact strings do not need (product
-   owner's ruling; the spike, session scratchpad `spike-icons`, matched all
-   twelve).
+   which has no DOM, the test loads `icons.js` through Node's `vm` and checks
+   that the table's names are exactly decision 1's, then, for each, compares
+   the markup the drawing function returns with lucide's component of that
+   name, looked up in the typed `lucide-react/dynamicIconImports` and rendered
+   by `react-dom/server`, as exact strings once lucide's `class` is removed.
+   One comparison covers the paths, the `<svg>`'s attributes and lucide's
+   defaults, which the package does not export, so a Dependabot bump that
+   redraws an icon or changes a default fails the suite until the copy
+   follows. Set aside: an HTML parser comparing elements, a dependency the
+   exact strings do not need (product owner's ruling; the spike, run on
+   2026-10-23 and removed, matched every icon).
 4. **The 14 avatar pairs become tokens** (product owner's ruling),
    `--avatar-1` to `--avatar-14` for the initials and `--avatar-1-ground` to
    `--avatar-14-ground` for their grounds, in `colours.css`, the values and
