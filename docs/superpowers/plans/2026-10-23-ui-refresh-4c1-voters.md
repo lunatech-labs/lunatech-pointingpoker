@@ -65,7 +65,7 @@
 ## Review Focus
 
 1. A call whose second stream fails, after its first has opened: the first is aborted before the call rejects (R2, R3; no case).
-2. A name the join refuses, such as a blank one: the call rejects with the join's 400 through the same check as case 2, and opens no stream.
+2. A join the app refuses while the call's other joins succeed: the call rejects with that join's status through the same check as case 2, and opens no stream. The app accepts a blank name (checked: it answers 204), so a refusal comes from the room, as case 2's 404 does.
 3. A case that fails after its voters joined: the fixture's teardown still closes every call that resolved.
 4. A case that turns the stub's buffering on or cuts a page: the voters are unaffected, as they go to `app.baseUrl` (decision 3).
 5. A case that runs for minutes: each voter keeps reading its stream, so the server's heartbeats never fill an unread buffer.
