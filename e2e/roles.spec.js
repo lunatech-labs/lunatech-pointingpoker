@@ -1,17 +1,16 @@
 import {
   test,
   expect,
-  card,
   createRoom,
   deck,
   defaultRoleChoice,
   defaultRoleRadio,
   expectSummaryMatchesParticipants,
   facilitatorMark,
-  frozenNotice,
   nameInput,
   ownEstimation,
   participantEntry,
+  phaseLine,
   results,
   revealedEstimation,
   roomIdInput,
@@ -73,9 +72,12 @@ test('a switch to facilitator drops the vote from the results', async ({ join })
 
   // Switching back starts with no estimate, and the round stays revealed.
   await switchTo(bob.page, 'voter').click()
-  await expect(deck(bob.page)).toBeVisible()
-  await expect(ownEstimation(bob.page)).toHaveCount(0)
-  await expect(card(bob.page, '8')).toBeDisabled()
+  // Alice's reads first: Bob's no-deck read would pass before the switch lands.
+  const bobOnAlice = participantEntry(alice.page, 'Bob')
+  await expect(revealedEstimation(bobOnAlice)).toHaveText('')
+  await expect(bobOnAlice.getByRole('img', { name: 'No vote', exact: true })).toHaveCount(1)
+  await expect(deck(bob.page)).toHaveCount(0)
+  await expect(results(bob.page)).toBeVisible()
 })
 
 test("a facilitator's page has no deck, and keeps Show, Re-vote and Clear", async ({ join }) => {
@@ -86,16 +88,16 @@ test("a facilitator's page has no deck, and keeps Show, Re-vote and Clear", asyn
 
   await vote(bob.page, '5')
   // Bob is the only voter, so his vote reveals; Re-vote then reopens it for the Show below.
-  await expect(frozenNotice(bob.page)).toBeVisible()
-  await expect(frozenNotice(alice.page)).toHaveCount(0)
+  await expect(phaseLine(bob.page)).toHaveText('Revealed')
+  await expect(phaseLine(alice.page)).toHaveText('Revealed')
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   await expect(unconfirmedCard(bob.page)).toHaveText('5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(frozenNotice(bob.page)).toBeVisible()
+  await expect(phaseLine(bob.page)).toHaveText('Revealed')
   // Alice's own page must have flipped, or her Clear can land as the flip guards it.
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
   await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(frozenNotice(bob.page)).toBeHidden()
+  await expect(phaseLine(bob.page)).toHaveText('Voting')
   await expect(ownEstimation(bob.page)).toHaveCount(0)
   await expect(deck(alice.page)).toHaveCount(0)
 })

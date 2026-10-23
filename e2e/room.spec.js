@@ -6,8 +6,9 @@ import {
   participantEntry,
   participantEntries,
   card,
+  deck,
   expectSummaryMatchesParticipants,
-  frozenNotice,
+  phaseLine,
   revealedEstimation,
   results,
   tallyEntries,
@@ -198,15 +199,14 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(results(alice.page)).toBeVisible()
 
   // Bob never voted, so this covers a first vote as well as Alice changing hers.
-  await expect(card(alice.page, '5')).toBeDisabled()
-  await expect(card(alice.page, '8')).toBeDisabled()
-  await expect(card(bob.page, '3')).toBeDisabled()
-  await expect(frozenNotice(bob.page)).toBeVisible()
+  await expect(deck(alice.page)).toHaveCount(0)
+  await expect(deck(bob.page)).toHaveCount(0)
+  await expect(phaseLine(bob.page)).toHaveText('Revealed')
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // Alice's mark clearing on Bob's page is the proof the re-vote reached him, not just her.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
-  await expect(frozenNotice(bob.page)).toBeHidden()
+  await expect(phaseLine(bob.page)).toHaveText('Voting')
 
   await vote(bob.page, '3')
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
@@ -214,14 +214,13 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
 
 test('the reveal notice claims its space before the reveal', async ({ join }) => {
   const alice = await join('Alice')
-  // The notice and the Re-vote button both appear above the list, so its first entry stays put
-  // only if neither takes height: the notice's row also sizes the estimation card.
+  // The phase line and the toggle flip in place, so the list's first entry stays put on a reveal.
   const top = async () => (await participantEntries(alice.page).first().boundingBox()).y
 
-  // Nobody votes, so no summary block appears and what is left is the two in-place appearances.
+  // Nobody votes, so the reveal only swaps the deck for the result in the slot.
   const before = await top()
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(frozenNotice(alice.page)).toBeVisible()
+  await expect(phaseLine(alice.page)).toHaveText('Revealed')
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
   expect(await top()).toEqual(before)
 })
@@ -432,6 +431,7 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
   // No entry rather than no region, so a region saying nobody voted still passes.
   await expect(tallyEntries(alice.page)).toHaveCount(0)
+  await expect(results(alice.page)).toContainText('Nobody voted')
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -949,6 +949,8 @@ test("the editor's notices are announced from one live region", async ({ join, r
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
   const alice = await join('Alice')
+  // Bob keeps the round open, so Alice's card is read while voting: a revealed round has no deck.
+  await join('Bob')
   const selected = ownEstimation(alice.page)
   const unconfirmed = unconfirmedCard(alice.page)
 
@@ -958,6 +960,7 @@ test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ j
   // The role filter pressed: false would also match a card with no aria-pressed at all.
   await expect(card(alice.page, '3')).toHaveAttribute('aria-pressed', 'false')
 
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // reVote clears voted and keeps estimation, which is the only state this description means.
   await expect(unconfirmed).toHaveText('5')

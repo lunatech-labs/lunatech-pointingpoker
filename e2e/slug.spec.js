@@ -3,9 +3,9 @@ import {
   expect,
   deck,
   inRoom,
+  mostVoted,
   movedBanner,
   nameInput,
-  ownEstimation,
   roomIdInput,
   vote
 } from './fixtures.js'
@@ -43,8 +43,9 @@ test('an old UUID link opens its derived room under a banner that covers no card
       .map(b => b.textContent.trim())
   )
   expect(covered).toEqual([])
+  // Alice is alone, so her vote reveals the round and the deck gives way to the result.
   await vote(page, '89')
-  await expect(ownEstimation(page)).toHaveText('89')
+  await expect(mostVoted(page)).toHaveText('89')
   await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
   await expect(movedBanner(page)).toBeHidden()
 })
