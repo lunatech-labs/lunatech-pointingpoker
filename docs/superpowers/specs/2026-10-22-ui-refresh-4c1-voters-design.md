@@ -59,16 +59,17 @@ fills a room cheaply while the pages it measures stay real. 4c1-wide's and
 
 ## Spike
 
-Run 2026-10-22 (session scratchpad, `spike-voters`): one browser page and 13
-protocol voters in a fresh room. The joins and streams answered in about
-0.1 s; the page showed 14 entries, and still 14 after 8 s, past the test
-profile's 4 s grace period; 13 distinct votes gave 13 tally entries. A posted
-leave removed its entry in about 0.1 s. A join to an id that is not a room
-name answered 404; a valid but unknown name creates the room. An aborted
-stream still counted 6 s later. A later probe found the server notices only at
-its second write after the abort: two votes removed it 5.5 s later, one did
-not; with no write, the heartbeats are the writes (15 s,
-`SSE.heartbeatInterval`).
+Run 2026-10-22 and removed: one browser page and 13 protocol voters in a fresh
+room. The joins and streams answered in about 0.1 s; the page showed 14
+entries, and still 14 after 8 s, past the test profile's 4 s grace period; 13
+distinct votes gave 13 tally entries. A posted leave removed its entry in
+about 0.1 s. A join to an id that is not a room name answered 404; a valid but
+unknown name creates the room. An aborted stream still counted 6 s later. A
+later probe found the server notices only at its second write after the abort:
+two votes removed it 5.5 s later, one did not; with no write, the heartbeats
+are the writes (15 s, `SSE.heartbeatInterval`). A call that waits on nothing
+had some of its 14 votes refused with 403 in each run of a third probe; one
+that waits only for its streams to open had none refused.
 
 ## Accepted costs
 
@@ -77,9 +78,10 @@ not; with no write, the heartbeats are the writes (15 s,
 - A voter's frames are not parsed, so a stream dropped mid-case shows only as
   a missing entry once the server has written to it twice, which with no
   activity takes two heartbeats, and the grace period has passed.
-- The first-frame wait and its 5 s limit go untested (product owner's ruling):
-  they only turn what would be a vote's 403 or a case's bare timeout into a
-  failure naming the voter.
+- The wait from a stream's opening to its first frame, and its 5 s limit, go
+  untested (product owner's ruling): case 1 catches only a call that waits on
+  nothing, and the rest only turns what would be a vote's 403 or a case's bare
+  timeout into a failure naming the voter.
 
 ## Contract
 
@@ -88,9 +90,9 @@ in `test/voters.test.js` against the started app, as `reproduction.test.js`'s
 is, each failure matched by the request and status it names:
 
 - every voter's vote succeeds as soon as the call resolves (killed by a call
-  that does not wait on its streams: a vote sent before its stream opens
-  answers 403; the kill is a race, not certain, though a probe's three runs
-  each had 3 to 9 of the 14 refused);
+  that waits on nothing: a vote sent before its stream opens answers 403; the
+  kill is a race, though every run of the Spike's third probe had votes
+  refused);
 - a join refused, to an id that is not a room name, fails the call with the
   join's 404 (killed by ignoring the status);
 - a blank vote fails its call with 400 (killed likewise).
