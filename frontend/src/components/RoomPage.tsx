@@ -4,9 +4,8 @@ import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
 import { RoomHeader } from './RoomHeader'
 import { IssuePanel } from './IssuePanel'
-import { Deck } from './Deck'
-import { Results } from './Results'
-import { Controls } from './Controls'
+import { RoundPanel } from './RoundPanel'
+import { RoundBar } from './RoundBar'
 import { Participants } from './Participants'
 
 type Props = {
@@ -57,16 +56,15 @@ export function RoomPage(props: Props) {
             <IssuePanel issue={view.currentIssue} onSave={saveIssue} />
             {/* Interim, until Task 6: the parts not yet moved keep today's look. */}
             <div className="legacy-page">
-              {view.ownRole !== 'Facilitator' && <Deck view={view} onVote={vote} />}
-              <Controls
-                revealed={view.votesRevealed}
-                onShow={() => run(api.command(roomId, 'show'))}
-                onRevote={() => run(api.command(roomId, 'revote'))}
-                onClear={() => run(api.command(roomId, 'clear'))}
-              />
-              <Results view={view} />
               <Participants view={view} />
             </div>
+            <RoundPanel view={view} onVote={vote} />
+            <RoundBar
+              revealed={view.votesRevealed}
+              onShow={() => run(api.command(roomId, 'show'))}
+              onRevote={() => run(api.command(roomId, 'revote'))}
+              onClear={() => run(api.command(roomId, 'clear'))}
+            />
           </div>
           <div className="room-page-sidebar" />
         </main>

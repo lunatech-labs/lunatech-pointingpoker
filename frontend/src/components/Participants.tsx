@@ -29,6 +29,12 @@ export function Participants({ view }: { view: View }) {
                   {view.votesRevealed && (
                     <div data-testid="participant-estimation">{u.estimation}</div>
                   )}
+                  {/* Interim, until Task 6's Voters: a revealed voter's mark for no vote. */}
+                  {view.votesRevealed && !u.facilitator && !u.hasEstimation && (
+                    <span role="img" aria-label="No vote">
+                      –
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

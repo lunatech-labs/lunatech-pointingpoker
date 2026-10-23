@@ -226,9 +226,10 @@ export const expectSummaryMatchesParticipants = async page => {
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
 export const deck = page => page.getByRole('group', { name: 'Estimation cards' })
 export const vote = (page, value) => card(page, value).click()
-// The line under the deck that says why the cards are frozen, keyed on its text rather than
-// its lock icon.
-export const frozenNotice = page => page.getByText('The round is revealed')
+// The round bar's phase word: 'Voting' or 'Revealed'.
+export const phaseLine = page => page.getByTestId('phase-line')
+// The round panel's slot, the deck or the result; none on a facilitator's page while voting.
+export const roundSlot = page => page.getByTestId('round-slot')
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
 // After a Re-vote the cast card is not pressed but keeps this description.
