@@ -126,12 +126,13 @@ describe('the colour tokens no pair reaches', () => {
   })
 
   it('leave out the decorative set', () => {
-    const decorative = '--mark-offset: #F9C3C6; --shadow-colour: rgba(28, 25, 23, 0.05); --lift-colour: rgba(220, 47, 60, 0.25);'
+    const decorative = '--mark-offset: #F9C3C6; --shadow-colour: rgba(28, 25, 23, 0.05); --lift-colour: rgba(220, 47, 60, 0.25); --avatar-ink-1: #6D28D9; --avatar-ground-14: #E2E8F0;'
     expect(unreached(parseColours(file(`${every} ${decorative}`, more)))).toEqual([])
   })
 
   it('include a token added without a pair', () => {
-    expect(unreached(parseColours(file(`${every} --spare: #000000;`, more)))).toEqual(['--spare'])
+    // An avatar's name, so the decorative set must list the avatars by name, not by their prefix.
+    expect(unreached(parseColours(file(`${every} --avatar-ink-15: #000000;`, more)))).toEqual(['--avatar-ink-15'])
   })
 
   it('include a token that only an unchecked var() reaches', () => {
