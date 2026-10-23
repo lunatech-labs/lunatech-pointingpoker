@@ -60,20 +60,23 @@ ships.
    exact strings do not need (product owner's ruling; the spike, run on
    2026-10-23 and removed, matched every icon).
 4. **The 14 avatar pairs become tokens** (product owner's ruling),
-   `--avatar-1` to `--avatar-14` for the initials and `--avatar-1-ground` to
-   `--avatar-14-ground` for their grounds, in `colours.css`, the values and
-   their order unchanged. The mockup's script names the tokens in its inline
-   `--h` and `--t`; `roster.css` is unchanged. Set aside: 14 hue tokens with
-   each ground mixed from its hue, whose grounds would differ from the
-   accepted ones; the pairs as literals in TSX, against principle 6.
+   `--avatar-ink-1` to `--avatar-ink-14` for the initials and
+   `--avatar-ground-1` to `--avatar-ground-14` for their grounds, in
+   `colours.css`, the values and their order unchanged. They are named as
+   `--notice-ink` on `--notice-ground`, so none reads as `tokens.css`'s
+   `--avatar`, the avatar's size (product owner's ruling). The mockup's script
+   names the tokens in its inline `--h` and `--t`; `roster.css` is unchanged.
+   Set aside: 14 hue tokens with each ground mixed from its hue, whose grounds
+   would differ from the accepted ones; the pairs as literals in TSX, against
+   principle 6.
 5. **The avatars join the gate's decorative set, by their names exactly**,
-   `--avatar-1` to `--avatar-14` and their grounds, so a later avatar token,
-   such as an indicator, is not exempt by its prefix; `gate.ts`'s comment on
-   the set names incidental text beside J9's hairlines and shadows. They are
-   exempt from contrast as incidental text (J8, 3b1 decision 17), so no pair
-   reaches them. Kept exempt rather than tuned: every pair is under 7:1 (4.52
-   to 6.41 under normal vision), and reaching it would bring every initial
-   near black.
+   `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
+   `--avatar-ground-14`, so a later avatar token, such as an indicator, is not
+   exempt by its prefix; `gate.ts`'s comment on the set names incidental text
+   beside J9's hairlines and shadows. They are exempt from contrast as
+   incidental text (J8, 3b1 decision 17), so no pair reaches them. Kept exempt
+   rather than tuned: every pair is under 7:1 (4.52 to 6.41 under normal
+   vision), and reaching it would bring every initial near black.
 
 ## Accepted costs
 
