@@ -310,11 +310,11 @@ stacking, Dismiss and mounting are J12's.
   set: the hairline's pale, and the colours drawn only in a shadow, the soft
   shadow's, the chosen card's glow and the header mark's offset card, since
   forced colours drop shadows and the hairline alone tells surfaces apart
-  (J9). So are the roster's avatars, initials on a pale ground in a hue hashed
-  from the name, `aria-hidden` and incidental: the name beside them carries
-  the information. The set lists their tokens by name, `--avatar-ink-1` to
-  `--avatar-ink-14` and `--avatar-ground-1` to `--avatar-ground-14`, so a later
-  avatar token is not exempt by its prefix.
+  (J9). So are the roster's avatars, initials on a pale ground, the pair
+  picked by a hash of the name, `aria-hidden` and incidental: the name beside
+  them carries the information. The set lists their tokens by name,
+  `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
+  `--avatar-ground-14`, so a later avatar token is not exempt by its prefix.
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
