@@ -252,8 +252,7 @@ function fitEntries() {
   fits(Math.floor(lo * 50) / 50)   // in steps of 0.02, clear of subpixel rounding
   const items = [...list.children]
   const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
-  const perRow = Math.ceil(items.length / rows), width = items[0].getBoundingClientRect().width
-  if (rows > 1) list.style.maxWidth = `${perRow * width + 1}px`
+  if (rows > 1) list.style.maxWidth = `${Math.ceil(items.length / rows) * items[0].getBoundingClientRect().width + 1}px`
 }
 const watched = new ResizeObserver(fitEntries)
 document.fonts.addEventListener('loadingdone', fitEntries)
