@@ -66,6 +66,9 @@ the decisions log at the end.
   `probe`.
 - `lobby-cells.html`, the lobby's pages side by side at a chosen width
   (1280, 800, 392 or 320 px), each with a link that opens it alone.
+- `icons.js`, the icons both mockups draw, lucide's, copied from `lucide-react`
+  by name; `frontend/src/design/icons.test.ts` keeps it equal to the package,
+  and lucide's licence sits beside it as `lucide-LICENSE.txt`.
 
 ## Brand source
 
