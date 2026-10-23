@@ -179,6 +179,8 @@ export const inRoom = page => page.getByTestId('room')
 // The header's status region, always rendered, holding 'Link copied' for 2 s after a copy.
 export const copyHint = page => page.getByRole('banner').getByRole('status')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
+// The issue while viewing: its heading, holding 'No issue yet' when there is none.
+export const issueText = page => page.getByTestId('issue-text')
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })

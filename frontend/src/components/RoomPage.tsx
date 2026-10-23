@@ -3,7 +3,7 @@ import * as api from '../protocol/api'
 import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
 import { RoomHeader } from './RoomHeader'
-import { IssueEditor } from './IssueEditor'
+import { IssuePanel } from './IssuePanel'
 import { Deck } from './Deck'
 import { Results } from './Results'
 import { Controls } from './Controls'
@@ -54,9 +54,9 @@ export function RoomPage(props: Props) {
         />
         <main className="room-page-main">
           <div className="room-page-column">
+            <IssuePanel issue={view.currentIssue} onSave={saveIssue} />
             {/* Interim, until Task 6: the parts not yet moved keep today's look. */}
             <div className="legacy-page">
-              <IssueEditor issue={view.currentIssue} onSave={saveIssue} />
               {view.ownRole !== 'Facilitator' && <Deck view={view} onVote={vote} />}
               <Controls
                 revealed={view.votesRevealed}
