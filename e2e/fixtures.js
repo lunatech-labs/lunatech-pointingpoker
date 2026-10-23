@@ -176,6 +176,8 @@ export const nameInput = page => page.getByLabel('User name')
 export const roomIdInput = page => page.getByLabel('Room id')
 // The room's marker: the room view's root, rendered on the first snapshot, never before.
 export const inRoom = page => page.getByTestId('room')
+// The header's status region, always rendered, holding 'Link copied' for 2 s after a copy.
+export const copyHint = page => page.getByRole('banner').getByRole('status')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })

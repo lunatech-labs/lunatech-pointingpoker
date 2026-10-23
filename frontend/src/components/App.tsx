@@ -13,7 +13,7 @@ import {
 import { ownRoleOf } from '../room/view'
 import { Alerts } from './Alerts'
 import { Lobby, type LobbyTab } from './Lobby'
-import { Room } from './Room'
+import { RoomPage } from './RoomPage'
 import { useRoom } from './useRoom'
 
 // Read once at startup: the path alone decides the page, and every change of room is a page load.
@@ -126,43 +126,47 @@ export function App({ connection }: { connection: Connection }) {
       ? { href: '/' + encodeURIComponent(remembered), label: rejoinLabel(remembered, name) }
       : null
 
-  // Today's markup, fenced from the reset in base.css; each 4c1 slice moves what it replaces out.
+  // Today's markup, fenced from the reset in base.css, keeps the lobby and the banners; the room
+  // page renders beside it (4c1-wide decision 3).
   return (
-    <div className="container legacy-page">
-      <Alerts
-        error={connectionMessage || error}
-        copied={copied}
-        moved={moved}
-        onDismissMoved={() => setMoved(false)}
-        restarted={restarted}
-        onDismissRestarted={() => setRestarted(false)}
-      />
-      {room.snapshot === null ? (
-        <Lobby
-          tab={tab}
-          onTab={setTab}
-          roomId={roomId}
-          fixedRoom={pathRoom !== ''}
-          onRoomId={setRoomId}
-          name={name}
-          onName={setName}
-          defaultRole={shownRole}
-          onChooseRole={chooseRole}
-          rejoin={rejoin}
-          disabled={room.fatal}
-          onCreate={doCreate}
-          onJoin={pathRoom ? joinHere : doJoin}
+    <>
+      <div className="container legacy-page">
+        <Alerts
+          error={connectionMessage || error}
+          moved={moved}
+          onDismissMoved={() => setMoved(false)}
+          restarted={restarted}
+          onDismissRestarted={() => setRestarted(false)}
         />
-      ) : (
-        <Room
+        {room.snapshot === null && (
+          <Lobby
+            tab={tab}
+            onTab={setTab}
+            roomId={roomId}
+            fixedRoom={pathRoom !== ''}
+            onRoomId={setRoomId}
+            name={name}
+            onName={setName}
+            defaultRole={shownRole}
+            onChooseRole={chooseRole}
+            rejoin={rejoin}
+            disabled={room.fatal}
+            onCreate={doCreate}
+            onJoin={pathRoom ? joinHere : doJoin}
+          />
+        )}
+      </div>
+      {room.snapshot !== null && (
+        <RoomPage
           roomId={pathRoom}
           snapshot={room.snapshot}
+          copied={copied}
           onCopied={onCopied}
           onLeave={doLeave}
           onRefused={() => connection.refused()}
           onSwitched={role => rememberRole(localStorage, pathRoom, role)}
         />
       )}
-    </div>
+    </>
   )
 }
