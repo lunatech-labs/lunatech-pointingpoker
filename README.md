@@ -159,7 +159,8 @@ difference.
 
 There is also a Node testkit under `testkit/`, exercised by `node --test`. It contains a
 stub buffering proxy that reproduces the response-scanning appliance a customer reported,
-and a harness that starts the packaged app:
+a harness that starts the packaged app, and voters that join a room and vote over the
+protocol without a browser, for the cases that need a full room:
 
 ```
 npm test
