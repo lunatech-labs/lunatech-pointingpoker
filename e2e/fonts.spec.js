@@ -168,7 +168,9 @@ test('a held-back Inter draws the fallback, then Inter once it arrives', async (
 test("today's lobby stays centred and keeps Bootstrap's form spacing", async ({ page, origin }) => {
   await page.goto(`${origin}/`)
   const heading = await page.getByRole('heading', { name: 'Create Room' }).boundingBox()
-  const right = page.viewportSize().width - heading.x - heading.width
+  // page.css's scrollbar gutter narrows the body in Chromium, which the root's clientWidth omits.
+  const width = await page.evaluate(() => document.body.clientWidth)
+  const right = width - heading.x - heading.width
   expect(Math.abs(heading.x - right)).toBeLessThan(1)
   const name = await nameInput(page).boundingBox()
   const role = await defaultRoleChoice(page).boundingBox()

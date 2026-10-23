@@ -1,9 +1,11 @@
-/* Today's CSS sits in legacy, beneath the reset in base; the colours and tokens are unlayered. */
+/* legacy holds today's CSS, base the reset and page.css; colours, tokens and looks are unlayered. */
 @layer legacy, base;
 
 @import 'bootstrap/dist/css/bootstrap.min.css' layer(legacy);
 @import './styles.css' layer(legacy);
 @import './reset.css' layer(base);
+@import './page.css' layer(base);
+@import './components/looks.css';
 @import './colours.css';
 @import './tokens.css';
 
@@ -15,13 +17,4 @@
   .legacy-page *::after {
     all: revert-layer;
   }
-}
-
-/* Unlayered, so the fence leaves them; they move to page.css and room-header.css in 4c1-wide. */
-body {
-  font-family: var(--font-sans);
-}
-
-.room-header-id {
-  font-family: var(--font-mono);
 }

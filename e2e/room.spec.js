@@ -19,6 +19,7 @@ import {
   expectLiveRegion,
   issueEdit,
   inRoom,
+  copyHint,
   votedMark,
   hiddenMark,
   vote,
@@ -1136,19 +1137,17 @@ test('the copy hint lasts 2 s from the first copy, not the last', async ({ join 
   const alice = await join('Alice')
   const page = alice.page
   const copy = page.getByRole('link', { name: 'Copy link' })
-  // By its text, so step 4's move to a status region breaks no lookup.
-  const hint = page.getByText('Link copied to clipboard')
   // Paused just after real time: the tick's heartbeat was heard on the real clock.
   await page.clock.install()
   await page.clock.pauseAt(Date.now() + 2000)
 
   await copy.click()
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(1500)
   await copy.click()
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(490)
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(10)
-  await expect(hint).toBeHidden()
+  await expect(copyHint(page)).toBeEmpty()
 })
