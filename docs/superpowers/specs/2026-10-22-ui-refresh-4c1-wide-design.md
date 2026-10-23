@@ -43,13 +43,12 @@ it writes.
    `RoleLine` goes: `RoomHeader` draws the header's sentence and ☰'s row's
    quiet button, both switching through one hook holding the press rule
    (product owner's ruling). `Figure` (decision 8) is the one component
-   outside the rule, its class `looks.css`'s `tight-point`.
+   outside the prefix rule, its class `looks.css`'s `tight-point`.
 3. **The room page renders beside `App`'s wrapper, which keeps the lobby and
    the banners.** The lobby keeps `container legacy-page` until 4c2.
-   `base.css` imports `page.css` into `base`, then `looks.css` unlayered, both
-   `@import`s before the fence's block (4c1-foundation decision 3), so the
-   shared looks come before every area file (4c1-mockups' plan, Review Focus
-   3; decision 12's diff checks it). `base.css`'s unlayered `body` and
+   `base.css` imports `page.css` into `base`, then `looks.css` unlayered, so
+   the shared looks come before every area file (4c1-mockups' plan, Review
+   Focus 3; decision 12's diff checks it). `base.css`'s unlayered `body` and
    `.room-header-id` rules leave it, now said by `page.css` and
    `room-header.css`.
 4. **The entries' scale is a hook, `useFitEntries`** (product owner's ruling),
@@ -107,14 +106,14 @@ it writes.
     parameters, at the cells pages' four widths, 1280, 1000, 800 and 392 px,
     680 px tall, in Chromium, each element paired by its path from
     `.room-page`. Ivan, Peggy and Victor have pages, Peggy's compared as the
-    facilitator's; the mockup's other 13 voters are protocol voters. The
-    mockup's font request is routed to the app's own font files, and both
-    sides are read as the cases read (the Contract's preamble to the new
-    cases), once each page shows its state. A throwaway script, as
-    4c1-mockups' was. The product owner rules on each difference. Expected
-    ones: the text the mockup fakes, the issue not a link (decision 11), and
-    Bootstrap's base rules where the reset sets nothing, such as the labels'
-    line height and Copy link's underline (4c1-foundation's Accepted costs).
+    facilitator's; the mockup's other voters are protocol voters. The mockup's
+    font request is routed to the app's own font files, and both sides are
+    read as the cases read (the Contract's preamble to the new cases), once
+    each page shows its state. A throwaway script, as 4c1-mockups' was. The
+    product owner rules on each difference. Expected ones: the text the mockup
+    fakes, the issue not a link (decision 11), and Bootstrap's base rules
+    where the reset sets nothing, such as the labels' line height and Copy
+    link's underline (4c1-foundation's Accepted costs).
 
 ## Accepted costs
 
@@ -145,12 +144,13 @@ A change the build turns up beyond these joins this list in the commit that
 rewrites its case, and the PR names it. Every other read the reference's
 "Contract reads the look keeps" lists stays, the new markup carrying it; this
 step's reference change adds the reads it lacks: `most-voted`, `tally-value`
-and `tally-count`, `issue-status`, `round-slot`, the cards' names ("0.5"
-included), "Copy link" as a link, the role switches, Edit's name and the
-header's status. 4b2's double-click cases are shown to fail again on the new
-page, by their mutation, since its geometry moves the second click; so is 'a
-double-click's second click does not switch back' (`roles.spec.js`), which
-aims at the switch drawn after the first switch, now `RoomHeader`'s.
+and `tally-count`, `issue-status`, the cards' names ("0.5" included), "Copy
+link" as a link, the role switches and Edit's name, and the new cases' reads,
+`round-slot` and the header's status. 4b2's double-click cases are shown to
+fail again on the new page, by their mutation, since its geometry moves the
+second click; so is 'a double-click's second click does not switch back'
+(`roles.spec.js`), which aims at the switch drawn after the first switch, now
+`RoomHeader`'s.
 
 New cases, at the floor and the comfort target unless said, on the voter's and
 the facilitator's pages, in both browsers, the room filled with protocol
@@ -199,6 +199,7 @@ The zoomed page, the switches' crossings, 320 px and the phone's copy hint are
 
 ## The docs' changes
 
+- **Parent**: step 4's text gives this spec's path, as it gives its siblings'.
 - **Reference**: Contract reads moves each change this step makes into the
   past tense, the "Messages" region left for 4c1-editor, and gains the reads
   it lacks (Contract).
