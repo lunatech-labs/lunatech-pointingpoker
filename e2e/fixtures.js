@@ -245,7 +245,7 @@ export const defaultRoleChoice = page => page.getByRole('group', { name: 'Your d
 export const defaultRoleRadio = (page, role) =>
   defaultRoleChoice(page).getByRole('radio', { name: role, exact: true })
 
-// The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
+// The role switch shown, named for the role it switches to: 'facilitator' or 'voter'.
 export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })
 // A facilitator's name in the roster, matched exactly, as participantEntry matches a substring.
 export const facilitatorName = (page, name) =>
