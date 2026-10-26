@@ -16,10 +16,10 @@ describe('largestFit', () => {
       expect(s).toBeGreaterThan(t - 0.03)
     }
   })
-  it('asks at most 11 times, the cap then 10 halvings', () => {
+  it('asks at most 6 times, the top step then 5 halvings', () => {
     let asked = 0
     largestFit(s => (asked++, s <= 1.21), cap)
-    expect(asked).toBeLessThanOrEqual(11)
+    expect(asked).toBeLessThanOrEqual(6)
   })
   it('returns a step it saw fit when the fit is not monotone', () => {
     // 1.2 fails between passing neighbours, as a row's balance can make it.
