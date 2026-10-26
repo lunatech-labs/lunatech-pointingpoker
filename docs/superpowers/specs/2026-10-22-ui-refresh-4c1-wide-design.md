@@ -123,8 +123,9 @@ it writes.
   closes only on a press, an open row coming back open after a widen and a
   narrow, and focus outside the phone's pinned sheet can stay behind it in
   Firefox.
-- The fit runs a layout per step of its search, about 10, on each trigger, as
-  the mockups do.
+- The fit runs at most seven steps on each trigger, its search's and the
+  result's, and each lays out twice, once to count the rows and once to
+  measure them balanced, as the mockups do.
 
 ## Contract
 
@@ -196,6 +197,11 @@ its place:
   entry's card past `--deck-card`'s height (3b1 decision 10's 5.5 / 3.85), and
   a room of 0 voters, on the facilitator's page, its "Voters · 0" heading
   shown, or of 1 is fitted.
+- **Two wrapping names**: at 1280 by 1000 only, in a room of 14 where
+  'Jean-Baptiste Delacroix' and 'Marie-Christine Lefebvre' wrap and the rows'
+  balance puts them in different rows (the case checks it), every entry stays
+  inside the table, while voting and after a reveal with no votes, where the
+  facilitator's table gives up its reserve.
 - **Nobody voted**: the slot keeps its height through a reveal with no votes
   (its text and tally stay with 'a Show in a room where nobody voted renders
   no summary').

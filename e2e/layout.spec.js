@@ -10,6 +10,7 @@ import {
   issueText,
   markRegion,
   participantEntries,
+  participantEntry,
   phaseLine,
   readBoxes,
   roundSlot,
@@ -241,18 +242,22 @@ cases("an entry's card never passes a deck card's height", {}, async ({ join, vo
   expect(read.boxes.card.height).toBeLessThanOrEqual(5.5 * read.rem + 0.5)
 })
 
+// Records every uncaught error from before the page's first script.
+const heardErrors = () => {
+  window.heardErrors = []
+  window.addEventListener('error', event => window.heardErrors.push(event.message))
+}
+
 cases(
   'a room of 0 voters is fitted',
   { roles: ['Facilitator'] },
-  async ({ join, voters, role }) => {
-    // A throw in the first fit unmounts the room, so join's wait for the marker fails first.
-    const { page } = await fill(join, voters, role, 0)
-    const errors = []
-    page.on('pageerror', error => errors.push(error.message))
+  async ({ join, role }) => {
+    // A throw in the first fit, the observer's first callback, comes before join returns.
+    const { page } = await join('Alice', { role, initScript: heardErrors })
     await expect(table(page).getByRole('heading', { name: 'Voters · 0' })).toBeVisible()
     await readBoxes(page, { table: table(page) })
     await expect(inRoom(page)).toBeVisible()
-    expect(errors).toEqual([])
+    expect(await page.evaluate(() => window.heardErrors)).toEqual([])
   }
 )
 
@@ -345,5 +350,35 @@ cases(
     const covered = Object.keys(after).filter(name => overlap(hint, after[name]))
     expect(covered, JSON.stringify({ hint, ...after })).toEqual([])
     await expectLiveRegion(copyHint(page))
+  }
+)
+
+// Two names that wrap, which the rows' balance moves into different rows at this height.
+const WRAPPING = ['Bruno', 'Camille', 'Damien', 'Elodie', 'Fabien', 'Jean-Baptiste Delacroix',
+  'Julien', 'Laura', 'Lucas', 'Marie-Christine Lefebvre', 'Nicolas', 'Pauline', 'Thomas']
+
+cases(
+  'two wrapping names in different rows keep every entry in view',
+  { viewports: [{ width: 1280, height: 1000 }] },
+  async ({ join, voters, role, viewport }) => {
+    const { page } = await join('Alice', { role })
+    // Agnes takes Alice's place in the table on the facilitator's page.
+    await voters(role === 'Voter' ? WRAPPING : ['Agnes', ...WRAPPING])
+    await expect(participantEntries(page)).toHaveCount(14)
+    const inView = async () => {
+      const read = await readBoxes(page, {
+        table: table(page),
+        jean: participantEntry(page, 'Jean-Baptiste'),
+        marie: participantEntry(page, 'Marie-Christine'),
+        ...entries(page, 14)
+      })
+      expect(read.boxes.jean.y, 'the wrapping names share a row').not.toBe(read.boxes.marie.y)
+      expectInView(read, viewport, Object.keys(entries(page, 14)), true)
+    }
+    await inView()
+    // The facilitator's table gives up its reserve to the slot here.
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(phaseLine(page)).toHaveText('Revealed')
+    await inView()
   }
 )

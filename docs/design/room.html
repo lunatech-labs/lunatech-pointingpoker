@@ -245,14 +245,20 @@ function fitEntries() {
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
   const used = () => shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad)
   const room = Math.floor(box.clientHeight - reserve)
-  const fits = v => { list.style.setProperty('--s', v); list.style.maxWidth = ''; return used() <= room }
-  let lo = 1, hi = token('--deck-card') / token('--entry-mark')
-  if (fits(hi)) lo = hi
-  else for (let i = 0; i < 10; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid }
-  fits(Math.floor(lo * 50) / 50)   // in steps of 0.02, clear of subpixel rounding
   const items = [...list.children]
-  const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
-  if (rows > 1) list.style.maxWidth = `${Math.ceil(items.length / rows) * items[0].getBoundingClientRect().width + 1}px`
+  // Balanced before it measures, since the balance can move a wrapping name to another row
+  const fits = v => {
+    list.style.setProperty('--s', v); list.style.maxWidth = ''
+    const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
+    if (rows > 1) list.style.maxWidth = `${Math.ceil(items.length / rows) * items[0].getBoundingClientRect().width + 1}px`
+    return used() <= room
+  }
+  // Whole steps of 0.02, clear of subpixel rounding: lo is 0 or a step that fit, hi one that did not
+  const scale = k => (50 + k) / 50
+  let lo = 0, hi = Math.floor(token('--deck-card') / token('--entry-mark') * 50) - 50
+  if (fits(scale(hi))) lo = hi
+  else while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (fits(scale(mid))) lo = mid; else hi = mid }
+  fits(scale(lo))
 }
 const watched = new ResizeObserver(fitEntries)
 document.fonts.addEventListener('loadingdone', fitEntries)

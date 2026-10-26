@@ -21,6 +21,11 @@ describe('largestFit', () => {
     largestFit(s => (asked++, s <= 1.21), cap)
     expect(asked).toBeLessThanOrEqual(11)
   })
+  it('returns a step it saw fit when the fit is not monotone', () => {
+    // 1.2 fails between passing neighbours, as a row's balance can make it.
+    const fits = (s: number) => s <= 1.21 && Math.abs(s - 1.2) > 1e-9
+    expect(fits(largestFit(fits, cap))).toBe(true)
+  })
 })
 
 describe('balancedWidth', () => {
