@@ -286,4 +286,29 @@ export const expectLiveRegion = async region => {
   expect(problems, 'what keeps the region from announcing').toEqual([])
 }
 
+// Every box in one call, after the fonts and two frames, so a swap or the fit's rerun lands first.
+export const readBoxes = async (page, locators) => {
+  const names = Object.keys(locators)
+  const handles = await Promise.all(names.map(name => locators[name].elementHandle()))
+  try {
+    return await page.evaluate(
+      async ([names, elements]) => {
+        await document.fonts.ready
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        const root = document.documentElement
+        const boxes = {}
+        names.forEach((name, i) => {
+          const { x, y, width, height } = elements[i].getBoundingClientRect()
+          boxes[name] = { x, y, width, height }
+        })
+        const rem = parseFloat(getComputedStyle(root).fontSize)
+        return { rem, scrolls: root.scrollHeight - root.clientHeight, boxes }
+      },
+      [names, handles]
+    )
+  } finally {
+    await Promise.all(handles.map(handle => handle.dispose()))
+  }
+}
+
 export { expect }

@@ -209,12 +209,12 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 })
 
-test('the reveal notice claims its space before the reveal', async ({ join }) => {
+test('a reveal with no vote moves no entry', async ({ join }) => {
   const alice = await join('Alice')
-  // The phase line and the toggle flip in place, so the list's first entry stays put on a reveal.
+  // Layout f puts the table above the slot, so a move here comes from above it or the scale.
   const top = async () => (await participantEntries(alice.page).first().boundingBox()).y
 
-  // Nobody votes, so the reveal only swaps the deck for the result in the slot.
+  // Nobody votes, so the reveal only turns each mark into its "–" face, of the same size.
   const before = await top()
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(phaseLine(alice.page)).toHaveText('Revealed')

@@ -141,7 +141,13 @@ more, found after 3b1's list:
   against the root's `clientWidth` instead;
 - 'an old UUID link opens its derived room under a banner that covers no card'
   (`slug.spec.js`) reads the lone voter's vote as the pressed card, gone with
-  the deck once the vote reveals, and reads it as the most voted instead.
+  the deck once the vote reveals, and reads it as the most voted instead;
+- 'the reveal notice claims its space before the reveal' (`room.spec.js`)
+  guarded the slot's swap on a reveal, which layout f draws below the table,
+  so it can no longer move the first entry; retitled 'a reveal with no vote
+  moves no entry', it guards what sits above the table and the entries' scale,
+  and 'nobody voted: the slot keeps its height through a reveal'
+  (`layout.spec.js`) takes over the slot's guarantee.
 
 A change the build turns up beyond these joins this list in the commit that
 rewrites its case, and the PR names it. Every other read the reference's
