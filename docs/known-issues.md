@@ -35,7 +35,8 @@ roadmap item instead of leaving it here as stale history.
 
 ### On a phone, the virtual keyboard and the pinned sheet may leave the editing view little room
 
-- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in step 4.
+- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
+  step 4c1-editor.
 - **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
   virtual keyboard rises over it. With the keyboard open, the field, Save and
   Cancel and the editor's messages may have little room to show (inferred, not
@@ -62,8 +63,9 @@ roadmap item instead of leaving it here as stale history.
   banners in `App`'s `legacy-page` wrapper, and the editing view's legacy
   wrappers in `IssueEditor.tsx` and `IssuePanel.tsx`.
 - **Issue:** Since step 4c1-wide the viewport meta makes a phone lay out every
-  page at its own width, not at 980 px. The room page's phone layout is pinned
-  by 'a phone lays the room page out at its own width' (`e2e/phone.spec.js`).
+  page at its own width, not at 980 px. The room page laying out at the
+  phone's width is pinned by 'a phone lays the room page out at its own width'
+  (`e2e/phone.spec.js`).
   The lobby and the banners, still Bootstrap's look inside the legacy-page
   fence, now lay out at the phone's width too, as does the editing view. Only
   'an old UUID link opens its derived room under a banner that covers no card'
@@ -75,7 +77,7 @@ roadmap item instead of leaving it here as stale history.
 ### The issue editor's field needs a script fit where `field-sizing` is unsupported
 
 - **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
-  in step 4.
+  in step 4c1-editor.
 - **Issue:** The mockup's field grows by CSS `field-sizing: content`, which
   Firefox ESR 140 lacks (confirmed by hand) and Safari's support is unchecked.
   The mockup fits the field by script there; the app needs the same.
@@ -86,7 +88,7 @@ roadmap item instead of leaving it here as stale history.
 ### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
 
 - **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
-  step 4.
+  step 4c1-editor.
 - **Issue:** With the root font at 400% (text-only zoom) and a viewport under
   about 400 px, Save and Cancel overflow the issue panel in Firefox; Chromium
   fits them. The page already scrolls sideways there on the plain read view
@@ -916,11 +918,12 @@ roadmap item instead of leaving it here as stale history.
   place ('the phase line keeps its box through a reveal, a Re-vote and a
   vote') and the entries their scale ("the entries' scale holds through a
   reveal"), but the entries, centred in the table, move up, about 60 px at the
-  floor and 80 px at the comfort target (3b1's Accepted costs). Below 65.75 rem
-  the slot is taller than the room held, so the table also refits its entries
-  smaller at a reveal; on the phone no room is held (3b2 decision 11), so the
-  slot grows the sheet over the table, and where the page ends on screen or
-  the sheet flows, the round bar moves down by the result's height
+  floor and 80 px at the comfort target, within 3b1's accepted 50 to 80 px.
+  Below 65.75 rem the slot is taller than the room held, so the table also
+  refits its entries smaller at a reveal; on the phone no room is held (3b2
+  decision 11), so the slot grows the sheet over the table, and where the page
+  ends on screen or the sheet flows, the round bar moves down by the result's
+  height
   (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`,
   Accepted costs). The frozen-round notice this entry once contrasted with
   left with the deck's hidden row; 'a reveal with no vote moves no entry'
@@ -1102,7 +1105,10 @@ roadmap item instead of leaving it here as stale history.
   1 s guard ignores the second click anyway. The issue editor's buttons do the
   same since step 4b2, where a double-click's second click would land on Cancel
   editing in Edit issue's place. On a touch screen the window is the double-tap
-  distance, which can reach a neighbouring button (inferred for Android).
+  distance, which can reach a neighbouring button (inferred for Android). ☰
+  (`frontend/src/components/RoomHeader.tsx`) deliberately keeps no such rule,
+  since it sends nothing and stays in place, so a double-tap's open then close
+  is seen and undone by one more tap.
 - **Resolution:** Stays open, since the cost is a pause before the second click.
 
 ### The frontend's type check stops at ES2022 APIs
