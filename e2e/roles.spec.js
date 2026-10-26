@@ -6,8 +6,9 @@ import {
   defaultRoleChoice,
   defaultRoleRadio,
   expectSummaryMatchesParticipants,
-  facilitatorMark,
+  facilitatorName,
   nameInput,
+  noVoteMark,
   ownEstimation,
   participantEntry,
   phaseLine,
@@ -30,7 +31,7 @@ const joinedAs = (page, role) =>
 const becomeFacilitator = async (who, watcher) => {
   await switchTo(who.page, 'facilitator').click()
   await expect(switchTo(who.page, 'voter')).toBeVisible()
-  await expect(facilitatorMark(participantEntry(watcher.page, who.name))).toHaveCount(1)
+  await expect(facilitatorName(watcher.page, who.name)).toHaveCount(1)
 }
 
 test('a room with a facilitator auto-reveals when the voters finish', async ({ join }) => {
@@ -67,7 +68,8 @@ test('a switch to facilitator drops the vote from the results', async ({ join })
 
   await becomeFacilitator(bob, alice)
   await expect(tallyEntries(alice.page)).toHaveCount(1)
-  await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveText('')
+  // The table holds voters only, so a facilitator has no entry.
+  await expect(participantEntry(alice.page, 'Bob')).toHaveCount(0)
   await expectSummaryMatchesParticipants(alice.page)
 
   // Switching back starts with no estimate, and the round stays revealed.
@@ -75,7 +77,8 @@ test('a switch to facilitator drops the vote from the results', async ({ join })
   // Alice's reads first: Bob's no-deck read would pass before the switch lands.
   const bobOnAlice = participantEntry(alice.page, 'Bob')
   await expect(revealedEstimation(bobOnAlice)).toHaveText('')
-  await expect(bobOnAlice.getByRole('img', { name: 'No vote', exact: true })).toHaveCount(1)
+  await expect(noVoteMark(bobOnAlice)).toHaveCount(1)
+  await expect(switchTo(bob.page, 'facilitator')).toBeVisible()
   await expect(deck(bob.page)).toHaveCount(0)
   await expect(results(bob.page)).toBeVisible()
 })
@@ -148,12 +151,12 @@ test('a held Enter does not switch back', async ({ join, room }) => {
 test('a facilitator stays one across a reload', async ({ join }) => {
   const alice = await join('Alice', { role: 'Facilitator' })
   const bob = await join('Bob')
-  await expect(facilitatorMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(facilitatorName(bob.page, 'Alice')).toHaveCount(1)
 
   await alice.page.reload()
   await joinedAs(alice.page, 'Facilitator')
   await expect(deck(alice.page)).toHaveCount(0)
-  await expect(facilitatorMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(facilitatorName(bob.page, 'Alice')).toHaveCount(1)
 })
 
 test('a regular user from before roles gets the lobby on Voter, and joins on Join', async ({
@@ -337,13 +340,13 @@ test('a switch survives a reload while the stream is frozen', async ({ join }) =
   await switchTo(bob.page, 'facilitator').click()
   // A 204 has no body, so the page acts on it as the headers land.
   await switched
-  await expect(facilitatorMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(facilitatorName(alice.page, 'Bob')).toHaveCount(1)
   // Frozen, so only the 204 told Bob's page.
   await expect(switchTo(bob.page, 'facilitator')).toBeVisible()
 
   await bob.page.reload()
   await joinedAs(bob.page, 'Facilitator')
-  await expect(facilitatorMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(facilitatorName(alice.page, 'Bob')).toHaveCount(1)
 })
 
 test("a switch in one room changes neither another room's role nor the default", async ({

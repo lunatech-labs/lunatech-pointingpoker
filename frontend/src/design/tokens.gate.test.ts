@@ -7,9 +7,9 @@ import { literalProblems, paint, pairs, parseColours, parseTokens, rootProblems,
 
 // The value source as written; the gate checks token pairs, not a rendered page.
 const read = (file: string) => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8')
-// Every stylesheet but the token files and today's styles.css, which each slice replaces.
+// Every stylesheet but the token files.
 const stylesheets = readdirSync(fileURLToPath(new URL('..', import.meta.url)), { recursive: true, encoding: 'utf8' })
-  .filter(file => file.endsWith('.css') && !['colours.css', 'tokens.css', 'styles.css'].includes(file))
+  .filter(file => file.endsWith('.css') && !['colours.css', 'tokens.css'].includes(file))
   .sort()
 const runs = parseColours(read('colours.css'))
 const tokens = parseTokens(read('tokens.css'))

@@ -2,7 +2,6 @@
 @layer legacy, base;
 
 @import 'bootstrap/dist/css/bootstrap.min.css' layer(legacy);
-@import './styles.css' layer(legacy);
 @import './reset.css' layer(base);
 @import './page.css' layer(base);
 @import './components/looks.css';
