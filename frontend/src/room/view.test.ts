@@ -77,6 +77,14 @@ describe('applySnapshot', () => {
     expect(applySnapshot(s).users.map(u => u.facilitator)).toEqual([true, false, false])
   })
 
+  it("marks the reader's own row", () => {
+    const s = snap([row('a', none), row('b', none)])
+    expect(applySnapshot(s).users.map(u => [u.id, u.self])).toEqual([
+      ['a', true],
+      ['b', false]
+    ])
+  })
+
   it("reads the reader's own role from their seat", () => {
     expect(applySnapshot(snap([facilitator('a'), row('b', none)])).ownRole).toBe('Facilitator')
     expect(applySnapshot(snap([row('a', none), facilitator('b')])).ownRole).toBe('Voter')

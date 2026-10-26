@@ -6,7 +6,8 @@ import { RoomHeader } from './RoomHeader'
 import { IssuePanel } from './IssuePanel'
 import { RoundPanel } from './RoundPanel'
 import { RoundBar } from './RoundBar'
-import { Participants } from './Participants'
+import { Voters } from './Voters'
+import { Roster } from './Roster'
 
 type Props = {
   roomId: string
@@ -34,11 +35,7 @@ export function RoomPage(props: Props) {
       throw reason
     })
 
-  const vote = (estimation: string) => {
-    // The server refuses it anyway; this only spares the doomed POST.
-    if (view.votesRevealed) return
-    run(api.vote(roomId, estimation))
-  }
+  const vote = (estimation: string) => run(api.vote(roomId, estimation))
 
   return (
     <div className="room-page" data-testid="room">
@@ -54,10 +51,7 @@ export function RoomPage(props: Props) {
         <main className="room-page-main">
           <div className="room-page-column">
             <IssuePanel issue={view.currentIssue} onSave={saveIssue} />
-            {/* Interim, until Task 6: the parts not yet moved keep today's look. */}
-            <div className="legacy-page">
-              <Participants view={view} />
-            </div>
+            <Voters view={view} />
             <RoundPanel view={view} onVote={vote} />
             <RoundBar
               revealed={view.votesRevealed}
@@ -66,7 +60,9 @@ export function RoomPage(props: Props) {
               onClear={() => run(api.command(roomId, 'clear'))}
             />
           </div>
-          <div className="room-page-sidebar" />
+          <div className="room-page-sidebar">
+            <Roster view={view} />
+          </div>
         </main>
       </div>
     </div>

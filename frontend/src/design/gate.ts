@@ -198,7 +198,7 @@ thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen`.split
 const literalFunctions = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'])
 const checkedAtRules = new Set(['media', 'container', 'supports'])
 
-// Every stylesheet but the token files and styles.css: no literal colour and no px (4c1-foundation).
+// Every stylesheet but the token files: no literal colour and no px (4c1-foundation).
 export const literalProblems = (css: string): string[] => {
   const problems = new Set<string>()
   const check = (value: string, where: string) => void valueParser(value).walk(node => {

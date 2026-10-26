@@ -188,12 +188,16 @@ export const results = page => page.getByRole('region', { name: 'Results' })
 export const tallyEntries = page => results(page).getByTestId('tally-entry')
 export const mostVoted = page => results(page).getByTestId('most-voted')
 export const participantEntries = page =>
-  page.getByRole('region', { name: 'Participants' }).getByTestId('participant')
+  page.getByRole('region', { name: 'Voters' }).getByTestId('participant')
 // not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
 // strict mode violation, so an entry assertion cannot pass vacuously and needs no existence pin.
 export const participantEntry = (page, name) => participantEntries(page).filter({ hasText: name })
-export const votedMark = entry => entry.getByRole('img', { name: 'Voted' })
-export const hiddenMark = entry => entry.getByRole('img', { name: 'Vote hidden' })
+export const votedMark = entry => entry.getByRole('img', { name: 'Voted', exact: true })
+// A kept vote's mark while voting, and its image on the face once revealed.
+export const keptMark = entry =>
+  entry.getByRole('img', { name: 'Previous vote, not confirmed', exact: true })
+// A voter without an estimation: the mark while voting, the face's "–" once revealed.
+export const noVoteMark = entry => entry.getByRole('img', { name: 'No vote', exact: true })
 // Rendered only while the round is revealed, so it is the one signal a reveal landed in a room
 // where nobody has voted and the value is empty.
 export const revealedEstimation = entry => entry.getByTestId('participant-estimation')
@@ -243,8 +247,12 @@ export const defaultRoleRadio = (page, role) =>
 
 // The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
 export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })
-// What a facilitator's row shows in place of the voted mark.
-export const facilitatorMark = entry => entry.getByText('Facilitator', { exact: true })
+// A facilitator's name in the roster, matched exactly, as participantEntry matches a substring.
+export const facilitatorName = (page, name) =>
+  page
+    .getByRole('complementary', { name: 'Participants' })
+    .getByTestId('facilitator')
+    .and(page.getByText(name, { exact: true }))
 
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })

@@ -23,7 +23,7 @@ import {
   inRoom,
   copyHint,
   votedMark,
-  hiddenMark,
+  keptMark,
   vote,
   ownEstimation,
   restartNotice,
@@ -72,19 +72,16 @@ test('a cast vote is withheld, shown on the reveal, and withheld again on a re-v
   await vote(alice.page, '5')
   const aliceOnBob = participantEntry(bob.page, 'Alice')
   await expect(votedMark(aliceOnBob)).toHaveCount(1)
-  // Redaction blanks the estimation, so this marker can only come from hasEstimation.
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
   await expect(aliceOnBob).not.toContainText('5')
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(aliceOnBob).toContainText('5')
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(0)
 
   // The mark clearing proves the re-vote reached Bob: the value goes back behind the marker while
   // the entry still has one, which showUserEstimation reading voted would lose.
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   await expect(votedMark(aliceOnBob)).toHaveCount(0)
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
+  await expect(keptMark(aliceOnBob)).toHaveCount(1)
   await expect(aliceOnBob).not.toContainText('5')
 })
 
@@ -299,7 +296,7 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   }
   await expect(participantEntry(alice.page, 'Bob')).not.toContainText('3')
   await expect(participantEntry(bob.page, 'Alice')).not.toContainText('5')
-  await expect(hiddenMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 }
 
 test('a straggler closing their tab leaves the votes hidden', async ({ join }) => {
@@ -427,7 +424,7 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
-  // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
+  // never arrived. Without Result's fallback for an empty tally the render aborts, so this fails.
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
   // No entry rather than no region, so a region saying nobody voted still passes.
   await expect(tallyEntries(alice.page)).toHaveCount(0)
