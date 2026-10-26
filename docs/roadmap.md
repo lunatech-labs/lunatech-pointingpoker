@@ -100,7 +100,7 @@ directly in the new frontend.
       keeps the controls, so there is no read-only observer. **Landed as steps
       2a to 2c** of `docs/superpowers/specs/2026-10-04-ui-refresh-2-roles-design.md`.
 - [ ] Show how many participants have voted, so a facilitator reads abstention
-      instead of counting check-circles. Comes out of step 3, which took the
+      instead of counting the voted entries. Comes out of step 3, which took the
       non-voter out of the tally as a non-value: a count beside the distribution is
       where that signal belongs, rather than a bucket inside it. Step 3a makes it
       want to be readable before the reveal, since revealing to find out costs a

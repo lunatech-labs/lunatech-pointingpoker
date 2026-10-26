@@ -46,11 +46,13 @@ it writes.
    outside the prefix rule, its class `looks.css`'s `tight-point`.
 3. **The room page renders beside `App`'s wrapper, which keeps the lobby and
    the banners.** The lobby keeps `container legacy-page` until 4c2.
-   `base.css` imports `page.css` into `base`, then `looks.css` unlayered, so
-   the shared looks come before every area file (4c1-mockups' plan, Review
-   Focus 3; decision 12's diff checks it). `base.css`'s unlayered `body` and
-   `.room-header-id` rules leave it, now said by `page.css` and
-   `room-header.css`.
+   `base.css` imports `page.css` into `base`, then `bootstrap-undo.css` into
+   `base`, then `looks.css` unlayered, so the shared looks come before every
+   area file (4c1-mockups' plan, Review Focus 3; decision 12's diff checks it).
+   `base.css`'s unlayered `body` and `.room-header-id` rules leave it, now said
+   by `page.css` and `room-header.css`. `index.html`'s viewport meta makes a
+   phone lay the room page out at its own width, pinned by 'a phone lays the
+   room page out at its own width' (`phone.spec.js`).
 4. **The entries' scale is a hook, `useFitEntries`** (product owner's ruling),
    doing what `room.html`'s `fitEntries` does: in a layout effect, so the
    first paint is fitted, and again when the panel resizes, the fonts load, or
@@ -113,7 +115,8 @@ it writes.
     product owner rules on each difference. Expected ones: the text the mockup
     fakes, the issue not a link (decision 11), and Bootstrap's base rules
     where the reset sets nothing, such as the labels' line height and Copy
-    link's underline (4c1-foundation's Accepted costs).
+    link's underline (4c1-foundation's Accepted costs). The product owner
+    ruled those two fixed, which `bootstrap-undo.css` does.
 
 ## Accepted costs
 
@@ -129,6 +132,9 @@ it writes.
 - No case guards the refit on a font load: in the cases' rooms Inter and its
   fallback fit the entries at the same scale, so a held-back Inter shows
   nothing once the `loadingdone` listener is gone.
+- The reserve's height is written twice, in `voters.css`'s `min-height` and
+  `useFitEntries`'s `held`; 4c1-narrow, which reworks the reserve, names it
+  once.
 
 ## Contract
 
@@ -158,8 +164,12 @@ More, found after 3b1's list:
   and 'nobody voted: the slot keeps its height through a reveal'
   (`layout.spec.js`) takes over the slot's guarantee.
 - 'a room filled by protocol voters keeps its 14 entries past the grace
-  period' (`voters.spec.js`) counted its facilitator as an entry, and counts
-  13 voters and Alice in the roster instead (R9).
+  period' (`voters.spec.js`) counted its facilitator as an entry; retitled 'a
+  room filled by protocol voters keeps its 13 voters past the grace period',
+  it counts 13 voters and Alice in the roster instead;
+- 3b1's read change for 'the issue box is readonly until Edit issue is
+  pressed' (`room.spec.js`) landed as a retitle, 'the issue is text until Edit
+  issue is pressed'.
 
 A change the build turns up beyond these joins this list in the commit that
 rewrites its case, and the PR names it. Every other read the reference's
