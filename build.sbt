@@ -12,7 +12,7 @@ lazy val V = new {
   val logback      = "1.6.3"
   val owaspEncoder = "1.3.1"
   val pekko        = "1.7.0"
-  val pekkoHttp    = "1.4.0"
+  val pekkoHttp    = "1.4.2"
   val scalatest    = "3.2.20"
   val tapir        = "1.13.31"
 }
