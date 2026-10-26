@@ -30,21 +30,23 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement, reserve: boolean) 
     parseFloat(style.paddingBottom) +
     parseFloat(style.rowGap) * (shown.length - 1)
   const room = Math.floor(box.clientHeight - held)
+  const items = [...list.children] as HTMLElement[]
+  // Balanced before it measures, since the balance can move a wrapping name to another row.
   const fits = (s: number) => {
     list.style.setProperty('--s', String(s))
     list.style.removeProperty('max-width')
+    if (items.length) {
+      const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
+      const width = balancedWidth(items.length, rows, items[0].getBoundingClientRect().width)
+      if (width !== null) list.style.maxWidth = `${width}px`
+    }
     return shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad) <= room
   }
   fits(largestFit(fits, token('--deck-card') / token('--entry-mark')))
-  const items = [...list.children] as HTMLElement[]
-  if (!items.length) return
-  const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
-  const width = balancedWidth(items.length, rows, items[0].getBoundingClientRect().width)
-  if (width === null) list.style.removeProperty('max-width')
-  else list.style.maxWidth = `${width}px`
 }
 
-// Fitted before the first paint, again on a resize of the table or a font load (decision 4).
+// Fitted by the observer's first callback, before the first paint, then again on a resize
+// of the table or a font load (decision 4).
 export function useFitEntries({ reserve, revealed, names }: Fit): {
   box: RefObject<HTMLElement | null>
   list: RefObject<HTMLUListElement | null>
@@ -57,7 +59,6 @@ export function useFitEntries({ reserve, revealed, names }: Fit): {
     const entries = list.current
     if (!table || !entries) return
     const fit = () => fitEntries(table, entries, reserve)
-    fit()
     const watched = new ResizeObserver(fit)
     watched.observe(table)
     document.fonts.addEventListener('loadingdone', fit)
