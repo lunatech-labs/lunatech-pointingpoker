@@ -126,6 +126,9 @@ it writes.
 - The fit runs at most seven steps on each trigger, its search's and the
   result's, and each lays out twice, once to count the rows and once to
   measure them balanced, as the mockups do.
+- No case guards the refit on a font load: in the cases' rooms Inter and its
+  fallback fit the entries at the same scale, so a held-back Inter shows
+  nothing once the `loadingdone` listener is gone.
 
 ## Contract
 
@@ -202,6 +205,9 @@ its place:
   balance puts them in different rows (the case checks it), every entry stays
   inside the table, while voting and after a reveal with no votes, where the
   facilitator's table gives up its reserve.
+- **A shorter window**: a room of 14 at 1280 by 1000, its window then
+  shortened to 1280 by 680, is fitted at a smaller scale, every entry inside
+  the table.
 - **Nobody voted**: the slot keeps its height through a reveal with no votes
   (its text and tally stay with 'a Show in a room where nobody voted renders
   no summary').

@@ -227,6 +227,26 @@ cases("the entries' scale holds through a reveal", {}, async ({ join, voters, ro
   expect(Math.abs((await first()) - voting), `voting at ${voting} px`).toBeLessThanOrEqual(0.5)
 })
 
+// The entries' scale as their list carries it, read without waiting for the fonts.
+const scale = page =>
+  table(page)
+    .getByRole('list')
+    .evaluate(list => parseFloat(list.style.getPropertyValue('--s')))
+
+cases(
+  'a shorter window refits the entries',
+  { viewports: [{ width: 1280, height: 1000 }] },
+  async ({ join, voters, role }) => {
+    const { page } = await fill(join, voters, role, 14)
+    const tall = await scale(page)
+    const short = { width: 1280, height: 680 }
+    await page.setViewportSize(short)
+    await expect.poll(() => scale(page), `from ${tall}`).toBeLessThan(tall)
+    const read = await readBoxes(page, { table: table(page), ...entries(page, 14) })
+    expectInView(read, short, Object.keys(entries(page, 14)), true)
+  }
+)
+
 cases('a room of 1 is drawn larger than a room of 14', {}, async ({ join, voters, role }) => {
   const { page } = await fill(join, voters, role, 1)
   const first = async () =>
