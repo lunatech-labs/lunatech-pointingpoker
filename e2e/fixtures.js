@@ -286,6 +286,13 @@ export const expectLiveRegion = async region => {
   expect(problems, 'what keeps the region from announcing').toEqual([])
 }
 
+// room.html's names: its first wraps, which the scales it measured and the 4c1-wide plan's R10
+// rely on.
+export const NAMES = ['Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank',
+  'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
+// Deck.tsx's estimationValues, so 13 voters give 13 distinct values.
+export const ESTIMATIONS = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+
 // Every box in one call, after the fonts and two frames, so a swap or the fit's rerun lands first.
 export const readBoxes = async (page, locators) => {
   const names = Object.keys(locators)
