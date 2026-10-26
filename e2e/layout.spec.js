@@ -1,6 +1,8 @@
 import {
   test,
   expect,
+  ESTIMATIONS,
+  NAMES,
   copyHint,
   expectLiveRegion,
   inRoom,
@@ -24,11 +26,6 @@ import {
 const floor = { width: 1280, height: 600 }
 const comfort = { width: 1280, height: 680 }
 
-// room.html's names: its first wraps, which the scales it measured and R10 rely on.
-const NAMES = ['Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace',
-  'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
-// Deck.tsx's estimationValues, so 13 voters give 13 distinct values.
-const ESTIMATIONS = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
 // Two lines at 1280 px in both browsers, measured on room.html.
 const TWO_LINES =
   'Rework the login page so that a returning user lands on their last room, and keep the room ' +
@@ -120,6 +117,10 @@ const entries = (page, count) =>
     Array.from({ length: count }, (_, i) => [`entry ${i}`, participantEntries(page).nth(i)])
   )
 
+// The first entry's width, which follows the entries' scale.
+const firstWidth = async page =>
+  (await readBoxes(page, { first: participantEntries(page).first() })).boxes.first.width
+
 const within = (box, frame) =>
   box.x >= frame.x - 0.5 &&
   box.y >= frame.y - 0.5 &&
@@ -161,7 +162,8 @@ cases('no scroll at the floor', {}, async ({ join, voters, role, viewport }) => 
   expectInView(revealed, viewport, Object.keys(revealed.boxes))
 })
 
-// R6: a one-line issue, as 3b1 measured; with the two-line one the mockup itself clips 7 of 14.
+// The 4c1-wide plan's R6: a one-line issue, as 3b1 measured; with the two-line one the mockup
+// itself clips 7 of 14.
 cases(
   'every entry in view at the comfort target',
   { viewports: [comfort] },
@@ -216,15 +218,15 @@ cases(
   }
 )
 
-// R10: a room of 4 fits above 1 and below the cap at the floor, so a dropped reserve shows.
+// The 4c1-wide plan's R10: a room of 4 fits above 1 and below the cap at the floor, so a dropped
+// reserve shows.
 cases("the entries' scale holds through a reveal", {}, async ({ join, voters, role }) => {
   const { page, joined } = await fill(join, voters, role, 4)
-  const first = async () =>
-    (await readBoxes(page, { first: participantEntries(page).first() })).boxes.first.width
   await voteAllButOne(page, role, joined)
-  const voting = await first()
+  const voting = await firstWidth(page)
   await voteLast(page, role, joined)
-  expect(Math.abs((await first()) - voting), `voting at ${voting} px`).toBeLessThanOrEqual(0.5)
+  const revealed = await firstWidth(page)
+  expect(Math.abs(revealed - voting), `voting at ${voting} px`).toBeLessThanOrEqual(0.5)
 })
 
 // The entries' scale as their list carries it, read without waiting for the fonts.
@@ -249,11 +251,9 @@ cases(
 
 cases('a room of 1 is drawn larger than a room of 14', {}, async ({ join, voters, role }) => {
   const { page } = await fill(join, voters, role, 1)
-  const first = async () =>
-    (await readBoxes(page, { first: participantEntries(page).first() })).boxes.first.width
-  const alone = await first()
+  const alone = await firstWidth(page)
   await grow(page, voters, role, 1, 14)
-  expect(alone).toBeGreaterThan((await first()) + 1)
+  expect(alone).toBeGreaterThan((await firstWidth(page)) + 1)
 })
 
 cases("an entry's card never passes a deck card's height", {}, async ({ join, voters, role }) => {
