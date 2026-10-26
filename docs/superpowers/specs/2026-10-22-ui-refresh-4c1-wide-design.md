@@ -130,22 +130,27 @@ it writes.
 
 The changes are 3b1's "Contract changes for step 4" and those the reference's
 "Contract reads the look keeps" adds, its `participant-estimation` read among
-them, all but the banners' region "Messages", which waits for 4c1-editor. Two
-more, found after 3b1's list:
+them, all but the banners' region "Messages", which waits for 4c1-editor.
+More, found after 3b1's list:
 
 - 'the room is drawn in Inter…' (`fonts.spec.js`) reads the name as a table
   `cell`, and reads the entry's name element instead;
 - 'today's lobby stays centred and keeps Bootstrap's form spacing'
   (`fonts.spec.js`) measures against the viewport's width, which `page.css`'s
   scrollbar gutter, now reaching the lobby, narrows in Chromium, and measures
-  against the root's `clientWidth` instead;
+  against the body's `clientWidth` instead, since in Chromium the root's does
+  not narrow with it;
 - 'an old UUID link opens its derived room under a banner that covers no card'
   (`slug.spec.js`) reads the lone voter's vote as the pressed card, gone with
   the deck once the vote reveals, and reads it as the most voted instead;
+- 'Enter saves and Escape cancels' (`room.spec.js`) records `readOnly` at the
+  first focus on an element with a `readOnly` property, not at the first
+  `focusin`, since Edit takes focus first; it keeps the iOS guard, and a
+  mutation making the field read-only still fails it;
 - 'the reveal notice claims its space before the reveal' (`room.spec.js`)
   guarded the slot's swap on a reveal, which layout f draws below the table,
-  so it can no longer move the first entry; retitled 'a reveal with no vote
-  moves no entry', it guards what sits above the table and the entries' scale,
+  so it can no longer move the first entry. Retitled 'a reveal with no vote
+  moves no entry', it guards the entries' scale and what sits above the table,
   and 'nobody voted: the slot keeps its height through a reveal'
   (`layout.spec.js`) takes over the slot's guarantee.
 

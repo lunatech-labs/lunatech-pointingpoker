@@ -324,16 +324,21 @@ which chooses plain CSS
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-prep-design.md`),
 4c1-voters, voters without a browser for the layout cases
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
-4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
+4c1-wide, the wide room page's look
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-design.md`),
+4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
 Save and Cancel against the contrast gate and taking the two cases 4b2's
 final review deferred, a failed save with focus fallen to the page and a
 double-click selecting a word in the field;
 4c2, the lobby's look, which removes
-Bootstrap and its pin; and 4d, the not-a-room page in React with the Join
-tab's URL flag (3b4 decision 15). What follows is the whole of step 4, each
-step's spec taking its part. The step 3 reference applied in plain CSS
-(4c1-foundation), Bootstrap 4 and its Dependabot major-version pin removed, mobile-first
-layout,
+Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
+undoing Bootstrap's base styles outside the legacy-page fence, and its import
+in `base.css`, and decides whether to keep Bootstrap's tap highlight removal
+(`-webkit-tap-highlight-color: transparent`); and 4d, the not-a-room page
+in React with the Join tab's URL flag (3b4 decision 15). What follows is the
+whole of step 4, each step's spec taking its part. The step 3 reference
+applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot
+major-version pin removed, mobile-first layout,
 and the result placed as step 3b1 decides: in the deck's place on the voter's
 page, and below the table on the facilitator's page (layout f), the table
 giving it its height, which narrows that entry in `docs/known-issues.md`, and the
