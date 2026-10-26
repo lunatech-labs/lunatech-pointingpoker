@@ -7,7 +7,7 @@ ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val apispec      = "0.11.10"
-  val circe        = "0.14.16"
+  val circe        = "0.14.17"
   val commonsText  = "1.15.0"
   val logback      = "1.6.3"
   val owaspEncoder = "1.3.1"
