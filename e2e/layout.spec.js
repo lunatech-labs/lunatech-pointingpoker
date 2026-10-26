@@ -90,7 +90,8 @@ const setTwoLines = async page => {
   expect(Math.round(two / one), `${two} px over ${one} px`).toBe(2)
 }
 
-// Every voter but the last protocol voter, so the round stays open; the page's value is distinct.
+// Every voter but the last protocol voter, so the round stays open; the page's value is
+// distinct below 14 voters.
 const voteAllButOne = async (page, role, joined) => {
   if (role === 'Voter') await vote(page, ESTIMATIONS[joined.length % 13])
   await Promise.all(joined.slice(0, -1).map((voter, i) => voter.vote(ESTIMATIONS[i % 13])))

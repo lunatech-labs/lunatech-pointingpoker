@@ -1,9 +1,11 @@
-/* legacy holds today's CSS, base the reset and page.css; colours, tokens and looks are unlayered. */
+/* legacy holds today's CSS, base the reset, page.css and the Bootstrap undo;
+   colours, tokens and looks are unlayered. */
 @layer legacy, base;
 
 @import 'bootstrap/dist/css/bootstrap.min.css' layer(legacy);
 @import './reset.css' layer(base);
 @import './page.css' layer(base);
+@import './bootstrap-undo.css' layer(base);
 @import './components/looks.css';
 @import './colours.css';
 @import './tokens.css';
