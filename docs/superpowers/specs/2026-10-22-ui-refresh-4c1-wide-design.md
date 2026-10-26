@@ -220,7 +220,8 @@ The zoomed page, the switches' crossings, 320 px and the phone's copy hint are
 - **Known issues**: 'A reveal with votes still pushes the participants list
   down' and 'A tied vote is broken by JavaScript key order' cite today's
   components and the "Most voted estimation" heading; both follow the new
-  page.
+  page, the first retitled 'A reveal with votes still moves the facilitator's
+  entries'.
 
 ## Branches and commits
 

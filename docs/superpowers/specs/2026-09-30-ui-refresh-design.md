@@ -419,7 +419,7 @@ commitment:
   denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
   fills the facilitator's slot that step 4 leaves empty while voting, which
   ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
-  votes still pushes the participants list down").
+  votes still moves the facilitator's entries").
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.

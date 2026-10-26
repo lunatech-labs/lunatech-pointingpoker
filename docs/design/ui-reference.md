@@ -557,7 +557,7 @@ Contract).
   (`issueText`), holding "No issue yet" when there is none, and Edit by its
   name, "Edit issue" (`issueEdit`), though it shows "Edit".
 - The issue editor's notices, the status region with the test id
-  `issue-status` (`issueStatus`), rendered once around both views.
+  `issue-status` (`issueStatus`), rendered once, outside both views.
 - The round panel's slot, the test id `round-slot` (`roundSlot`), holding the
   deck while voting and the result once revealed; a facilitator's page has
   none while voting.

@@ -22,7 +22,7 @@ roadmap item instead of leaving it here as stale history.
   holds the typed word in a composition. On an iPhone, the pencil must bring up
   the keyboard; `flushSync` makes the box editable before it takes focus, which
   the e2e suite checks on desktop only. Step 3b3 makes Enter always save and
-  never insert a line break (`oneLine` in `room/issueEditor.ts`), so a
+  never insert a line break (3b3's `oneLine`, built in 4c1-editor), so a
   swallowed Gboard Enter at the end of the draft does nothing, as today, and one
   inside the text becomes a space and moves the caret to the end.
 - **Resolution:** Stays open until the rollout's step 8b phone check in
@@ -65,8 +65,10 @@ roadmap item instead of leaving it here as stale history.
   page at its own width, not at 980 px. The room page's phone layout is pinned
   by 'a phone lays the room page out at its own width' (`e2e/phone.spec.js`).
   The lobby and the banners, still Bootstrap's look inside the legacy-page
-  fence, now lay out at the phone's width too, as does the editing view, and
-  no case or hand test has checked them there.
+  fence, now lay out at the phone's width too, as does the editing view. Only
+  'an old UUID link opens its derived room under a banner that covers no card'
+  (`e2e/slug.spec.js`) checks a banner at that width, and no hand test has
+  seen them there.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;
   never a merge gate. Remove this entry if they read well there.
 
@@ -810,8 +812,8 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Unscheduled, and deliberately not decided here, because the
   rule is a product question rather than a bug with one right answer.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
-  are all defensible, and the third is worth weighing since the table already
-  shows it. Whoever builds step 9's history views should decide it there:
+  are all defensible, and the third is worth weighing since the columns already
+  show it. Whoever builds step 9's history views should decide it there:
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   under "Round history, within the session",
   already lists highest and lowest, majority, and most voted as additive views
@@ -899,7 +901,7 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open. Only a round number in the command would close
   it, as for the late Re-vote above.
 
-### A reveal with votes still pushes the participants list down
+### A reveal with votes still moves the facilitator's entries
 
 - **Where:** `frontend/src/components/Result.tsx`, in the round panel's slot
   (`RoundPanel.tsx`) below `Voters.tsx` in layout f, and the room the
