@@ -54,21 +54,21 @@ it writes.
    phone lay the room page out at its own width, pinned by 'a phone lays the
    room page out at its own width' (`phone.spec.js`).
 4. **The entries' scale is a hook, `useFitEntries`** (product owner's ruling),
-   doing what `room.html`'s `fitEntries` does: in a layout effect, so the
-   first paint is fitted, and again when the panel resizes, the fonts load, or
-   the voters, the phase or the role change, it searches the largest `--s`
-   from 1 to the deck card that fits the panel, reserving the slot on the
-   facilitator's page while voting (3b1 decision 5), and narrows the list so
-   wrapped rows come out even. In the phone layout it clears its inline
-   values, so the phone's fixed scale applies (moved here from 4c1-narrow by
-   the product owner's ruling). "The voters change" includes their names, as a
-   longer name can wrap. The search, given whether a scale fits, and the rows'
-   balance are pure functions with scenario tests, 0, 1 and 14 voters among
-   the balance's, as 3b1's Accepted costs ask; the hook only measures (product
-   owner's ruling). `room.html`'s script served as the spike, and its throw
-   with no voter is fixed in the mockup too. Set aside: CSS alone, which
-   cannot solve for the rows; a scale computed from the tokens, which a font
-   or a long name breaks.
+   doing what `room.html`'s `fitEntries` does: from a layout effect, whose
+   observer's first callback fits before the first paint, and again when the
+   panel resizes, the fonts load, or the voters, the phase or the role change,
+   it searches the largest `--s` from 1 to the deck card that fits the panel,
+   reserving the slot on the facilitator's page while voting (3b1 decision 5),
+   and narrows the list so wrapped rows come out even. In the phone layout it
+   clears its inline values, so the phone's fixed scale applies (moved here
+   from 4c1-narrow by the product owner's ruling). "The voters change"
+   includes their names, as a longer name can wrap. The search, given whether
+   a scale fits, and the rows' balance are pure functions with scenario tests,
+   0, 1 and 14 voters among the balance's, as 3b1's Accepted costs ask; the
+   hook only measures (product owner's ruling). `room.html`'s script served as
+   the spike, and its throw with no voter is fixed in the mockup too. Set
+   aside: CSS alone, which cannot solve for the rows; a scale computed from
+   the tokens, which a font or a long name breaks.
 5. **lucide's icons, from `lucide-react`**, the names 4c1-wide-prep gave the
    mockups; the brand glyph is the mockups' SVG.
 6. **The avatar's colours from the tokens.** `Roster` hashes the name as
