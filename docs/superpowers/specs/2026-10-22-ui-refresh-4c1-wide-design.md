@@ -153,6 +153,9 @@ More, found after 3b1's list:
   moves no entry', it guards the entries' scale and what sits above the table,
   and 'nobody voted: the slot keeps its height through a reveal'
   (`layout.spec.js`) takes over the slot's guarantee.
+- 'a room filled by protocol voters keeps its 14 entries past the grace
+  period' (`voters.spec.js`) counted its facilitator as an entry, and counts
+  13 voters and Alice in the roster instead (R9).
 
 A change the build turns up beyond these joins this list in the commit that
 rewrites its case, and the PR names it. Every other read the reference's
