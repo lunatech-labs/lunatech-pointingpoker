@@ -44,7 +44,7 @@ const tableBehindPanel = async join => {
   return page
 }
 
-test.describe('the phone layout, ☰ and its row', () => {
+test.describe("☰'s row and a keyboard focus on the phone", () => {
   test.use({ viewport: PHONE })
 
   test('☰ opens its row and closes it again', async ({ join }) => {
