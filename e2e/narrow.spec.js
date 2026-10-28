@@ -16,14 +16,15 @@ import {
 const PHONE = { width: 392, height: 800 }
 const menu = page => page.getByRole('button', { name: 'Menu' })
 
-// scrollY after two frames, as a browser's own focus scroll may land a frame later.
-const scrollTop = page =>
+const twoFrames = page =>
   page.evaluate(
-    () =>
-      new Promise(resolve =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve(scrollY)))
-      )
+    () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   )
+// scrollY after two frames, as a browser's own focus scroll may land a frame later.
+const scrollTop = async page => {
+  await twoFrames(page)
+  return page.evaluate(() => scrollY)
+}
 // The round panel in both phases, as the slot's parent.
 const roundPanel = page => roundSlot(page).locator('..')
 const roster = page => page.getByRole('complementary', { name: 'Participants' })
@@ -61,6 +62,8 @@ test.describe('the phone layout, ☰ and its row', () => {
     await menu(page).click()
     await page.setViewportSize({ width: 1280, height: 800 })
     await expect(switchTo(page, 'facilitator')).toBeVisible()
+    // A resize observer fires in a frame, so one at the wide width must run first.
+    await twoFrames(page)
     await page.setViewportSize(PHONE)
     await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByRole('link', { name: 'Leave' })).toBeVisible()
