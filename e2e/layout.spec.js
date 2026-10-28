@@ -2,21 +2,22 @@ import {
   test,
   expect,
   ESTIMATIONS,
+  ISSUE_240,
   NAMES,
   copyHint,
   expectLiveRegion,
   inRoom,
-  issueBox,
-  issueEdit,
-  issueSave,
   issueText,
   markRegion,
   participantEntries,
   participantEntry,
   phaseLine,
   readBoxes,
+  roundBar,
   roundSlot,
+  setIssue,
   switchTo,
+  table,
   tallyEntries,
   vote,
   votedMark
@@ -30,15 +31,9 @@ const comfort = { width: 1280, height: 680 }
 const TWO_LINES =
   'Rework the login page so that a returning user lands on their last room, and keep the room ' +
   'list in sync'
-// room.html's 240 characters leave the table above its 5 rem, so three of them cut to 600.
-const ISSUE_240 =
-  'Rework the login page so that a returning user lands on their last room, and keep the room ' +
-  'list in sync with the rooms they were invited to since their last visit, including the ' +
-  'rooms that were renamed or archived meanwhile by a facilitator'
+// Three of ISSUE_240, cut to 600.
 const LONG = [ISSUE_240, ISSUE_240, ISSUE_240].join('. ').slice(0, 600)
 
-const table = page => page.getByRole('region', { name: 'Voters' })
-const roundBar = page => page.getByRole('region', { name: 'Round' })
 // The voters besides the page, which is one of them on the voter's page.
 const others = (role, count) => (role === 'Voter' ? count - 1 : count)
 
@@ -70,13 +65,6 @@ const fill = async (join, voters, role, count) => {
 const grow = async (page, voters, role, from, to) => {
   await voters(NAMES.slice(others(role, from), others(role, to)))
   await expect(participantEntries(page)).toHaveCount(to)
-}
-
-const setIssue = async (page, text) => {
-  await issueEdit(page).click()
-  await issueBox(page).fill(text)
-  await issueSave(page).click()
-  await expect(issueText(page)).toHaveText(text)
 }
 
 // The premise of the floor's cases: the issue's heading is two of PP-1's lines tall.
