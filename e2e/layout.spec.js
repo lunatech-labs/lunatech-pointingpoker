@@ -240,6 +240,10 @@ cases(
   { viewports: [{ width: 1280, height: 1000 }] },
   async ({ join, voters, role }) => {
     const { page } = await fill(join, voters, role, 14)
+    // The fit runs in the observer's callback, a frame after the 14th entry lands.
+    await page.evaluate(
+      () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    )
     const tall = await scale(page)
     const short = { width: 1280, height: 680 }
     await page.setViewportSize(short)
