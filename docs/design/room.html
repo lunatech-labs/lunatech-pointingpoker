@@ -296,14 +296,13 @@ document.addEventListener('click', e => {
   if (e.target.closest('.room-header-menu-button')) { menuShown = !menuShown; draw() }
   if (e.target.closest('a')) e.preventDefault()
 })
-// ☰'s row closes on Escape from ☰ or the row, focus back on ☰; crossing 51.75 rem closes it
+// ☰'s row closes on Escape from ☰ or the row, focus back on ☰; the row keeps its state across widths
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || !menuShown || !e.target.closest?.('.room-header-menu, .room-header-menu-button')) return
   menuShown = false; draw(); document.querySelector('.room-header-menu-button').focus()
 })
-new ResizeObserver(() => { if (menuShown && !isPhone()) { menuShown = false; draw() } }).observe(document.getElementById('root'))
-// Firefox does not scroll to a focus already in the viewport, so a keyboard focus not wholly in view above the
-// pinned sheet scrolls to the top, which clears the sheet wherever it fits (3b2 decision 7)
+// Firefox leaves a tall focus, the table, behind the sheet, so a keyboard focus not wholly in view above the
+// pinned sheet scrolls to the top (3b2 decision 7)
 document.addEventListener('focusin', e => {
   const bar = document.querySelector('.round-bar'), sheetTop = (document.querySelector('.round-panel') ?? bar).getBoundingClientRect().top
   const box = e.target.getBoundingClientRect()

@@ -187,8 +187,9 @@ document as a whole stays in discussion.
 | 4c1-wide-prep | The mockups' icons and the avatars' tokens | 4c1-mockups | The product owner, on a computed-style diff of the mockups, and its unit tests |
 | 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
 | 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-narrow-keys | ☰'s row and a keyboard focus on the phone | 4c1-wide | Its new cases, and the existing cases unchanged |
+| 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases |
@@ -326,7 +327,7 @@ which chooses plain CSS
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
 4c1-wide, the wide room page's look
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-design.md`),
-4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
+4c1-narrow-keys, 4c1-narrow-cases and 4c1-editor, the last re-challenging 4b2's muted
 Save and Cancel against the contrast gate and taking the two cases 4b2's
 final review deferred, a failed save with focus fallen to the page and a
 double-click selecting a word in the field;
@@ -368,7 +369,8 @@ element lists step 3's layouts give:
   phase its progress or its result; at 200% it scrolls only vertically
   (principle 4).
 - Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
-  width gives, the table's scale and ☰'s row included (3b2).
+  width gives, the table's scale included, ☰'s row keeping its state
+  (4c1-narrow-keys).
 - The phase line keeps its place and its height through a reveal, a reopening
   and a vote, and sits where step 3 places it, with step 3's exception.
 - The copy hint moves nothing and covers nothing, but the room id it replaces
@@ -419,7 +421,8 @@ commitment:
   denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
   fills the facilitator's slot that step 4 leaves empty while voting, which
   ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
-  votes still moves the facilitator's entries").
+  votes still moves the facilitator's entries"). It also revisits the round bar's
+  case, which 4c1-narrow-keys left without one.
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.

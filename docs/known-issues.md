@@ -40,7 +40,8 @@ roadmap item instead of leaving it here as stale history.
 - **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
   virtual keyboard rises over it. With the keyboard open, the field, Save and
   Cancel and the editor's messages may have little room to show (inferred, not
-  checked on a phone).
+  checked on a phone). A field the sheet hides scrolls to the top when focused
+  (step 4c1-narrow-keys), unchecked on a phone.
 - **Resolution:** Stays open until a phone is at hand on the deployed app
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   Accepted costs); never a merge gate.
@@ -73,6 +74,17 @@ roadmap item instead of leaving it here as stale history.
   seen them there.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;
   never a merge gate. Remove this entry if they read well there.
+
+### The Leave link's icon before the word looks slightly off
+
+- **Where:** `frontend/src/components/RoomHeader.tsx` (the Leave link) and
+  `docs/design/room.html`.
+- **Issue:** The link keeps its icon before the word, with its arrow pointing
+  at the icon, and that looks slightly off (step 4c1-narrow-keys, decision 5).
+- **Resolution:** Stays open until the designer chooses among the icon after
+  the word, the icon alone (his Figma), and a mirrored or other icon. The
+  choice is made with Copy link's, so both follow one rule, by mockup with the
+  designer. The link's place and behaviour do not change.
 
 ### The issue editor's field needs a script fit where `field-sizing` is unsupported
 
