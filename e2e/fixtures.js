@@ -184,6 +184,18 @@ export const issueText = page => page.getByTestId('issue-text')
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
+export const setIssue = async (page, text) => {
+  await issueEdit(page).click()
+  await issueBox(page).fill(text)
+  await issueSave(page).click()
+  await expect(issueText(page)).toHaveText(text)
+}
+// room.html's 240 characters leave the table above its 5 rem.
+export const ISSUE_240 =
+  'Rework the login page so that a returning user lands on their last room, and keep the room ' +
+  'list in sync with the rooms they were invited to since their last visit, including the ' +
+  'rooms that were renamed or archived meanwhile by a facilitator'
+export const table = page => page.getByRole('region', { name: 'Voters' })
 export const results = page => page.getByRole('region', { name: 'Results' })
 export const tallyEntries = page => results(page).getByTestId('tally-entry')
 export const mostVoted = page => results(page).getByTestId('most-voted')
@@ -234,6 +246,7 @@ export const vote = (page, value) => card(page, value).click()
 export const phaseLine = page => page.getByTestId('phase-line')
 // The round panel's slot, the deck or the result; none on a facilitator's page while voting.
 export const roundSlot = page => page.getByTestId('round-slot')
+export const roundBar = page => page.getByRole('region', { name: 'Round' })
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
 // After a Re-vote the cast card is not pressed but keeps this description.

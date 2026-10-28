@@ -1,7 +1,47 @@
-import { test, expect, nameInput, switchTo } from './fixtures.js'
+import {
+  test,
+  expect,
+  ISSUE_240,
+  deck,
+  issueEdit,
+  nameInput,
+  readBoxes,
+  roundBar,
+  roundSlot,
+  setIssue,
+  switchTo,
+  table
+} from './fixtures.js'
 
 const PHONE = { width: 392, height: 800 }
 const menu = page => page.getByRole('button', { name: 'Menu' })
+
+// scrollY after two frames, as a browser's own focus scroll may land a frame later.
+const scrollTop = page =>
+  page.evaluate(
+    () =>
+      new Promise(resolve =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(scrollY)))
+      )
+  )
+// The round panel in both phases, as the slot's parent.
+const roundPanel = page => roundSlot(page).locator('..')
+const roster = page => page.getByRole('complementary', { name: 'Participants' })
+
+// Alice's page at scroll 0 with the table's foot behind the round panel, checked so a drift fails.
+const tableBehindPanel = async join => {
+  const { page } = await join('Alice', { role: 'Voter' })
+  await setIssue(page, ISSUE_240)
+  await page.evaluate(() => scrollTo(0, 0))
+  const sheet = { table: table(page), panel: roundPanel(page), bar: roundBar(page) }
+  const { table: box, panel, bar } = (await readBoxes(page, sheet)).boxes
+  const foot = box.y + box.height
+  expect(bar.y + bar.height, 'the round bar pinned to the bottom').toBeCloseTo(800, 0)
+  expect(box.y, "the table's top above the round panel's").toBeLessThan(panel.y)
+  expect(foot, "the table's foot below the round panel's top").toBeGreaterThan(panel.y)
+  expect(foot, "the table's foot above the round bar's top").toBeLessThan(bar.y)
+  return page
+}
 
 test.describe('the phone layout, ☰ and its row', () => {
   test.use({ viewport: PHONE })
@@ -88,5 +128,56 @@ test.describe('the phone layout, ☰ and its row', () => {
     await page.keyboard.press('Escape')
     await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
     await expect(switchTo(page, 'facilitator')).toBeVisible()
+  })
+
+  test('a keyboard focus behind the round panel scrolls clear of it', async ({ join }) => {
+    const page = await tableBehindPanel(join)
+    await issueEdit(page).focus()
+    await page.keyboard.press('Tab')
+    await expect(table(page)).toBeFocused()
+    const { table: box, panel } = (await readBoxes(page, {
+      table: table(page),
+      panel: roundPanel(page)
+    })).boxes
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(panel.y)
+  })
+
+  test('a tap on the table scrolls nothing', async ({ join }) => {
+    const page = await tableBehindPanel(join)
+    const box = (await readBoxes(page, { table: table(page) })).boxes.table
+    await page.mouse.click(box.x + 8, box.y + 8)
+    await expect(table(page)).toBeFocused()
+    expect(await scrollTop(page)).toBe(0)
+  })
+
+  test('a keyboard focus inside the sheet scrolls nothing', async ({ join }) => {
+    const page = await tableBehindPanel(join)
+    const box = (await readBoxes(page, { table: table(page) })).boxes.table
+    await page.mouse.click(box.x + 8, box.y + 8)
+    await expect(table(page)).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(deck(page).getByRole('button').first()).toBeFocused()
+    expect(await scrollTop(page)).toBe(0)
+  })
+
+  test('in the wide layout, a keyboard focus scrolls nothing', async ({ join }) => {
+    const { page } = await join('Alice', { role: 'Voter' })
+    await page.setViewportSize({ width: 1280, height: 450 })
+    await page.evaluate(() => scrollTo(0, 0))
+    const read = await readBoxes(page, { roster: roster(page), panel: roundPanel(page) })
+    const { roster: box, panel } = read.boxes
+    expect(read.scrolls, 'the page scrolls').toBeGreaterThan(0)
+    expect(box.y, "the roster's top in view").toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height, "the roster's foot in view").toBeLessThanOrEqual(450)
+    expect(box.y + box.height, "the roster's foot below the round panel's top").toBeGreaterThan(
+      panel.y
+    )
+    await page.getByRole('button', { name: 'Show votes' }).focus()
+    await page.evaluate(() => scrollTo(0, 0))
+    const before = await scrollTop(page)
+    await page.keyboard.press('Tab')
+    await expect(roster(page)).toBeFocused()
+    expect(await scrollTop(page)).toBe(before)
   })
 })
