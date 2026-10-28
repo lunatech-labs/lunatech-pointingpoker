@@ -151,6 +151,14 @@ test.describe('the phone layout, ☰ and its row', () => {
     expect(await scrollTop(page)).toBe(0)
   })
 
+  test('a keyboard focus in view above the sheet scrolls nothing', async ({ join }) => {
+    const page = await tableBehindPanel(join)
+    await menu(page).focus()
+    await page.keyboard.press('Tab')
+    await expect(issueEdit(page)).toBeFocused()
+    expect(await scrollTop(page)).toBe(0)
+  })
+
   test('a keyboard focus inside the sheet scrolls nothing', async ({ join }) => {
     const page = await tableBehindPanel(join)
     const box = (await readBoxes(page, { table: table(page) })).boxes.table
