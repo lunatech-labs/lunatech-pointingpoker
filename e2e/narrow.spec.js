@@ -55,4 +55,38 @@ test.describe('the phone layout, ☰ and its row', () => {
     await expect(switchTo(page, 'voter')).toBeVisible()
     await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
   })
+
+  test('Escape inside the row closes it and focuses ☰', async ({ join }) => {
+    const { page } = await join('Alice')
+    await menu(page).focus()
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Tab')
+    await expect(switchTo(page, 'facilitator')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(switchTo(page, 'facilitator')).toBeHidden()
+    await expect(menu(page)).toBeFocused()
+    await expect(menu(page)).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('Escape on ☰ closes the open row, and once closed does nothing', async ({ join }) => {
+    const { page } = await join('Alice')
+    await menu(page).focus()
+    await page.keyboard.press('Enter')
+    await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+    await expect(menu(page)).toHaveAttribute('aria-expanded', 'false')
+    await expect(switchTo(page, 'facilitator')).toBeHidden()
+    await page.keyboard.press('Escape')
+    await expect(menu(page)).toHaveAttribute('aria-expanded', 'false')
+    await expect(switchTo(page, 'facilitator')).toBeHidden()
+  })
+
+  test('Escape elsewhere leaves the row open', async ({ join }) => {
+    const { page } = await join('Alice')
+    await menu(page).click()
+    await page.getByRole('link', { name: 'Copy link' }).focus()
+    await page.keyboard.press('Escape')
+    await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
+    await expect(switchTo(page, 'facilitator')).toBeVisible()
+  })
 })

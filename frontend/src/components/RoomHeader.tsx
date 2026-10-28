@@ -1,5 +1,5 @@
 import './room-header.css'
-import { useState, type MouseEvent } from 'react'
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, LogOut, Menu } from 'lucide-react'
 import type { Role } from '../protocol/snapshot'
 import { useRoleSwitch } from './useRoleSwitch'
@@ -15,6 +15,7 @@ type Props = {
 
 export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: Props) {
   const [menuShown, setMenuShown] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
   // Called whatever the role, as a hook must be; nothing it returns is drawn without one.
   const { sentence, label, press } = useRoleSwitch(role ?? 'Voter', onSwitch)
   const copy = (event: MouseEvent) => {
@@ -30,6 +31,11 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
   const leave = (event: MouseEvent) => {
     event.preventDefault()
     onLeave()
+  }
+  const closeOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !menuShown) return
+    menuButton.current?.focus()
+    setMenuShown(false)
   }
   return (
     <header className={copied ? 'room-header room-header-copied' : 'room-header'}>
@@ -66,16 +72,18 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
         Leave
       </a>
       <button
+        ref={menuButton}
         className="room-header-menu-button button-quiet"
         type="button"
         aria-expanded={menuShown}
         aria-label="Menu"
         onClick={() => setMenuShown(shown => !shown)}
+        onKeyDown={closeOnEscape}
       >
         <Menu />
       </button>
       {menuShown && (
-        <div className="room-header-menu panel">
+        <div className="room-header-menu panel" onKeyDown={closeOnEscape}>
           {role && (
             <>
               <span className="room-header-menu-role">{sentence}</span>
