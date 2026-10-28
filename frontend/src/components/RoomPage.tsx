@@ -1,4 +1,5 @@
 import './room-page.css'
+import type { FocusEvent } from 'react'
 import * as api from '../protocol/api'
 import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
@@ -22,6 +23,20 @@ type Props = {
 
 const log = (reason: unknown) => console.log(reason)
 
+// Firefox leaves a tall focus, the table, behind the pinned sheet, so a keyboard focus not
+// wholly in view above the sheet scrolls to the top (3b2 decision 7).
+function keepClearOfSheet(event: FocusEvent<HTMLDivElement>): void {
+  const page = event.currentTarget
+  const target: EventTarget = event.target
+  const bar = page.querySelector('.round-bar')
+  if (!(target instanceof Element) || !target.matches(':focus-visible')) return
+  if (!bar || getComputedStyle(bar).position !== 'sticky') return
+  if (target.closest('.round-panel, .round-bar')) return
+  const sheetTop = (page.querySelector('.round-panel') ?? bar).getBoundingClientRect().top
+  const box = target.getBoundingClientRect()
+  if (box.top < 0 || box.bottom > sheetTop) target.scrollIntoView({ block: 'start' })
+}
+
 export function RoomPage(props: Props) {
   const { roomId, snapshot, copied, onCopied, onLeave, onRefused, onSwitched } = props
   const view = applySnapshot(snapshot)
@@ -38,7 +53,7 @@ export function RoomPage(props: Props) {
   const vote = (estimation: string) => run(api.vote(roomId, estimation))
 
   return (
-    <div className="room-page" data-testid="room">
+    <div className="room-page" data-testid="room" onFocus={keepClearOfSheet}>
       <div className="room-page-stack">
         <RoomHeader
           roomId={roomId}
