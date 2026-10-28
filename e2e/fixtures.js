@@ -190,7 +190,7 @@ export const setIssue = async (page, text) => {
   await issueSave(page).click()
   await expect(issueText(page)).toHaveText(text)
 }
-// room.html's 240 characters leave the table above its 5 rem.
+// room.html's 240 characters: the table above its 5 rem, its foot behind the phone's round panel.
 export const ISSUE_240 =
   'Rework the login page so that a returning user lands on their last room, and keep the room ' +
   'list in sync with the rooms they were invited to since their last visit, including the ' +
