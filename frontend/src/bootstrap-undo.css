@@ -1,0 +1,13 @@
+/* Undoes Bootstrap's base styles outside the legacy-page fence; deleted with Bootstrap in step 4c2. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  line-height: inherit;
+}
+
+a {
+  text-decoration: underline;
+}

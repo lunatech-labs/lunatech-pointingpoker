@@ -1,67 +1,54 @@
+import './deck.css'
 import { useId } from 'react'
-import { Lock } from 'lucide-react'
 import type { View } from '../room/view'
+import { Figure } from './Figure'
 
-const estimationValues = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+export const estimationValues = [
+  '0',
+  '0.5',
+  '1',
+  '2',
+  '3',
+  '5',
+  '8',
+  '13',
+  '21',
+  '34',
+  '55',
+  '89',
+  '?'
+]
 
 type Props = { view: View; onVote: (estimation: string) => void }
 
+// Drawn only while voting, so a card is never disabled.
 export function Deck({ view, onVote }: Props) {
   const noteId = useId()
-  const unconfirmed = (e: string) => e === view.userEstimation && !view.ownVoteConfirmed
-  const cardClass = (e: string) => {
-    if (e !== view.userEstimation) return 'btn estimation-button m-1'
-    return view.ownVoteConfirmed
-      ? 'btn estimation-button estimation-button-selected m-1'
-      : 'btn estimation-button estimation-button-uncomfirmed m-1'
-  }
+  const own = (e: string) => e === view.userEstimation
+  const kept = (e: string) => own(e) && !view.ownVoteConfirmed
   return (
-    <div className="row">
-      <div className="col">
-        <div className="lt-dark-red-bg estimation-card">
-          <div className="row">
-            <div className="col mt-2">
-              <h6>Your estimation</h6>
-            </div>
-          </div>
-          <div className="row">
-            <div className="col mt-2">
-              <div className="estimation-text">{view.userEstimation}</div>
-            </div>
-          </div>
+    <div className="deck" role="group" aria-label="Estimation cards">
+      <span id={noteId} hidden>
+        Previous vote, not confirmed
+      </span>
+      {estimationValues.map(e => (
+        <div className="deck-place" key={e}>
+          <button
+            type="button"
+            className={kept(e) ? 'deck-card deck-card-kept' : 'deck-card'}
+            aria-pressed={own(e) && view.ownVoteConfirmed}
+            aria-describedby={kept(e) ? noteId : undefined}
+            onClick={() => onVote(e)}
+          >
+            <Figure value={e} />
+          </button>
+          {kept(e) && (
+            <span className="deck-tag" aria-hidden="true">
+              Not confirmed
+            </span>
+          )}
         </div>
-      </div>
-      <div className="col">
-        <div className="row" role="group" aria-label="Estimation cards">
-          {estimationValues.map(e => (
-            <div className="col" key={e}>
-              <button
-                type="button"
-                className={cardClass(e)}
-                aria-pressed={e === view.userEstimation && view.ownVoteConfirmed}
-                aria-describedby={unconfirmed(e) ? noteId : undefined}
-                disabled={view.votesRevealed}
-                onClick={() => onVote(e)}
-              >
-                {e}
-              </button>
-              {unconfirmed(e) && (
-                <span id={noteId} hidden>
-                  Previous vote, not confirmed
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-        {/* Hidden rather than absent: its row sizes the estimation card, so removing it
-            resizes the card and shifts every row below on each reveal. */}
-        <div className="row" style={{ visibility: view.votesRevealed ? 'visible' : 'hidden' }}>
-          <div className="col text-muted m-1">
-            <Lock size={20} />{' '}
-            <small>The round is revealed. Press Re-vote to open it again.</small>
-          </div>
-        </div>
-      </div>
+      ))}
     </div>
   )
 }

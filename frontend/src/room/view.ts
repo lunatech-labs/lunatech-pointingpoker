@@ -5,10 +5,17 @@ export type ParticipantRow = {
   id: string
   name: string
   facilitator: boolean
+  // The reader's own row.
+  self: boolean
   voted: boolean
   hasEstimation: boolean
   estimation: string
 }
+
+// A voter's entry as drawn: confirmed, kept from before a Re-vote, or no vote.
+export type VoteState = 'confirmed' | 'kept' | 'none'
+export const voteState = (u: ParticipantRow): VoteState =>
+  u.voted ? 'confirmed' : u.hasEstimation ? 'kept' : 'none'
 
 const confirmed = (e: Estimation) => e.type === 'Confirmed' || e.type === 'ConfirmedHidden'
 const shown = (e: Estimation) =>
@@ -18,12 +25,13 @@ const shown = (e: Estimation) =>
 const estimationOf = (seat: Seat): Estimation =>
   seat.type === 'Voter' ? seat.estimation : { type: 'NoEstimation' }
 
-const toRow = ({ id, name, seat }: Participant): ParticipantRow => {
+const toRow = (you: string) => ({ id, name, seat }: Participant): ParticipantRow => {
   const estimation = estimationOf(seat)
   return {
     id,
     name,
     facilitator: seat.type === 'Facilitator',
+    self: id === you,
     voted: confirmed(estimation),
     hasEstimation: estimation.type !== 'NoEstimation',
     estimation: shown(estimation)
@@ -50,8 +58,8 @@ export const ownRoleOf = (s: RoomSnapshot): Seat['type'] | null =>
   s.users.find(u => u.id === s.you)?.seat.type ?? null
 
 export function applySnapshot(s: RoomSnapshot): View {
-  const users = s.users.map(toRow)
-  const me = users.find(u => u.id === s.you)
+  const users = s.users.map(toRow(s.you))
+  const me = users.find(u => u.self)
   const tally: Record<string, number> = {}
   // Whoever has an estimation, which is what the table renders. Not u.voted: that drops a
   // re-vote in progress, where the value stands and the confirmation does not.
