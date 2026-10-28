@@ -80,7 +80,7 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `frontend/src/components/RoomHeader.tsx` (the Leave link) and
   `docs/design/room.html`.
 - **Issue:** The link keeps its icon before the word, with its arrow pointing
-  at the icon, and that looks slightly off (step 4c1-narrow-keys, decision 5).
+  at the word, and that looks slightly off (step 4c1-narrow-keys, decision 5).
 - **Resolution:** Stays open until the designer chooses among the icon after
   the word, the icon alone (his Figma), and a mirrored or other icon. The
   choice is made with Copy link's, so both follow one rule, by mockup with the
