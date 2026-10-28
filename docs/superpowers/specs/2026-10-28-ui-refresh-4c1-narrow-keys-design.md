@@ -52,8 +52,10 @@ guarantees are 4c1-narrow-cases', the step after this one.
    before `focusin`, and both clear a link or Edit issue of the sheet by the
    scroll margins alone; Firefox leaves a focused voters table, taller than a
    margin clears, at 264 to 614 px behind a sheet from 442 px, and only the
-   listener clears it. 3b2's "margin or not" thus holds today for the table
-   alone. Ported from `room.html`'s `focusin` listener as an `onFocus` on
+   listener clears it. In the app (2026-10-28), Firefox leaves the table behind
+   the round panel but clears it of the round bar alone on a facilitator's
+   page: the table ends the page there, and any scroll reaches the end. 3b2's
+   "margin or not" thus holds today for the table alone. Ported from `room.html`'s `focusin` listener as an `onFocus` on
    `.room-page`, which React delegates as `focusin`, so no effect adds or
    removes it; it tests `:focus-visible`, the round bar's `sticky` position
    (no breakpoint of its own) and the sheet's ancestry before reading any box
@@ -162,16 +164,13 @@ Left without a case: the banner, reconnect, phase and rejoin rows, as nothing
 here touches what keeps or resets the row's state; a close on a tap outside
 the row.
 
-The listener; Chromium's margins clear the table unaided, so the first two
-kill in Firefox alone:
+The listener; Chromium's margins clear the table unaided, so the first kills
+in Firefox alone:
 
 - **A keyboard focus behind the sheet**: a voter's page whose table's foot
   lies below the round panel's top and above the round bar's, at scroll 0;
   Tab onto the table; it ends wholly above the sheet's top (killed by
   removing the listener, and by a listener taking the round bar's top alone).
-- **The round bar's top**: the same on a facilitator's page while voting, the
-  table's foot behind the round bar (killed by a listener reading the round
-  panel with no fallback).
 - **A tap**: the first case's page, a mouse click at a point of the table in
   view above the sheet, not a click that first scrolls its target into view;
   the page does not scroll (killed in both browsers by dropping the
@@ -182,6 +181,11 @@ kill in Firefox alone:
   participants panel; the scroll position stays exactly the one read before
   the Tab (killed by dropping the `sticky` test).
 
+Left without a case: the round bar's top as the sheet's top, on a
+facilitator's page while voting. Both browsers clear the table of the round
+bar alone (decision 3), so a listener reading the round panel with no fallback
+fails nothing; the progress step, whose progress fills that slot, revisits it.
+
 ## The docs' changes
 
 - **Parent**: the steps table's 4c1-narrow row becomes two. 4c1-narrow-keys,
@@ -191,7 +195,9 @@ kill in Firefox alone:
   eye, its new cases, and the existing cases unchanged but for its listed
   contract changes. 4c1-editor waits on the latter, and step 4's text names
   both. The guarantee "the table's scale and ☰'s row included" becomes the
-  table's scale included, ☰'s row keeping its state (decision 1).
+  table's scale included, ☰'s row keeping its state (decision 1). The progress
+  count among the steps after 5 notes it revisits the round bar's case left
+  without one here.
 - **`docs/design/room.html`**: the `ResizeObserver` close goes, its comment
   saying the row keeps its state; the `focusin` listener's comment says
   Firefox leaves a tall focus, the table, behind the sheet (decision 3).
