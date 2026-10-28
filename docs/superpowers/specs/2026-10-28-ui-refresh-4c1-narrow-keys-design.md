@@ -24,9 +24,9 @@ guarantees are 4c1-narrow-cases', the step after this one.
   decision 7); **its top** is the round panel's (`.round-panel`), or the
   round bar's on a facilitator's page while voting, where no round panel is
   drawn.
-- **A keyboard focus**: a focus matching `:focus-visible`: a key's or a
-  script's, and a text field's however it was focused, but not a tap's
-  elsewhere.
+- **A keyboard focus**: a focus matching `:focus-visible`: a key's, a
+  script's after a key (not after a click), and a text field's however it was
+  focused, but not a tap's elsewhere.
 
 ## Decisions
 
@@ -175,6 +175,9 @@ in Firefox alone:
   view above the sheet, not a click that first scrolls its target into view;
   the page does not scroll (killed in both browsers by dropping the
   `:focus-visible` test).
+- **In view above the sheet**: the first case's page, Tab from ☰ onto Edit
+  issue; the page does not scroll (killed in both by dropping the in-view
+  test, a listener that always scrolls).
 - **Inside the sheet**: the same click, then Tab into the deck; the page does
   not scroll (killed in both by dropping the outside-the-sheet test).
 - **The wide layout**: at 1280 by 450, where the page scrolls, Tab onto the
@@ -185,6 +188,8 @@ Left without a case: the round bar's top as the sheet's top, on a
 facilitator's page while voting. Both browsers clear the table of the round
 bar alone (decision 3), so a listener reading the round panel with no fallback
 fails nothing; the progress step, whose progress fills that slot, revisits it.
+Nor a focus above the viewport: both browsers scroll to a focus before
+`focusin` (decision 3), so the listener rarely meets one (inferred).
 
 ## The docs' changes
 
