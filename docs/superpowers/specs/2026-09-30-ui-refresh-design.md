@@ -132,8 +132,8 @@ document as a whole stays in discussion.
      `IssuePanel.tsx`: focus taken back after a failed save unless the user has
      moved elsewhere, `flushSync` so a phone shows its keyboard, and the
      refocus in `takeTheirs`.
-   - `Deck.tsx`: drawn only while voting, so a revealed round has no card to
-     press, a guarantee the structure now holds.
+   - `RoundPanel.tsx`: draws `Deck` only while voting, so a revealed round has
+     no card to press, a guarantee the structure now holds.
    - `App.tsx`: the join, create and leave flow, the name and room in
      `localStorage`, the trimmed room id, reading and stripping `?moved=1` and
      `?restarted=1`, and the "Link copied" hint's 2 s timeout, started on each
