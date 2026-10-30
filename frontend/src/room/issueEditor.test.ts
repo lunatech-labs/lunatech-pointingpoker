@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initial, shows, step, type EditorEvent } from './issueEditor'
+import { initial, oneLine, shows, step, type EditorEvent } from './issueEditor'
 
 const pencil: EditorEvent = { type: 'pencil' }
 const save: EditorEvent = { type: 'save' }
@@ -158,5 +158,41 @@ describe('the accepted races', () => {
     // Its own frame and a restore of PP-1 that both beat the response leave the store as it was.
     expect(after(...savingMine, frame('mine'), frame('PP-1'), succeeded)).toEqual(viewing('mine'))
     expect(after(...savingMine, succeeded, frame('PP-3'))).toEqual(viewing('PP-3'))
+  })
+})
+
+describe('oneLine', () => {
+  it('drops line breaks at the ends', () => {
+    expect(oneLine('\na\n')).toBe('a')
+  })
+
+  it('drops CRLF at the ends', () => {
+    expect(oneLine('\r\na\r\n')).toBe('a')
+  })
+
+  it('turns a run of line breaks inside into one space', () => {
+    expect(oneLine('a\r\n\r\nb')).toBe('a b')
+  })
+
+  it('treats a lone CR as a line break', () => {
+    expect(oneLine('a\rb')).toBe('a b')
+  })
+
+  it('keeps spaces at the ends', () => {
+    expect(oneLine('a ')).toBe('a ')
+  })
+})
+
+describe('the editor keeps the draft on one line', () => {
+  it('on typing', () => {
+    expect(after(pencil, typed('a\nb'))).toEqual(editing('a b'))
+  })
+
+  it('on the pencil', () => {
+    expect(after(frame('a\nb'), pencil)).toEqual(editing('a b'))
+  })
+
+  it('on Use theirs, with no notice since start keeps the room issue as it was', () => {
+    expect(after(...editingMine, frame('x\ny'), theirs)).toEqual(editing('x y'))
   })
 })

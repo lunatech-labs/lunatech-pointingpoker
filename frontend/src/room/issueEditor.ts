@@ -36,6 +36,10 @@ export const initial = (issue: string): EditorState => ({
 // The spec's "room's issue": the store's, or the saved text while it waits.
 const roomIssue = (s: EditorState) => s.saved ?? s.store
 
+// A draft is one line: line breaks at the ends go, a run inside becomes one space.
+export const oneLine = (text: string) =>
+  text.replace(/^[\r\n]+|[\r\n]+$/g, '').replace(/[\r\n]+/g, ' ')
+
 // Every event outside its state is ignored, which covers the matrix's "Cannot happen" cells too.
 export function step(s: EditorState, e: EditorEvent): EditorState {
   switch (e.type) {
@@ -43,15 +47,21 @@ export function step(s: EditorState, e: EditorEvent): EditorState {
       return { ...s, store: e.issue, saved: e.issue === s.before ? s.saved : null }
     case 'pencil':
       if (s.mode !== 'viewing') return s
-      return { ...s, mode: 'editing', draft: roomIssue(s), start: roomIssue(s), failed: false }
+      return {
+        ...s,
+        mode: 'editing',
+        draft: oneLine(roomIssue(s)),
+        start: roomIssue(s),
+        failed: false
+      }
     case 'typed':
-      return s.mode === 'editing' ? { ...s, draft: e.text } : s
+      return s.mode === 'editing' ? { ...s, draft: oneLine(e.text) } : s
     case 'save':
       return s.mode === 'editing' ? { ...s, mode: 'saving', failed: false, before: s.store } : s
     case 'cancel':
       return s.mode === 'editing' ? { ...s, mode: 'viewing' } : s
     case 'theirs':
-      return s.mode === 'editing' ? { ...s, draft: roomIssue(s), start: roomIssue(s) } : s
+      return s.mode === 'editing' ? { ...s, draft: oneLine(roomIssue(s)), start: roomIssue(s) } : s
     case 'succeeded':
       if (s.mode !== 'saving') return s
       // A frame that beat the response has already moved the store, so nothing is left to wait for.
