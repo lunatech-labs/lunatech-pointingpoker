@@ -413,9 +413,9 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   takes focus without joining the tab order). The Messages section mounts only
   while a banner shows.
 - **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
-  issue", which grows to fit (by `field-sizing: content`, with a script fit in
-  Firefox ESR 140, which lacks it). Enter saves and never inserts a line break;
-  `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
+  issue", which grows to fit by `field-sizing: content` (a browser without it
+  keeps one line). Enter saves and never inserts a line break; `oneLine` keeps
+  the draft to one line. Save and Cancel, icon and word, sit
   beside the field at and above 65.75 rem and below it under 65.75 rem, in both
   layouts (J11's compact switch), in the DOM order field, Save, Cancel,
   messages at every width. In the band between 51.75 and 65.75 rem a panel
@@ -423,9 +423,10 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   editing view closes (Escape, Cancel, a save that succeeded), focus returns to
   Edit if it was inside the panel or had dropped; focus the user moved elsewhere
   is left alone.
-- **While saving**, Save and Cancel are `aria-disabled`, keep focus and look
-  muted; the field is read-only. After a failure the field takes focus only if
-  focus fell to the page.
+- **While saving**, Save and Cancel are `aria-disabled`, keep focus and take
+  the lobby's inert look (`--grey` on `--paper-pale`, 7.06:1); the field is
+  read-only. After a failure the field takes focus only if focus fell to the
+  page.
 - **The editor's two messages** are message panels under the buttons, inside
   the editor region (step 1a's `issue-status`, always rendered and never
   `display: none`), the problem above the notice, with no role of their own.
@@ -461,9 +462,9 @@ Step 3b4's spec holds its rules,
   then lost, then a failure) and the notices by tone. A form shows only the
   messages it can have: the lost connection and the ended session on the pinned
   form, the only one with a stream, and the create failure on the root form. After "Your session has
-  ended" the panel stays, its name, roles and Join inert in the saving look's
-  muted text on `--paper-pale`, since grey on `--track` is 6.47:1 and J8 asks
-  7:1 for text; an inert control's edge is exempt from J8's 3:1.
+  ended" the panel stays, its name, roles and Join inert in the app's inert
+  look, `--grey` on `--paper-pale` (the editor's saving look too); an inert
+  control's edge is exempt from J8's 3:1.
 - **The not-a-room page** is drawn in the same regions. Its `h1` reads
   `<code><bdi>x</bdi></code> is not a room name.`, the typed name wrapping
   anywhere and isolated by the `<bdi>`. A suggestion is a room row under the
@@ -581,7 +582,7 @@ Contract).
   the issue's read view and its empty "No issue yet", the nobody-voted read,
   the phase line's test id, the round bar's region "Round") are listed in its
   spec, and step 4c1-wide made them, with those found after 3b1's list (its
-  spec's Contract). The banners' region "Messages" waits for 4c1-editor.
+  spec's Contract). The banners' region "Messages" waits for 4c1-banners.
 
 ## Open
 
@@ -606,10 +607,6 @@ and L8 by 3b3 (J12), and L9 by 3b4 (J13).
   brainstorm raises first: an entry point of its own or a view of the room app,
   and how the server hands over the typed name and the suggestion, keeping its
   404 status.
-- **The saving look's text contrast**: Save in `--grey` on `--track` is 6.47:1
-  (3b3 decision 10), under J8's 7:1 for text, though an inactive control is
-  exempt (WCAG 1.4.3 and 1.4.6). The lobby's inert look uses `--paper-pale` (7.06:1);
-  whether the editor follows it is for the product owner.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -981,6 +978,13 @@ The reasons behind each rule, and what was set aside.
   once. Set aside: `optional`; `block`, which hides late text up to about 3 s
   and jumps just the same; a fallback scaled to Inter's size, which narrows the
   jump without removing it.
+- **4c1-editor.** The editing view (the UI refresh design's step 4c1-editor)
+  reopened two of 3b3's choices. The saving look takes the lobby's inert look,
+  as Save in `--grey` on `--track` was 6.47:1, under J8's 7:1, and one inert
+  look serves the app; revisited after the stack is deployed. The script fit
+  goes: every current browser has `field-sizing`, Firefox ESR 140 having ended.
+  Set aside: a white fill, a second inert look; a fallback script no CI browser
+  runs.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
