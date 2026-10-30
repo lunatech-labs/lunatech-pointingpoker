@@ -37,10 +37,10 @@ the decisions log at the end.
 ## Mockups
 
 - They live beside this file, under `docs/design/`, as clickable HTML linking
-  the app's stylesheets: the value source, `looks.css`, `message.css`, `brand-logo.css` and their
-  area files in `frontend/src/components/`, with `reset.css` and `page.css`
-  imported into the `base` layer. Their own `<style>` keeps only the later
-  steps' parts and the parameters' design alternatives.
+  the app's stylesheets: the value source, `looks.css`, `message.css`,
+  `brand-logo.css` and their area files in `frontend/src/components/`, with
+  `reset.css` and `page.css` imported into the `base` layer. Their own `<style>`
+  keeps only the later steps' parts and the parameters' design alternatives.
 - They show what step 4 builds and, behind a "later steps" toggle, the parts
   later steps add (progress count, Next issue, recent rounds), dashed, so step
   4 leaves room for them.
@@ -59,11 +59,10 @@ the decisions log at the end.
   the window's size.
 - `lobby.html`, the lobby's three pages (J13). Its parameters, listed at the top
   of its script: `page` (`root`, `pinned`, `notaroom`), `tab` (`create`,
-  `join`), `name`, `remembered` (`slug`, `legacy`, `none`), `rejoin` (`chip`
-  outlines the row's arrow), `role`, `message` (the join and create failures,
-  the lost connection, the ended session, the moved and restart notices),
-  `room`, `typed`, `suggestion`, `stored`, `longest` (the longest valid id) and
-  `probe`.
+  `join`), `name`, `remembered` (`slug`, `legacy`, `none`), `role`, `message`
+  (the join and create failures, the lost connection, the ended session, the
+  moved and restart notices), `room`, `typed`, `suggestion`, `stored`, `longest`
+  (the longest valid id) and `probe`.
 - `lobby-cells.html`, the lobby's pages side by side at a chosen width
   (1280, 800, 392 or 320 px), each with a link that opens it alone.
 - `icons.js`, the icons both mockups draw, lucide's, copied from `lucide-react`
@@ -441,9 +440,9 @@ Step 3b4's spec holds its rules,
 
 - **The regions** are the room page's: the header bar with the brand lockup,
   then one centred column that the header's content, the banners and the panel
-  share a left edge with. The column is `--lobby-width`, 24 rem until judged,
-  and `min(--lobby-width, 100% - 2 × --page-edge)` on a narrow screen; one
-  column at every width, no breakpoint and no hero.
+  share a left edge with. The column is `--lobby-width`, 26 rem, judged by
+  4c2-form, and `min(--lobby-width, 100% - 2 × --page-edge)` on a narrow screen;
+  one column at every width, no breakpoint and no hero.
 - **The `h1` names the form**: "Create room" or "Join room". Dismiss's focus
   lands on it. The tabs are links, the active one `aria-current="true"` and
   marked by weight and a bar, the others underlined (J4); the pinned form has
@@ -594,10 +593,6 @@ L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
 settled by 3b1 (J10), L5, L10 and L11 for the room page by 3b2 (J11), and L7
 and L8 by 3b3 (J12), and L9 by 3b4 (J13).
 
-- **The lobby's column width**: `--lobby-width` is 24 rem until the product
-  owner judges `lobby.html` (J13).
-- **The rejoin row's arrow**: the plain ink arrow (the default) or the outlined
-  chip (`rejoin=chip`), after the product owner and the designer have seen both.
 - **Three rejoin-row variants, deferred for the designer and not rejected**:
   no square with an outlined "Rejoin" button on the right, with the outlined
   arrow chip on the right, and with it in the square's place on the left.
@@ -995,6 +990,15 @@ The reasons behind each rule, and what was set aside.
   aside: `.message` left in `looks.css`; `--page-edge` on the phone, which
   lines the banners up with nothing; the issue panel named by its heading,
   which changes each round.
+- **4c2-form.** The lobby's page and form (the UI refresh design's step
+  4c2-form) took the column at 26 rem, judged on `lobby.html` at 1280 by 700:
+  the longest id keeps a fifth of its line, the help line takes two lines, and
+  every form stays taller than wide but the pinned one, about square. The room
+  row's arrow stays plain: the outlined chip, a box with no role of its own,
+  mirrored the square. The brand lockup became one component, `BrandLogo`,
+  its rules moved from `looks.css` to `brand-logo.css`. Set aside: 24 rem,
+  which the longest id nearly fills; 28 rem, which turns the pinned panel
+  landscape; the outlined chip.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

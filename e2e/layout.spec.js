@@ -3,6 +3,7 @@ import {
   expect,
   ESTIMATIONS,
   ISSUE_240,
+  LONGEST_ID,
   NAMES,
   connectionLost,
   copyHint,
@@ -16,11 +17,13 @@ import {
   markRegion,
   messages,
   movedBanner,
+  nameInput,
   participantEntries,
   participantEntry,
   phaseLine,
   readBoxes,
   restartNotice,
+  roomIdInput,
   roundBar,
   roundSlot,
   setIssue,
@@ -681,6 +684,26 @@ test.describe('the narrow layouts', () => {
       })
     })
   }
+
+  test.describe(() => {
+    test.use({ viewport: { width: 320, height: 640 } })
+
+    test('the lobby scrolls no page sideways, 320 by 640', async ({ visitor }) => {
+      const page = await visitor({ roomId: LONGEST_ID, name: 'Alice' })
+      await page.goto('/')
+      await page.getByRole('link', { name: 'Join', exact: true }).click()
+      await expect(roomIdInput(page), 'the Join tab').toBeVisible()
+      const row = page.getByRole('link', { name: `${LONGEST_ID} Rejoin as Alice`, exact: true })
+      await expect(row, 'the rejoin row, named in visible order').toBeVisible()
+      expect(await sideways(page), 'no sideways scroll').toBeLessThanOrEqual(0)
+      // Against the body: page.css's scrollbar gutter narrows it in Chromium (R8).
+      const gaps = await nameInput(page).evaluate(field => {
+        const { left, right } = field.getBoundingClientRect()
+        return [left, document.body.clientWidth - right]
+      })
+      expect(Math.abs(gaps[0] - gaps[1]), `the column centred, ${gaps}`).toBeLessThan(1)
+    })
+  })
 })
 
 test.describe('the editing view', () => {

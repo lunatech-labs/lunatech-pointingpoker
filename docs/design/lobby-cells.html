@@ -28,7 +28,6 @@ const cells = [
 const options = {
   name: [['Alice', 'A name typed'], ['', 'No name']],
   remembered: [['slug', 'A remembered room'], ['legacy', 'A legacy id'], ['none', 'Nothing remembered']],
-  rejoin: [['plain', 'Plain arrow (default)'], ['chip', 'Outlined chip']],
   longest: [['0', 'Ordinary ids'], ['1', 'The longest id, 26 characters']],
   message: [['', 'No message'], ['join-failed', 'Join failed'], ['create-failed', 'Create failed'], ['lost', 'Connection lost'], ['ended', 'Session ended (inert panel)'],
     ['moved', 'Moved link'], ['restarted', 'Reconnected'], ['join-failed,moved,restarted', 'Failure and both notices']],
@@ -38,7 +37,7 @@ const options = {
 }
 // The messages each form can show (a stream exists on the pinned form alone, Create on the root form alone); a cell that cannot show the chosen one is dimmed
 const shown = { root: ['join-failed', 'create-failed', 'moved', 'restarted'], pinned: ['join-failed', 'lost', 'ended', 'moved', 'restarted'], notaroom: [] }
-const state = { name: 'Alice', remembered: 'slug', rejoin: 'plain', longest: '0', message: '', width: '800', height: '700', scale: '0.5' }
+const state = { name: 'Alice', remembered: 'slug', longest: '0', message: '', width: '800', height: '700', scale: '0.5' }
 const bar = document.getElementById('bar')
 for (const [key, list] of Object.entries(options)) {
   const fs = document.createElement('fieldset')
@@ -50,7 +49,7 @@ function render() {
   const grid = document.getElementById('grid')
   grid.style.setProperty('--s', state.scale); grid.style.setProperty('--w', `${state.width}px`)
   grid.innerHTML = cells.map(([title, cell]) => {
-    const src = `lobby.html?${cell}&name=${encodeURIComponent(state.name)}&remembered=${state.remembered}&rejoin=${state.rejoin}&longest=${state.longest}&message=${state.message}`
+    const src = `lobby.html?${cell}&name=${encodeURIComponent(state.name)}&remembered=${state.remembered}&longest=${state.longest}&message=${state.message}`
     const page = new URLSearchParams(cell).get('page'), cannot = state.message.split(',').filter(Boolean).some(f => !shown[page].includes(f))
     return `<figure style="${cannot ? 'opacity:.45' : ''}"><figcaption>${title}${cannot ? ' (this message cannot show here)' : ''} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
       <div class="frame" style="--s:${state.scale};--w:${state.width}px;--h:${state.height}px"><iframe src="${src}" title="${title}"></iframe></div></figure>`
