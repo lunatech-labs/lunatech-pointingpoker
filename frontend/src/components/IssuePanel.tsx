@@ -43,6 +43,9 @@ export function IssuePanel({ issue, onSave }: Props) {
     // Render editable before focusing: iOS shows no keyboard for focus on a readonly field.
     flushSync(() => editor.pencil())
     box.current?.focus()
+    // React mounts a textarea's text as its content, which leaves the caret at the start.
+    const end = box.current?.value.length ?? 0
+    box.current?.setSelectionRange(end, end)
   }
   // After a failed save, the field takes focus only if focus fell to the page.
   useEffect(() => {
