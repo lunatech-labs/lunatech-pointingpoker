@@ -111,6 +111,17 @@ roadmap item instead of leaving it here as stale history.
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   decision 8); never a merge gate.
 
+### A layout journey failing inside a shared helper does not name its guarantee
+
+- **Where:** `e2e/layout.spec.js`, `scrollsAndCutsNothing` and `expectInView`.
+- **Issue:** The journeys' own expects each carry a message naming their
+  guarantee (4c1-narrow-cases plan, R3), but these helpers' expects have none
+  or only the boxes' JSON. A journey failing in one reads as a bare matcher
+  error, the stack's call site the only pointer to the stop.
+- **Resolution:** Stays open until a step next touches these helpers; adding
+  messages changes only the failure text, so the existing cases stay unchanged
+  in behaviour (4c1-narrow-cases decision 7).
+
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/RoomManager.scala`
