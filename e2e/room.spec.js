@@ -129,6 +129,15 @@ test('the issue is text until Edit issue is pressed', async ({ join }) => {
   await issueEdit(alice.page).click()
   await expect(issueBox(alice.page)).toBeEditable()
   await expect(issueBox(alice.page)).toBeFocused()
+
+  // The caret starts at the end of a stored issue.
+  await issueCancel(alice.page).click()
+  await setIssue(alice, 'alpha beta')
+  await expect(issueText(alice.page)).toHaveText('alpha beta')
+  await issueEdit(alice.page).click()
+  await expect(issueBox(alice.page)).toBeFocused()
+  const caret = f => [f.selectionStart, f.selectionEnd]
+  expect(await issueBox(alice.page).evaluate(caret)).toEqual([10, 10])
 })
 
 // Carol departs while Bob is cut, and Bob is back before his own removal fires. Alice learns it
