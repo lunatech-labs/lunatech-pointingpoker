@@ -742,6 +742,24 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   await expect(elsewhere).toBeFocused()
 })
 
+test('a failed save with focus fallen puts focus in the field', async ({ join, room }) => {
+  const alice = await join('Alice')
+  let release
+  const stalled = new Promise(resolve => (release = resolve))
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await stalled
+    await route.abort()
+  })
+
+  await setIssue(alice, 'mine')
+  await expect(issueSave(alice.page)).toBeFocused()
+  await alice.page.evaluate(() => document.activeElement.blur())
+  await expect(alice.page.locator('body')).toBeFocused()
+  release()
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+})
+
 // The issue saves a page sends; read only once a later frame has landed.
 const issueSaves = (page, room) => {
   const sent = []
@@ -873,6 +891,18 @@ test('a double-click on Edit issue leaves the editor open, focus in the field', 
   await expect(issueCancel(alice.page)).toBeVisible()
   await expect(issueBox(alice.page)).toBeFocused()
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+
+  // A double-click in the field still selects a word, so only buttons lose the second press.
+  await issueBox(alice.page).fill('alpha beta')
+  const spot = await issueBox(alice.page).evaluate(f => ({
+    x: parseFloat(getComputedStyle(f).paddingLeft) + 4,
+    y: f.clientHeight / 2
+  }))
+  await issueBox(alice.page).dblclick({ position: spot })
+  const word = f => f.value.slice(f.selectionStart, f.selectionEnd).trim()
+  expect(await issueBox(alice.page).evaluate(word)).toBe('alpha')
+  await expect(issueCancel(alice.page)).toBeVisible()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 })
 
 test('a held Enter in the field saves once and leaves the editor closed', async ({
@@ -925,11 +955,13 @@ test('a held Enter in the field while saves fail sends one request', async ({ jo
   await alice.page.keyboard.down('Enter')
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
   await expect(issueBox(alice.page)).toBeFocused()
+  await issueBox(alice.page).evaluate(f => f.setSelectionRange(2, 2))
   // Sent after the failure, where each repeat would retry.
   await alice.page.keyboard.down('Enter')
   await alice.page.keyboard.down('Enter')
   await alice.page.keyboard.up('Enter')
   await laterVote(bob, alice)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
   expect(saves).toHaveLength(1)
 })
 
