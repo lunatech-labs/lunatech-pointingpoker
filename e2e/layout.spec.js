@@ -10,10 +10,12 @@ import {
   inRoom,
   issueText,
   markRegion,
+  movedBanner,
   participantEntries,
   participantEntry,
   phaseLine,
   readBoxes,
+  restartNotice,
   roundBar,
   roundSlot,
   setIssue,
@@ -440,6 +442,18 @@ const crossingRead = async page => {
   return { boxes, scale }
 }
 
+// A protocol voter's name with no space, which nothing caps.
+const LONG_NAME = 'W'.repeat(60)
+
+// How far the page scrolls sideways, after the fonts and two frames as readBoxes reads.
+const sideways = page =>
+  page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const root = document.documentElement
+    return root.scrollWidth - root.clientWidth
+  })
+
 test.describe('the narrow layouts', () => {
   test.skip(({ browserName }) => browserName !== 'chromium')
 
@@ -575,4 +589,70 @@ test.describe('the narrow layouts', () => {
       }
     })
   })
+
+  for (const viewport of [
+    { width: 320, height: 640 },
+    { width: 640, height: 300 }
+  ]) {
+    test.describe(() => {
+      test.use({ viewport })
+      const size = `${viewport.width} by ${viewport.height}`
+
+      test(`no page scrolls sideways, ${size}`, async ({ join, voters, room }) => {
+        const alice = await join('Alice')
+        const bob = await join('Bob', { role: 'Facilitator' })
+        await voters([LONG_NAME])
+        await setIssue(alice.page, TWO_LINES_MIDDLE)
+        const pages = [alice.page, bob.page]
+        // App.tsx reads both banners' flags on load, so no restart is needed.
+        for (const page of pages) {
+          await page.goto(`/${room}?moved=1&restarted=1`)
+          await expect(inRoom(page), `back in the room, ${size}`).toBeVisible()
+          await expect(movedBanner(page), `the moved banner, ${size}`).toBeVisible()
+          await expect(restartNotice(page), `the restart notice, ${size}`).toBeVisible()
+          await expect(issueText(page), `the two-line issue, ${size}`).toHaveText(TWO_LINES_MIDDLE)
+          const name = participantEntry(page, LONG_NAME)
+          await expect(name, `the long name uncapped, ${size}`).toBeVisible()
+        }
+
+        for (const page of pages) {
+          const over = await sideways(page)
+          expect(over, `no sideways scroll while voting, ${size}`).toBeLessThanOrEqual(0)
+        }
+        await vote(alice.page, '13')
+        await bob.page.getByRole('button', { name: 'Show votes' }).click()
+        for (const page of pages) {
+          await expect(phaseLine(page), `revealed, ${size}`).toHaveText('Revealed')
+          const over = await sideways(page)
+          expect(over, `no sideways scroll once revealed, ${size}`).toBeLessThanOrEqual(0)
+        }
+
+        if (viewport.width !== 320) return
+        // The copy, on Alice's page; the hint's text is read through a Range, its box the cell's.
+        const page = alice.page
+        const id = page.getByRole('heading', { name: room, exact: true })
+        await expect(id, 'the room id before the copy').toBeVisible()
+        const copy = page.getByRole('link', { name: 'Copy link' })
+        const menu = page.getByRole('button', { name: 'Menu' })
+        const named = { header: page.getByRole('banner'), issue: issueText(page), copy, menu }
+        const before = (await readBoxes(page, named)).boxes
+        await copy.click()
+        await expect(copyHint(page), 'the hint after the copy').toHaveText('Link copied')
+        await expect(id, 'the room id hidden under the hint').toBeHidden()
+        const after = (await readBoxes(page, named)).boxes
+        const text = await copyHint(page).evaluate(hint => {
+          const range = document.createRange()
+          range.selectNodeContents(hint)
+          const { x, y, width, height } = range.getBoundingClientRect()
+          return { x, y, width, height }
+        })
+        await expect(copyHint(page), 'the hint through the reads').toHaveText('Link copied')
+        const kept = 'the header, the issue, Copy link and the menu keep their boxes'
+        expect(moved(before, after), kept).toEqual([])
+        const covered = ['copy', 'menu'].filter(name => overlap(text, after[name]))
+        const boxes = JSON.stringify({ text, ...after })
+        expect(covered, `the hint covers neither Copy link nor the menu, ${boxes}`).toEqual([])
+      })
+    })
+  }
 })
