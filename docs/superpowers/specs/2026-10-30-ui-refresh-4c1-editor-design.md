@@ -27,8 +27,7 @@ layout** the narrow one.
   the issue panel's status region (`.issue-panel-status`, `role="status"`).
 - **Focus fell**: 4b2's term, `document.activeElement` is the body or null.
 - **A line break**: LF or CR, the only characters that add a line to the
-  field or the heading in Chromium and Firefox (checked; U+2028, U+2029 and
-  NEL do not).
+  field in Chromium and Firefox (checked; U+2028, U+2029 and NEL do not).
 
 ## Decisions
 
@@ -76,18 +75,16 @@ layout** the narrow one.
    and shows the caret's line, its `overflow` hidden. Set aside: a fallback
    script only those browsers would run, untested in CI; an always-on script,
    a second mechanism for the few.
-7. **`oneLine` runs inside `step`**, on `typed`, `pencil` (Edit's seed) and
-   `theirs` (Use theirs' seed), the three ways text enters the draft (3b3
-   decision 7); `start` stays the room's issue, unnormalised. So the reducer's
-   unit table pins each, without a browser.
-8. **Three guards keep a line break out of the field, and no new one is
-   added**: the first Enter saves and the field turns read-only before the
-   key's default action (inferred; the plan's spike checks it); a held Enter's
-   repeats are dropped by the panel's capture rule (4b2's, in `IssuePanel`),
-   including after a fast failure makes the field editable again; `oneLine` is
-   the backstop. If the spike finds a single Enter mid-text leaving a break,
-   the field gains a `preventDefault` with a case of its own. Set aside: a
-   `preventDefault` in the field as belt and braces, which no mutation could
+7. **`oneLine` runs inside `step`**, on the events behind 3b3 decision 7's
+   three entries (`typed`, `pencil`, `theirs`), so the reducer's unit table
+   pins each without a browser.
+8. **Three guards keep a line break out of the draft, and no new one is
+   added**: the first Enter's save moves the reducer to saving, which drops
+   the press's `typed` (pinned by `issueEditor.test.ts`'s typing-while-saving
+   row); a held Enter's repeats are dropped by the panel's capture rule (4b2's,
+   in `IssuePanel`), including after a fast failure makes the field editable
+   again; `oneLine` is the backstop, and the only guard for an input method's
+   Enter. Set aside: a `preventDefault` in the field, which no mutation could
    fail while the other guards stand.
 
 ## Built from 3b3
@@ -105,6 +102,10 @@ the look changes. The editor drops every Bootstrap class and both
 - Decision 4's selected word: typing then replaces that word, not the issue.
 - A browser without `field-sizing` (an iPhone before iOS 26.2, an old ESR)
   shows a long issue one line at a time while edited (decision 6).
+- A failed save after an Enter mid-text may leave the caret at the end of the
+  field, where React's write-back of the dropped press puts it (inferred).
+- A line break stored through the API while the reader edits shows a notice
+  offering the one-line text; Use theirs clears it, the draft unchanged.
 
 ## Contract
 
@@ -119,32 +120,34 @@ here (my call).
 
 - **`oneLine`'s unit table** (`room/issueEditor.test.ts`): a line break at
   either end removed, an inner run to one space, a CRLF run, a trailing typed
-  space kept (killed by a trim, and by a `replace` of single breaks only).
+  space kept (killed by a trim, by a `replace` of single breaks only, and by
+  a pattern matching LF alone).
 - **`step`'s rows** (decision 7), each killed by `oneLine` dropped from its
   event: `typed` "a\nb" gives the draft "a b"; Edit on a stored "a\nb" gives
   the draft "a b" and no notice (the notice part also killed by normalising
   `start`); a conflicting "x\ny" then Use theirs gives the draft "x y" and no
   notice.
 - **A held Enter mid-text**: "a held Enter in the field while saves fail sends
-  one request" puts the caret mid-text before Enter and also expects the
-  draft unchanged (killed by the panel's capture rule narrowed to buttons).
+  one request" puts the caret mid-text after the failure, before the repeats,
+  and also expects the draft unchanged (killed by the panel's capture rule
+  narrowed to buttons).
 - **A failed save with focus fallen**: the stall-then-abort route of "a failed
   save leaves focus the user moved elsewhere", focus blurred to the body before
   the release; the field has focus (killed by an `editor.failed` effect that
-  never focuses). 4b2's final review deferred it here.
+  never focuses).
 - **A double-click on a word in the field**: "a double-click on Edit issue
   leaves the editor open, focus in the field" goes on to fill the field and
-  double-click a word; the word is selected and the editor open (killed by
-  4b2's mousedown rule extended to the field). 4b2's final review deferred it
-  here.
+  double-click a named word at its own position; the word is selected and the
+  editor open (killed by 4b2's mousedown rule extended to the field).
 - **A long issue shows whole**, in `layout.spec.js`, Chromium only as its
   layout cases are: an issue wrapping to three lines in the desktop layout;
-  the field's `scrollHeight` equals its `clientHeight` (killed by dropping
-  `field-sizing`).
+  the field's `scrollHeight` exceeds its `clientHeight` by at most 1 px
+  (killed by dropping `field-sizing`, which leaves two lines hidden).
 - **The inert look**: "a mouse save keeps focus on Save issue, …" checks that
   mid-save Save's computed colour, background and border colour are Cancel's,
-  and its background `--paper-pale`'s, read from the page's custom property
-  (killed by the mockup's `--track` rule on Save, and by one moving both).
+  and its background and colour those of `--paper-pale` and `--grey`, each
+  resolved through a probe element (killed by the mockup's `--track` rule on
+  Save, by a rule moving both, and by ink words on both).
 
 Left without a case: decision 4's selection, an accepted cost; decision 6's
 one-line fallback, which no CI browser shows.
