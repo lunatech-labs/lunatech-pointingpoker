@@ -57,7 +57,7 @@ export function IssuePanel({ issue, onSave }: Props) {
   }, [editor.mode])
   const takeTheirs = () => {
     editor.takeTheirs()
-    // The link-button unmounts with the notice, which would drop focus to the page.
+    // The Use theirs button unmounts with the notice, which would drop focus to the page.
     box.current?.focus()
   }
   return (
