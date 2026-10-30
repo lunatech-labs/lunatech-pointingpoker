@@ -451,7 +451,8 @@ Step 3b4's spec holds its rules,
   id in monospace, a second line, an ink arrow. Its name is its content in
   visible order, `<id> <line 2>`, with no `aria-label`, a literal space between
   the two lines so the name reads the same in any layout. Line 2 reads "Rejoin"
-  alone when the typed name is empty or only spaces. Line 2 is underlined, J4's
+  alone when the typed name is empty; a name of only spaces shows as typed until
+  names are checked at join (4c2-form decision 6). Line 2 is underlined, J4's
   cue; a link drawn as a button is not. An id wraps at its hyphens and is never
   cut, in a row and in the badge.
 - **One burgundy-filled control per page**: the primary button, or, where the
