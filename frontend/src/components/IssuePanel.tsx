@@ -1,9 +1,10 @@
 import './issue-panel.css'
 import { type SyntheticEvent, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { Info, Pencil, TriangleAlert } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import { useIssueEditor } from './useIssueEditor'
 import { IssueEditor } from './IssueEditor'
+import { Message } from './Message'
 
 type Props = {
   issue: string
@@ -108,21 +109,15 @@ export function IssuePanel({ issue, onSave }: Props) {
       {/* Always rendered: a screen reader announces changes to a region, not one appearing. */}
       <div className="issue-panel-status" role="status" data-testid="issue-status">
         {editor.failed && (
-          <div className="message message-problem">
-            <TriangleAlert />
-            <p>Could not save the issue</p>
-          </div>
+          <Message tone="problem">Could not save the issue</Message>
         )}
         {editor.notice !== null && (
-          <div className="message message-notice">
-            <Info />
-            <p>
-              Changed by someone else to: "{editor.notice}"{' '}
-              <button type="button" className="button-quiet" onClick={takeTheirs}>
-                Use theirs
-              </button>
-            </p>
-          </div>
+          <Message tone="notice">
+            Changed by someone else to: "{editor.notice}"{' '}
+            <button type="button" className="button-quiet" onClick={takeTheirs}>
+              Use theirs
+            </button>
+          </Message>
         )}
       </div>
     </section>
