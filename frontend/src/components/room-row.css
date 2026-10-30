@@ -48,7 +48,7 @@
   margin-left: auto;
 }
 
-/* 3b4 decision 9: the arrow is a burgundy chip only where the row is the page's primary; rejoin=chip outlines the root's arrow */
+/* 3b4 decision 9: the arrow is a burgundy chip only where the row is the page's primary */
 .room-row-go-primary {
   background: var(--burgundy);
   color: var(--paper-warm);

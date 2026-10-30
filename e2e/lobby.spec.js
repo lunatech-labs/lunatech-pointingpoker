@@ -1,4 +1,4 @@
-import { test, expect, inRoom, nameInput, roomIdInput } from './fixtures.js'
+import { test, expect, LONGEST_ID, inRoom, nameInput, roomIdInput } from './fixtures.js'
 
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 
@@ -56,4 +56,25 @@ test('Create, Leave and Join change the address, and Leave keeps the name', asyn
   await page.getByRole('button', { name: 'Join' }).click()
   await expect(page).toHaveURL(`${origin}/${room}`)
   await expect(inRoom(page)).toBeVisible()
+})
+
+test('the h1 names the form and the active tab is marked', async ({ page, origin }) => {
+  await page.goto(`${origin}/`)
+  const h1 = page.getByRole('heading', { level: 1 })
+  const create = page.getByRole('link', { name: 'Create', exact: true })
+  const join = page.getByRole('link', { name: 'Join', exact: true })
+  await expect(h1).toHaveText('Create room')
+  await expect(create).toHaveAttribute('aria-current', 'true')
+  await expect(join).not.toHaveAttribute('aria-current')
+  await join.click()
+  await expect(h1).toHaveText('Join room')
+  await expect(join).toHaveAttribute('aria-current', 'true')
+  await expect(create).not.toHaveAttribute('aria-current')
+  // A room's own path with nothing stored: the pinned form, waiting for a name.
+  await page.goto(`${origin}/${LONGEST_ID}`)
+  await expect(h1).toHaveText('Join room')
+  await expect(page.getByText(LONGEST_ID, { exact: true })).toBeVisible()
+  await expect(create).toHaveCount(0)
+  await expect(join).toHaveCount(0)
+  await expect(roomIdInput(page)).toHaveCount(0)
 })

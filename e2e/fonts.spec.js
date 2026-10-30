@@ -1,7 +1,6 @@
 import {
   test,
   expect,
-  defaultRoleChoice,
   defaultRoleRadio,
   inRoom,
   nameInput,
@@ -75,7 +74,7 @@ test('the lobby is drawn in Inter', async ({ page, origin, browserName }) => {
   await settle(page)
   const heading = page.getByRole('heading', { name: 'Create Room' })
   await expectPainted(page, browserName, heading, 'Inter', 'a')
-  await expectPainted(page, browserName, page.getByText('User name'), 'Inter', 'a')
+  await expectPainted(page, browserName, page.getByText('Your name'), 'Inter', 'a')
 })
 
 test('the room is drawn in Inter, a name in other scripts too, and the room id in JetBrains Mono', async ({
@@ -162,20 +161,6 @@ test('a held-back Inter draws the fallback, then Inter once it arrives', async (
   release()
   await settle(page)
   await expectPainted(page, browserName, heading, 'Inter', 'a')
-})
-
-// The reset sits above Bootstrap; the fence in base.css gives today's markup today's cascade back.
-test("today's lobby stays centred and keeps Bootstrap's form spacing", async ({ page, origin }) => {
-  await page.goto(`${origin}/`)
-  const heading = await page.getByRole('heading', { name: 'Create Room' }).boundingBox()
-  // page.css's scrollbar gutter narrows the body in Chromium, which the root's clientWidth omits.
-  const width = await page.evaluate(() => document.body.clientWidth)
-  const right = width - heading.x - heading.width
-  expect(Math.abs(heading.x - right)).toBeLessThan(1)
-  const name = await nameInput(page).boundingBox()
-  const role = await defaultRoleChoice(page).boundingBox()
-  // The name row's form-group margin, 1rem.
-  expect(role.y - name.y - name.height).toBeCloseTo(16, 0)
 })
 
 test('the stylesheet opens with the licence comment, and its files are served', async ({

@@ -1,28 +1,5 @@
 /* The looks shared across areas; it comes before the area files, which override it at equal specificity. */
 
-/* The mark: the Lunatech glyph in white on the card back, with its pale offset card */
-.brand-logo {
-  height: var(--brand-height);
-  aspect-ratio: 11 / 15;
-  border-radius: var(--radius-mark);
-  background: var(--card-back);
-  color: var(--paper-warm);
-  display: grid;
-  place-items: center;
-  box-shadow: calc(-1 * var(--space-1)) var(--space-1) 0 var(--mark-offset);
-  margin-left: var(--space-1);
-}
-
-.brand-logo svg {
-  width: 62%;
-  height: auto;
-}
-
-.brand-logo-name {
-  font-weight: var(--weight-bold);
-  font-size: var(--text-md);
-}
-
 .panel {
   background: var(--paper-warm);
   border: var(--line-hairline) solid var(--hairline-colour);
@@ -85,15 +62,4 @@
 
 .tight-point {
   margin-inline: var(--tight-point);
-}
-
-/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
-@media (forced-colors: active) {
-  .brand-logo {
-    forced-color-adjust: none;
-    background: CanvasText;
-    color: Canvas;
-    border-color: CanvasText;
-    box-shadow: none;
-  }
 }
