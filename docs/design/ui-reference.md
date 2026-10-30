@@ -462,9 +462,9 @@ Step 3b4's spec holds its rules,
   then lost, then a failure) and the notices by tone. A form shows only the
   messages it can have: the lost connection and the ended session on the pinned
   form, the only one with a stream, and the create failure on the root form. After "Your session has
-  ended" the panel stays, its name, roles and Join inert in the saving look's
-  muted text on `--paper-pale`, since grey on `--track` is 6.47:1 and J8 asks
-  7:1 for text; an inert control's edge is exempt from J8's 3:1.
+  ended" the panel stays, its name, roles and Join inert in the app's inert
+  look, `--grey` on `--paper-pale` (the editor's saving look too); an inert
+  control's edge is exempt from J8's 3:1.
 - **The not-a-room page** is drawn in the same regions. Its `h1` reads
   `<code><bdi>x</bdi></code> is not a room name.`, the typed name wrapping
   anywhere and isolated by the `<bdi>`. A suggestion is a room row under the
