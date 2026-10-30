@@ -172,7 +172,7 @@ export const test = base.extend({
 })
 
 // The test contract: roles, names, text and test ids only (ui refresh design, step 1).
-export const nameInput = page => page.getByLabel('User name')
+export const nameInput = page => page.getByLabel('Your name')
 export const roomIdInput = page => page.getByLabel('Room id')
 // The room's marker: the room view's root, rendered on the first snapshot, never before.
 export const inRoom = page => page.getByTestId('room')
@@ -192,6 +192,8 @@ export const setIssue = async (page, text) => {
   await issueSave(page).click()
   await expect(issueText(page)).toHaveText(text)
 }
+// The longest id the slug vocabulary makes, 26 characters, as the lobby mockup's longest=1.
+export const LONGEST_ID = 'fearless-speckled-flamingo'
 // room.html's 240 characters: the table above its 5 rem, its foot behind the phone's round panel.
 export const ISSUE_240 =
   'Rework the login page so that a returning user lands on their last room, and keep the room ' +

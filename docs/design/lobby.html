@@ -9,7 +9,6 @@
 <style>
   @import url(../../frontend/src/reset.css) layer(base);
   @import url(../../frontend/src/page.css) layer(base);
-  .room-row-go-chip { background: var(--paper-warm); border: var(--line-control) solid var(--ink); border-radius: var(--radius-card); }
 </style>
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
@@ -25,7 +24,7 @@
 <div id="root"></div>
 <script src="icons.js"></script>
 <script>
-// Parameters: page (root | pinned | notaroom), tab, name, remembered (slug | legacy | none), rejoin=chip, role, message (comma list), room, typed, suggestion,
+// Parameters: page (root | pinned | notaroom), tab, name, remembered (slug | legacy | none), role, message (comma list), room, typed, suggestion,
 // stored, longest=1 (the 26-character id), probe=1; the lobby-cells page lists each with its meaning.
 const q = new URLSearchParams(location.search)
 const page = q.get('page') || 'root'
@@ -37,9 +36,7 @@ const suggestion = q.has('suggestion') ? q.get('suggestion') : id('brave-golden-
 const room = q.get('room') || id('brave-golden-otter')
 const stored = q.get('stored') ?? 'Alice'
 const typedName = q.get('name') ?? 'Alice'
-const typedLabel = typedName.trim()   // a blank typed name reads like none
 const remembered = q.get('remembered') || 'slug'
-const chip = q.get('rejoin') === 'chip'
 const role = q.get('role') === 'facilitator' ? 'Facilitator' : 'Voter'
 // Only the forms that can show a message draw it: a stream exists on the pinned form alone, Create on the root form alone
 const shown = { root: ['join-failed', 'create-failed', 'moved', 'restarted'], pinned: ['join-failed', 'lost', 'ended', 'moved', 'restarted'] }[page] || []
@@ -70,7 +67,7 @@ const header = `<header class="lobby-page-header"><div class="lobby-page-column"
 
 const rowLabel = remembered === 'legacy' ? 'your last room' : id('caring-striped-hamster')
 const rejoinRow = () => remembered === 'none' ? '' :
-  `<a class="room-row" href="#"><span class="room-row-square" aria-hidden="true"></span><span class="room-row-text"><span class="room-row-id">${esc(rowLabel)}</span> <span class="room-row-line2">${typedLabel ? `Rejoin as ${esc(typedLabel)}` : 'Rejoin'}</span></span><span class="room-row-go${chip ? ' room-row-go-chip' : ''}" aria-hidden="true">${arrow}</span></a>`
+  `<a class="room-row" href="#"><span class="room-row-square" aria-hidden="true"></span><span class="room-row-text"><span class="room-row-id">${esc(rowLabel)}</span> <span class="room-row-line2">${typedName ? `Rejoin as ${esc(typedName)}` : 'Rejoin'}</span></span><span class="room-row-go" aria-hidden="true">${arrow}</span></a>`
 const badge = `<div class="room-row"><span class="room-row-square" aria-hidden="true"></span><span class="room-row-text"><span class="room-row-id">${esc(room)}</span></span></div>`
 
 const dis = ended ? ' disabled' : ''
