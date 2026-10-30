@@ -377,8 +377,7 @@ element lists step 3's layouts give:
   A laptop at 100% is 1280 by 600 to 700. A 1920 by 1080 screen is shown at
   100% or 150%, about 1280 by 630 at 150%. A 4K screen is shown at 100 to
   200%. Each is the desktop layout at or above the floor. At 200% of the
-  laptop, 640 by 300, the page scrolls only vertically. The page's parts in
-  view at 150% wait for the progress step's case (4c1-narrow-cases decision 3).
+  laptop, 640 by 300, the page scrolls only vertically.
 - Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
   width gives, the table's scale included, ☰'s row keeping its state
   (4c1-narrow-keys).
