@@ -89,8 +89,8 @@ step and every later one.
 The new cases go in `layout.spec.js`, beside the helpers they use, as plain
 `test`s rather than its `cases()` wrapper, in a `describe` skipped outside
 Chromium by `test.skip(({ browserName }) => browserName !== 'chromium')` (my
-calls). Each is
-shown to fail by the mutation named, applied by hand and reverted, the task
+calls). Each is shown to fail by the mutation named, applied by hand and
+reverted, the task
 report listing the failing line, as 4c1-narrow-keys' plan did. If a case's
 setup does not fail under its mutation, the plan stops and the case comes back
 here (my call). A two-line issue for 860 sits beside `TWO_LINES`, which is cut
@@ -132,20 +132,25 @@ viewport coordinates, the two-line issue:
 1. The "Facilitators: …" line follows the voters (killed by the line drawn
    before them).
 2. Middle stop 5, with its mutation; the phone journey casts no vote.
-3. The crossing, on Alice's page, in the voting phase after Bob's Re-vote: resized
-   to 860, 1280, 860 and 392, all 800 tall, at or above the floor and pinning
-   the sheet (my call). At each size, before and after a reload (decision 6),
-   the case waits for 14 entries, scrolls to 0 and reads through `readBoxes`
-   the header, the issue, the table, the slot, the round bar and the entries'
-   computed `--s`: the boxes match within 0.5 px and the `--s` is equal.
+3. The crossing, on Alice's page, in the voting phase after Bob's Re-vote:
+   resized to 860, 1280, 860 and 392, all 800 tall, at or above the floor
+   and pinning the sheet (my call). At each size, before and after a reload
+   (decision 6), the case waits for 14 entries, scrolls to 0 and reads
+   through `readBoxes` the header, the issue, the table, the slot, the round
+   bar and the entries' computed `--s`: the boxes match within 0.5 px and the
+   `--s` is equal.
    Killed, entering the phone layout, by `fitEntries`' phone branch keeping
    the wide fit's `--s`. At 1280, after its comparison, the issue becomes
-   `LONG`, the same reads compare with a reload, and the two-line issue comes
-   back: killed by the table's observer disconnected after its first callback
-   (measured: `--s` stays 1.42 against 1). A resize cannot kill it, since
-   Chromium fires the fonts' `loadingdone` after every `setViewportSize`,
-   faces loaded or not, and the fit's font listener refits (measured). If the
-   fit depends on its history, the plan stops and the case comes back here.
+   `LONG`, its `--s` checked to differ from the two-line issue's, the same
+   reads compare with a reload, and the two-line issue comes back: the fit
+   follows the table, not the window. Killed by the table's observer swapped
+   for a window `resize` listener, which `'a shorter window refits the
+   entries'` lets pass, and by the observer disconnected after its first
+   callback (measured: `--s` stays 1.42 against 1). The crossing's resizes
+   alone do not kill the disconnected observer: after a reload something
+   refits on the resize, likely the reload's fonts through the fit's font
+   listener (inferred). If the fit depends on its history, the plan stops and
+   the case comes back here.
 
 Set aside for the phone (checked): the sheet from 2 to 14, which moves by
 design, sticky, in the flow on a short page and pinned once the page outgrows
@@ -167,8 +172,9 @@ names losing `overflow-wrap: anywhere`, and by `white-space: nowrap` on
 copied" shows; the header, the issue, Copy link and ☰ keep their boxes; and
 the hint's text, read through a `Range` since its box spans the chip's cell,
 overlaps neither Copy link nor ☰ (killed by the hint's `grid-area: 1 / 2`
-removed, which gives it a row of its own, and by the room id kept beside the
-hint). Set aside: the third banner, a connection message or a lobby error,
+removed, which gives it a row of its own, by the room id kept beside the
+hint, and by a hint wider than its cell, `letter-spacing: 1em` in the phone
+block: measured). Set aside: the third banner, a connection message or a lobby error,
 the same `div.alert` in `Alerts.tsx`'s wrapper as moved and restarted
 (checked).
 
@@ -178,6 +184,9 @@ the same `div.alert` in `Alerts.tsx`'s wrapper as moved and restarted
   test or a user finds it.
 - A failing journey stops at its first broken stop, hiding later ones until
   that one is fixed.
+- A journey's later checks are not shown failing on their own: the middle
+  stops 2 and 3's no-scroll and in-view checks, and the issue change's boxes.
+  A rule that breaks them likely breaks an earlier stop first (inferred).
 - The laptop at 200%, 640 by 300, drawn in the phone layout, has the
   facilitator's round bar below the fold at load; the parent allows it.
 - 1920 by 1080 at 150% sits between the floor and the comfort target: with 14

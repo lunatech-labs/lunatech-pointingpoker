@@ -148,12 +148,13 @@ Case `'the phone layout, 392 by 800, on both pages, then a crossing'`, viewport 
 - [ ] **Step 1: Setup.** `journeyRoom(join, voters, 14)`, then `setIssue(alice.page, TWO_LINES_MIDDLE)` and Bob's issue awaited.
 - [ ] **Step 2: Stop 1, the facilitators' line.** On each page, read `table(page).getByText('Facilitators: Bob')` and the 14th entry. Expect the line's `y` at least the entry's `y + height - 0.5`.
 - [ ] **Step 3: Stop 2, nobody voted.** `nobodyVoted(alice, bob)` (Task 2). No vote is cast.
-- [ ] **Step 4: Stop 3, the crossing.** On Alice's page, for each of `[860, 1280, 860, 392]` at height 800: `setViewportSize`, then `const before = await crossingRead(page)`. `page.reload()`, then expect `inRoom` visible, then `const after = await crossingRead(page)`. Expect `moved(before.boxes, after.boxes)` empty and `after.scale` to be `before.scale`, each message naming the width. At 1280, after that comparison: `setIssue(page, LONG)`, Bob's issue awaited, then the same read, reload and comparison, messages naming "an issue change at 1280"; then `setIssue(page, TWO_LINES_MIDDLE)`, Bob's awaited.
+- [ ] **Step 4: Stop 3, the crossing.** On Alice's page, for each of `[860, 1280, 860, 392]` at height 800: `setViewportSize`, then `const before = await crossingRead(page)`. `page.reload()`, then expect `inRoom` visible, then `const after = await crossingRead(page)`. Expect `moved(before.boxes, after.boxes)` empty and `after.scale` to be `before.scale`, each message naming the width. At 1280, after that comparison: `setIssue(page, LONG)`, Bob's issue awaited, then the same read, its `scale` expected to differ from the two-line read's (the premise), the reload and the comparison, messages naming "an issue change at 1280"; then `setIssue(page, TWO_LINES_MIDDLE)`, Bob's awaited.
 - [ ] **Step 5: Run it.** Expected: PASS.
 - [ ] **Step 6: Show each stop fails under its mutation.**
   - Stop 1: in `Voters.tsx`, the facilitators' `<p>` drawn before the `<ul>`.
   - Stop 2: Task 2's stop 5 mutation.
-  - Stop 3, mutation 1: `useFitEntries`' `fit` calls `watched.disconnect()` after its first run. It fails at the issue change at 1280 (measured); a resize alone passes, the fonts' `loadingdone` refitting after every `setViewportSize`.
+  - Stop 3, mutation 1: `useFitEntries`' `fit` calls `watched.disconnect()` after its first run. It fails at the issue change at 1280 (measured); the crossing's resizes alone pass.
+  - Stop 3, mutation 3: the observer swapped for a window `resize` listener. It fails at the issue change at 1280, and `'a shorter window refits the entries'` passes (measured).
   - Stop 3, mutation 2: `fitEntries`' phone branch keeps `--s`, losing `list.style.removeProperty('--s')`. It should fail at 392.
 
   If the crossing fails with no mutation, the fit depends on its history: stop and report (spec).
@@ -183,5 +184,6 @@ One case per viewport, `{ width: 320, height: 640 }` and `{ width: 640, height: 
   - `.alert { white-space: nowrap }` added to `looks.css`: Step 2 fails.
   - `.room-header-copy-note`'s `grid-area: 1 / 2` removed: Step 3's `moved` fails.
   - `.room-header-copied .room-header-id`'s rule removed: Step 3's hidden check fails.
+  - `letter-spacing: 1em` on the phone block's `.room-header-copy-note`: Step 3's overlap check fails (measured).
 - [ ] **Step 6: Run everything.** `npm run test:unit && npm run typecheck && npm run lint && npm test && npm run e2e -- --workers=1`. Expected: all pass, with no existing case changed.
 - [ ] **Step 7: Commit** with Task 4's subject.
