@@ -953,7 +953,7 @@ test("the editor's notices are announced from one live region", async ({ join, r
   const editIssue = new RegExp(`/rooms/${room}/edit-issue$`)
   await alice.page.route(editIssue, route => route.abort())
   await issueSave(alice.page).click()
-  await expect(status).toHaveText(conflict + failure)
+  await expect(status).toHaveText(failure + conflict)
   await expectLiveRegion(status)
 
   await alice.page.getByRole('button', { name: 'Use theirs' }).click()

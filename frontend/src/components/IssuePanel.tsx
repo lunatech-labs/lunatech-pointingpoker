@@ -1,7 +1,7 @@
 import './issue-panel.css'
 import { type SyntheticEvent, useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { Pencil } from 'lucide-react'
+import { Info, Pencil, TriangleAlert } from 'lucide-react'
 import { useIssueEditor } from './useIssueEditor'
 import { IssueEditor } from './IssueEditor'
 
@@ -104,19 +104,21 @@ export function IssuePanel({ issue, onSave }: Props) {
       )}
       {/* Always rendered: a screen reader announces changes to a region, not one appearing. */}
       <div className="issue-panel-status" role="status" data-testid="issue-status">
-        {(editor.notice !== null || editor.failed) && (
-          <div className="legacy-page">
-            {editor.notice !== null && (
-              <small className="form-text text-muted">
-                Changed by someone else to: "{editor.notice}"{' '}
-                <button type="button" className="btn btn-link btn-sm p-0" onClick={takeTheirs}>
-                  Use theirs
-                </button>
-              </small>
-            )}
-            {editor.failed && (
-              <small className="form-text text-danger">Could not save the issue</small>
-            )}
+        {editor.failed && (
+          <div className="message message-problem">
+            <TriangleAlert />
+            <p>Could not save the issue</p>
+          </div>
+        )}
+        {editor.notice !== null && (
+          <div className="message message-notice">
+            <Info />
+            <p>
+              Changed by someone else to: "{editor.notice}"{' '}
+              <button type="button" className="button-quiet" onClick={takeTheirs}>
+                Use theirs
+              </button>
+            </p>
           </div>
         )}
       </div>
