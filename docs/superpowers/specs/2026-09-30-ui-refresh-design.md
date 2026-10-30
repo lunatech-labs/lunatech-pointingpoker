@@ -1067,7 +1067,8 @@ spec. Provisional, like the plan.
   4a needs text that changes in place. Outside the desktop layout the reserve
   waits for the progress step (4c1-narrow-cases decision 4).
 - Its height is compared before a reveal and after it, which covers a reopening
-  too, at the laptop target and at 320 px, and across a vote that changes a
+  too, at the laptop target (the 320 px case waits for the progress step, as
+  the reserve does), and across a vote that changes a
   progress sharing its line. Today's "the reveal
   notice claims its space before the reveal" case runs at the default viewport
   only.
