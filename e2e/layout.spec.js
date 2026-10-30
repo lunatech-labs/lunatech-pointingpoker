@@ -8,6 +8,8 @@ import {
   deck,
   expectLiveRegion,
   inRoom,
+  issueBox,
+  issueEdit,
   issueText,
   markRegion,
   movedBanner,
@@ -656,4 +658,25 @@ test.describe('the narrow layouts', () => {
       })
     })
   }
+})
+
+test.describe('the editing view', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium')
+  test.use({ viewport: comfort })
+
+  test("a long issue shows whole while edited, 1280 by 680, on the voter's page", async ({
+    join
+  }) => {
+    const { page } = await join('Alice')
+    await issueEdit(page).click()
+    await issueBox(page).fill(ISSUE_240)
+    const read = await issueBox(page).evaluate(async field => {
+      await document.fonts.ready
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const line = parseFloat(getComputedStyle(field).lineHeight)
+      return { client: field.clientHeight, scroll: field.scrollHeight, line }
+    })
+    expect(read.client).toBeGreaterThanOrEqual(3 * read.line)
+    expect(read.scroll - read.client).toBeLessThanOrEqual(1)
+  })
 })

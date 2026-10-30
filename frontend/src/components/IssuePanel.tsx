@@ -35,12 +35,12 @@ function segments(issue: string) {
 
 export function IssuePanel({ issue, onSave }: Props) {
   const editor = useIssueEditor(issue, onSave)
-  const box = useRef<HTMLInputElement>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
   const group = useRef<HTMLElement>(null)
   const edit = useRef<HTMLButtonElement>(null)
   const was = useRef(editor.mode)
   const open = () => {
-    // Render editable before focusing: iOS shows no keyboard for focus on a readonly input.
+    // Render editable before focusing: iOS shows no keyboard for focus on a readonly field.
     flushSync(() => editor.pencil())
     box.current?.focus()
   }
