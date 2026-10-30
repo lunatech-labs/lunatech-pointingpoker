@@ -90,8 +90,8 @@ layout** the narrow one.
    fail while the other guards stand.
 9. **Edit puts the caret at the end of the issue** (product owner's ruling,
    found after the build). React creates the textarea's text as its content,
-   which leaves the caret at the start, where a field whose value a script
-   sets has it at the end (checked in Chromium and Firefox); `IssuePanel`'s
+   which leaves the caret at the start; a value a script sets leaves it at
+   the end (checked in Chromium and Firefox). `IssuePanel`'s
    `open` moves it to the end after focusing. The failure and Use theirs
    paths need nothing: the field keeps its caret, or React sets a new value.
    Set aside: selecting the whole text, where typing replaces the issue.
