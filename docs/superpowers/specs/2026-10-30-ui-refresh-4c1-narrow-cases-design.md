@@ -142,10 +142,10 @@ viewport coordinates, the two-line issue:
    Killed, entering the phone layout, by `fitEntries`' phone branch keeping
    the wide fit's `--s`. At 1280, after its comparison, the issue becomes
    `LONG`, the same reads compare with a reload, the reloaded `--s` checked
-   to differ from the two-line issue's, and the two-line issue comes back: the fit
-   follows the table, not the window. Killed by the table's observer swapped
-   for a window `resize` listener, which `'a shorter window refits the
-   entries'` lets pass, and by the observer disconnected after its first
+   to differ from the two-line issue's, and the two-line issue comes back:
+   the fit follows the table, not the window. Killed by the table's observer
+   swapped for a window `resize` listener, which `'a shorter window refits
+   the entries'` lets pass, and by the observer disconnected after its first
    callback (measured: `--s` stays 1.42 against 1). The crossing's resizes
    alone do not kill the disconnected observer: after a reload something
    refits on the resize, likely the reload's fonts through the fit's font
@@ -174,9 +174,9 @@ the hint's text, read through a `Range` since its box spans the chip's cell,
 overlaps neither Copy link nor ☰ (killed by the hint's `grid-area: 1 / 2`
 removed, which gives it a row of its own, by the room id kept beside the
 hint, and by a hint wider than its cell, `letter-spacing: 1em` in the phone
-block: measured). Set aside: the third banner, a connection message or a lobby error,
-the same `div.alert` in `Alerts.tsx`'s wrapper as moved and restarted
-(checked).
+block: measured). Set aside: the third banner, a connection message or a
+lobby error, the same `div.alert` in `Alerts.tsx`'s wrapper as moved and
+restarted (checked).
 
 ## Accepted costs
 
