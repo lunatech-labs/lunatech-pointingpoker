@@ -1,7 +1,7 @@
 # UI Refresh, Step 4c1-editor: The Editing View's Look
 
 Date: 2026-10-30
-Status: In discussion
+Status: Approved
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 4
 
 ## Purpose
@@ -148,8 +148,9 @@ here (my call).
   viewport on one page, in Chromium as its layout cases are: an issue
   wrapping to three lines; the field is at least three line-heights tall and
   its `scrollHeight` exceeds its `clientHeight` by at most 1 px (killed by
-  dropping `field-sizing`, which leaves two lines hidden, and by dropping the
-  field's width, which leaves one wide line).
+  dropping `field-sizing`, which leaves two lines hidden). Dropping the
+  field's `width` kills nothing: the editor's grid stretches it in both CI
+  browsers (measured), and the declaration stays for WebKit, unchecked.
 - **The inert look**: "a mouse save keeps focus on Save issue, …" checks that
   mid-save Save's computed colour, background and border colour are Cancel's,
   and its background and colour those of `--paper-pale` and `--grey`, each
