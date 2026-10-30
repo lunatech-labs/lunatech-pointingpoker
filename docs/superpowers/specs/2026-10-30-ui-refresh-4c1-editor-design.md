@@ -88,6 +88,13 @@ layout** the narrow one.
    backstop, and the only guard for an input method's
    Enter. Set aside: a `preventDefault` in the field, which no mutation could
    fail while the other guards stand.
+9. **Edit puts the caret at the end of the issue** (product owner's ruling,
+   found after the build). React creates the textarea's text as its content,
+   which leaves the caret at the start, where a field whose value a script
+   sets has it at the end (checked in Chromium and Firefox); `IssuePanel`'s
+   `open` moves it to the end after focusing. The failure and Use theirs
+   paths need nothing: the field keeps its caret, or React sets a new value.
+   Set aside: selecting the whole text, where typing replaces the issue.
 
 ## Built from 3b3
 
@@ -144,6 +151,10 @@ here (my call).
   double-click its first word, a few px inside the content box; the selection,
   read from `selectionStart` to `selectionEnd` and trimmed, is that word and
   the editor open (killed by 4b2's mousedown rule extended to the field).
+- **The caret on Edit** (decision 9): "the issue is text until Edit issue is
+  pressed" goes on to cancel, set the issue "alpha beta" and press Edit; the
+  field's selection is empty at its end (killed by dropping the caret move
+  from `open`).
 - **A long issue shows whole**, in `layout.spec.js`, one test at one desktop
   viewport on one page, in Chromium as its layout cases are: an issue
   wrapping to three lines; the field is at least three line-heights tall and
@@ -189,4 +200,5 @@ one-line fallback, which no CI browser shows.
 One PR on `20260930.ui_refresh_4c1_editor`, stacked on 4c1-narrow-cases'
 `20260930.ui_refresh_4c1_narrow_cases` (#473): this document with the docs'
 changes first, then `oneLine` with its table, then the field and buttons, then
-the messages with the contract change, then the remaining cases.
+the messages with the contract change, then the remaining cases, then the
+caret on Edit (decision 9).
