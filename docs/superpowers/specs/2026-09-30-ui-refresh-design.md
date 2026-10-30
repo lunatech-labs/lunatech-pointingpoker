@@ -197,8 +197,9 @@ document as a whole stays in discussion.
 | 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow-keys | ☰'s row and a keyboard focus on the phone | 4c1-wide | Its new cases, and the existing cases unchanged |
 | 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged |
-| 4c1-editor | The issue editor's and the messages' look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-editor | The editing view's look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-banners | The banners' look and place under the header (J12) | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2 | The lobby's look | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases |
 | 5 | Next issue | 4c1-editor | Its cases |
@@ -335,10 +336,10 @@ which chooses plain CSS
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
 4c1-wide, the wide room page's look
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-design.md`),
-4c1-narrow-keys, 4c1-narrow-cases and 4c1-editor, the last re-challenging 4b2's muted
-Save and Cancel against the contrast gate and taking the two cases 4b2's
-final review deferred, a failed save with focus fallen to the page and a
-double-click selecting a word in the field;
+4c1-narrow-keys, 4c1-narrow-cases, 4c1-editor, the editing view
+(`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`), whose
+muted Save and Cancel are revisited once the stack is deployed and users have
+given feedback, and 4c1-banners, the banners under the header;
 4c2, the lobby's look, which removes
 Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import

@@ -48,24 +48,16 @@
   display: block;
 }
 
-/* While saving: aria-disabled keeps focus, the look says a save is in flight (3b3 decision 10) */
+/* While saving: aria-disabled keeps focus, both buttons take the lobby's inert look (4c1-editor decision 2) */
 .issue-editor-actions [aria-disabled="true"] {
+  background: var(--paper-pale);
+  border-color: var(--hairline-colour);
+  color: var(--grey);
   cursor: default;
 }
 
-.issue-editor-actions .button-primary[aria-disabled="true"] {
-  background: var(--track);
-  color: var(--grey);
-}
-
-.issue-editor-actions .button-secondary[aria-disabled="true"] {
-  border-color: var(--hairline-colour);
-  color: var(--grey);
-}
-
 @media (forced-colors: active) {
-  .issue-editor-actions .button-primary[aria-disabled="true"],
-  .issue-editor-actions .button-secondary[aria-disabled="true"] {
+  .issue-editor-actions [aria-disabled="true"] {
     color: GrayText;
     border-color: GrayText;
   }
