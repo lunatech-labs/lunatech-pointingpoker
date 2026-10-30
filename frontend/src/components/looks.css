@@ -87,6 +87,7 @@
   margin-inline: var(--tight-point);
 }
 
+/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
 @media (forced-colors: active) {
   .brand-logo {
     forced-color-adjust: none;
