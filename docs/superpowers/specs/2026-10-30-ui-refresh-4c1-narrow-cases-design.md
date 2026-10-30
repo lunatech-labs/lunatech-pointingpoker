@@ -100,21 +100,28 @@ The journeys' room (my calls): Alice's voter page and Bob's facilitator page,
 with 13 protocol voters, `NAMES` without Bob, voting 13 distinct values; so 14
 voters and Bob no entry. Bob presses Show votes and Re-vote.
 
-**The middle journey**, 860 by 600, both pages:
+**The middle journey**, 860 by 600, both pages, its stops run as 1, 5, 2, 3,
+4 and 6: stop 5 reveals the fresh round, since a Re-vote keeps every value,
+unconfirmed, and the tally counts it (checked, `view.ts`):
 
 1. A room of 2 grows to 14: the header, the issue, the round bar and the slot
    (voter) or the table's top (facilitator) keep their boxes (killed by the
    table's region growing past its least height into the page).
 2. At 14 with the two-line issue, voting: neither page scrolls, every part in
-   view (killed by the compact foot's rules removed).
-3. A reveal: the voter's entries keep their scale; neither page scrolls; Show
-   votes is absent (killed by a refit on reveal; a "Show votes" kept beside
-   Re-vote). The facilitator's page refits, as 3b2 accepts below 65.75 rem.
+   view, and on the voter's page the deck's cards lie within the slot (killed
+   by the compact foot's rules removed, which leave the page unscrolled but
+   push the deck's one row past the slot: measured).
+3. A reveal: neither page scrolls; Show votes is absent (killed by a "Show
+   votes" kept beside Re-vote). The facilitator's page refits, as 3b2 accepts
+   below 65.75 rem. The voter's scale goes unchecked: at 860 by 600 it is 1,
+   the fit's floor, from a room of 2 (measured), so no refit could lower it;
+   `layout.spec.js` pins it at 1280 by 600.
 4. The roster: the facilitators are its last rows, after every voter (killed
    by facilitators sorted with the voters).
-5. Re-vote, then a reveal where nobody voted: "Nobody voted" shows and the
-   slot keeps its height (killed by the compact slot's height rule replaced by
-   its content's height).
+5. A reveal where nobody voted, then Re-vote: "Nobody voted" shows, and on
+   the voter's page the slot keeps its height, the facilitator's having no
+   slot while voting (killed by the compact slot's height rule replaced by its
+   content's height).
 6. `LONG`: the page scrolls, the table keeps its 5 rem, and the slot (voter)
    and the round bar can be scrolled to (killed by the table's least height
    removed).
@@ -124,8 +131,8 @@ viewport coordinates, the two-line issue:
 
 1. The "Facilitators: …" line follows the voters (killed by the line drawn
    before them).
-2. Middle stop 5, with its mutation.
-3. The crossing, on Alice's page, voting again after Bob's Re-vote: resized
+2. Middle stop 5, with its mutation; the phone journey casts no vote.
+3. The crossing, on Alice's page, in the voting phase after Bob's Re-vote: resized
    to 860, 1280, 860 and 392, all 800 tall, at or above the floor and pinning
    the sheet (my call). At each size, before and after a reload (decision 6),
    the case waits for 14 entries, scrolls to 0 and reads through `readBoxes`
