@@ -137,10 +137,15 @@ viewport coordinates, the two-line issue:
    the sheet (my call). At each size, before and after a reload (decision 6),
    the case waits for 14 entries, scrolls to 0 and reads through `readBoxes`
    the header, the issue, the table, the slot, the round bar and the entries'
-   computed `--s`: the boxes match within 0.5 px and the `--s` is equal. Killed by the table's observer disconnected after
-   its first callback, and, entering the phone layout, by `fitEntries`' phone
-   branch keeping the wide fit's `--s`. If the fit depends on its history, the
-   plan stops and the case comes back here.
+   computed `--s`: the boxes match within 0.5 px and the `--s` is equal.
+   Killed, entering the phone layout, by `fitEntries`' phone branch keeping
+   the wide fit's `--s`. At 1280, after its comparison, the issue becomes
+   `LONG`, the same reads compare with a reload, and the two-line issue comes
+   back: killed by the table's observer disconnected after its first callback
+   (measured: `--s` stays 1.42 against 1). A resize cannot kill it, since
+   Chromium fires the fonts' `loadingdone` after every `setViewportSize`,
+   faces loaded or not, and the fit's font listener refits (measured). If the
+   fit depends on its history, the plan stops and the case comes back here.
 
 Set aside for the phone (checked): the sheet from 2 to 14, which moves by
 design, sticky, in the flow on a short page and pinned once the page outgrows
