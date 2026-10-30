@@ -37,7 +37,7 @@ the decisions log at the end.
 ## Mockups
 
 - They live beside this file, under `docs/design/`, as clickable HTML linking
-  the app's stylesheets: the value source, `looks.css`, `message.css` and their
+  the app's stylesheets: the value source, `looks.css`, `message.css`, `brand-logo.css` and their
   area files in `frontend/src/components/`, with `reset.css` and `page.css`
   imported into the `base` layer. Their own `<style>` keeps only the later
   steps' parts and the parameters' design alternatives.
