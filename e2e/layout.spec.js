@@ -436,10 +436,10 @@ const crossingRead = async page => {
   await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
   await page.evaluate(() => window.scrollTo(0, 0))
   const { boxes } = await readBoxes(page, parts(page, true))
-  const scale = await table(page)
+  const computed = await table(page)
     .getByRole('list')
     .evaluate(list => getComputedStyle(list).getPropertyValue('--s').trim())
-  return { boxes, scale }
+  return { boxes, scale: computed }
 }
 
 // A protocol voter's name with no space, which nothing caps.
@@ -573,13 +573,14 @@ test.describe('the narrow layouts', () => {
         expect(moved(before.boxes, after.boxes), `the boxes at ${width}`).toEqual([])
         expect(after.scale, `the scale at ${width}`).toBe(before.scale)
         if (width === 1280) {
-          // A resize cannot pin the observer: Chromium refires loadingdone after setViewportSize.
+          // The fit follows the table, not the window: an issue change resizes the table alone.
           await setIssue(page, LONG)
           await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
           const changed = await crossingRead(page)
           await page.reload()
           await expect(inRoom(page), 'back in the room, an issue change at 1280').toBeVisible()
           const fresh = await crossingRead(page)
+          expect(fresh.scale, 'premise: LONG refits at 1280').not.toBe(after.scale)
           const named = 'an issue change at 1280'
           expect(moved(changed.boxes, fresh.boxes), `the boxes, ${named}`).toEqual([])
           expect(fresh.scale, `the scale, ${named}`).toBe(changed.scale)
