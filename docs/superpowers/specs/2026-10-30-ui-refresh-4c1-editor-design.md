@@ -79,11 +79,13 @@ layout** the narrow one.
    three entries (`typed`, `pencil`, `theirs`), so the reducer's unit table
    pins each without a browser.
 8. **Three guards keep a line break out of the draft, and no new one is
-   added**: the first Enter's save moves the reducer to saving, which drops
-   the press's `typed` (pinned by `issueEditor.test.ts`'s typing-while-saving
-   row); a held Enter's repeats are dropped by the panel's capture rule (4b2's,
-   in `IssuePanel`), including after a fast failure makes the field editable
-   again; `oneLine` is the backstop, and the only guard for an input method's
+   added**: the first Enter's save, sent synchronously from its keydown,
+   moves the reducer to saving, which drops the press's later `typed` (pinned
+   by `issueEditor.test.ts`'s typing-while-saving row); a held Enter's repeats
+   are dropped by the panel's capture rule (4b2's, in `IssuePanel`), whatever
+   the mode, so after a fast failure makes the field editable again and for a
+   held Enter on Edit whose repeats land in the opened field; `oneLine` is the
+   backstop, and the only guard for an input method's
    Enter. Set aside: a `preventDefault` in the field, which no mutation could
    fail while the other guards stand.
 
@@ -119,30 +121,35 @@ setup does not fail under its mutation, the plan stops and the case comes back
 here (my call).
 
 - **`oneLine`'s unit table** (`room/issueEditor.test.ts`): a line break at
-  either end removed, an inner run to one space, a CRLF run, a trailing typed
-  space kept (killed by a trim, by a `replace` of single breaks only, and by
-  a pattern matching LF alone).
+  either end removed; an inner run of CRLFs, "a\r\n\r\nb", to "a b"; a lone
+  CR, "a\rb", to "a b"; a trailing typed space kept (killed by a trim, by a
+  `replace` of single breaks only, by a pattern matching LF alone, and by one
+  matching CRLF or LF).
 - **`step`'s rows** (decision 7), each killed by `oneLine` dropped from its
   event: `typed` "a\nb" gives the draft "a b"; Edit on a stored "a\nb" gives
-  the draft "a b" and no notice (the notice part also killed by normalising
-  `start`); a conflicting "x\ny" then Use theirs gives the draft "x y" and no
-  notice.
+  the draft "a b" and no notice; a conflicting "x\ny" then Use theirs gives
+  the draft "x y" and no notice (both notice parts also killed by normalising
+  `start`).
 - **A held Enter mid-text**: "a held Enter in the field while saves fail sends
   one request" puts the caret mid-text after the failure, before the repeats,
   and also expects the draft unchanged (killed by the panel's capture rule
   narrowed to buttons).
 - **A failed save with focus fallen**: the stall-then-abort route of "a failed
-  save leaves focus the user moved elsewhere", focus blurred to the body before
-  the release; the field has focus (killed by an `editor.failed` effect that
+  save leaves focus the user moved elsewhere", `document.activeElement`
+  blurred and the body's focus asserted before the release, Save holding focus
+  after `setIssue`'s click; the field has focus (killed by an `editor.failed` effect that
   never focuses).
 - **A double-click on a word in the field**: "a double-click on Edit issue
   leaves the editor open, focus in the field" goes on to fill the field and
-  double-click a named word at its own position; the word is selected and the
-  editor open (killed by 4b2's mousedown rule extended to the field).
-- **A long issue shows whole**, in `layout.spec.js`, Chromium only as its
-  layout cases are: an issue wrapping to three lines in the desktop layout;
-  the field's `scrollHeight` exceeds its `clientHeight` by at most 1 px
-  (killed by dropping `field-sizing`, which leaves two lines hidden).
+  double-click its first word, a few px inside the content box; the selection,
+  read from `selectionStart` to `selectionEnd` and trimmed, is that word and
+  the editor open (killed by 4b2's mousedown rule extended to the field).
+- **A long issue shows whole**, in `layout.spec.js`, one test at one desktop
+  viewport on one page, in Chromium as its layout cases are: an issue
+  wrapping to three lines; the field is at least three line-heights tall and
+  its `scrollHeight` exceeds its `clientHeight` by at most 1 px (killed by
+  dropping `field-sizing`, which leaves two lines hidden, and by dropping the
+  field's width, which leaves one wide line).
 - **The inert look**: "a mouse save keeps focus on Save issue, …" checks that
   mid-save Save's computed colour, background and border colour are Cancel's,
   and its background and colour those of `--paper-pale` and `--grey`, each
