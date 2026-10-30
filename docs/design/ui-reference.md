@@ -391,8 +391,8 @@ and `room.html` draws them.
   scroll margins and, for Firefox, a scroll to the top of what the sheet
   covers.
 - **The cap** stops the page at 106 rem, centred, the header's bar full width
-  and its content aligned with the page; in the phone layout the header
-  shares the column's edges.
+  and its content aligned with the page; in the phone layout the header and
+  the banners share the column's edges.
 - **The shared screen** is the wide layout, as principle 4's last row says
   (3b2 decision 14).
 - The room page keeps its scrollbar's gutter, so the two layouts never
@@ -582,7 +582,8 @@ Contract).
   the issue's read view and its empty "No issue yet", the nobody-voted read,
   the phase line's test id, the round bar's region "Round") are listed in its
   spec, and step 4c1-wide made them, with those found after 3b1's list (its
-  spec's Contract). The banners' region "Messages" waits for 4c1-banners.
+  spec's Contract). Step 4c1-banners made the banners' region "Messages" and
+  named the issue panel the region "Issue".
 
 ## Open
 
@@ -985,6 +986,15 @@ The reasons behind each rule, and what was set aside.
   goes: every current browser has `field-sizing`, Firefox ESR 140 having ended.
   Set aside: a white fill, a second inert look; a fallback script no CI browser
   runs.
+- **4c1-banners.** The banners (the UI refresh design's step 4c1-banners) drew
+  the message panel as one component, `Message`, its rules moved from
+  `looks.css` to `message.css`, so each component's prefix names its file and
+  `Figure` stays the one exception. In the phone layout the banners take the
+  column's edges, `--space-3`, as the panels and the header do. The issue
+  panel became the region "Issue", as the table and the round bar are. Set
+  aside: `.message` left in `looks.css`; `--page-edge` on the phone, which
+  lines the banners up with nothing; the issue panel named by its heading,
+  which changes each round.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

@@ -68,6 +68,7 @@ export function IssuePanel({ issue, onSave }: Props) {
     <section
       ref={group}
       className="panel issue-panel"
+      aria-label="Issue"
       // A double-click's second press moves no focus, so it stays in the field it opened.
       onMouseDownCapture={e => e.detail > 1 && onButton(e) && e.preventDefault()}
       // Drops a double-click's second click, which lands on Cancel in Edit's place.
