@@ -18,6 +18,8 @@ import {
   issueSave,
   issueStatus,
   markRegion,
+  messages,
+  movedBanner,
   expectLiveRegion,
   issueEdit,
   inRoom,
@@ -1219,4 +1221,21 @@ test('the copy hint lasts 2 s from the first copy, not the last', async ({ join 
   await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(10)
   await expect(copyHint(page)).toBeEmpty()
+})
+
+test('Dismiss focuses the room id, and the Messages section leaves with the last notice', async ({
+  join,
+  room
+}) => {
+  const { page } = await join('Alice')
+  await page.goto(`/${room}?moved=1&restarted=1`)
+  await expect(inRoom(page)).toBeVisible()
+  const id = page.getByRole('heading', { name: room, exact: true })
+  await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(movedBanner(page)).toHaveCount(0)
+  await expect(id).toBeFocused()
+  await restartNotice(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(restartNotice(page)).toHaveCount(0)
+  await expect(id).toBeFocused()
+  await expect(messages(page)).toHaveCount(0)
 })

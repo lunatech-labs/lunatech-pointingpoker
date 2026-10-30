@@ -4,14 +4,17 @@ import {
   ESTIMATIONS,
   ISSUE_240,
   NAMES,
+  connectionLost,
   copyHint,
   deck,
   expectLiveRegion,
   inRoom,
   issueBox,
   issueEdit,
+  issuePanel,
   issueText,
   markRegion,
+  messages,
   movedBanner,
   participantEntries,
   participantEntry,
@@ -655,6 +658,26 @@ test.describe('the narrow layouts', () => {
         const covered = ['copy', 'menu'].filter(name => overlap(text, after[name]))
         const boxes = JSON.stringify({ text, ...after })
         expect(covered, `the hint covers neither Copy link nor the menu, ${boxes}`).toEqual([])
+
+        // Left cut: a restore could reload onto ?restarted=1, and cleanStub restores at teardown.
+        await alice.cut()
+        await expect(connectionLost(page), 'the lost banner').toBeVisible()
+        const shown = (await readBoxes(page, {
+          header: page.getByRole('banner'), region: messages(page), issue: issuePanel(page),
+          lost: connectionLost(page), old: movedBanner(page), back: restartNotice(page)
+        })).boxes
+        const { header, region, issue, lost, old, back } = shown
+        const order = lost.y < old.y && old.y < back.y
+        expect(order, 'the panels read lost, moved, restarted').toBe(true)
+        const below = header.y + header.height - 0.5
+        expect(region.y, 'the region below the header').toBeGreaterThanOrEqual(below)
+        const bottom = region.y + region.height
+        expect(bottom, 'the region above the issue panel').toBeLessThanOrEqual(issue.y + 0.5)
+        const edges = { lost: issue, old: issue, back: issue }
+        const sides = moved(edges, { lost, old, back }, ['x', 'width'])
+        expect(sides, "each panel on the issue panel's edges").toEqual([])
+        const over = await sideways(page)
+        expect(over, 'no sideways scroll with all three shown').toBeLessThanOrEqual(0)
       })
     })
   }

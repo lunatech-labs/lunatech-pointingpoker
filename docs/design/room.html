@@ -40,6 +40,7 @@
   @container page (width < 51.75rem) { .round-history { order: 5; } }
 </style>
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
+<link rel="stylesheet" href="../../frontend/src/components/message.css">
 <link rel="stylesheet" href="../../frontend/src/components/room-page.css">
 <link rel="stylesheet" href="../../frontend/src/components/room-header.css">
 <link rel="stylesheet" href="../../frontend/src/components/issue-panel.css">
@@ -162,9 +163,9 @@ function draw() {
   const status = `<div class="issue-panel-status" role="status">${failure}${conflict}</div>`
   const aria = saving ? ' aria-disabled="true"' : ''
   const issueBlock = editing
-    ? `<section class="panel issue-panel"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
+    ? `<section class="panel issue-panel" aria-label="Issue"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>${status}</section>`
-    : `<section class="panel issue-panel"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
+    : `<section class="panel issue-panel" aria-label="Issue"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
   const bannerList = ['lost', 'moved', 'restarted'].filter(m => messages.includes(m)).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="room-page-banners" aria-label="Messages">${bannerList}</section>`
 
