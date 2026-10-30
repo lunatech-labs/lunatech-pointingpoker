@@ -429,6 +429,17 @@ const nobodyVoted = async (alice, bob) => {
   }
 }
 
+// The crossing's read at scroll 0: the parts' boxes and the entries' computed scale.
+const crossingRead = async page => {
+  await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  const { boxes } = await readBoxes(page, parts(page, true))
+  const scale = await table(page)
+    .getByRole('list')
+    .evaluate(list => getComputedStyle(list).getPropertyValue('--s').trim())
+  return { boxes, scale }
+}
+
 test.describe('the narrow layouts', () => {
   test.skip(({ browserName }) => browserName !== 'chromium')
 
@@ -507,6 +518,61 @@ test.describe('the narrow layouts', () => {
       await setIssue(alice.page, LONG)
       await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
       for (const page of pages) await scrollsAndCutsNothing(page, viewport, true)
+    })
+  })
+
+  test.describe(() => {
+    test.use({ viewport: { width: 392, height: 800 } })
+
+    test('the phone layout, 392 by 800, on both pages, then a crossing', async ({
+      join,
+      voters
+    }) => {
+      const { alice, bob } = await journeyRoom(join, voters, 14)
+      const pages = [alice.page, bob.page]
+      await setIssue(alice.page, TWO_LINES_MIDDLE)
+      await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
+
+      // Stop 1
+      for (const page of pages) {
+        await page.evaluate(() => window.scrollTo(0, 0))
+        const { line, last } = (
+          await readBoxes(page, {
+            line: table(page).getByText('Facilitators: Bob'),
+            last: participantEntries(page).nth(13)
+          })
+        ).boxes
+        const after = last.y + last.height - 0.5
+        expect(line.y, 'the facilitators after the voters').toBeGreaterThanOrEqual(after)
+      }
+
+      await nobodyVoted(alice, bob)
+
+      // Stop 3: each size read, reloaded, which keeps the size, and read again.
+      const page = alice.page
+      for (const width of [860, 1280, 860, 392]) {
+        await page.setViewportSize({ width, height: 800 })
+        const before = await crossingRead(page)
+        await page.reload()
+        await expect(inRoom(page), `back in the room at ${width}`).toBeVisible()
+        const after = await crossingRead(page)
+        expect(moved(before.boxes, after.boxes), `the boxes at ${width}`).toEqual([])
+        expect(after.scale, `the scale at ${width}`).toBe(before.scale)
+        if (width === 1280) {
+          // A resize cannot pin the observer: Chromium refires loadingdone after setViewportSize.
+          await setIssue(page, LONG)
+          await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
+          const changed = await crossingRead(page)
+          await page.reload()
+          await expect(inRoom(page), 'back in the room, an issue change at 1280').toBeVisible()
+          const fresh = await crossingRead(page)
+          const named = 'an issue change at 1280'
+          expect(moved(changed.boxes, fresh.boxes), `the boxes, ${named}`).toEqual([])
+          expect(fresh.scale, `the scale, ${named}`).toBe(changed.scale)
+          await setIssue(page, TWO_LINES_MIDDLE)
+          await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
+        }
+      }
     })
   })
 })
