@@ -58,20 +58,20 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a phone is at hand on the deployed app; never
   a merge gate.
 
-### On a phone, the lobby and the banners now lay out at the phone's width, unchecked
+### On a phone, the lobby and its banners now lay out at the phone's width, unchecked
 
-- **Where:** `frontend/index.html` (the viewport meta); the lobby and the
-  banners in `App`'s `legacy-page` wrapper, and the editing view's legacy
-  wrappers in `IssueEditor.tsx` and `IssuePanel.tsx`.
+- **Where:** `frontend/index.html` (the viewport meta); the lobby and its
+  banners in `App`'s `legacy-page` wrapper.
 - **Issue:** Since step 4c1-wide the viewport meta makes a phone lay out every
   page at its own width, not at 980 px. The room page laying out at the
   phone's width is pinned by 'a phone lays the room page out at its own width'
   (`e2e/phone.spec.js`).
-  The lobby and the banners, still Bootstrap's look inside the legacy-page
-  fence, now lay out at the phone's width too, as does the editing view. Only
-  'an old UUID link opens its derived room under a banner that covers no card'
-  (`e2e/slug.spec.js`) checks a banner at that width, and no hand test has
-  seen them there.
+  The lobby and its banners, still Bootstrap's look inside the fence, lay out
+  at the phone's width too. The room page's banners are pinned at 320 px by
+  'no page scrolls sideways, 320 by 640' (`e2e/layout.spec.js`), and the
+  editing view is drawn since 4c1-editor. 'an old UUID link opens its derived
+  room under a banner that covers no card' (`e2e/slug.spec.js`) shows a lobby
+  banner at 390 px, and no hand test has seen them there.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;
   never a merge gate. Remove this entry if they read well there.
 

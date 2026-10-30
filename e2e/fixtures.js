@@ -181,6 +181,8 @@ export const copyHint = page => page.getByRole('banner').getByRole('status')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
 // The issue while viewing: its heading, holding 'No issue yet' when there is none.
 export const issueText = page => page.getByTestId('issue-text')
+// The issue panel, named so a layout case can read its box (4c1-banners decision 5).
+export const issuePanel = page => page.getByRole('region', { name: 'Issue' })
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
@@ -271,6 +273,8 @@ export const facilitatorName = (page, name) =>
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.
 export const restartNotice = page => page.getByRole('status').filter({ hasText: 'Reconnected' })
+// The room page's banners' section, mounted only while a banner shows.
+export const messages = page => page.getByRole('region', { name: 'Messages' })
 
 // The issue editor's notices as a screen reader hears them: a role lookup skips a hidden region.
 export const issueStatus = page => page.getByRole('status').and(page.getByTestId('issue-status'))
