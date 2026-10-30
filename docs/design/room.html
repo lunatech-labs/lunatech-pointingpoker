@@ -229,7 +229,6 @@ function draw() {
   if (onMenu) document.querySelector('.room-header-menu-button').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.round-history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.voters'))
-  fitField()
 }
 
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
@@ -273,18 +272,6 @@ function moveTo(next) {
 }
 document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('.round-bar') && e.preventDefault())
 document.addEventListener('keydown', e => e.key === 'Enter' && e.target.matches('.issue-editor-field') && e.preventDefault())
-// Without field-sizing (Firefox ESR 140) script sets the field's height from its text.
-const nativeGrow = CSS.supports('field-sizing', 'content')
-function fitField() {
-  const f = document.querySelector('.issue-editor-field')
-  if (nativeGrow || !f) return
-  f.style.height = 'auto'; f.style.height = `${f.scrollHeight + f.offsetHeight - f.clientHeight}px`
-}
-let fitQueued = false   // resize and font events fit once per frame; a fit forces a full layout
-const fitSoon = () => { if (!fitQueued) { fitQueued = true; requestAnimationFrame(() => { fitQueued = false; fitField() }) } }
-document.addEventListener('input', e => e.target.matches('.issue-editor-field') && fitField())
-window.addEventListener('resize', fitSoon)
-document.fonts.addEventListener('loadingdone', fitSoon)
 document.addEventListener('click', e => {
   if (e.target.closest('[aria-disabled="true"]')) return
   const act = e.target.closest('[data-do]')?.dataset.do, vote = e.target.closest('[data-vote]')?.dataset.vote
