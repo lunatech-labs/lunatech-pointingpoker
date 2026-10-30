@@ -783,6 +783,29 @@ test('a mouse save keeps focus on Save issue, and presses on it or Cancel mid-sa
   await expect(issueSave(alice.page)).toHaveAttribute('aria-disabled', 'true')
   await expect(issueSave(alice.page)).toBeFocused()
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+  const looks = el =>
+    el.evaluate(node => {
+      const style = getComputedStyle(node)
+      return {
+        color: style.color,
+        background: style.backgroundColor,
+        border: style.borderTopColor
+      }
+    })
+  const save = await looks(issueSave(alice.page))
+  const cancel = await looks(issueCancel(alice.page))
+  const probe = await alice.page.evaluate(() => {
+    const span = document.createElement('span')
+    span.style.color = 'var(--grey)'
+    span.style.backgroundColor = 'var(--paper-pale)'
+    document.body.append(span)
+    const style = getComputedStyle(span)
+    const read = { color: style.color, background: style.backgroundColor }
+    span.remove()
+    return read
+  })
+  expect(save).toEqual(cancel)
+  expect([save.color, save.background]).toEqual([probe.color, probe.background])
 
   // Forced, since a plain click waits while the button is aria-disabled.
   await issueSave(alice.page).click({ force: true })
