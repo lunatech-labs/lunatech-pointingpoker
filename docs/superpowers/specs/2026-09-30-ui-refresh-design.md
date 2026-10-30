@@ -42,6 +42,10 @@ document as a whole stays in discussion.
 - **Progress**: who has voted and who is still waiting, however step 3 shows
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
+- **Desktop layout**: the wide layout from 65.75 rem, the laptop target's.
+  **Middle layout**: the wide layout below 65.75 rem, with its compact foot.
+  The wide and phone layouts and the compact foot are settled in step 3b2's
+  spec, "Terms".
 - **Test contract**: defined in step 1, under "The test contract"; steps 1a,
   1b, 1c, 2c, 4, 4a and 5 each add to it or change it in their own sections.
 - **Live region**: an element the browser watches, so text added or changed
@@ -71,16 +75,16 @@ document as a whole stays in discussion.
 4. **Degrade gradually with room size** (settled; steps 3b1 and 3b2
    reopened its table, and step 3b3 closed its last cell).
    Nothing ever scrolls horizontally. Whether the page scrolls
-   vertically depends on the viewport, zoom included, since zoom only shrinks
-   the viewport in CSS px, and in the wide layout on the issue's length and the
-   notices shown:
+   vertically depends on the viewport, zoom included (the effective viewport),
+   since zoom only shrinks the viewport in CSS px, and in the wide layout on
+   the issue's length and the notices shown:
 
    | Viewport | The page | The participant area | The reference's open question |
    | --- | --- | --- | --- |
-   | The wide layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The desktop layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, a zoomed screen | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The middle layout at or above the height floor, with an issue of up to two lines and no notice | never scrolls, as a goal: a step may give it up by weighing it in its spec and listing the contract change (4c1-narrow-cases decision 2) | scrolls in its own region past a size | that size (L3) |
    | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | none: step 3b3 |
-   | The narrow layout, a phone among them | may scroll vertically | flows with the page | none: step 3b2's phone layout |
-   | The shared screen | the wide layout: a larger screen matches the laptop target at about 125 to 170% zoom; zoom past that may degrade the layout but never breaks it | as in the wide layout | none: step 3b2 |
+   | The phone layout | may scroll vertically | flows with the page | none: step 3b2's phone layout |
 
    A notice is a message that ends: a banner reporting a rare event, such as
    the connection lost, a moved link or a restart, until it clears or is
@@ -112,9 +116,8 @@ document as a whole stays in discussion.
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
      unconfirmed and revealed differ by text, shape or a solid fill.
-   - Browser zoom is the facilitator's own lever: a larger screen keeps the
-     wide layout up to about 170%, and zoom past that may degrade the layout
-     but never breaks it (principle 4).
+   - Browser zoom is the facilitator's own lever; a zoom gives the layout of
+     its effective viewport (principle 4).
 6. **One brand theme**. No light and dark switch, matching lunatech.com.
    Colours exist only as CSS custom properties, so a second theme stays
    possible without touching components.
@@ -161,6 +164,11 @@ document as a whole stays in discussion.
       effective (principle 5), and motion stops under `prefers-reduced-motion`.
 
     The numbers are J8's in `docs/design/ui-reference.md`.
+11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1).
+    Layout cases run in Chromium alone, and in both browsers only where they
+    are known to differ, such as Firefox's focus scroll. One setup checks
+    several guarantees, each still failed by its own mutation. One width
+    stands for each layout.
 
 ## Steps
 
@@ -188,8 +196,8 @@ document as a whole stays in discussion.
 | 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
 | 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow-keys | ☰'s row and a keyboard focus on the phone | 4c1-wide | Its new cases, and the existing cases unchanged |
-| 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged |
+| 4c1-editor | The issue editor's and the messages' look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases |
@@ -365,9 +373,11 @@ element lists step 3's layouts give:
 - The round bar's toggle and guard: 4b's cases.
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
-- The facilitator's page, zoomed to 150%, keeps the issue in view, and in each
-  phase its progress or its result; at 200% it scrolls only vertically
-  (principle 4).
+- Guarantees are stated by effective viewport (4c1-narrow-cases decision 3).
+  A laptop at 100% is 1280 by 600 to 700. A 1920 by 1080 screen is shown at
+  100% or 150%, about 1280 by 630 at 150%. A 4K screen is shown at 100 to
+  200%. Each is the desktop layout at or above the floor. At 200% of the
+  laptop, 640 by 300, the page scrolls only vertically.
 - Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
   width gives, the table's scale included, ☰'s row keeping its state
   (4c1-narrow-keys).
@@ -422,7 +432,9 @@ commitment:
   fills the facilitator's slot that step 4 leaves empty while voting, which
   ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
   votes still moves the facilitator's entries"). It also revisits the round bar's
-  case, which 4c1-narrow-keys left without one.
+  case, which 4c1-narrow-keys left without one. It adds the phase line's
+  reserve and its cases outside the desktop layout (4c1-narrow-cases decision
+  4).
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.
@@ -1052,10 +1064,12 @@ spec. Provisional, like the plan.
   again, which is accepted.
 - The phase line's height is reserved by sizing, such as a `min-height`, not by
   keeping the revealed text rendered and hidden as `Deck.tsx` does today: step
-  4a needs text that changes in place.
+  4a needs text that changes in place. Outside the desktop layout the reserve
+  waits for the progress step (4c1-narrow-cases decision 4).
 - Its height is compared before a reveal and after it, which covers a reopening
-  too, at the laptop target and at 320 px, and across a vote that changes a
-  progress sharing its line. Today's "the reveal
+  too, at the laptop target (the 320 px case waits for the progress step, as
+  the reserve does), and across a vote that changes a progress sharing its
+  line. Today's "the reveal
   notice claims its space before the reveal" case runs at the default viewport
   only.
 - The banners are the connection messages, moved and restarted. Moved and
