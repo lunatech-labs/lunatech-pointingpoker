@@ -141,8 +141,8 @@ viewport coordinates, the two-line issue:
    `--s` is equal.
    Killed, entering the phone layout, by `fitEntries`' phone branch keeping
    the wide fit's `--s`. At 1280, after its comparison, the issue becomes
-   `LONG`, its `--s` checked to differ from the two-line issue's, the same
-   reads compare with a reload, and the two-line issue comes back: the fit
+   `LONG`, the same reads compare with a reload, the reloaded `--s` checked
+   to differ from the two-line issue's, and the two-line issue comes back: the fit
    follows the table, not the window. Killed by the table's observer swapped
    for a window `resize` listener, which `'a shorter window refits the
    entries'` lets pass, and by the observer disconnected after its first
