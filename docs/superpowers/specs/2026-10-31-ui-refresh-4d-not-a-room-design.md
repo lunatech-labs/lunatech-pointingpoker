@@ -162,12 +162,15 @@ back here.
   not removed (the URL keeps `?tab=join`); the suggestion block drawn
   without a suggestion.
 - **New, 'a mistyped name offers to join as the stored name, and opens no
-  stream'** (`slug.spec.js`): storage seeded with Dana and a default role
-  (`fixtures.js`'s `visitor`), `/brave-golden-oter` shows a row reading
-  "Join as Dana", no request reaches `/rooms/` before the click, and after
-  the click the room shows Dana's participant entry (`participantEntry`):
-  the row joins as it reads, the promise the lobby's row once broke
-  (4c2-rejoin-name). Mutations: line 2 ignores the stored name; `main.tsx`
+  stream'** (`slug.spec.js`): storage seeded with Dana and the default role
+  Voter, since `participantEntry` searches the Voters region (`fixtures.js`'s
+  `visitor`); `/brave-golden-oter` shows a row reading "Join as Dana", and
+  after its click the room shows Dana's participant entry
+  (`participantEntry`): the row joins as it reads, the promise the lobby's
+  row once broke (4c2-rejoin-name). Requests are recorded for the whole
+  case, and none names the typed room, `/rooms/brave-golden-oter/`, asserted
+  after Dana's entry shows, when a mount join would long have fired; a check
+  before the click would race it. Mutations: line 2 ignores the stored name; `main.tsx`
   mounts `App` beside `NotARoom`; the row's link gains an `onClick` storing
   an empty name. Dana, not Alice: both mistyped-name cases land in the one
   room the typo suggests, not a fresh room per case, and the earlier case's
