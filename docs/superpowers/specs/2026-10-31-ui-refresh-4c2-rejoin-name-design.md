@@ -58,7 +58,7 @@ against the stored name.
 
 | Event \ field | A name other than the stored one | The stored name | Empty |
 |---|---|---|---|
-| Click, or Enter on the link | Stores the typed name; the room joins with it | Stores nothing new but the shown default when none is stored (decision 2); as today | Stores the empty name; the room page shows its join form (decision 3) |
+| Click, or Enter on the link | Stores the typed name; the room joins with it | Stores nothing new but the shown default role when none is stored (decision 2); as today | Stores the empty name; the room page shows its join form (decision 3) |
 | Ctrl-, Cmd- or Shift-click | As a click, the room in a new tab or window; this tab stays in the lobby | As a click | As a click |
 | Middle-click, or the context menu's Open in new tab | Stores nothing; the new tab joins with the stored name (Accepted costs) | As today | As today |
 
