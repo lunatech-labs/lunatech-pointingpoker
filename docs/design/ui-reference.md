@@ -351,8 +351,9 @@ stacking, Dismiss and mounting are J12's.
   bars; a 2 px focus outline, offset 2 px; transitions of 0.18 to 0.25 s;
   buttons at least 44 px tall, kept as `--target-min`.
 - **Corners** are rounded (3b1's second look): panels and messages take
-  `--radius`, cards, rows and inputs `--radius-card`, buttons
-  `--radius-control`; the tokens hold the rest.
+  `--radius`, cards, rows and inputs `--radius-card`, buttons and links
+  `--radius-control` unless their component sets its own, the lobby's tabs
+  square; the tokens hold the rest.
 - **Two line weights**: controls keep the brand's 1 px line, `--line-control`;
   J3's marks take 2 px, `--line-mark`; both within J8's 3:1 for indicators.
 
@@ -1021,6 +1022,15 @@ The reasons behind each rule, and what was set aside.
   Chromium and Safari, and `-webkit-text-size-adjust: 100%`, so iOS Safari does
   not enlarge text in landscape. Set aside: dropping either; tap feedback
   through `:active` styles, a question for the designer.
+- **4c2-focus-ring.** Buttons and links (the UI refresh design's step
+  4c2-focus-ring) take `--radius-control` by default, from `page.css` in the
+  `base` layer, so every control's focus ring is rounded and a component's own
+  radius wins. The lobby's tabs opt out, as a radius would curve the current
+  tab's bar; the `h1`s a Dismiss focuses stay square, J9 rounding controls,
+  not headings. Ruled by the project's owner; the designer validates it on the
+  deployed app. Set aside: the radius per component, a list a new control
+  must remember to join; a shared class in the markup; waiting for the
+  designer's ruling.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
