@@ -42,15 +42,14 @@ form**, **not-a-room page**, **room row**.
    second HTML shell to keep in step with the first, to prevent a mistake in
    one line of `main.tsx` that a case guards (Contract).
 2. **The hand-over is a meta element**, inserted literally before the first
-   `</head>` (`indexOf`, or the non-regex `String.replace`; a regex
-   replacement such as `replaceFirst` reads a typed `$` or `\` as group
-   syntax and answers 500):
+   `</head>` by `indexOf` (a regex replacement such as `replaceFirst` reads
+   a typed `$` as a group and answers 500, and drops a typed `\`):
    `<meta name="not-a-room" content="<typed>" data-suggestion="<slug>">`,
    `data-suggestion` left out with no suggestion. Both values are encoded
    with `Encode.forHtml`, the OWASP encoder the page uses today, which is
    built for text and quoted attributes; attribute values are entity-decoded
-   by the parser, so the app reads them back as typed, control characters
-   aside (`forHtml` writes them as spaces). Rejected: a JSON block
+   by the parser, so the app reads them back as typed, C0 control characters
+   other than tab, LF and CR aside (`forHtml` writes them as spaces). Rejected: a JSON block
    in a `<script>`, whose safety needs a hand-made rule on top of the encoder
    (`<` written as `\u003c`, since the HTML parser ends the element at
    `</script` inside a JSON string), while `forHtml` there would leave
@@ -106,7 +105,7 @@ the hand-over and the stored name.
 | Load | Sentence; row "Join as <name>", the primary; outlined "Join a different room" | As left, row "Join" | Sentence; "Join a different room" the primary and the only action |
 | The row's click | `/<suggestion>`: the pinned form joins at once with the stored name and default role (2c) | `/<suggestion>`: the pinned form, empty | cannot happen |
 | "Join a different room" | `/?tab=join` → `/`, Join tab, flag removed | same | same |
-| Reload, Back or Forward to the page | The server answers again, or Back/Forward restores the page from the browser's cache with the name it read at load (Accepted costs) | same | same |
+| Reload, Back or Forward to the page | The server answers again; Back or Forward may instead restore the page from the back/forward cache, with the name it read at load (Accepted costs), or the HTTP cache, which reads storage anew | same | same |
 | Storage changed in another tab | Not seen until reload (Accepted costs) | same | cannot happen |
 
 On the shell: a request for the page with the shell not built answers 503
@@ -136,7 +135,7 @@ back here.
 
 - **'refuse a name outside the vocabulary with a page suggesting the
   correction'**: 404, `text/html`, the fixture shell, and the meta with
-  `content="brave-golden-oter"` and `data-suggestion="brave-golden-otter"`.
+  `content="brave-golden-oter"` and `data-suggestion="brave-golden-otter"`,
   and `Cache-Control: no-cache`. The fixture shell gains a
   `<head></head>`. Mutations: no suggestion written; `revalidated` dropped
   from the not-a-room branch.
@@ -163,17 +162,21 @@ back here.
   not removed (the URL keeps `?tab=join`); the suggestion block drawn
   without a suggestion.
 - **New, 'a mistyped name offers to join as the stored name, and opens no
-  stream'** (`slug.spec.js`): storage seeded with Alice and a default role
-  (`fixtures.js`'s seeded page), `/brave-golden-oter` shows a row reading
-  "Join as Alice", no request reaches `/rooms/` before the click, and after
-  the click the room shows Alice's participant entry (`participantEntry`):
+  stream'** (`slug.spec.js`): storage seeded with Dana and a default role
+  (`fixtures.js`'s `visitor`), `/brave-golden-oter` shows a row reading
+  "Join as Dana", no request reaches `/rooms/` before the click, and after
+  the click the room shows Dana's participant entry (`participantEntry`):
   the row joins as it reads, the promise the lobby's row once broke
   (4c2-rejoin-name). Mutations: line 2 ignores the stored name; `main.tsx`
   mounts `App` beside `NotARoom`; the row's link gains an `onClick` storing
-  an empty name.
+  an empty name. Dana, not Alice: both mistyped-name cases land in the one
+  room the typo suggests, not a fresh room per case, and the earlier case's
+  Alice stays listed for the grace period, so a second Alice would match
+  two entries. The case says so in a one-line comment.
 
 Incidental, flagged for the product owner: the title "Not a room name", one
-assertion in `slug.spec.js`'s mistyped-name case. Left without a case: the client's escaping,
+assertion in 'a mistyped room name is refused with a suggestion that
+reaches the room'. Left without a case: the client's escaping,
 React's text nodes; the bidi wrapping and the longest name, checked by eye
 against the mockup at 320 wide, with and without a suggestion, in both
 browsers.
