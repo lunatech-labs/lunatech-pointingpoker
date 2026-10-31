@@ -1,9 +1,8 @@
 import './room-page.css'
-import { useRef, type FocusEvent } from 'react'
+import type { FocusEvent, ReactNode } from 'react'
 import * as api from '../protocol/api'
 import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
-import { Message } from './Message'
 import { RoomHeader } from './RoomHeader'
 import { IssuePanel } from './IssuePanel'
 import { RoundPanel } from './RoundPanel'
@@ -20,11 +19,7 @@ type Props = {
   onRefused: () => void
   // A 204 from /role, which the page remembers before any snapshot shows it.
   onSwitched: (role: Role) => void
-  lost: boolean
-  moved: boolean
-  restarted: boolean
-  onDismissMoved: () => void
-  onDismissRestarted: () => void
+  banners: ReactNode
 }
 
 const log = (reason: unknown) => console.log(reason)
@@ -44,15 +39,8 @@ function keepClearOfSheet(event: FocusEvent<HTMLDivElement>): void {
 }
 
 export function RoomPage(props: Props) {
-  const { roomId, snapshot, copied, onCopied, onLeave, onRefused, onSwitched } = props
-  const { lost, moved, restarted, onDismissMoved, onDismissRestarted } = props
+  const { roomId, snapshot, copied, onCopied, onLeave, onRefused, onSwitched, banners } = props
   const view = applySnapshot(snapshot)
-  const id = useRef<HTMLHeadingElement>(null)
-  // A Dismiss focuses the room id as its notice leaves (4c1-banners decision 4).
-  const dismiss = (onDismiss: () => void) => () => {
-    id.current?.focus()
-    onDismiss()
-  }
 
   const report = (reason: unknown) => (api.isSessionRefusal(reason) ? onRefused() : log(reason))
   const run = (promise: Promise<void>) => promise.catch(report)
@@ -75,28 +63,8 @@ export function RoomPage(props: Props) {
           onCopy={onCopied}
           onLeave={onLeave}
           onSwitch={role => run(api.switchRole(roomId, role).then(() => onSwitched(role)))}
-          idRef={id}
         />
-        {(lost || moved || restarted) && (
-          <section className="room-page-banners" aria-label="Messages">
-            {lost && (
-              <Message tone="problem" role="alert">
-                Connection to the room was lost
-              </Message>
-            )}
-            {moved && (
-              <Message tone="notice" role="status" onDismiss={dismiss(onDismissMoved)}>
-                The old link you followed now opens this address. Please update your invitation or
-                bookmark to use it.
-              </Message>
-            )}
-            {restarted && (
-              <Message tone="notice" role="status" onDismiss={dismiss(onDismissRestarted)}>
-                Reconnected. Please check your vote.
-              </Message>
-            )}
-          </section>
-        )}
+        {banners}
         <main className="room-page-main">
           <div className="room-page-column">
             <IssuePanel issue={view.currentIssue} onSave={saveIssue} />

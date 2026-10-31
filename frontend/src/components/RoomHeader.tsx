@@ -1,5 +1,5 @@
 import './room-header.css'
-import { useRef, useState, type KeyboardEvent, type MouseEvent, type RefObject } from 'react'
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { Link, LogOut, Menu } from 'lucide-react'
 import type { Role } from '../protocol/snapshot'
 import { BrandLogo } from './BrandLogo'
@@ -12,11 +12,9 @@ type Props = {
   onCopy: () => void
   onLeave: () => void
   onSwitch: (role: Role) => void
-  // The room id's heading, which a banner's Dismiss focuses (4c1-banners decision 4).
-  idRef: RefObject<HTMLHeadingElement | null>
 }
 
-export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch, idRef }: Props) {
+export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: Props) {
   const [menuShown, setMenuShown] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   // Called whatever the role, as a hook must be; nothing it returns is drawn without one.
@@ -44,7 +42,7 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch, id
     <header className={copied ? 'room-header room-header-copied' : 'room-header'}>
       <BrandLogo />
       <span className="room-header-chip">
-        <h1 ref={idRef} className="room-header-id" tabIndex={-1}>
+        <h1 className="room-header-id" tabIndex={-1} data-dismiss-focus>
           {roomId}
         </h1>
         <a className="room-header-copy" href="#" aria-label="Copy link" onClick={copy}>
