@@ -1,4 +1,12 @@
-import { test, expect, LONGEST_ID, inRoom, nameInput, roomIdInput } from './fixtures.js'
+import {
+  test,
+  expect,
+  LONGEST_ID,
+  inRoom,
+  nameInput,
+  participantEntry,
+  roomIdInput
+} from './fixtures.js'
 
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 
@@ -34,6 +42,17 @@ test('the lobby offers the remembered room rather than joining it', async ({ joi
   await rejoin.click()
   await expect(alice.page).toHaveURL(new RegExp(`/${room}$`))
   await expect(inRoom(alice.page)).toBeVisible()
+})
+
+test('the rejoin row joins with the name typed over the stored one', async ({ join, room }) => {
+  const alice = await join('Alice')
+  await alice.page.goto('/')
+  const rejoin = alice.page.getByRole('link', { name: room })
+  await nameInput(alice.page).fill('Bob')
+  await expect(rejoin).toContainText('as Bob')
+  await rejoin.click()
+  await expect(inRoom(alice.page)).toBeVisible()
+  await expect(participantEntry(alice.page, 'Bob')).toBeVisible()
 })
 
 test('Create, Leave and Join change the address, and Leave keeps the name', async ({

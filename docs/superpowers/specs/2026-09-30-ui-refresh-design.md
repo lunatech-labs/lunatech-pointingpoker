@@ -164,11 +164,15 @@ document as a whole stays in discussion.
       effective (principle 5), and motion stops under `prefers-reduced-motion`.
 
     The numbers are J8's in `docs/design/ui-reference.md`.
-11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1).
-    Layout cases run in Chromium alone, and in both browsers only where they
-    are known to differ, such as Firefox's focus scroll. One setup checks
-    several guarantees, each still failed by its own mutation. One width
-    stands for each layout.
+11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1;
+    revised 2026-10-31 by the product owner, 4c2-rejoin-name). Every case
+    runs in both browsers: their drift comes from outside, unannounced. One
+    width stands for each layout. A setup is shared across guarantees only
+    where its cost earns it, weighed case by case in each spec's Contract;
+    otherwise each behaviour gets its own case, each still failed by its own
+    mutation. A spec or plan flags each case that pins incidental behaviour,
+    stated by no spec, for the product owner to keep or drop. The cases
+    written under the first version wait in `docs/known-issues.md`.
 
 ## Steps
 
@@ -200,7 +204,8 @@ document as a whole stays in discussion.
 | 4c1-editor | The editing view's look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-banners | The banners' look and place under the header (J12) | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-form | The lobby's page and form (J13) | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-form | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-rejoin-name | The rejoin row joins with the typed name | 4c2-form | Its case, and the existing cases unchanged |
+| 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-rejoin-name | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
 | 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases |
@@ -344,6 +349,8 @@ muted Save and Cancel are revisited once the stack is deployed and users have
 given feedback, and 4c1-banners, the banners under the header;
 4c2, the lobby's look, as 4c2-form, the lobby's page and form
 (`docs/superpowers/specs/2026-10-30-ui-refresh-4c2-form-design.md`),
+4c2-rejoin-name, the rejoin row joining with the typed name
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-rejoin-name-design.md`),
 4c2-banners, the lobby's banners in the new look, and 4c2-bootstrap, which
 removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import

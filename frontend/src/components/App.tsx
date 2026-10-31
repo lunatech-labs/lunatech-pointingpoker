@@ -127,7 +127,8 @@ export function App({ connection }: { connection: Connection }) {
       ? {
           href: '/' + encodeURIComponent(remembered),
           id: rejoinId(remembered),
-          line2: name ? `Rejoin as ${name}` : 'Rejoin'
+          line2: name ? `Rejoin as ${name}` : 'Rejoin',
+          onClick: keepLobby
         }
       : null
 
