@@ -167,8 +167,8 @@ back here.
   `visitor`); `/brave-golden-oter` shows a row reading "Join as Dana", and
   after its click the room shows Dana's participant entry
   (`participantEntry`): the row joins as it reads, the promise the lobby's
-  row once broke (4c2-rejoin-name). Requests are recorded for the whole
-  case, and none names the typed room, `/rooms/brave-golden-oter/`, asserted
+  row once broke (4c2-rejoin-name). Requests are recorded from before the
+  goto, since a mount join fires during load, and none names the typed room, `/rooms/brave-golden-oter/`, asserted
   after Dana's entry shows, when a mount join would long have fired; a check
   before the click would race it. Mutations: line 2 ignores the stored name; `main.tsx`
   mounts `App` beside `NotARoom`; the row's link gains an `onClick` storing
