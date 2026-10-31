@@ -1,7 +1,7 @@
 # UI Refresh, Step 4d: The Not-a-Room Page
 
 Date: 2026-10-31
-Status: Draft
+Status: Approved
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 4
 
 ## Purpose
