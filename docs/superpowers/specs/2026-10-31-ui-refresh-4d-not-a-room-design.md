@@ -35,16 +35,22 @@ form**, **not-a-room page**, **room row**.
    `main.tsx` looks for the hand-over before anything else: with one it
    renders `NotARoom` and never creates the connection, whose construction
    adds `window` listeners (checked), so it moves into the other branch;
-   without one it runs as today. The split sits above `App` because `App` auto-joins its path on
-   mount (checked). Rejected: an entry of its own, a second Vite input and a
+   without one it runs as today. The split sits above `App` because `App`
+   auto-joins its path on mount (checked); it splits rendering only, so
+   `App.tsx`'s module code, the flags' reading and removal, still runs on
+   this page, harmlessly (decision 5). Rejected: an entry of its own, a second Vite input and a
    second HTML shell to keep in step with the first, to prevent a mistake in
    one line of `main.tsx` that a case guards (Contract).
-2. **The hand-over is a meta element**, inserted before the first `</head>`:
+2. **The hand-over is a meta element**, inserted literally before the first
+   `</head>` (`indexOf`, or the non-regex `String.replace`; a regex
+   replacement such as `replaceFirst` reads a typed `$` or `\` as group
+   syntax and answers 500):
    `<meta name="not-a-room" content="<typed>" data-suggestion="<slug>">`,
    `data-suggestion` left out with no suggestion. Both values are encoded
    with `Encode.forHtml`, the OWASP encoder the page uses today, which is
    built for text and quoted attributes; attribute values are entity-decoded
-   by the parser, so the app reads them back as typed. Rejected: a JSON block
+   by the parser, so the app reads them back as typed, control characters
+   aside (`forHtml` writes them as spaces). Rejected: a JSON block
    in a `<script>`, whose safety needs a hand-made rule on top of the encoder
    (`<` written as `\u003c`, since the HTML parser ends the element at
    `</script` inside a JSON string), while `forHtml` there would leave
@@ -100,7 +106,7 @@ the hand-over and the stored name.
 | Load | Sentence; row "Join as <name>", the primary; outlined "Join a different room" | As left, row "Join" | Sentence; "Join a different room" the primary and the only action |
 | The row's click | `/<suggestion>`: the pinned form joins at once with the stored name and default role (2c) | `/<suggestion>`: the pinned form, empty | cannot happen |
 | "Join a different room" | `/?tab=join` → `/`, Join tab, flag removed | same | same |
-| Reload, Back or Forward to the page | The server answers again: same page | same | same |
+| Reload, Back or Forward to the page | The server answers again, or Back/Forward restores the page from the browser's cache with the name it read at load (Accepted costs) | same | same |
 | Storage changed in another tab | Not seen until reload (Accepted costs) | same | cannot happen |
 
 On the shell: a request for the page with the shell not built answers 503
@@ -118,7 +124,8 @@ writing both.
 - A stored name with no stored default role reads "Join as <name>", but the
   room shows its pinned form, prefilled; only storage from before the roles
   step lacks a default (inferred, 4c2-rejoin-name decision 2).
-- The row reads the stored name once, at load, as the pinned form does.
+- The row reads the stored name once, at load, as the pinned form does, so
+  a page restored by Back or Forward can show a name since changed.
 
 ## Contract
 
@@ -130,13 +137,16 @@ back here.
 - **'refuse a name outside the vocabulary with a page suggesting the
   correction'**: 404, `text/html`, the fixture shell, and the meta with
   `content="brave-golden-oter"` and `data-suggestion="brave-golden-otter"`.
-  The fixture shell gains a `<head></head>`. Mutation: no suggestion
-  written.
+  and `Cache-Control: no-cache`. The fixture shell gains a
+  `<head></head>`. Mutations: no suggestion written; `revalidated` dropped
+  from the not-a-room branch.
 - **'refuse a name near no room name without a suggestion'**: the meta
   present, `data-suggestion` absent. Mutation: the attribute always written.
-- **'escape the refused name before echoing it'**: the input gains a `"`,
-  `/%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E`; the page holds `&#34;&gt;&lt;img`
-  and no `<img` nor `">`. Mutation: `Encode.forHtml` removed.
+- **'escape the refused name before echoing it'**: the input gains `"`,
+  `$1` and `\`, `/%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E$1%5C`; the page
+  holds exactly `content="&#34;&gt;&lt;img src=x onerror=alert(1)&gt;$1\"`
+  and no `<img`. Mutations: `Encode.forHtml` removed, or swapped for
+  `forHtmlContent`; the insertion by `replaceFirst`.
 - **New, beside the not-built cases**: a name outside the vocabulary with
   the shell not built answers 503. Mutation: the not-a-room page skips the
   built check.
@@ -155,12 +165,15 @@ back here.
 - **New, 'a mistyped name offers to join as the stored name, and opens no
   stream'** (`slug.spec.js`): storage seeded with Alice and a default role
   (`fixtures.js`'s seeded page), `/brave-golden-oter` shows a row reading
-  "Join as Alice", no request reaches `/rooms/` before the click, and the
-  click joins at once. Mutations: line 2 ignores the stored name; `main.tsx`
-  mounts `App` beside `NotARoom`.
+  "Join as Alice", no request reaches `/rooms/` before the click, and after
+  the click the room shows Alice's participant entry (`participantEntry`):
+  the row joins as it reads, the promise the lobby's row once broke
+  (4c2-rejoin-name). Mutations: line 2 ignores the stored name; `main.tsx`
+  mounts `App` beside `NotARoom`; the row's link gains an `onClick` storing
+  an empty name.
 
 Incidental, flagged for the product owner: the title "Not a room name", one
-assertion in the first case. Left without a case: the client's escaping,
+assertion in `slug.spec.js`'s mistyped-name case. Left without a case: the client's escaping,
 React's text nodes; the bidi wrapping and the longest name, checked by eye
 against the mockup at 320 wide, with and without a suggestion, in both
 browsers.
@@ -170,11 +183,14 @@ browsers.
 - **Parent**: step 4's paragraph gains this document's path after "4d, the
   not-a-room page"; the Steps table stands.
 - **Mockup** (`docs/design/lobby.html`): the sentence reads "is not a valid
-  room name." (decision 7).
+  room name." (decision 7), and "Join as" follows the app's untrimmed rule
+  (decision 4).
 - **Reference** (`docs/design/ui-reference.md`): J13's sentence likewise;
   Open's "The not-a-room page's React shape" entry leaves Open; the log gains
   a 4d entry for decisions 1, 2 and 7.
-- **Known issues**: the pasted-URL entry stands, still true.
+- **Known issues**: the pasted-URL entry stands, still true; the
+  `ProbeRoutes` order entry's "the 'not a room name' rejection page" becomes
+  "the not-a-room page".
 - 3b4's spec, delivered, stays as written.
 
 ## Branches and commits
