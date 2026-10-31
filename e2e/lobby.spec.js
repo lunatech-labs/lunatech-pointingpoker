@@ -1,4 +1,12 @@
-import { test, expect, LONGEST_ID, inRoom, nameInput, participantEntry, roomIdInput } from './fixtures.js'
+import {
+  test,
+  expect,
+  LONGEST_ID,
+  inRoom,
+  nameInput,
+  participantEntry,
+  roomIdInput
+} from './fixtures.js'
 
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 
