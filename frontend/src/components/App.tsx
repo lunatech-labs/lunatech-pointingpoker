@@ -12,6 +12,7 @@ import {
 } from '../room/joinRole'
 import { ownRoleOf } from '../room/view'
 import { Alerts } from './Alerts'
+import { Banners } from './Banners'
 import { LobbyForm } from './LobbyForm'
 import { LobbyPage } from './LobbyPage'
 import type { LobbyTab } from './LobbyTabs'
@@ -122,6 +123,15 @@ export function App({ connection }: { connection: Connection }) {
     : room.lost
       ? 'Connection to the room was lost'
       : ''
+  const banners = (
+    <Banners
+      problem={connectionMessage || error}
+      moved={moved}
+      restarted={restarted}
+      onDismissMoved={() => setMoved(false)}
+      onDismissRestarted={() => setRestarted(false)}
+    />
+  )
   const rejoin =
     !pathRoom && remembered
       ? {
@@ -171,11 +181,7 @@ export function App({ connection }: { connection: Connection }) {
       onLeave={doLeave}
       onRefused={() => connection.refused()}
       onSwitched={role => rememberRole(localStorage, pathRoom, role)}
-      lost={room.lost}
-      moved={moved}
-      restarted={restarted}
-      onDismissMoved={() => setMoved(false)}
-      onDismissRestarted={() => setRestarted(false)}
+      banners={banners}
     />
   )
 }

@@ -34,11 +34,8 @@
 
 /* Q: full width under the header, each message a panel of its own; the icon and the words carry the tone */
 /* The gap below the banners is their own, so no ancestor of the view changes and scroll anchoring holds (3b1 decision 3) */
-.room-page-banners {
+.room-page .banners {
   flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
   padding: var(--panel-gap) var(--page-edge) 0;
   margin-bottom: calc(var(--space-2) - var(--panel-gap));
 }
@@ -63,7 +60,7 @@
   }
 
   /* 4c1-banners decision 3: the banners take the column's edges, as the header does */
-  .room-page-banners {
+  .room-page .banners {
     padding-inline: var(--space-3);
   }
 
