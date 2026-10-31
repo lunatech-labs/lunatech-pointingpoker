@@ -359,7 +359,7 @@ removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import
 in `base.css`, the `legacy` layer and the fence itself, and keeps
 Bootstrap's two phone properties, its tap highlight removal and its text size
-adjustment, and 4c2-focus-ring, the quiet buttons' rounded focus ring
+adjustment, and 4c2-focus-ring, the controls' rounded focus ring
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-focus-ring-design.md`); and
 4d, the not-a-room page
 in React with the Join tab's URL flag (3b4 decision 15). What follows is the
