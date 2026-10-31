@@ -176,6 +176,8 @@ export const nameInput = page => page.getByLabel('Your name')
 export const roomIdInput = page => page.getByLabel('Room id')
 // The room's marker: the room view's root, rendered on the first snapshot, never before.
 export const inRoom = page => page.getByTestId('room')
+// The lobby's panel, by its test id (4c2-banners decision 5).
+export const lobbyPanel = page => page.getByTestId('lobby-panel')
 // The header's status region, always rendered, holding 'Link copied' for 2 s after a copy.
 export const copyHint = page => page.getByRole('banner').getByRole('status')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
@@ -275,7 +277,7 @@ export const facilitatorName = (page, name) =>
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.
 export const restartNotice = page => page.getByRole('status').filter({ hasText: 'Reconnected' })
-// The room page's banners' section, mounted only while a banner shows.
+// The Messages section, on either page, mounted only while a banner shows.
 export const messages = page => page.getByRole('region', { name: 'Messages' })
 
 // The issue editor's notices as a screen reader hears them: a role lookup skips a hidden region.

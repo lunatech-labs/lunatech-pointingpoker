@@ -3,6 +3,7 @@ import {
   expect,
   LONGEST_ID,
   inRoom,
+  movedBanner,
   nameInput,
   participantEntry,
   roomIdInput
@@ -96,4 +97,11 @@ test('the h1 names the form and the active tab is marked', async ({ page, origin
   await expect(create).toHaveCount(0)
   await expect(join).toHaveCount(0)
   await expect(roomIdInput(page)).toHaveCount(0)
+})
+
+test('Dismiss on the lobby focuses its h1', async ({ page, origin, room }) => {
+  await page.goto(`${origin}/${room}?moved=1&restarted=1`)
+  await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(movedBanner(page)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Join room' })).toBeFocused()
 })

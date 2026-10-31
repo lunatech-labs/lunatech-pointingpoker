@@ -14,6 +14,7 @@ import {
   issueEdit,
   issuePanel,
   issueText,
+  lobbyPanel,
   markRegion,
   messages,
   movedBanner,
@@ -703,6 +704,27 @@ test.describe('the narrow layouts', () => {
       })
       expect(Math.abs(gaps[0] - gaps[1]), `the column centred, ${gaps}`).toBeLessThan(1)
     })
+  })
+})
+
+test.describe("the lobby's banners", () => {
+  test.use({ viewport: { width: 320, height: 640 } })
+
+  test("the lobby's banners sit in the column above the panel, 320 by 640", async ({
+    visitor,
+    room
+  }) => {
+    const page = await visitor()
+    await page.goto(`/${room}?moved=1&restarted=1`)
+    await expect(movedBanner(page), 'the moved notice').toBeVisible()
+    await expect(restartNotice(page), 'the restart notice').toBeVisible()
+    const { region, panel, old, back } = (await readBoxes(page, {
+      region: messages(page), panel: lobbyPanel(page),
+      old: movedBanner(page), back: restartNotice(page)
+    })).boxes
+    expect(region.y + region.height, 'the region above the panel').toBeLessThanOrEqual(panel.y + 0.5)
+    const sides = moved({ old: panel, back: panel }, { old, back }, ['x', 'width'])
+    expect(sides, "each notice on the panel's edges").toEqual([])
   })
 })
 

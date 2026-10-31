@@ -21,7 +21,9 @@ export function LobbyPage({ ended, banners, children }: Props) {
       <main className="lobby-page-main">
         <div className="lobby-page-column">
           {banners}
-          <div className={`panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}`}>
+          <div
+            data-testid="lobby-panel"
+            className={`panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}`}>
             {children}
           </div>
         </div>

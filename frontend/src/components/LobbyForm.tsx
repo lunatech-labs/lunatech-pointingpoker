@@ -47,7 +47,7 @@ export function LobbyForm(props: Props) {
   const id = useId()
   return (
     <>
-      <h1 className="lobby-page-title" tabIndex={-1}>
+      <h1 className="lobby-page-title" tabIndex={-1} data-dismiss-focus>
         {tab === 'create' ? 'Create room' : 'Join room'}
       </h1>
       {fixedRoom ? (
