@@ -61,7 +61,7 @@ form**, **not-a-room page**, **room row**.
    parsing, so the meta is in the document when `main.tsx` reads it.
 4. **`NotARoom` draws the mockup** in `LobbyPage`, not ended and with no
    banners: the `h1` `lobby-page-title`, `<code><bdi>typed</bdi></code> is
-   not a room name.`; with a suggestion, "Did you mean" as a
+   not a valid room name.` (decision 7); with a suggestion, "Did you mean" as a
    `lobby-page-lead` paragraph, then the room row linking to
    `/<suggestion>`, its line 2 "Join as <stored name>", or "Join" with none,
    its arrow the burgundy chip (`room-row-go-primary`, through a new optional
@@ -82,6 +82,13 @@ form**, **not-a-room page**, **room row**.
 6. **The page needs the server.** Vite's dev server answers every path with
    the shell and no hand-over, so the page shows only on the built page
    served by `sbt run`, where the by-eye checks run (my call: no dev shim).
+7. **The sentence says "not a valid room name"**, reopening 3b4 decision 12's
+   wording (product owner's ruling). Any well-formed name opens a room
+   (checked, `RoomManager`), so the page only ever refuses a name's form;
+   "not a room name" reads as "that room is gone". Rejected: keeping it; a
+   hint at a room name's shape, new content beyond the mockup. The code's
+   names stay (`notARoom`, the not-a-room page): they name the path, not the
+   sentence, and delivered specs cite them.
 
 ## States and events
 
@@ -134,10 +141,10 @@ back here.
   the shell not built answers 503. Mutation: the not-a-room page skips the
   built check.
 - **'a mistyped room name is refused with a suggestion that reaches the
-  room'** (`slug.spec.js`) passes unchanged (inferred: its link lookup by
-  `brave-golden-otter` matches the row, "brave-golden-otter Join") and
-  gains the heading `brave-golden-oter is not a room name.` by role.
-  Mutation: `main.tsx` ignores the hand-over.
+  room'** (`slug.spec.js`): its link lookup by `brave-golden-otter` still
+  matches the row, "brave-golden-otter Join" (inferred), and it changes its `getByText('is not a room name')` to the heading
+  `brave-golden-oter is not a valid room name.` by role. Mutation:
+  `main.tsx` ignores the hand-over.
 - **New, 'a name near no room name offers only Join a different room, which
   opens the Join tab'** (`slug.spec.js`): `/nothing-like-this` answers 404,
   the heading shows, "Did you mean" is absent, and the link "Join a
@@ -162,9 +169,11 @@ browsers.
 
 - **Parent**: step 4's paragraph gains this document's path after "4d, the
   not-a-room page"; the Steps table stands.
-- **Reference** (`docs/design/ui-reference.md`): Open's "The not-a-room
-  page's React shape" entry leaves Open; the log gains a 4d entry for
-  decisions 1 and 2.
+- **Mockup** (`docs/design/lobby.html`): the sentence reads "is not a valid
+  room name." (decision 7).
+- **Reference** (`docs/design/ui-reference.md`): J13's sentence likewise;
+  Open's "The not-a-room page's React shape" entry leaves Open; the log gains
+  a 4d entry for decisions 1, 2 and 7.
 - **Known issues**: the pasted-URL entry stands, still true.
 - 3b4's spec, delivered, stays as written.
 
