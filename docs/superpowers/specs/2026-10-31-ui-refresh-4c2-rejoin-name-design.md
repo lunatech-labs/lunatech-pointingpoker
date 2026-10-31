@@ -73,21 +73,21 @@ Terms), and the row shows only at `/`.
 
 ## Contract
 
-The existing cases pass unchanged: 'a room remembered from before the
-cutover reopens under its derived name' (`slug.spec.js`) clicks the row with
-the stored name in the field; 'the lobby scrolls no page sideways, 320 by
-640' (`layout.spec.js`) only finds the row.
+The existing cases pass unchanged: 'the lobby offers the remembered room
+rather than joining it' (`lobby.spec.js`) and 'a room remembered from before
+the cutover reopens under its derived name' (`slug.spec.js`) click the row
+with the stored name in the field; 'the lobby scrolls no page sideways, 320
+by 640' (`layout.spec.js`) only finds the row.
 
-One case grows, by the lean test budget's shared setup, and is shown to fail
-by the mutation named. If it does not fail under its mutation, the plan stops
-and the case comes back here.
+One new case, a behaviour of its own with a setup of a few lines (product
+owner's ruling), shown to fail by the mutation named. If it does not fail
+under its mutation, the plan stops and the case comes back here.
 
-- **'the lobby offers the remembered room rather than joining it'**
-  (`lobby.spec.js`) becomes **'the lobby offers the remembered room, and
-  rejoins it with the typed name'**: after the row reads "as Alice", the name
-  field is filled with Bob, the row reads "as Bob", and after its click the
-  room's participant entry for Bob shows (`participantEntry`). Mutation:
-  `RoomRow` puts no `onClick` on the link.
+- **'the rejoin row joins with the name typed over the stored one'**
+  (`lobby.spec.js`): Alice joins, then at `/` the name field is filled with
+  Bob, the row reads "as Bob", and after its click the room's participant
+  entry for Bob shows (`participantEntry`). Mutation: `RoomRow` puts no
+  `onClick` on the link.
 
 Left without a case: the empty name, which runs `keepLobby()` as Create and
 Join do; the new-tab and middle-click paths.
@@ -96,8 +96,7 @@ Join do; the new-tab and middle-click paths.
 
 - **Parent**: the step table gains a 4c2-rejoin-name row after 4c2-form,
   "The rejoin row joins with the typed name", depending on 4c2-form, judged
-  by "Its grown case, and the existing cases unchanged but for its listed
-  contract change"; 4c2-banners then depends on 4c2-rejoin-name. The step 4
+  by "Its case, and the existing cases unchanged"; 4c2-banners then depends on 4c2-rejoin-name. The step 4
   paragraph gains, after 4c2-form, "4c2-rejoin-name, the rejoin row joining
   with the typed name", with this document's path.
 - 3b4's spec, delivered, stays as written.
@@ -106,4 +105,4 @@ Join do; the new-tab and middle-click paths.
 
 One PR on `20260930.ui_refresh_4c2_rejoin_name`, stacked on 4c2-form's
 `20260930.ui_refresh_4c2_form` (#476): this document, the parent's change and
-its plan first; then the row's click with its grown case.
+its plan first; then the row's click with its case.
