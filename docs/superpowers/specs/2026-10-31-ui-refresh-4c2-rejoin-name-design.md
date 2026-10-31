@@ -58,9 +58,9 @@ against the stored name.
 
 | Event \ field | A name other than the stored one | The stored name | Empty |
 |---|---|---|---|
-| Click, or Enter on the link | Stores the typed name; the room joins with it | Stores nothing new; as today | Stores the empty name; the room page shows its join form (decision 3) |
-| Ctrl- or Cmd-click | As a click, the room in a new tab; this tab stays in the lobby | As a click | As a click |
-| Middle-click | Stores nothing; the new tab joins with the stored name (Accepted costs) | As today | As today |
+| Click, or Enter on the link | Stores the typed name; the room joins with it | Stores nothing new but the shown default when none is stored (decision 2); as today | Stores the empty name; the room page shows its join form (decision 3) |
+| Ctrl-, Cmd- or Shift-click | As a click, the room in a new tab or window; this tab stays in the lobby | As a click | As a click |
+| Middle-click, or the context menu's Open in new tab | Stores nothing; the new tab joins with the stored name (Accepted costs) | As today | As today |
 
 The room's remembered role decides the seat, as on Join (`joinRole`). The
 lobby's inert look cannot meet the row: only the pinned form can end (3b4
@@ -68,8 +68,9 @@ Terms), and the row shows only at `/`.
 
 ## Accepted costs
 
-- A middle-click opens the room with the stored name, since it fires
-  `auxclick`, not `click`. Recorded here only; not worth an `onAuxClick`.
+- A middle-click, or the context menu's Open in new tab, opens the room with
+  the stored name, since neither fires `click`. Recorded here only; not worth
+  an `onAuxClick`.
 
 ## Contract
 
@@ -90,15 +91,17 @@ under its mutation, the plan stops and the case comes back here.
   `onClick` on the link.
 
 Left without a case: the empty name, which runs `keepLobby()` as Create and
-Join do; the new-tab and middle-click paths.
+Join do; Enter, which the browser turns into the link's click; the new-tab,
+middle-click and context-menu paths.
 
 ## The docs' changes
 
 - **Parent**: the step table gains a 4c2-rejoin-name row after 4c2-form,
   "The rejoin row joins with the typed name", depending on 4c2-form, judged
-  by "Its case, and the existing cases unchanged"; 4c2-banners then depends on 4c2-rejoin-name. The step 4
-  paragraph gains, after 4c2-form, "4c2-rejoin-name, the rejoin row joining
-  with the typed name", with this document's path.
+  by "Its case, and the existing cases unchanged"; 4c2-banners then depends on
+  4c2-rejoin-name. The step 4 paragraph gains, after 4c2-form,
+  "4c2-rejoin-name, the rejoin row joining with the typed name", with this
+  document's path.
 - **Parent, principle 11**: revised by the product owner (2026-10-31), as
   this step's case split prompted: every case in both browsers, a setup
   shared only where its cost earns it, incidental cases flagged.

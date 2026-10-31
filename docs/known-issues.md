@@ -112,8 +112,9 @@ roadmap item instead of leaving it here as stale history.
   layout, 392 by 800, on both pages, then a crossing', 'no page scrolls
   sideways' at each size, 'the lobby scrolls no page sideways, 320 by 640'
   and 'a long issue shows whole while edited, 1280 by 680, on the voter's
-  page'. Since 2026-10-31 every case runs in both browsers, so a Firefox-only
-  break in these layouts goes unseen.
+  page'. Since 2026-10-31 the budget runs every case in both browsers, but
+  these still skip Firefox, so a Firefox-only break in these layouts goes
+  unseen.
 - **Resolution:** Accepted for now (product owner, 2026-10-31): browsers do
   not drift in weeks, and the narrow layouts see little use soon, with no
   phone users and the product owner beta-testing the middle layout. Revisit
