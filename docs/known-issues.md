@@ -102,6 +102,24 @@ roadmap item instead of leaving it here as stale history.
   range (`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`,
   decision 3).
 
+### The layout cases written under the first test budget run in Chromium alone
+
+- **Where:** `e2e/layout.spec.js`, the describes 'the narrow layouts' and
+  'the editing view', each skipped outside Chromium.
+- **Issue:** From 4c1-narrow-cases to 4c2-form, the parent's principle 11
+  ran layout cases in Chromium alone and shared one setup across several
+  guarantees: 'the middle layout, 860 by 600, on both pages', 'the phone
+  layout, 392 by 800, on both pages, then a crossing', 'no page scrolls
+  sideways' at each size, 'the lobby scrolls no page sideways, 320 by 640'
+  and 'a long issue shows whole while edited, 1280 by 680, on the voter's
+  page'. Since 2026-10-31 every case runs in both browsers, so a Firefox-only
+  break in these layouts goes unseen.
+- **Resolution:** Accepted for now (product owner, 2026-10-31): browsers do
+  not drift in weeks, and the narrow layouts see little use soon, with no
+  phone users and the product owner beta-testing the middle layout. Revisit
+  the coverage: drop the skips, fixing what Firefox shows, and weigh
+  splitting the shared setups case by case.
+
 ### A layout journey failing inside a shared helper does not name its guarantee
 
 - **Where:** `e2e/layout.spec.js`, `scrollsAndCutsNothing` and `expectInView`.

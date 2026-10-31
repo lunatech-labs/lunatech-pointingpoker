@@ -99,6 +99,11 @@ Join do; the new-tab and middle-click paths.
   by "Its case, and the existing cases unchanged"; 4c2-banners then depends on 4c2-rejoin-name. The step 4
   paragraph gains, after 4c2-form, "4c2-rejoin-name, the rejoin row joining
   with the typed name", with this document's path.
+- **Parent, principle 11**: revised by the product owner (2026-10-31), as
+  this step's case split prompted: every case in both browsers, a setup
+  shared only where its cost earns it, incidental cases flagged.
+- **`docs/known-issues.md`**: the layout cases written under the first
+  budget, run in Chromium alone, wait there.
 - 3b4's spec, delivered, stays as written.
 
 ## Branches and commits

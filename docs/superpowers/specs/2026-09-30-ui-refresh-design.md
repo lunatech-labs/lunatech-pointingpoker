@@ -164,11 +164,15 @@ document as a whole stays in discussion.
       effective (principle 5), and motion stops under `prefers-reduced-motion`.
 
     The numbers are J8's in `docs/design/ui-reference.md`.
-11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1).
-    Layout cases run in Chromium alone, and in both browsers only where they
-    are known to differ, such as Firefox's focus scroll. One setup checks
-    several guarantees, each still failed by its own mutation. One width
-    stands for each layout.
+11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1;
+    revised 2026-10-31 by the product owner, 4c2-rejoin-name). Every case
+    runs in both browsers: their drift comes from outside, unannounced. One
+    width stands for each layout. A setup is shared across guarantees only
+    where its cost earns it, weighed case by case in each spec's Contract;
+    otherwise each behaviour gets its own case, each still failed by its own
+    mutation. A spec or plan flags each case that pins incidental behaviour,
+    stated by no spec, for the product owner to keep or drop. The cases
+    written under the first version wait in `docs/known-issues.md`.
 
 ## Steps
 
