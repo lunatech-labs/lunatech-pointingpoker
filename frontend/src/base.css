@@ -1,21 +1,6 @@
-/* legacy holds today's CSS, base the reset, page.css and the Bootstrap undo;
-   colours, tokens and looks are unlayered. */
-@layer legacy, base;
-
-@import 'bootstrap/dist/css/bootstrap.min.css' layer(legacy);
+/* base holds the reset and page.css; looks, colours and tokens stay unlayered, above it. */
 @import './reset.css' layer(base);
 @import './page.css' layer(base);
-@import './bootstrap-undo.css' layer(base);
 @import './components/looks.css';
 @import './colours.css';
 @import './tokens.css';
-
-/* From inside base, revert-layer falls back to legacy, today's cascade; keep this the last rule in base. */
-@layer base {
-  .legacy-page,
-  .legacy-page *,
-  .legacy-page *::before,
-  .legacy-page *::after {
-    all: revert-layer;
-  }
-}
