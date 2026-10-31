@@ -39,6 +39,12 @@ svg {
   flex: none;
 }
 
+/* Controls are round, so their ring is; a component's own radius wins (4c2-focus-ring) */
+button,
+a {
+  border-radius: var(--radius-control);
+}
+
 :focus-visible {
   outline: var(--focus-width) solid var(--ink);
   outline-offset: var(--focus-gap);

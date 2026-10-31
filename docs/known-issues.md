@@ -88,22 +88,6 @@ roadmap item instead of leaving it here as stale history.
   choice is made with Copy link's, so both follow one rule, by mockup with the
   designer. The link's place and behaviour do not change.
 
-### The focus ring is square on quiet buttons, rounded on the others
-
-- **Where:** `frontend/src/components/looks.css` (`.button-quiet`, `.button`)
-  and `frontend/src/page.css` (`:focus-visible`).
-- **Issue:** The ring follows the element's corner radius. `.button` sets
-  `--radius-control`, so Save, Cancel, Join and Show votes get a rounded ring;
-  `.button-quiet` sets none, so Dismiss, Edit, Clear votes and the header's
-  quiet controls get a square one, as do the `h1`s focused after a Dismiss.
-  The design (J8) fixes the ring's colour, width and gap, not its shape. Not
-  caused by Bootstrap's removal: Bootstrap and both browsers give a button no
-  radius (checked in Chromium and Firefox, 4c2-bootstrap).
-- **Resolution:** Stays open until the designer rules on the shape. The likely
-  fix is `border-radius: var(--radius-control)` on `.button-quiet`, unseen at
-  rest since it has no border or background; planned as a small step before
-  the UI refresh stack merges.
-
 ### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
 
 - **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
