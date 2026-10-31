@@ -1,4 +1,4 @@
-/* The element rules both mockups open with; it goes into the base layer after the reset (4c1-mockups decision 3). */
+/* Element defaults for the app and both mockups, in the base layer after the reset (4c1-mockups decision 3). */
 * {
   box-sizing: border-box;
 }
