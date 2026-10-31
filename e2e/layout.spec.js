@@ -722,7 +722,8 @@ test.describe("the lobby's banners", () => {
       region: messages(page), panel: lobbyPanel(page),
       old: movedBanner(page), back: restartNotice(page)
     })).boxes
-    expect(region.y + region.height, 'the region above the panel').toBeLessThanOrEqual(panel.y + 0.5)
+    const bottom = region.y + region.height
+    expect(bottom, 'the region above the panel').toBeLessThanOrEqual(panel.y + 0.5)
     const sides = moved({ old: panel, back: panel }, { old, back }, ['x', 'width'])
     expect(sides, "each notice on the panel's edges").toEqual([])
   })

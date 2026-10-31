@@ -70,8 +70,8 @@ roadmap item instead of leaving it here as stale history.
   is pinned at 320 px by 'the lobby scrolls no page sideways, 320 by 640', the
   pinned form sharing its column and row, the lobby's banners by 'the lobby's
   banners sit in the column above the panel, 320 by 640', and the room page's
-  banners by 'no page scrolls sideways, 320 by 640' (all `e2e/layout.spec.js`); the editing view is drawn since
-  4c1-editor. 'an old UUID link opens its derived room under a banner that
+  banners by 'no page scrolls sideways, 320 by 640' (all `e2e/layout.spec.js`);
+  the editing view is drawn since 4c1-editor. 'an old UUID link opens its derived room under a banner that
   covers no card' (`e2e/slug.spec.js`) shows a lobby banner at 390 px, and no
   hand test has seen them there.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;

@@ -1,4 +1,4 @@
-/* The banners stack, whatever the page (4c2-banners decision 4). */
+/* The banners stack, whatever the page (4c2-banners decision 4) */
 .banners {
   display: flex;
   flex-direction: column;
