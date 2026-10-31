@@ -200,7 +200,7 @@ document as a whole stays in discussion.
 | 4c1-editor | The editing view's look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-banners | The banners' look and place under the header (J12) | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-form | The lobby's page and form (J13) | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c2-rejoin-name | The rejoin row joins with the typed name | 4c2-form | Its grown case, and the existing cases unchanged but for its listed contract change |
+| 4c2-rejoin-name | The rejoin row joins with the typed name | 4c2-form | Its case, and the existing cases unchanged |
 | 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-rejoin-name | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
 | 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
