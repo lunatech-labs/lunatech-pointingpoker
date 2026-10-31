@@ -61,16 +61,16 @@ roadmap item instead of leaving it here as stale history.
 ### On a phone, the lobby's banners now lay out at the phone's width, unchecked
 
 - **Where:** `frontend/index.html` (the viewport meta); the lobby's banners,
-  `Alerts` in their own `legacy-page` fence.
+  `Banners`.
 - **Issue:** Since step 4c1-wide the viewport meta makes a phone lay out every
   page at its own width, not at 980 px. The room page laying out at the
   phone's width is pinned by 'a phone lays the room page out at its own width'
   (`e2e/phone.spec.js`).
-  The lobby's banners, still Bootstrap's look inside their fence, lay out at
-  the phone's width too. The lobby's root form is pinned at 320 px by 'the
-  lobby scrolls no page sideways, 320 by 640', the pinned form sharing its
-  column and row, and the room page's banners by 'no page scrolls sideways,
-  320 by 640' (both `e2e/layout.spec.js`); the editing view is drawn since
+  The lobby's banners lay out at the phone's width too. The lobby's root form
+  is pinned at 320 px by 'the lobby scrolls no page sideways, 320 by 640', the
+  pinned form sharing its column and row, the lobby's banners by 'the lobby's
+  banners sit in the column above the panel, 320 by 640', and the room page's
+  banners by 'no page scrolls sideways, 320 by 640' (all `e2e/layout.spec.js`); the editing view is drawn since
   4c1-editor. 'an old UUID link opens its derived room under a banner that
   covers no card' (`e2e/slug.spec.js`) shows a lobby banner at 390 px, and no
   hand test has seen them there.
@@ -1108,7 +1108,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A screen reader hears the connection lost, but never that it came back
 
-- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+- **Where:** `frontend/src/components/Banners.tsx` (the problem slot) and
   `frontend/src/components/App.tsx` (`connectionMessage`).
 - **Issue:** "Connection to the room was lost" shows in a `role="alert"`, so a
   screen reader announces it. When the connection recovers in place, the
@@ -1165,7 +1165,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A failure that repeats unchanged is not announced twice by a screen reader
 
-- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+- **Where:** `frontend/src/components/Banners.tsx` (the problem slot) and
   `frontend/src/components/App.tsx` (`joinError`, `joinHere`, `doCreate`).
 - **Issue:** The join and create failures show in a `role="alert"`. When a second
   attempt fails with the same text, the text does not change, so a screen reader

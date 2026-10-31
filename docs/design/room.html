@@ -42,6 +42,7 @@
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
 <link rel="stylesheet" href="../../frontend/src/components/message.css">
+<link rel="stylesheet" href="../../frontend/src/components/banners.css">
 <link rel="stylesheet" href="../../frontend/src/components/room-page.css">
 <link rel="stylesheet" href="../../frontend/src/components/room-header.css">
 <link rel="stylesheet" href="../../frontend/src/components/issue-panel.css">
@@ -149,7 +150,7 @@ function draw() {
   const logo = q.get('brand') === 'pip' ? '<span class="brand-logo brand-logo-pip" aria-hidden="true"></span>'
     : `<span class="brand-logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
   const header = `<header class="room-header${copied ? ' room-header-copied' : ''}">${logo}<span class="brand-logo-name">Pointing Poker</span>
-    <span class="room-header-chip"><h1 class="room-header-id">${q.get('room') || 'brave-golden-otter'}</h1><a class="room-header-copy" href="#" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></a></span>
+    <span class="room-header-chip"><h1 class="room-header-id" tabindex="-1" data-dismiss-focus>${q.get('room') || 'brave-golden-otter'}</h1><a class="room-header-copy" href="#" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></a></span>
     <span class="room-header-copy-note" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="room-header-role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
     <a class="room-header-leave" href="#">${exit}Leave</a>
@@ -168,7 +169,7 @@ function draw() {
       <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>${status}</section>`
     : `<section class="panel issue-panel" aria-label="Issue"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
   const bannerList = ['lost', 'moved', 'restarted'].filter(m => messages.includes(m)).map(m => banners[m]).join('')
-  const bannerBlock = bannerList && `<section class="room-page-banners" aria-label="Messages">${bannerList}</section>`
+  const bannerBlock = bannerList && `<section class="banners" aria-label="Messages">${bannerList}</section>`
 
   const phaseLine = `<div class="round-bar-phase" data-testid="phase-line"><h2 class="panel-label">${revealed ? 'Revealed' : 'Voting'}</h2></div>`
   // G: the voter's small count in the bar (later); the facilitator's big one in the slot

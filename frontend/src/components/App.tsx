@@ -11,7 +11,6 @@ import {
   storedDefault
 } from '../room/joinRole'
 import { ownRoleOf } from '../room/view'
-import { Alerts } from './Alerts'
 import { Banners } from './Banners'
 import { LobbyForm } from './LobbyForm'
 import { LobbyPage } from './LobbyPage'
@@ -142,19 +141,10 @@ export function App({ connection }: { connection: Connection }) {
         }
       : null
 
-  // The lobby's banners keep today's markup, fenced from base.css's reset, until 4c2-banners.
   return room.snapshot === null ? (
     <LobbyPage
       ended={room.fatal}
-      banners={
-        <Alerts
-          error={connectionMessage || error}
-          moved={moved}
-          onDismissMoved={() => setMoved(false)}
-          restarted={restarted}
-          onDismissRestarted={() => setRestarted(false)}
-        />
-      }
+      banners={banners}
     >
       <LobbyForm
         tab={tab}
