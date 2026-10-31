@@ -16,7 +16,7 @@ type Props = {
   onName: (name: string) => void
   defaultRole: Role
   onChooseRole: (role: Role) => void
-  rejoin: { href: string; id: string; line2: string } | null
+  rejoin: { href: string; id: string; line2: string; onClick: () => void } | null
   // A session that has ended: further clicks would be ignored, so the form is inert instead.
   disabled: boolean
   onCreate: () => void
@@ -53,7 +53,14 @@ export function LobbyForm(props: Props) {
       {fixedRoom ? (
         <RoomRow id={roomId} />
       ) : (
-        rejoin && <RoomRow id={rejoin.id} line2={rejoin.line2} href={rejoin.href} />
+        rejoin && (
+          <RoomRow
+            id={rejoin.id}
+            line2={rejoin.line2}
+            href={rejoin.href}
+            onClick={rejoin.onClick}
+          />
+        )
       )}
       {!fixedRoom && <LobbyTabs tab={tab} onTab={onTab} />}
       {tab === 'join' && !fixedRoom && (

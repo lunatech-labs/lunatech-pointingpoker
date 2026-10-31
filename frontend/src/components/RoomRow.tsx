@@ -5,10 +5,11 @@ type Props = {
   id: string
   line2?: string
   href?: string
+  onClick?: () => void
 }
 
 // The room row (3b4 Terms): with an href, the link with its second line and arrow; else the badge.
-export function RoomRow({ id, line2, href }: Props) {
+export function RoomRow({ id, line2, href, onClick }: Props) {
   const square = <span className="room-row-square" aria-hidden="true" />
   if (!href) {
     return (
@@ -22,7 +23,7 @@ export function RoomRow({ id, line2, href }: Props) {
   }
   // The space keeps the link's name "<id> <line 2>", as the mockup writes it.
   return (
-    <a className="room-row" href={href}>
+    <a className="room-row" href={href} onClick={onClick}>
       {square}
       <span className="room-row-text">
         <span className="room-row-id">{id}</span>{' '}
