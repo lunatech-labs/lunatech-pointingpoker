@@ -469,7 +469,7 @@ Step 3b4's spec holds its rules,
   look, `--grey` on `--paper-pale` (the editor's saving look too); an inert
   control's edge is exempt from J8's 3:1.
 - **The not-a-room page** is drawn in the same regions. Its `h1` reads
-  `<code><bdi>x</bdi></code> is not a room name.`, the typed name wrapping
+  `<code><bdi>x</bdi></code> is not a valid room name.`, the typed name wrapping
   anywhere and isolated by the `<bdi>`. A suggestion is a room row under the
   plain text "Did you mean", reading "Join as <name>" from the stored name; the
   secondary action is "Join a different room", which opens `/` on the Join tab.
@@ -605,10 +605,6 @@ and L8 by 3b3 (J12), and L9 by 3b4 (J13).
 - **The lobby's open costs** (3b4's Accepted costs): a Reload button on "Your
   session has ended"; a "Joining…" look from a press to the first snapshot;
   accepting a full URL pasted into Join.
-- **The not-a-room page's React shape** (3b4 decision 15), which step 4d's
-  brainstorm raises first: an entry point of its own or a view of the room app,
-  and how the server hands over the typed name and the suggestion, keeping its
-  404 status.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -1031,6 +1027,17 @@ The reasons behind each rule, and what was set aside.
   deployed app. Set aside: the radius per component, a list a new control
   must remember to join; a shared class in the markup; waiting for the
   designer's ruling.
+- **4d.** The not-a-room page (the UI refresh design's step 4d) became a view
+  of the room app, `main.tsx` rendering `NotARoom` before `App` and never
+  creating the connection, and the server hands it the typed name and the
+  suggestion in a `not-a-room` meta element, inserted before the first
+  `</head>` by `indexOf` and encoded with `Encode.forHtml`, the 404 kept. The
+  sentence reads "is not a valid room name": any well-formed name opens a room,
+  so the page only refuses a name's form. Set aside: an entry of its own, a
+  second Vite input and shell; a JSON block in a `<script>`, whose safety needs
+  a hand-made rule on top of the encoder; the app reading the typed name from
+  its own URL, splitting one fact between two decoders; keeping "is not a room
+  name", which reads as "that room is gone"; a hint at a name's shape.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
