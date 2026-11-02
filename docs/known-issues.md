@@ -21,11 +21,53 @@ roadmap item instead of leaving it here as stale history.
   Enter from saving, may also swallow the keyboard's Enter while Gboard still
   holds the typed word in a composition. On an iPhone, the pencil must bring up
   the keyboard; `flushSync` makes the box editable before it takes focus, which
-  the e2e suite checks on desktop only.
+  the e2e suite checks on desktop only. Step 3b3 makes Enter always save and
+  never insert a line break (`oneLine` in `room/issueEditor.ts`), so a
+  swallowed Gboard Enter at the end of the draft does nothing, as today, and one
+  inside the text becomes a space and moves the caret to the end.
 - **Resolution:** Stays open until the rollout's step 8b phone check in
   `docs/superpowers/specs/2026-09-24-frontend-rewrite-design.md` runs on the
   deployed app, which waits for a phone to be at hand. Remove this entry if it
   passes; if Enter is swallowed, narrow the guard then.
+  The narrowing, if needed, is to treat a `beforeinput` of `insertLineBreak` as
+  the save, which a composition commit never produces (inferred, not checked on
+  a phone).
+
+### On a phone, the virtual keyboard and the pinned sheet may leave the editing view little room
+
+- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in step 4.
+- **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
+  virtual keyboard rises over it. With the keyboard open, the field, Save and
+  Cancel and the editor's messages may have little room to show (inferred, not
+  checked on a phone).
+- **Resolution:** Stays open until a phone is at hand on the deployed app
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  Accepted costs); never a merge gate.
+
+### The issue editor's field needs a script fit where `field-sizing` is unsupported
+
+- **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
+  in step 4.
+- **Issue:** The mockup's field grows by CSS `field-sizing: content`, which
+  Firefox ESR 140 lacks (confirmed by hand) and Safari's support is unchecked.
+  The mockup fits the field by script there; the app needs the same.
+- **Resolution:** Built in step 4; remove this entry when step 4 lands the fit
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  decision 7).
+
+### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
+
+- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
+  step 4.
+- **Issue:** With the root font at 400% (text-only zoom) and a viewport under
+  about 400 px, Save and Cancel overflow the issue panel in Firefox; Chromium
+  fits them. The page already scrolls sideways there on the plain read view
+  (checked on the mockup). Page zoom, which WCAG's reflow case uses, is not
+  affected.
+- **Resolution:** Step 4 lets the buttons wrap onto two rows or keep only
+  their words at that size, or accepts the limit with the rest of the page
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  decision 8); never a merge gate.
 
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
@@ -1003,10 +1045,11 @@ roadmap item instead of leaving it here as stale history.
   off the polite "Could not save the issue". This was heard with a mouse click
   on the button, and Space or Enter on it is expected to behave the same, since
   the same `disabled` drops focus; only Enter in the box is heard.
-- **Resolution:** Stays open, as a later step with its own short spec: keep Save
-  focusable while saving (`aria-disabled` and a guard in `submit`), so focus
-  never moves. It changes the button's contract and look, so it is not part of
-  step 1a.
+- **Resolution:** Decided in step 3b3 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
+  decision 10) and built in step 4: Save and Cancel are `aria-disabled` while
+  saving and keep focus, and after a failure the field takes focus only if focus
+  fell to the page, so a failure read from the button is not cut off. Remove
+  this entry when step 4 lands it.
 
 ### A screen reader hears the connection lost, but never that it came back
 

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Room mockup, layout cells (ui refresh steps 3b1 and 3b2)</title>
+<title>Room mockup, layout cells (ui refresh steps 3b1 to 3b3)</title>
 <style>
   body { margin: 0; padding: 16px; background: #E7E2DC; font: 14px/1.4 system-ui, sans-serif; color: #1C1917; }
   .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #E7E2DC; padding: 8px 0; z-index: 1; }
@@ -30,14 +30,15 @@ const options = {
   later: [['0', 'Step 4 only'], ['1', 'With later steps, dashed: progress, round history, Next issue, the tie rule']],
   issue: [['https://lunatech.atlassian.net/browse/PP-1234', 'Issue: a link'], ['Rework the login page so that a returning user lands on their last room, and keep the room list in sync', 'free text'], [long, 'long free text']],
   layout: [['deck-bottom', 'f. Deck or result above the bar (default)'], ['deck-top', 'g. Deck or result on top (the open swap)']],
-  message: [['', 'No message'], ['lost', 'Connection lost'], ['ended', 'Session ended'], ['restarted', 'Reconnected'], ['moved', 'Moved link'], ['lost,moved', 'Lost + moved'],
-    ['restarted,moved', 'Restarted + moved'], ['conflict', 'Issue changed by someone else (editor)'], ['save-failed', 'Issue save failed (editor)']],
+  message: [['', 'No message'], ['lost', 'Connection lost'], ['restarted', 'Reconnected'], ['moved', 'Moved link'], ['lost,moved', 'Lost + moved'],
+    ['restarted,moved', 'Restarted + moved'], ['conflict', 'Issue changed by someone else (editor)'], ['conflict,save-failed', 'Both editor messages'], ['save-failed', 'Issue save failed (editor)']],
+  edit: [['', 'Reading'], ['1', 'Editing'], ['saving', 'Saving']],
   width: [['1280', '1280 (wide layout)'], ['1000', '1000 (compact foot)'], ['800', '800 (phone layout)'], ['392', '392 (a phone)']],
   height: [['680', '680 (comfort)'], ['600', '600 (floor)'], ['900', '900'], ['743', '743 (a phone)']],
   scale: [['0.5', '50%'], ['0.75', '75%'], ['1', 'Actual size']]
 }
 const multi = ['role', 'phase']
-const state = { role: ['voter', 'facilitator'], phase: ['voting', 'revote', 'revealed'], votes: 'sample', voters: '14', later: '0', message: '', layout: 'deck-bottom', issue: options.issue[0][0], width: '1280', height: '680', scale: '0.5' }
+const state = { role: ['voter', 'facilitator'], phase: ['voting', 'revote', 'revealed'], votes: 'sample', voters: '14', later: '0', message: '', edit: '', layout: 'deck-bottom', issue: options.issue[0][0], width: '1280', height: '680', scale: '0.5' }
 const bar = document.getElementById('bar')
 for (const [key, list] of Object.entries(options)) {
   const fs = document.createElement('fieldset')
@@ -52,7 +53,7 @@ function render() {
   document.getElementById('grid').style.setProperty('--s', state.scale)
   document.getElementById('grid').style.setProperty('--w', `${state.width}px`)
   document.getElementById('grid').innerHTML = state.role.flatMap(role => state.phase.map(phase => {
-    const src = `room.html?role=${role}&phase=${phase}&votes=${state.votes}&voters=${state.voters}&later=${state.later}&message=${state.message}&layout=${state.layout}&issue=${encodeURIComponent(state.issue)}`
+    const src = `room.html?role=${role}&phase=${phase}&votes=${state.votes}&voters=${state.voters}&later=${state.later}&message=${state.message}&edit=${state.edit}&layout=${state.layout}&issue=${encodeURIComponent(state.issue)}`
     return `<figure><figcaption>${role}, ${phase} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
       <div class="frame" style="--s:${state.scale};--w:${state.width}px;--h:${state.height}px"><iframe src="${src}" title="${role} ${phase}"></iframe></div></figure>`
   })).join('')
