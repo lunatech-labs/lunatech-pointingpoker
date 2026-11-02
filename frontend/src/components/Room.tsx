@@ -40,7 +40,7 @@ export function Room({ roomId, snapshot, onCopied, onLeave, onRefused, onSwitche
   }
 
   return (
-    <div className="row">
+    <div className="row" data-testid="room">
       <div className="col-md-8 offset-md-2">
         <div className="card text-center shadow-sm m-1">
           <RoomHeader roomId={roomId} onCopied={onCopied} onLeave={onLeave} />

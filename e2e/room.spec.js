@@ -18,6 +18,7 @@ import {
   markRegion,
   expectLiveRegion,
   issueEdit,
+  inRoom,
   votedMark,
   hiddenMark,
   vote,
@@ -145,8 +146,8 @@ async function departureWhileCut(join) {
   const aliceOnBob = participantEntry(bob.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnBob)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnBob)).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
@@ -209,20 +210,16 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
 
 test('the reveal notice claims its space before the reveal', async ({ join }) => {
   const alice = await join('Alice')
-  const showVotes = alice.page.getByRole('button', { name: 'Show votes' })
-  // Two rows, since a reveal adds the notice to one and the Re-vote button to the other. Neither
-  // may take height: the notice's row also sizes the estimation card.
-  const tops = async () => [
-    (await showVotes.boundingBox()).y,
-    (await participantEntries(alice.page).first().boundingBox()).y
-  ]
+  // The notice and the Re-vote button both appear above the list, so its first entry stays put
+  // only if neither takes height: the notice's row also sizes the estimation card.
+  const top = async () => (await participantEntries(alice.page).first().boundingBox()).y
 
   // Nobody votes, so no summary block appears and what is left is the two in-place appearances.
-  const before = await tops()
-  await showVotes.click()
+  const before = await top()
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(frozenNotice(alice.page)).toBeVisible()
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
-  expect(await tops()).toEqual(before)
+  expect(await top()).toEqual(before)
 })
 
 // A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
@@ -344,9 +341,10 @@ test('two tabs on one room are one participant', async ({ join }) => {
   await expect(participantEntries(alice.page)).toHaveCount(2)
 
   await second.close()
-  // The surviving tab keeps the member: only its own ref went.
+  // The surviving tab keeps the member: only its own ref went. Alice's vote reveals the round,
+  // so her value is what reaches the surviving tab.
   await vote(alice.page, '3')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(revealedEstimation(participantEntry(bob.page, 'Alice'))).toHaveText('3')
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1)
 })
 
@@ -358,7 +356,7 @@ test('a reload keeps its identity and its vote', async ({ join }) => {
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 
   await bob.page.reload()
-  await expect(bob.page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(bob.page)).toBeVisible()
 
   // One Bob, not two, and the estimation came back with him rather than being recast.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
@@ -428,7 +426,8 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
   // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
   // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
-  await expect(results(alice.page)).toBeHidden()
+  // No entry rather than no region, so a region saying nobody voted still passes.
+  await expect(tallyEntries(alice.page)).toHaveCount(0)
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -470,11 +469,12 @@ test('a vote survives its own reconnect', async ({ join }) => {
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // The room's own state, not Bob's stale copy: Alice never disconnected, so her entry for
-  // Bob is redrawn from a snapshot published after the reconnect.
+  // The room's own state, not Bob's stale copy: Alice never disconnected, and her vote reveals
+  // the round, so Bob's value on her page comes from a snapshot published after the reconnect.
   await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1, { timeout: 10_000 })
-  await expect(participantEntry(alice.page, 'Bob')).toContainText('8')
+  await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveText('8', {
+    timeout: 10_000
+  })
 })
 
 test('a disconnection outlasting the grace period comes back without a reload', async ({
@@ -488,12 +488,12 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
   // Detection rides on the room's own traffic, so two writes to Bob's dead stream start his
-  // grace period; both are asserted on Alice's entry, since Bob's page is stale while cut.
+  // grace period; both are asserted on Alice's page, since Bob's page is stale while cut.
   const aliceOnAlice = participantEntry(alice.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnAlice)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnAlice)).toHaveCount(0)
+  await vote(alice.page, '8')
+  await expect(ownEstimation(alice.page)).toHaveText('8')
   // Bob's own entry going is the grace period expiring, which is what this case needs and what
   // departureWhileCut's reconnect stays inside: restoring sooner would prove nothing.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
@@ -509,8 +509,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await expect(participantEntries(bob.page)).toHaveCount(2, { timeout: 10_000 })
 
   // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
-  await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1', { timeout: 10_000 })
   expect(await bob.page.evaluate(() => window.sameLoad)).toBe(true)
   await expect(restartNotice(bob.page)).toHaveCount(0)
 })
@@ -537,8 +537,8 @@ test('a stream frozen without an error is noticed and reopened on its own', asyn
 
   // The reopened stream's first snapshot, then a frame sent after it.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueBox(bob.page)).toHaveValue('PP-1')
 })
 
 test('a draft survives blur and room activity', async ({ join }) => {
@@ -556,9 +556,9 @@ test('a draft survives blur and room activity', async ({ join }) => {
 
   // Edit mode, not focus, guards the draft, so alt-tabbing away to copy a title loses nothing.
   await issueBox(alice.page).blur()
-  // Clear, not a re-vote: Bob's mark only disappears once the frame lands.
-  await bob.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
+  // A join, since Carol's entry only appears once the frame lands.
+  await join('Carol')
+  await expect(participantEntry(alice.page, 'Carol')).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 })
 
@@ -732,11 +732,11 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   })
 
   await setIssue(alice, 'mine')
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.focus()
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
-  await expect(clear).toBeFocused()
+  await expect(elsewhere).toBeFocused()
 })
 
 // Read by its own text throughout, since a region's text is announced as a whole.

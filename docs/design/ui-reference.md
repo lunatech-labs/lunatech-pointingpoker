@@ -519,7 +519,7 @@ Contract).
   entry, the reads of "Vote hidden" are dropped where a read of "Voted" or of
   the value sits beside them; the last, in `stragglerDepartsWithVotesHidden`,
   the only proof that the votes survive a departure, becomes a `votedMark` read.
-  Step 1c moves every read of "Voted" on a revealed entry to the value (its list
+  Step 1c moved every read of "Voted" on a revealed entry to the value (its list
   names the cases).
 - The kept card's description, "Previous vote, not confirmed"
   (`unconfirmedCard`), from a hidden note, and the card's text, its figure
@@ -533,6 +533,13 @@ Contract).
   no estimate, only Alice's and Bob's entries carry the kept mark, and only
   Dave's the no-vote mark, each read by J3's name.
 - The room id as a heading, any level (`lobby.spec.js`).
+- The room's marker, the test id `room` on the room view's root (`inRoom`),
+  the sign a join reached the room: it sits on what renders from a snapshot,
+  never on a look drawn while joining, as 'the room's marker waits for the
+  first snapshot' (`smoke.spec.js`) holds it.
+- `tally-entry`, inside the region "Results", marks a value someone voted
+  for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
+  and the nobody-voted case reads none.
 - The copy hint's text, "Link copied to clipboard", which 3b1 shortens to
   "Link copied", a contract change of step 4.
 - The table region's name, "Participants", which 3b1 changes to "Voters", its
@@ -923,6 +930,12 @@ The reasons behind each rule, and what was set aside.
   after "session ended"; burgundy links and arrows; a Reload button, a
   "Joining…" look and an accepted pasted URL (each its own decision); the
   rejoin row without its square (the three deferred variants, Open).
+- **1c.** The test contract audit (the UI refresh design's step 1c)
+  reopened its sign that a join reached the room, "Leave or the role line":
+  3b2 puts both behind ☰ in the phone layout, where a case joins. The
+  room's marker serves (Contract reads). Set aside: the room id as a
+  heading, which a lobby giving the id a heading would pass; Edit issue;
+  the round region, absent from today's page.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
