@@ -208,7 +208,8 @@ document as a whole stays in discussion.
 | 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-rejoin-name | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
 | 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
-| 4a | The round's live region | 4c1-editor | Its cases |
+| 4a | The round's live region | 4c1-editor | Its cases, the hand check, and the existing cases unchanged but for its listed contract change |
+| 4a-arrival | Arriving in the room: focus moves to a heading when the room appears (to be confirmed) | 4a | Its cases |
 | 5 | Next issue | 4c1-editor | Its cases |
 | 5+ | One step per feature | 4d | Each one's spec |
 
@@ -428,7 +429,19 @@ it is hidden with `visibility` while the round is open, and an announcement
 needs text that changes in place. A visually hidden copy beside it was step
 1a's first design, and nearly every review finding on it came from the copy,
 so this waits for a visible line instead. It follows step 4c1, which draws the
-line, and stays out of it because a restyle adds no behaviour. Its spec starts from Appendix B.
+line, and stays out of it because a restyle adds no behaviour. Its spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+started from Appendix B.
+
+**Step 4a-arrival. Arriving in the room.** A screen reader user who joins or
+reloads hears nothing: no element takes focus when the room appears. The
+preferred solution, to be confirmed by its own spec, is focus moving to a
+heading when the room appears, the usual practice when a single-page app
+changes view. Weighed and not preferred: the round's state in the page title,
+read on a page load but also visible in the tab; a one-off spoken summary,
+which needs a region filled after a delay since text present when a region
+appears is not announced. To decide: what takes focus, and whether join,
+reload, the reload after a refusal and a reconnect behave alike.
 
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target
@@ -505,6 +518,10 @@ commitment:
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
+- A spoken result on a reveal: step 4a announces only "Votes revealed", and the
+  outcome is found by reading the Results region. To decide: what to say when
+  votes are spread or tied, and whether a leave that changes the result is
+  announced again.
 
 ## Where step 8c's list went
 
@@ -1017,6 +1034,10 @@ A rough sketch of the phase idea, a voter's page on a laptop:
 The revealed sketch has no deck, as step 3 decides.
 
 ## Appendix B. Inputs for step 4a
+
+Superseded by step 4a's spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+which holds the rulings.
 
 What step 1a's first design learned about announcing the round, kept for step
 4a's spec. Provisional, like the plan.
