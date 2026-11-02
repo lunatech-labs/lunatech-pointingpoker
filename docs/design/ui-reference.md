@@ -3,19 +3,21 @@
 Date: 2026-10-07
 Status: In discussion (step 3 of `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`)
 
-The design reference step 4 applies. Step 3a fills the token values, step 3b
-the layouts. Decisions are provisional unless marked **(settled)**, as in the
-UI refresh design's "How decisions are marked". The rules come first; the
-reasons and the options set aside are in the decisions log at the end.
+The design reference step 4 applies. Step 3a gave the token values, in the
+value source, and step 3b draws the layouts. Decisions are provisional unless
+marked **(settled)**, as in the UI refresh design's "How decisions are
+marked". The rules come first; the reasons and the options set aside are in
+the decisions log at the end.
 
 ## Terms
 
-- **Token**: a CSS custom property in the token list (principle 6 for
+- **Token**: a CSS custom property in the value source (principle 6 for
   colours).
-- **Token list**: the "Tokens" section, each token with its value and purpose.
-  It is the contract between 3a, which gives the values, and 3b, which uses
-  them.
-  "Role" is not used for this, since voter and facilitator own the word.
+- **Value source**: `frontend/src/colours.css` for the colour tokens and
+  `frontend/src/tokens.css` for the rest, the only place a token's value is
+  written, each token with a one-line purpose comment. It is the contract
+  between 3a, which gave the values, and 3b, which uses them. A token's purpose
+  is not called its role, since voter and facilitator own the word.
 - **Phase**: voting or revealed. A Re-vote returns the round to voting.
 - **Layout cell**: one page (voter, facilitator or lobby) in one phase at one
   target screen; the lobby has no phase.
@@ -56,8 +58,9 @@ lunatech.com's stylesheet, read 2026-10-06:
   ink-soft 12.12, mute 6.01 (fails AAA), mute-soft 3.95 (fails AA). White on
   burgundy 7.88. Burgundy against ink is 2.23, 1.79 under protanopia.
 - Under deuteranopia burgundy falls to 6.67 on paper, and white on it to 6.95,
-  so the app's burgundy is about 5% darker, such as `#8E292E` (7.14 and 7.43);
-  3a sets the value (J8).
+  so the app's burgundy is about 5% darker, `#8E292E` (7.14 and 7.43) (J8).
+- The app takes the site's gist, not its values: lunatech.com was not built
+  for contrast, so a value moves wherever J8 needs it, the hue kept.
 
 ## Rules
 
@@ -73,20 +76,23 @@ lunatech.com's stylesheet, read 2026-10-06:
 ### J2. One fluid root, everything else in rem
 
 - The root font size is the only fluid value:
-  `:root { font-size: clamp(<min>rem, <a>vmin + <b>rem, <max>rem) }`, values
-  from 3a. Its limits are in `rem`, so the reader's default font size counts.
+  `clamp(<min>rem, <a>vmin + <b>rem, <max>rem)`, the `--root-size` token,
+  which the contrast gate (J8) checks against the three rules below. Its limits
+  are in `rem`, so the reader's default font size counts.
 - The root sits at its minimum up to the laptop sizes (J1's target and hand
   checks below 800 px tall), so browser zoom there is exactly linear.
 - `b` is above zero, so every zoom step grows the text at every viewport.
 - `max` is at most 2.5 times `min`, so text reaches twice its size within
   Chromium's and Firefox's 500% zoom at any viewport.
-- Every other size is in `rem`. No viewport unit appears outside the root but
-  the app shell's height: exactly `100dvh` where principle 4's table says the
-  page never scrolls, and at least `100dvh` in its other rows.
-- `px` only for the hairline token. Every other line (the Lines tokens but the
-  hairline: control lines, message bars, the focus ring) is in `rem` with a
-  pixel floor, such as `max(2px, 0.15rem)`, so it scales with the root and never
-  rounds to nothing.
+- Every other size is in `rem`, but the label tracking, in `em` so that it
+  follows its own text. No viewport unit appears outside the root but the app
+  shell's height: exactly `100dvh` where principle 4's table says the page
+  never scrolls, and at least `100dvh` in its other rows.
+- `px` only for the hairline token and inside a pixel floor. Every other line
+  (the Lines tokens but the hairline: control lines, J3's marks, the kept
+  frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
+  such as `max(2px, 0.125rem)`, so it scales with the root and never rounds to
+  nothing. The gate checks the units in `tokens.css`.
 
 ### J3. How each round state is shown
 
@@ -105,28 +111,36 @@ shape or fill from afar, and words explain the rest up close.
 | --- | --- | --- |
 | No estimate | outline | "–" in the value's place |
 | Confirmed | solid fill | the value |
-| Kept | hatching | the value and a "not confirmed" pill |
+| Kept | kept frame | the value and a "not confirmed" tag |
 
 | Card | Shown as |
 | --- | --- |
 | Not chosen | plain |
 | Chosen, confirmed | solid fill |
-| Chosen, kept | a hatched frame around the figure, and a "not confirmed" pill |
-| Revealed | all disabled, the phase line says why; the chosen one keeps its look, fill or hatched frame; faded within J8 |
+| Chosen, kept | the kept frame around the figure, and a "not confirmed" tag |
+| Revealed | all disabled, the phase line says why; the chosen one keeps its look, fill or kept frame, faded to the grey (J8) |
 
 - Three looks answer the room's two questions at a glance: who has chosen
   again, and whether enough estimates exist for a reveal to mean something.
-- No pill on a kept entry while voting: the hatching carries it, and the
+- No tag on a kept entry while voting: the kept frame carries it, and the
   accessible name says it.
-- **Solid fill** and **hatching** are each defined once, on entries and cards
-  alike. The hatching frames a card's figure, so the figure stays on paper and
-  in line with the others.
-- The card's pill is `aria-hidden`: its hidden description, "Previous vote,
+- **Solid fill** and the **kept frame** are each defined once, on entries and
+  cards alike, both in the card back's colour (J4). The solid fill covers the
+  mark or the card. The kept frame is a solid band around a paper centre: on a
+  card the band is `--frame-band`, a fixed line; on an entry it is a fifth of
+  its mark's width in the mark's viewBox, the stroke inset. The frame surrounds
+  a card's figure, so the figure stays on paper and in line with the others.
+  Outline, kept frame and fill read as no fill, some, full: no estimate, kept,
+  confirmed.
+- A card's size is 3b's, with a token 3b adds: a kept card shows its widest
+  figure inside the band with room around it (L5).
+- The card's tag is `aria-hidden`: its hidden description, "Previous vote,
   not confirmed", already says it. It sits outside the button, in the card's
   wrapper beside that description, so the button's text stays the figure
   (see "Contract reads").
-- 3b checks the hatching on screenshots shrunk to a 480 by 270 video tile, and
-  from a few metres away.
+- 3b checks the kept frame on screenshots shrunk to a 480 by 270 video tile,
+  and from a few metres away, on the smallest entry mark too (L3). If it fails
+  there, 3b sends the band back to 3a (Tokens).
 - **Facilitators** have no round state, so they are listed in their own region
   under one heading, in step 1b's order, and no entry carries a "Facilitator"
   label. The region sits inside the participant area, after the voters, or is
@@ -139,11 +153,11 @@ shape or fill from afar, and words explain the rest up close.
   reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
-- **Forced colours** (Windows' contrast themes) repaint backgrounds and drop
-  gradients, which would erase the fill and the hatching:
-  - an entry's mark and a card's hatched frame are inline SVG drawn in an
-    inherited `currentColor`, which the browser repaints in the user's colours
-    with no opt-out;
+- **Forced colours** (Windows' contrast themes) repaint backgrounds, which
+  would erase the fill:
+  - a card's kept frame is its border, and an entry's mark is inline SVG drawn
+    in an inherited `currentColor`; the browser repaints both in the user's
+    colours with no opt-out;
   - a card's solid fill is the one opt-out (`forced-color-adjust: none`),
     drawn only in system colours (`Canvas`, `CanvasText`), since nothing else
     keeps a figure readable on a fill;
@@ -154,7 +168,9 @@ shape or fill from afar, and words explain the rest up close.
 
 - Burgundy marks the brand and at most one primary action per phase, and in
   its deep shade a problem message (J6).
-- Every J3 state is drawn in ink.
+- Every J3 state is drawn in the card back's colour, `--card-back`, which is
+  ink. 3b tries burgundy on the assembled mockups and the product owner
+  chooses; burgundy would reopen this rule.
 - The focus ring is ink (J8). Links are ink and always underlined, so they
   never rely on colour and burgundy never sits in running text.
 
@@ -206,75 +222,94 @@ bar only reinforce them.
 - JetBrains Mono for figures (cards, results, values) and the room id.
 - DM Sans for all other text, the issue included.
 - Instrument Serif at most for the app's name in the lobby (L9).
-- The app serves the fonts, not Google's CDN. 3a confirms the licence of all
-  three families allows it.
+- The app serves the fonts, not Google's CDN. All three families are SIL OFL
+  1.1 with no Reserved Font Name (google/fonts, `OFL.txt` and `METADATA.pb`),
+  so subsetting and woff2 need no renaming, and the licence text ships beside
+  the files.
+- **Shared-screen text** is sized for 4 m on a 40 inch TV at the laptop
+  target: the `--text-3xl` step, 44 px. 3b may drop one element to the 3 m
+  step, `--text-2xl`, said so in the log.
 - Step 4 keeps a late font load from shifting the page.
 
 ### J8. Contrast floor
 
 - All text at AAA, 7:1, large text included (AAA asks 4.5 there), on every
   ground it sits on: help lines, labels, placeholders and links included.
-  Supporting text is told by size and weight, or by a grey 3a computes to reach
-  7:1.
+  Supporting text is `--grey`, at the body size; the hierarchy comes from a
+  600-weight lead in ink. No text is italic.
 - Other indicators at 3:1 at least (WCAG 1.4.11), a line that identifies a
   control included. Hairlines are decorative and exempt.
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
-  least 2 px, both in `rem` with a floor (J2); never a `box-shadow`, which
-  forced colours remove. On every ground it meets both WCAG tests: 2.4.13
+  least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
+  which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
   (AAA), an area at least a 2 px perimeter with 3:1 between the focused and
   unfocused pixels, and 1.4.11, 3:1 against what touches it. On the one
   forced-colours opt-out (J3), it is `CanvasText`.
 - Focus is never hidden behind a banner or the scrolled participant area
   (2.4.12).
-- Under `prefers-contrast: more`, hairlines and the hatching darken, to values
-  3a gives as tokens.
+- Under `prefers-contrast: more`, the hairline colour turns `--mute-soft`, an
+  indicator at 3:1, and the control line takes the mark line's weight.
 - The frozen deck keeps every figure at 7:1, under every simulation too, though
   WCAG exempts disabled controls. Its figures and the chosen card's fill or
-  frame may fade toward paper only that far (about `#5A5553`, a 3a token), and
-  the unchosen cards' edges may use the hairline's width and colour tokens,
-  which 1.4.11 allows on a disabled control; the phase line says why it is
-  frozen. 3b picks the level on the mockups, and whether the fill fades. Nothing
-  fades under forced colours.
-- 3a's script checks each text and indicator colour at its floor on every ground
-  it can sit on: paper, paper-warm or white, paper-pale, the burgundy tint over
-  each surface a message sits on, the ink fill (a confirmed card's figure), the
-  faded fill (a frozen chosen card's figure) and burgundy (the primary's label).
-  The colour-blind simulations (Machado 2009, full severity) are a gate at the
-  same floors, not a report.
+  frame fade to `--grey`, whatever the card back, and the unchosen cards' edges
+  may use the hairline's width and colour tokens, which 1.4.11 allows on a
+  disabled control; the phase line says why it is frozen. Nothing fades under
+  forced colours.
+- **The contrast gate**, a Vitest test in `test:unit`, checks each text and
+  indicator colour at its floor on every ground it can sit on, under normal
+  vision and the colour-blind simulations (Machado 2009, full severity): a gate
+  at the same floors, not a report. Its pairs are listed in
+  `frontend/src/design/gate.ts` and follow the value source's current values.
+  It checks pairs of tokens, not rendered pages: a component that puts a
+  foreground on a ground outside the list escapes it until review catches it
+  or the pair is added.
 
 ### J9. Motion, surfaces and shapes
 
 - **Motion**: only small transitions, such as entries turning on a reveal and a
-  button changing state, each at most 200 ms, and none under
+  button changing state, each `--duration` long (at most 200 ms), and none under
   `prefers-reduced-motion`. Motion never carries information alone.
-- **Surfaces**: the page on paper, content surfaces on paper-warm or white
-  (3a's choice), told apart by a hairline, not a shadow.
+- **Surfaces**: the page on paper, content surfaces on paper-warm, told apart
+  by a hairline, not a shadow.
 - **No dark sections**: one light theme (principle 6).
-- **Shapes**: lunatech.com's corner radius and border widths, measured in 3a
-  and turned into the Shape and Lines tokens (J2), within J8's 3:1 for
-  indicators.
+- **Shapes**: lunatech.com's, as measured on 2026-10-07: corners square but the
+  scrollbars' 2 and 3 px and the 50% dots; 1 px lines; 2 and 3 px burgundy
+  bars; a 2 px focus outline, offset 2 px; transitions of 0.18 to 0.25 s;
+  buttons at least 44 px tall, kept as `--target-min`.
+- **Corners** are square but on cards, the deck's and L3's card entries, which
+  take `--radius-card`. Buttons, inputs, surfaces, messages and the "not
+  confirmed" tag stay square.
+- **Two line weights**: controls keep the brand's 1 px line, `--line-control`;
+  J3's marks take 2 px, `--line-mark`; both within J8's 3:1 for indicators.
 
 ## Tokens
 
-3a fills this list with each token's name, value and purpose. Every colour,
-size, font and duration in a component's CSS comes from it (principle 6 for
-colours), except CSS keywords such as system colours and `currentColor`, and
-L11's values in media queries, which cannot read a token.
+The value source (Terms) holds every token's value and purpose; this section
+keeps the kinds and the rules, and no value is written twice. Every colour,
+size, font and duration in a component's CSS comes from a token (principle 6
+for colours), except CSS keywords such as system colours and `currentColor`,
+and L11's values in media queries, which cannot read a token.
 
 | Kind | Tokens |
 | --- | --- |
-| Colour | paper, paper-warm or white (J9), paper-pale, pale for hairlines, ink, a supporting-text grey at 7:1 (J8), the app's burgundy (Brand source), burgundy-deep, the burgundy tint, the frozen-deck grey (J8), or the supporting grey if 3a finds one serves both |
-| Root | the clamp's minimum, `vmin` and `rem` terms, and maximum (J2) |
-| Shell | its height, `100dvh` (J2) |
-| Type | the families (J7); the scale, the weights |
+| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4) |
+| Root | the clamp (J2) |
+| Shell | its height (J2) |
+| Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking |
 | Spacing | one scale |
-| Shape | corner radii (J9) |
-| Lines | the hairline in `px`; the control line (outlines, card edges, marks, frames); the message bar; the focus ring and its gap (J2, J8) |
-| Pattern | the hatching's angle, stripe and gap (J3) |
+| Shape | the radii (J9); the least target size |
+| Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
 | Motion | the one duration (J9) |
 
-- 3b may add a token a layout needs: it adds it here, and its reason to the
-  log.
+- Nothing imports the value source before step 4; 3b's mockups link both
+  files. The gate (J8) also checks what each file may hold, and J2's root.
+- An alias exists only where its value can differ from its source, such as the
+  card back.
+- The type scale is named by steps, not roles, so 3b assigns a step to an
+  element without renaming a token. It is provisional until 3b's assembled
+  mockups judge it.
+- 3b may add a token a layout needs: it adds it to the value source, and its
+  reason to the log.
 - 3b may send a value back to 3a, the change recorded in the log. A layout that
   does not fit at 600 tries J1's relaxation first.
 - A derived value, such as a pixel floor, lives in a token's definition, never
@@ -302,7 +337,7 @@ the cases. A look that changes one lists it in step 4's contract changes.
   names the cases).
 - The kept card's description, "Previous vote, not confirmed"
   (`unconfirmedCard`), from a hidden note, and the card's text, its figure
-  alone (`toHaveText('5')`). J3's pill, `aria-hidden` and outside the button,
+  alone (`toHaveText('5')`). J3's tag, `aria-hidden` and outside the button,
   leaves both unchanged.
 - A revealed entry's `participant-estimation` holds the value and nothing else,
   empty for no vote (`revealedEstimation`, `expectSummaryMatchesParticipants`).
@@ -318,7 +353,10 @@ the cases. A look that changes one lists it in step 4's contract changes.
 
 The layout questions 3b decides, on mockups of each layout cell.
 
-- **L1. Each page's structure per phase**, the phase line included.
+- **L1. Each page's structure per phase**, the phase line included. A
+  50-character ticket link fits the issue's one line at the laptop target, at
+  J7's shared-screen size; a longer issue wraps, never truncated, until a
+  clickable-link step brings an ellipsis that keeps the link's end.
 - **L2. How progress is shown.**
 - **L3. A voter's entry: a row or a card with the name under it**, and the
   participant area's thresholds. Rows fit more people and longer names; cards
@@ -326,16 +364,20 @@ The layout questions 3b decides, on mockups of each layout cell.
   reveal. Decided on whole-page mockups at 1280 by 600 with 14 people. The
   revealed entries' form follows: whether the marks stay around the value, or
   the cards turn face up. Also where the facilitator region sits, within J3's
-  two choices.
+  two choices. The kept frame is checked on the smallest entry mark (J3).
 - **L4. Results**: scroll or summarise, and the later-steps spread toggle.
-- **L5. How the deck reflows** on narrow screens and phones.
+- **L5. How the deck reflows** on narrow screens and phones, and the card's
+  size (J3). A card fits its widest figure, "0.5"; for a narrower card, every
+  shown `0.5` may read "½" instead, a contract change of step 4: the card's
+  name, and the `most-voted`, `tally-value` and `participant-estimation` text,
+  which `expectSummaryMatchesParticipants` compares, all through one display.
 - **L6. The room page's header**, the copy hint and the role line. The app's
   name may leave it: no case reads it, the tab title carries it, and the 600 px
   budget wants the room. Today's headings skip levels: the name is an `<h2>`,
   the room id an `<h5>`, "Your estimation" and "Most voted estimation" `<h6>`.
   L6 gives the page an ordered heading structure, the room id staying a heading
   (see "Contract reads").
-- **L7. The issue editor** and its messages.
+- **L7. The issue editor** and its messages, within L1's one-line issue.
 - **L8. The banners.**
 - **L9. The lobby.**
 - **L10. The monitor's width cap**, and how the shared-screen elements stay in
@@ -360,7 +402,7 @@ The reasons behind each rule, and what was set aside.
   case. Principle 5's first bullet was reopened to say so. Zoom shrinks the
   viewport in CSS px, so the `vmin` part shrinks as everything else grows, and
   alone it cancels the zoom: with `clamp(1rem, 2vmin, 1.75rem)` the monitor's
-  text stayed flat from 125% to 200%. With the example `clamp(1rem, 1.05vmin +
+  text stayed flat from 125% to 200%. With the root `clamp(1rem, 1.05vmin +
   0.5rem, 1.75rem)`, 200% zoom doubles the text at J1's target and the hand
   checks below 800 px tall, 1280 by 952 doubles by the 250% step (Firefox's
   240%) and the 3072 by 1598 monitor by 400%, at 1.94 times on 300%, and every
@@ -391,16 +433,23 @@ The reasons behind each rule, and what was set aside.
   a half fill, which pushes the figure out of line with the others; a dashed
   outline, too close to the plain one at video-tile size; a cross for "no
   vote", which reads as refused; a card back, which already means hidden;
-  opting every mark or the kept frame out of forced colours, when SVG needs no
-  opt-out; mark names fitted to today's substring reads ("Voted, vote
+  opting every mark or the kept frame out of forced colours, when a border and
+  SVG need none; mark names fitted to today's substring reads ("Voted, vote
   hidden"), which writes them for the tests rather than the listener; "your
-  last vote" on the card, a second wording for one state.
+  last vote" on the card, a second wording for one state. The kept frame
+  replaced the hatching in 3a: it reads as focused where hatching blurred, at
+  full size and at the tile. Set aside: hatching; partial borders (top and
+  bottom, left and right); a card band a fifth of a card width 3a would have
+  had to guess before 3b's layouts. The pill was renamed the tag in 3a.
 - **J4.** lunatech.com uses burgundy for its primary button and its active
   state. As states, it would fill a room of 14 and hide the primary action.
   Ink on paper is about 17:1 for every vision type. Burgundy against ink is
   1.79 under protanopia, which is safe only because burgundy carries no state.
   Set aside: burgundy for states; the chosen card in burgundy and entries in
-  ink, which gives one state two colours.
+  ink, which gives one state two colours. A burgundy card back cannot fade
+  within 7:1 (paper-warm on it 7.31 at full strength, 6.57 at 95%, at worst),
+  hence the frozen card fades to the grey whatever the back; a blue back was
+  set aside, a colour from outside the brand.
 - **J5.** Showing Show while revealed re-reveals and republishes an identical
   snapshot (`RoomData.show`), so hiding it is presentation (principle 8).
   Re-voting and moving on happen about half each after a Show in the sessions
@@ -410,8 +459,8 @@ The reasons behind each rule, and what was set aside.
   separate step to hide Show; Next issue as the revealed primary; a primary
   chosen by the result, kept as a step 5+ candidate for the specialist.
 - **J6.** Burgundy-deep on the tint over paper is 10.75 (protanopia 11.99,
-  deuteranopia 10.07, tritanopia 10.75); ink on paper-pale 14.78 for all
-  three. The two grounds are close in
+  deuteranopia 10.07, tritanopia 10.75); ink on paper-pale 14.77 to 14.78
+  for all three. The two grounds are close in
   lightness, hence the icon and words. Set aside: four hues, which bring colours
   from outside the brand, red-green confusion and an amber that rarely reaches
   AAA, to split moved from restarted, which nobody acts on differently; ink
@@ -422,7 +471,10 @@ The reasons behind each rule, and what was set aside.
   from Google, survives a proxy that blocks the CDN, and drops an outside
   dependency; the test suite's off-origin guard would also fail every case on a
   CDN font. Set aside: the serif for the issue; system fonts only; Space
-  Grotesk, which the site uses only in places.
+  Grotesk, which the site uses only in places. Shared-screen text: cap height
+  at least a two-hundredth of the distance, at 0.65 mm per CSS px measured on a
+  40 inch TV, is 44 px of DM Sans (cap 0.70 em); a 3 m or a 5 m target set
+  aside.
 - **J8.** Principle 10 asks for it, and the brand's ink and paper make it cheap;
   only the muted grey needs replacing. Set aside: AA beyond the shared-screen
   elements, which allows the site's grey but falls short of principle 10; 7:1
@@ -437,9 +489,16 @@ The reasons behind each rule, and what was set aside.
   2.23 against ink text and 6.63 on a message's ground. The frozen deck fades
   within 7:1 rather than below it, so the voter's own vote stays legible once
   revealed and the text floor has no exception; thin edges carry most of the
-  disabled look. Set aside: a 4.5:1 exception for disabled cards.
+  disabled look. Set aside: a 4.5:1 exception for disabled cards. `--grey` is
+  the lightest grey found on the site's mute hue at 7:1 on every ground under
+  every vision, so one grey serves supporting text and the frozen deck. Set
+  aside: italics and a smaller helper. The gate composites a ground with alpha
+  in sRGB, rounded to 8 bits as the browser paints it, and applies the
+  simulations in linear RGB; that method reproduces every figure in Brand
+  source and the J6 log, and the gamma-space variant does not.
 - **J9.** A projector or a video tile loses a shadow and a dark page's contrast
-  in a lit room.
+  in a lit room. A playing card's corner tells a card from a button; the site's
+  corners are square. Set aside: a 1 px or a 2 px line everywhere.
 - **Brand source.** blog.lunatech.com was considered: black and gold, its gold
   2.02 on its own light ground, so it works only as a dark page, which J9 rules
   out. A new palette was considered for accessibility and set aside, since ink
@@ -449,6 +508,8 @@ The reasons behind each rule, and what was set aside.
   behaviour, principle 10, step 1c, step 4's hiding of Show and its wait on 1c,
   step 5 (Next issue), step 3's split into 3a and 3b, and the result-driven
   primary as a 5+ candidate. Appendix A stays the dated review it is.
+- **3a.** The token values, the gate and the kept frame came with their own
+  spec, `docs/superpowers/specs/2026-10-07-ui-refresh-3a-tokens-design.md`.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
