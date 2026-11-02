@@ -5,14 +5,17 @@ import {
   ISSUE_240,
   NAMES,
   copyHint,
+  deck,
   expectLiveRegion,
   inRoom,
   issueText,
   markRegion,
+  movedBanner,
   participantEntries,
   participantEntry,
   phaseLine,
   readBoxes,
+  restartNotice,
   roundBar,
   roundSlot,
   setIssue,
@@ -31,6 +34,8 @@ const comfort = { width: 1280, height: 680 }
 const TWO_LINES =
   'Rework the login page so that a returning user lands on their last room, and keep the room ' +
   'list in sync'
+// The middle layout's two lines at 860 px, measured: TWO_LINES wraps to three below 1040.
+const TWO_LINES_MIDDLE = TWO_LINES.slice(0, 66)
 // Three of ISSUE_240, cut to 600.
 const LONG = [ISSUE_240, ISSUE_240, ISSUE_240].join('. ').slice(0, 600)
 
@@ -68,10 +73,10 @@ const grow = async (page, voters, role, from, to) => {
 }
 
 // The premise of the floor's cases: the issue's heading is two of PP-1's lines tall.
-const setTwoLines = async page => {
+const setTwoLines = async (page, text = TWO_LINES) => {
   await setIssue(page, 'PP-1')
   const one = (await readBoxes(page, { issue: issueText(page) })).boxes.issue.height
-  await setIssue(page, TWO_LINES)
+  await setIssue(page, text)
   const two = (await readBoxes(page, { issue: issueText(page) })).boxes.issue.height
   expect(Math.round(two / one), `${two} px over ${one} px`).toBe(2)
 }
@@ -394,3 +399,261 @@ cases(
     await inView()
   }
 )
+
+// The journeys' protocol voters: NAMES without Bob, who facilitates.
+const OTHERS = NAMES.filter(name => name !== 'Bob')
+
+// Alice's voter page and Bob's facilitator page, with count entries in all.
+const journeyRoom = async (join, voters, count) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob', { role: 'Facilitator' })
+  const joined = await voters(OTHERS.slice(0, count - 1))
+  for (const { page } of [alice, bob]) {
+    await expect(participantEntries(page), `a room of ${count}`).toHaveCount(count)
+  }
+  return { alice, bob, joined }
+}
+
+// A reveal where nobody voted, then Re-vote; the facilitator's page has no slot while voting.
+const nobodyVoted = async (alice, bob) => {
+  const slot = async () => (await readBoxes(alice.page, { slot: roundSlot(alice.page) })).boxes
+  const voting = await slot()
+  await bob.page.getByRole('button', { name: 'Show votes' }).click()
+  for (const { page } of [alice, bob]) {
+    await expect(phaseLine(page), 'nobody voted: revealed').toHaveText('Revealed')
+    await expect(roundSlot(page), 'nobody voted: shown').toContainText('Nobody voted')
+  }
+  const revealed = await slot()
+  expect(moved(voting, revealed, ['height']), "nobody voted: the slot's height").toEqual([])
+  await bob.page.getByRole('button', { name: 'Re-vote' }).click()
+  for (const { page } of [alice, bob]) {
+    await expect(phaseLine(page), 'nobody voted: voting again').toHaveText('Voting')
+  }
+}
+
+// The crossing's read at scroll 0: the parts' boxes and the entries' computed scale.
+const crossingRead = async page => {
+  await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  const { boxes } = await readBoxes(page, parts(page, true))
+  const computed = await table(page)
+    .getByRole('list')
+    .evaluate(list => getComputedStyle(list).getPropertyValue('--s').trim())
+  return { boxes, scale: computed }
+}
+
+// A protocol voter's name with no space, which nothing caps.
+const LONG_NAME = 'W'.repeat(60)
+
+// How far the page scrolls sideways, after the fonts and two frames as readBoxes reads.
+const sideways = page =>
+  page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const root = document.documentElement
+    return root.scrollWidth - root.clientWidth
+  })
+
+test.describe('the narrow layouts', () => {
+  test.skip(({ browserName }) => browserName !== 'chromium')
+
+  test.describe(() => {
+    const viewport = { width: 860, height: 600 }
+    test.use({ viewport })
+
+    // The stops run as 1, 5, 2, 3, 4 and 6, so stop 5 reveals the fresh round.
+    test('the middle layout, 860 by 600, on both pages', async ({ join, voters }) => {
+      const { alice, bob, joined } = await journeyRoom(join, voters, 2)
+      const pages = [alice.page, bob.page]
+      await setTwoLines(alice.page, TWO_LINES_MIDDLE)
+      await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
+
+      // Stop 1; in the slot's place on Bob's page, the table's top.
+      const watched = page => ({
+        header: page.getByRole('banner'),
+        issue: issueText(page),
+        bar: roundBar(page),
+        ...(page === alice.page ? { slot: roundSlot(page) } : { table: table(page) })
+      })
+      const two = []
+      for (const page of pages) two.push((await readBoxes(page, watched(page))).boxes)
+      joined.push(...(await voters(OTHERS.slice(1))))
+      for (const [i, page] of pages.entries()) {
+        await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
+        const fourteen = (await readBoxes(page, watched(page))).boxes
+        const { table: top, ...fixed } = two[i]
+        expect(moved(fixed, fourteen), 'nothing moves from 2 to 14').toEqual([])
+        if (top) expect(moved({ table: top }, fourteen, ['y']), "the table's top").toEqual([])
+      }
+
+      await nobodyVoted(alice, bob)
+
+      // Stop 2: 13 distinct values, the last protocol voter's missing so the round stays open.
+      await vote(alice.page, ESTIMATIONS[12])
+      await Promise.all(joined.slice(0, 12).map((voter, i) => voter.vote(ESTIMATIONS[i])))
+      await expect(votedMark(table(bob.page)), '13 votes').toHaveCount(13)
+      const cards = Object.fromEntries(
+        ESTIMATIONS.map((_, i) => [`card ${i}`, deck(alice.page).getByRole('button').nth(i)])
+      )
+      for (const page of pages) {
+        const voter = page === alice.page
+        const read = await readBoxes(page, { ...parts(page, voter), ...(voter && cards) })
+        expect(read.scrolls, 'no scroll while voting').toBe(0)
+        expectInView(read, viewport, Object.keys(parts(page, voter)))
+        if (voter) {
+          const out = Object.keys(cards).filter(name => !within(read.boxes[name], read.boxes.slot))
+          expect(out, `the deck within the slot, ${JSON.stringify(read.boxes)}`).toEqual([])
+        }
+      }
+
+      // Stop 3
+      await bob.page.getByRole('button', { name: 'Show votes' }).click()
+      for (const page of pages) {
+        await expect(tallyEntries(page), 'the tally of 13').toHaveCount(13)
+        const read = await readBoxes(page, parts(page, true))
+        expect(read.scrolls, 'no scroll once revealed').toBe(0)
+        const show = page.getByRole('button', { name: 'Show votes' })
+        await expect(show, 'no Show votes once revealed').toHaveCount(0)
+      }
+
+      // Stop 4: each row, whether it holds a facilitator.
+      for (const page of pages) {
+        const rows = page.getByRole('complementary', { name: 'Participants' }).getByRole('listitem')
+        await expect(rows, 'the roster').toHaveCount(15)
+        const flags = []
+        for (const row of await rows.all()) {
+          flags.push((await row.getByTestId('facilitator').count()) > 0)
+        }
+        const last = [...Array(14).fill(false), true]
+        expect(flags, 'the facilitators after every voter').toEqual(last)
+      }
+
+      // Stop 6, revealed
+      await setIssue(alice.page, LONG)
+      await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
+      for (const page of pages) await scrollsAndCutsNothing(page, viewport, true)
+    })
+  })
+
+  test.describe(() => {
+    test.use({ viewport: { width: 392, height: 800 } })
+
+    test('the phone layout, 392 by 800, on both pages, then a crossing', async ({
+      join,
+      voters
+    }) => {
+      const { alice, bob } = await journeyRoom(join, voters, 14)
+      const pages = [alice.page, bob.page]
+      await setIssue(alice.page, TWO_LINES_MIDDLE)
+      await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
+
+      // Stop 1
+      for (const page of pages) {
+        await page.evaluate(() => window.scrollTo(0, 0))
+        const { line, last } = (
+          await readBoxes(page, {
+            line: table(page).getByText('Facilitators: Bob'),
+            last: participantEntries(page).nth(13)
+          })
+        ).boxes
+        const after = last.y + last.height - 0.5
+        expect(line.y, 'the facilitators after the voters').toBeGreaterThanOrEqual(after)
+      }
+
+      await nobodyVoted(alice, bob)
+
+      // Stop 3: each size read, reloaded, which keeps the size, and read again.
+      const page = alice.page
+      for (const width of [860, 1280, 860, 392]) {
+        await page.setViewportSize({ width, height: 800 })
+        const before = await crossingRead(page)
+        await page.reload()
+        await expect(inRoom(page), `back in the room at ${width}`).toBeVisible()
+        const after = await crossingRead(page)
+        expect(moved(before.boxes, after.boxes), `the boxes at ${width}`).toEqual([])
+        expect(after.scale, `the scale at ${width}`).toBe(before.scale)
+        if (width === 1280) {
+          // The fit follows the table, not the window: an issue change resizes the table alone.
+          await setIssue(page, LONG)
+          await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
+          const changed = await crossingRead(page)
+          await page.reload()
+          await expect(inRoom(page), 'back in the room, an issue change at 1280').toBeVisible()
+          const fresh = await crossingRead(page)
+          expect(fresh.scale, 'premise: LONG refits at 1280').not.toBe(after.scale)
+          const named = 'an issue change at 1280'
+          expect(moved(changed.boxes, fresh.boxes), `the boxes, ${named}`).toEqual([])
+          expect(fresh.scale, `the scale, ${named}`).toBe(changed.scale)
+          await setIssue(page, TWO_LINES_MIDDLE)
+          await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
+        }
+      }
+    })
+  })
+
+  for (const viewport of [
+    { width: 320, height: 640 },
+    { width: 640, height: 300 }
+  ]) {
+    test.describe(() => {
+      test.use({ viewport })
+      const size = `${viewport.width} by ${viewport.height}`
+
+      test(`no page scrolls sideways, ${size}`, async ({ join, voters, room }) => {
+        const alice = await join('Alice')
+        const bob = await join('Bob', { role: 'Facilitator' })
+        await voters([LONG_NAME])
+        await setIssue(alice.page, TWO_LINES_MIDDLE)
+        const pages = [alice.page, bob.page]
+        // App.tsx reads both banners' flags on load, so no restart is needed.
+        for (const page of pages) {
+          await page.goto(`/${room}?moved=1&restarted=1`)
+          await expect(inRoom(page), `back in the room, ${size}`).toBeVisible()
+          await expect(movedBanner(page), `the moved banner, ${size}`).toBeVisible()
+          await expect(restartNotice(page), `the restart notice, ${size}`).toBeVisible()
+          await expect(issueText(page), `the two-line issue, ${size}`).toHaveText(TWO_LINES_MIDDLE)
+          const name = participantEntry(page, LONG_NAME)
+          await expect(name, `the long name uncapped, ${size}`).toBeVisible()
+        }
+
+        for (const page of pages) {
+          const over = await sideways(page)
+          expect(over, `no sideways scroll while voting, ${size}`).toBeLessThanOrEqual(0)
+        }
+        await vote(alice.page, '13')
+        await bob.page.getByRole('button', { name: 'Show votes' }).click()
+        for (const page of pages) {
+          await expect(phaseLine(page), `revealed, ${size}`).toHaveText('Revealed')
+          const over = await sideways(page)
+          expect(over, `no sideways scroll once revealed, ${size}`).toBeLessThanOrEqual(0)
+        }
+
+        if (viewport.width !== 320) return
+        // The copy, on Alice's page; the hint's text is read through a Range, its box the cell's.
+        const page = alice.page
+        const id = page.getByRole('heading', { name: room, exact: true })
+        await expect(id, 'the room id before the copy').toBeVisible()
+        const copy = page.getByRole('link', { name: 'Copy link' })
+        const menu = page.getByRole('button', { name: 'Menu' })
+        const named = { header: page.getByRole('banner'), issue: issueText(page), copy, menu }
+        const before = (await readBoxes(page, named)).boxes
+        await copy.click()
+        await expect(copyHint(page), 'the hint after the copy').toHaveText('Link copied')
+        await expect(id, 'the room id hidden under the hint').toBeHidden()
+        const after = (await readBoxes(page, named)).boxes
+        const text = await copyHint(page).evaluate(hint => {
+          const range = document.createRange()
+          range.selectNodeContents(hint)
+          const { x, y, width, height } = range.getBoundingClientRect()
+          return { x, y, width, height }
+        })
+        await expect(copyHint(page), 'the hint through the reads').toHaveText('Link copied')
+        const kept = 'the header, the issue, Copy link and the menu keep their boxes'
+        expect(moved(before, after), kept).toEqual([])
+        const covered = ['copy', 'menu'].filter(name => overlap(text, after[name]))
+        const boxes = JSON.stringify({ text, ...after })
+        expect(covered, `the hint covers neither Copy link nor the menu, ${boxes}`).toEqual([])
+      })
+    })
+  }
+})
