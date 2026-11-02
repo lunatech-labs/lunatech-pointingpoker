@@ -151,7 +151,7 @@ back here.
   built check.
 - **'a mistyped room name is refused with a suggestion that reaches the
   room'** (`slug.spec.js`): its link lookup becomes the row's exact name,
-  "brave-golden-otter Join" (inferred), so a line 2 other than "Join" fails
+  "brave-golden-otter Join", so a line 2 other than "Join" fails
   it. It changes its `getByText('is not a room name')` to the heading
   `brave-golden-oter is not a valid room name.` by role. Mutations:
   `main.tsx` ignores the hand-over; line 2 always "Join as <name>".
