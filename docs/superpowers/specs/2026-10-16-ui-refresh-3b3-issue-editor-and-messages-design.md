@@ -40,7 +40,8 @@ step 4 builds the page, and step 1a's editor region contract stays (parent,
    the product owner judges the lobby there. 3b3 keeps the shared banner
    mechanics (decisions 2 to 6), which the lobby inherits, 3b4 being stacked on
    it. The parent's step lines and the reference's L7 to L9 follow (The docs'
-   changes).
+   changes). 3b4 draws them
+   (`docs/superpowers/specs/2026-10-19-ui-refresh-3b4-lobby-design.md`).
 
 **The banners (L8)**
 

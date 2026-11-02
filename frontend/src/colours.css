@@ -11,7 +11,7 @@
   --burgundy-deep: #931822; /* a problem's text and bar */
   --burgundy-tint: #FEF3F3; /* a problem's ground */
   --hairline-colour: var(--pale); /* dividers and surface edges */
-  --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark */
+  --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark, the room row's square */
   --bar-other: #DE656D; /* the chart's other bars */
   --notice-ground: #EEF4FF; /* a notice's ground */
   --notice-ink: #1E3A8A; /* a notice's text */

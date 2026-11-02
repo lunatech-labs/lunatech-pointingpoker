@@ -139,7 +139,7 @@ const unitOnlyOn = new Map<string, readonly string[]>([
   ['dvh', ['--shell-height']]
 ])
 // The generic font families; any other word, a colour name included, fails.
-const allowedWords = new Set(['system-ui', 'sans-serif', 'ui-monospace', 'monospace', 'ui-serif', 'serif'])
+const allowedWords = new Set(['system-ui', 'sans-serif', 'ui-monospace', 'monospace'])
 
 // Each node of a value with the name of the function it sits directly in.
 const walk = (nodes: Node[], visit: (node: Node, inside?: string) => void, inside?: string) => {

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lobby mockup, layout cells (ui refresh step 3b4)</title>
+<style>
+  body { margin: 0; padding: 16px; background: #E7E2DC; font: 14px/1.4 system-ui, sans-serif; color: #1C1917; }
+  .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-bottom: 16px; position: sticky; top: 0; background: #E7E2DC; padding: 8px 0; z-index: 1; }
+  .bar fieldset { border: 1px solid #B9AD9F; padding: 4px 8px; margin: 0; }
+  .bar legend { font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--w) * var(--s)), 1fr)); gap: 24px; }
+  figure { margin: 0; }
+  figcaption { font-weight: 600; margin-bottom: 6px; }
+  .frame { width: calc(var(--w) * var(--s)); height: calc(var(--h) * var(--s)); overflow: hidden; outline: 1px solid #8A7A70; background: #fff; }
+  iframe { width: var(--w); height: var(--h); border: 0; transform: scale(var(--s)); transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<p style="margin:0 0 8px;max-width:80rem"><b>Pointing Poker, the lobby.</b> The three pages of step 3b4 at the chosen width: the root form (Create and Join), the pinned form, and the not-a-room page with and without a suggestion. "Open alone" shows a cell at your window's size, with the probe.</p>
+<div class="bar" id="bar"></div>
+<div class="grid" id="grid"></div>
+<script>
+// Each cell is lobby.html at the chosen width; "open alone" shows one at the window's own size.
+const cells = [
+  ['Root form, Create tab', 'page=root&tab=create'], ['Root form, Join tab', 'page=root&tab=join'], ['Pinned form', 'page=pinned'],
+  ['Not-a-room page, with a suggestion', 'page=notaroom'], ['Not-a-room page, without one', 'page=notaroom&suggestion=']
+]
+const options = {
+  name: [['Alice', 'A name typed'], ['', 'No name']],
+  remembered: [['slug', 'A remembered room'], ['legacy', 'A legacy id'], ['none', 'Nothing remembered']],
+  rejoin: [['plain', 'Plain arrow (default)'], ['chip', 'Outlined chip']],
+  longest: [['0', 'Ordinary ids'], ['1', 'The longest id, 26 characters']],
+  message: [['', 'No message'], ['join-failed', 'Join failed'], ['create-failed', 'Create failed'], ['lost', 'Connection lost'], ['ended', 'Session ended (inert panel)'],
+    ['moved', 'Moved link'], ['restarted', 'Reconnected'], ['join-failed,moved,restarted', 'Failure and both notices']],
+  width: [['1280', '1280'], ['800', '800'], ['392', '392 (a phone)'], ['320', '320 (the narrowest)']],
+  height: [['700', '700'], ['900', '900'], ['743', '743 (a phone)']],
+  scale: [['0.5', '50%'], ['0.75', '75%'], ['1', 'Actual size']]
+}
+// The messages each form can show (a stream exists on the pinned form alone, Create on the root form alone); a cell that cannot show the chosen one is dimmed
+const shown = { root: ['join-failed', 'create-failed', 'moved', 'restarted'], pinned: ['join-failed', 'lost', 'ended', 'moved', 'restarted'], notaroom: [] }
+const state = { name: 'Alice', remembered: 'slug', rejoin: 'plain', longest: '0', message: '', width: '800', height: '700', scale: '0.5' }
+const bar = document.getElementById('bar')
+for (const [key, list] of Object.entries(options)) {
+  const fs = document.createElement('fieldset')
+  fs.innerHTML = `<legend>${key}</legend>` + list.map(([v, label]) => `<label><input type="radio" name="${key}" value="${v}" ${state[key] === v ? 'checked' : ''}> ${label}</label> `).join('')
+  fs.addEventListener('change', () => { state[key] = fs.querySelector('input:checked').value; render() })
+  bar.append(fs)
+}
+function render() {
+  const grid = document.getElementById('grid')
+  grid.style.setProperty('--s', state.scale); grid.style.setProperty('--w', `${state.width}px`)
+  grid.innerHTML = cells.map(([title, cell]) => {
+    const src = `lobby.html?${cell}&name=${encodeURIComponent(state.name)}&remembered=${state.remembered}&rejoin=${state.rejoin}&longest=${state.longest}&message=${state.message}`
+    const page = new URLSearchParams(cell).get('page'), cannot = state.message.split(',').filter(Boolean).some(f => !shown[page].includes(f))
+    return `<figure style="${cannot ? 'opacity:.45' : ''}"><figcaption>${title}${cannot ? ' (this message cannot show here)' : ''} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
+      <div class="frame" style="--s:${state.scale};--w:${state.width}px;--h:${state.height}px"><iframe src="${src}" title="${title}"></iframe></div></figure>`
+  }).join('')
+}
+render()
+</script>
+</body>
+</html>

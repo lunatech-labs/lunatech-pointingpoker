@@ -174,6 +174,8 @@ describe('what tokens.css may hold', () => {
     ['--a: red;', '--a: the word red in red'],
     ['--a: Canvas;', '--a: the word Canvas in Canvas'],
     ['--a: --b;', '--a: the word --b in --b'],
+    ['--a: serif;', '--a: the word serif in serif'],
+    ['--a: ui-serif;', '--a: the word ui-serif in ui-serif'],
     ['--a: var(--ink);', '--a: a colour token, --ink in var(--ink)'],
     ['--a: 2pt;', '--a: the unit pt in 2pt'],
     ['--a: calc(1rem + 2VW);', '--a: the unit VW in calc(1rem + 2VW)'],
@@ -190,7 +192,7 @@ describe('what tokens.css may hold', () => {
   })
 
   it('allows the generic font families in any case, and calc()\'s operators', () => {
-    const fine = '--a: system-ui, SANS-SERIF, ui-monospace, monospace, ui-serif, serif; --b: calc(1rem + 2rem - 1rem * 2 / 3);'
+    const fine = '--a: system-ui, SANS-SERIF, ui-monospace, monospace; --b: calc(1rem + 2rem - 1rem * 2 / 3);'
     expect(problems(fine)).toEqual([])
   })
 
