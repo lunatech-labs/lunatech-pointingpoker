@@ -1,7 +1,7 @@
 # UI Refresh, Step 4a: The Round's Live Region
 
 Date: 2026-11-02
-Status: In discussion
+Status: Approved
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 4a and
 Appendix B
 
@@ -71,8 +71,9 @@ The parent's Terms hold, **phase line** and **phase word** among them.
    (`roles.spec.js`, `room.spec.js`, `layout.spec.js`), and `phaseLine`'s
    comment, which says "phase word", is corrected. This is the step's contract
    change. The two hidden spans get test ids too, `phase-heard` and `tally-sr`
-   (and `room.html`'s, which mirrors the Result's test ids), so a case finds
-   each by its own name, never by the class that hides it.
+   (and `room.html`'s Result span, which mirrors the Result's test ids), so a
+   case finds each by its own name, never by the class that hides it.
+   `room.html`'s phase line stays as it is: nothing seen changes.
 5. **Out of scope**: who flipped the round (the snapshot does not say); a
    spoken result, a step 5+ candidate; orientation on arriving in the room,
    step 4a-arrival; focus lost when a reveal unmounts the deck, step
@@ -98,10 +99,9 @@ the region; the heard sentence is what is spoken.
 | Leave | The page unloads | Likewise |
 
 Accepted race: two flips in quick succession, such as a Show and then
-another's Re-vote, may render one after the other, and the reader may merge
-them or drop the earlier polite message; if both land before React commits,
-the line renders once, and a flip and its reversal are not announced at all,
-like the changed-and-back reconnect (inferred).
+another's Re-vote, render one after the other (checked: `useSyncExternalStore`
+in `useRoom.ts`), but the reader may merge them or drop the earlier polite
+message (inferred).
 
 ## Accepted costs
 
@@ -192,6 +192,6 @@ recorded in the PR's Verified section.
 One PR on `20260930.ui_refresh_4a_round_live_region`, stacked on 4d's
 `20260930.ui_refresh_4d_not_a_room` (#481): this document, the parent's
 changes, the known issue and the plan first; then the shared
-`visually-hidden` class with the Result's assertion (decision 3), so that
-commit has a case that can fail; then the region with its cases and the
+`visually-hidden` class with the `tally-sr` test ids and the Result's
+assertion (decision 3), so that commit has a case that can fail; then the region with its cases and the
 fixtures (decision 4).

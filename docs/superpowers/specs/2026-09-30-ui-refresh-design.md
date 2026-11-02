@@ -43,8 +43,8 @@ document as a whole stays in discussion.
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
 - **Phase line**: the round bar's element saying whether voting is open or
-  the round is revealed; from step 4a, the round's live region. Its text is
-  the **phase word**.
+  the round is revealed; from step 4a, the round's live region. Its shown text
+  is the **phase word**.
 - **Desktop layout**: the wide layout from 65.75 rem, the laptop target's.
   **Middle layout**: the wide layout below 65.75 rem, with its compact foot.
   The wide and phone layouts and the compact foot are settled in step 3b2's
