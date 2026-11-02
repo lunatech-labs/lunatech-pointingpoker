@@ -1061,21 +1061,6 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a user asks for it. If it is worth fixing, put
   the button outside the live region, or add its name to the notice's text.
 
-### A screen reader does not hear a failed save from the Save issue button
-
-- **Where:** `frontend/src/components/IssueEditor.tsx` (the Save issue button's
-  `disabled`, and the effect on `editor.failed`).
-- **Issue:** Save issue is disabled while saving, which drops focus, so the
-  editor moves focus back to the box. In Orca with Firefox, reading the box cuts
-  off the polite "Could not save the issue". This was heard with a mouse click
-  on the button, and Space or Enter on it is expected to behave the same, since
-  the same `disabled` drops focus; only Enter in the box is heard.
-- **Resolution:** Decided in step 3b3 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 10) and built in step 4: Save and Cancel are `aria-disabled` while
-  saving and keep focus, and after a failure the field takes focus only if focus
-  fell to the page, so a failure read from the button is not cut off. Remove
-  this entry when step 4 lands it.
-
 ### A screen reader hears the connection lost, but never that it came back
 
 - **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
@@ -1091,10 +1076,12 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
-### A deliberate re-click on the role line or the round bar within the double-click time is ignored
+### A deliberate re-click on the role line, the round bar or the issue editor within the double-click time is ignored
 
 - **Where:** `frontend/src/components/RoleLine.tsx` (the button's `onClick`),
-  `frontend/src/components/Controls.tsx` (the bar's `onClickCapture`).
+  `frontend/src/components/Controls.tsx` (the bar's `onClickCapture`),
+  `frontend/src/components/IssueEditor.tsx` (the editor's `onClickCapture` and
+  `onMouseDownCapture`).
 - **Issue:** The line ignores a click whose `detail` is above 1, so a double-click
   switches once. A browser counts any click within the OS double-click time and
   without a mouse move as part of the same run, so switching and then switching
@@ -1102,7 +1089,10 @@ roadmap item instead of leaving it here as stale history.
   keeps showing the role held, so nothing wrong is shown. The round bar does
   the same since step 4b. There it matters only for a press that flips
   nothing, such as Clear votes pressed twice while voting; after a flip, the
-  1 s guard ignores the second click anyway.
+  1 s guard ignores the second click anyway. The issue editor's buttons do the
+  same since step 4b2, where a double-click's second click would land on Cancel
+  editing in Edit issue's place. On a touch screen the window is the double-tap
+  distance, which can reach a neighbouring button (inferred for Android).
 - **Resolution:** Stays open, since the cost is a pause before the second click.
 
 ### The frontend's type check stops at ES2022 APIs
