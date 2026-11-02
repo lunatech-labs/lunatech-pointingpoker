@@ -31,19 +31,19 @@ class PageRoutes(apiConfig: ApiConfig):
   if !Files.exists(indexFile) then log.warn(notBuilt)
 
   // Checked per request, so a page built while the server runs is picked up.
-  private val index: Route =
-    revalidated {
-      extract(_ => Files.exists(indexFile)) { built =>
-        if built then getFromFile(indexFile.toFile)
-        else
-          complete(
-            HttpResponse(
-              StatusCodes.ServiceUnavailable,
-              entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, notBuilt)
-            )
+  private def whenBuilt(route: => Route): Route =
+    extract(_ => Files.exists(indexFile)) { built =>
+      if built then route
+      else
+        complete(
+          HttpResponse(
+            StatusCodes.ServiceUnavailable,
+            entity = HttpEntity(ContentTypes.`text/plain(UTF-8)`, notBuilt)
           )
-      }
+        )
     }
+
+  private val index: Route = revalidated(whenBuilt(getFromFile(indexFile.toFile)))
 
   // Asset names carry a content hash, so a cached copy never goes stale. The font licences keep
   // fixed names, so a changed one reaches a cached browser late (ui refresh step 4c1-foundation).
@@ -86,28 +86,23 @@ class PageRoutes(apiConfig: ApiConfig):
                 case Some(slug) =>
                   log.debug("Redirecting a mis-cased room link {} to {}", raw, slug.raw)
                   redirect(s"/${slug.raw}", StatusCodes.Found)
-                case None => revalidated(complete(notARoom(raw)))
+                case None => revalidated(whenBuilt(complete(notARoom(raw))))
         }
       }
     )
 
   private def notARoom(raw: String): HttpResponse =
+    val page = handOver(Files.readString(indexFile), raw)
+    HttpResponse(StatusCodes.NotFound, entity = HttpEntity(ContentTypes.`text/html(UTF-8)`, page))
+
+  private def handOver(shell: String, raw: String): String =
     val suggestion = Suggestion
       .suggest(raw)
-      .fold("")(slug => s"""<p>Did you mean <a href="/${slug.raw}">${slug.raw}</a>?</p>""")
-    val page =
-      s"""<!DOCTYPE html>
-         |<html lang="en">
-         |<head><meta charset="utf-8"><title>Not a room name</title></head>
-         |<body>
-         |<p><code>${Encode.forHtml(raw)}</code> is not a room name.</p>
-         |$suggestion
-         |<p><a href="/">Create a room</a></p>
-         |</body>
-         |</html>
-         |""".stripMargin
-    HttpResponse(StatusCodes.NotFound, entity = HttpEntity(ContentTypes.`text/html(UTF-8)`, page))
-  end notARoom
+      .fold("")(slug => s""" data-suggestion="${Encode.forHtml(slug.raw)}"""")
+    val meta = s"""<meta name="not-a-room" content="${Encode.forHtml(raw)}"$suggestion>"""
+    // Inserted by indexOf, as replaceFirst reads a typed `$` as a group (4d decision 2).
+    val at = shell.indexOf("</head>")
+    shell.substring(0, at) + meta + shell.substring(at)
 end PageRoutes
 
 object PageRoutes:
