@@ -43,8 +43,8 @@ document as a whole stays in discussion.
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
 - **Phase line**: the round bar's element saying whether voting is open or
-  the round is revealed; from step 4a, the round's live region. Its shown text
-  is the **phase word**.
+  the round is revealed; from step 4a, it holds the round's live region. Its
+  shown text is the **phase word**.
 - **Desktop layout**: the wide layout from 65.75 rem, the laptop target's.
   **Middle layout**: the wide layout below 65.75 rem, with its compact foot.
   The wide and phone layouts and the compact foot are settled in step 3b2's
@@ -330,7 +330,7 @@ while voting (3b2). Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
 step 4. It may share a line with the
 progress, as a separate element outside the region (step 4a's spec, decision
-1). Step 4a makes it the round's live region.
+1). Step 4a gives it the round's live region.
 
 **Step 4. Restyle.** It runs as steps sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
@@ -428,7 +428,7 @@ hidden style.
 Appendix C holds what this design's reviews found about writing these cases.
 
 **Step 4a. The round's live region.** Announces a reveal and a reopened round,
-by making step 3's phase line a live region. Today's reveal row cannot be one:
+with a live region inside step 3's phase line. Today's reveal row cannot be one:
 it is hidden with `visibility` while the round is open, and an announcement
 needs text that changes in place. A visually hidden copy beside it was step
 1a's first design, and nearly every review finding on it came from the copy,

@@ -1,18 +1,18 @@
 # UI Refresh, Step 4a: The Round's Live Region
 
 Date: 2026-11-02
-Status: Approved
+Status: Approved; amended after the hand check (decisions 1, 2 and 4)
 Parent: `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`, step 4a and
 Appendix B
 
 ## Purpose
 
 A reveal or a reopened round is shown to sighted users by the whole page
-changing at once; a screen reader user hears nothing. This step makes the
-round bar's phase line a live region, so each flip is announced with a short
-sentence that makes sense on its own, while the screen shows what it shows
-today. Appendix B's constraints and matrix are its starting point; this
-document supersedes them.
+changing at once; a screen reader user hears nothing. This step gives the
+round bar's phase line a live region inside it, so each flip is announced
+with a short sentence that makes sense on its own, while the screen shows
+what it shows today. Appendix B's constraints and matrix are its starting
+point; this document supersedes them.
 
 Today (checked, `RoundBar.tsx`): the line is `div.round-bar-phase >
 h2.panel-label`, reading "Voting" or "Revealed", rendered unconditionally by
@@ -30,27 +30,35 @@ The parent's Terms hold, **phase line** and **phase word** among them.
   assistive technology.
 - **Heard sentence**: what assistive technology gets instead, "Voting open" or
   "Votes revealed", visually hidden.
+- **Region**: the span holding the heard sentence, with `role="status"`: the
+  round's live region, inside the phase line.
 
 ## Decisions
 
-1. **The region is the phase line's wrapper**, `div.round-bar-phase`, with
-   `role="status"` (polite; never `alert`, since a flip is routine news,
-   often from someone else's Show). It is the same element from the room
-   page's mount for its life, and never empty. On the wrapper, the `h2` keeps
-   its heading role. The region holds the phase text alone: a later progress
-   count on the line is a separate element outside it, or every vote, join
-   and leave would be read aloud.
+1. **The region is the heard sentence's own span**, with `role="status"`
+   (polite; never `alert`, since a flip is routine news, often from someone
+   else's Show), holding the sentence as its only content, with no element
+   inside it (product owner's ruling, after the hand check; the rules it
+   follows are under "Checked in Firefox and Orca"). It is the same element
+   from the room page's mount for its life, and never empty. It holds the
+   phase text alone: a later progress count on the line is a separate element
+   outside it, or every vote, join and leave would be read aloud. Rejected:
+   the phase line's wrapper as the region, this decision's first version,
+   which Orca does not announce (rule 1).
 2. **Two separate texts, each complete** (product owner's ruling): inside the
-   `h2`, the seen word in a span with `aria-hidden="true"` and the heard
-   sentence in a span with the `visually-hidden` class. Both are picked by
-   `votesRevealed` in the same render, so the line has no state of its own:
-   one region, one render, unlike step 1a's rejected hidden copy beside the
-   line. The heading's name becomes the heard sentence, so heading navigation
-   reads "Votes revealed, heading level 2", how a user arriving mid-round
-   finds the phase until 4a-arrival. Rejected: the bare word spoken (unclear
-   out of context); a hidden word spliced onto the seen one, "Votes " +
-   "Revealed" (two fragments joined by whitespace and casing); the two words
-   shown on screen (reopens 3b2 decision 6, the one-row bar).
+   `h2`, the seen word in a span with `aria-hidden="true"` and the region,
+   with the `visually-hidden` class. The `h2` takes `aria-label`, set to the
+   heard sentence from the same value as the region's text. All three are
+   picked by `votesRevealed` in the same render, so the line has no state of
+   its own: one region, one render, unlike step 1a's rejected hidden copy
+   beside the line. Heading navigation reads "Votes revealed, heading level
+   2", how a user arriving mid-round finds the phase until 4a-arrival. The
+   label copies the sentence, so a case pins both copies (decision 4).
+   Rejected: the heading named from its content (rule 2); `aria-labelledby`
+   to the region (rule 2) or to a span inside it (rule 3); the bare word
+   spoken (unclear out of context); a hidden word spliced onto the seen one,
+   "Votes " + "Revealed" (two fragments joined by whitespace and casing); the
+   two words shown on screen (reopens 3b2 decision 6, the one-row bar).
 3. **`visually-hidden` is a shared class in `components/looks.css`**
    (unlayered; product owner's ruling): the Result's `.result-sr` rule
    (checked, `result.css`) moved and renamed, with `Result.tsx` and
@@ -63,21 +71,58 @@ The parent's Terms hold, **phase line** and **phase word** among them.
    the browser's heading font and changes the line's box (checked: the reset
    leaves headings' font alone).
 4. **The fixtures follow the Terms** (product owner's ruling): `phaseLine` is
-   the phase line, the region, found by role and test id as `issueStatus` is,
-   since `expectLiveRegion` passes an element with no live attributes at all
-   (checked); `phaseWord` is the seen word, a `data-testid="phase-word"` on its
-   span, as `tally-count` is on the Result's hidden-from-readers spans. Every
-   existing assertion on the phase line's text reads `phaseWord` instead
-   (`roles.spec.js`, `room.spec.js`, `layout.spec.js`), and `phaseLine`'s
-   comment, which says "phase word", is corrected. This is the step's contract
-   change. The two hidden spans get test ids too, `phase-heard` and `tally-sr`
-   (and `room.html`'s Result span, which mirrors the Result's test ids), so a
-   case finds each by its own name, never by the class that hides it.
-   `room.html`'s phase line stays as it is: nothing seen changes.
+   the phase line, found by its test id alone as before this step, for the
+   layout cases measuring its box; `phaseRegion` is the region, found by role
+   and test id (`phase-heard`) as `issueStatus` is, since `expectLiveRegion`
+   passes an element with no live attributes at all (checked); `phaseWord` is
+   the seen word, a `data-testid="phase-word"` on its span, as `tally-count`
+   is on the Result's hidden-from-readers spans. Every existing assertion on
+   the phase line's text reads `phaseWord` instead (`roles.spec.js`,
+   `room.spec.js`, `layout.spec.js`), and `phaseLine`'s comment, which says
+   "phase word", is corrected. This is the step's contract change. The
+   Result's hidden span gets a test id too, `tally-sr` (and `room.html`'s
+   Result span, which mirrors the Result's test ids), so a case finds each
+   hidden span by its own name, never by the class that hides it. What is
+   heard is pinned as markup, the region's text and the `h2`'s `aria-label`,
+   not as an accessible name: Playwright computes names in its own injected
+   script, not from the browser's tree (checked, `toHaveAccessibleName`
+   evaluates `getElementAccessibleNameText`), so a name check cannot see rule
+   2 and would pass with the label removed (inferred). `room.html`'s phase
+   line stays as it is: nothing seen changes.
 5. **Out of scope**: who flipped the round (the snapshot does not say); a
    spoken result, a step 5+ candidate; orientation on arriving in the room,
    step 4a-arrival; focus lost when a reveal unmounts the deck, step
    4a-reveal-focus.
+
+## Checked in Firefox and Orca
+
+The first build's hand check failed: a flip was spoken only with focus on the
+phase line. A spike then tried each markup below on the running app (Firefox
+153.5.1esr, Orca 51.1), read through Firefox's accessibility tree, a log of
+its text-change events and the hand check's ear.
+
+1. **The sentence's text sits directly in the `role="status"` element.** Orca
+   drops a text change arriving within 0.1 s of another from the same app,
+   unless the changed object has focus, or has a live-region role and its own
+   `live` attribute (checked in Orca's installed source, `event_manager.py`,
+   `_ignore_by_focus_state` then `_ignore_by_spam_filter`). A flip changes
+   the result, the button and the roster within a few milliseconds, and
+   Firefox reports a text change on the nearest object of its own holding the
+   text (checked, the event log). With the region on the wrapper, that was
+   the hidden span, an object of its own in the tree (checked; that its
+   absolute positioning makes it one is inferred), with no `live`: dropped.
+2. **Firefox names nothing from a `role="status"` element's content**, even
+   through `aria-labelledby`: the heading containing the region, or labelled
+   by it, was nameless in the tree.
+3. **An element named by an id reference is an object of its own**: a span
+   inside the region, there for `aria-labelledby`, took the text change, and
+   rule 1 dropped it again.
+
+On the spike, the markup of decisions 1 and 2 passed by ear another's Show
+and Re-vote with focus elsewhere, heading navigation and reading the line in
+browse mode; an own Show was not run on it. On its first markup, the region
+without the `h2`'s label, an own last
+vote auto-revealing was spoken with focus on a card.
 
 ## States and events
 
@@ -128,30 +173,36 @@ New:
 ## Contract
 
 **Changed**: decision 4. The layout cases measuring the phase line's box
-(`readBoxes`) keep measuring the wrapper through `phaseLine`. The phase line
-joins the no-cover check of 'an old UUID link opens its derived room under a
-banner that covers no card' (`slug.spec.js`), which passes unchanged
+(`readBoxes`) keep measuring the wrapper through `phaseLine`. The no-cover
+check of 'an old UUID link opens its derived room under a banner that covers
+no card' (`slug.spec.js`) matches any `role="status"` element at a card's
+centre; the region is one, clipped to nothing, so the case passes unchanged
 (inferred).
 
 **New**, both browsers, each shown to fail by the mutations named. If one
 does not fail under its mutation, the plan stops and the case comes back
-here. "Heard" is the `h2`'s accessible name, which leaves `aria-hidden`
-content out; the region is `phaseLine` (decision 4).
+here. The region is `phaseRegion`; "holds" is its text (decision 4).
 
 - **'the phase line announces each flip from one region'** (`room.spec.js`):
-  Alice and Bob join; Bob's phase line is marked (`markRegion`) and heard as
-  "Voting open". After Alice's Show it is heard as "Votes revealed", after her
-  Re-vote as "Voting open", and each time it is still the marked live region
-  (`expectLiveRegion`). Its `phase-heard` span has `clip-path: inset(50%)` and
-  `text-transform: none` (`toHaveCSS`). Mutations: the wrapper keyed by
-  `votesRevealed`; `role="status"` removed; `aria-hidden` removed from the
-  seen word; the sentences swapped; the heard span's class misspelt;
-  `clip-path` dropped from the shared rule; the shared rule without
-  `text-transform: none`.
+  Alice and Bob join; Bob's region, found inside his phase line's heading, is
+  marked (`markRegion`), holds "Voting open" and has no element inside it;
+  that heading has `aria-label` "Voting open", the phase line's wrapper has no
+  `role`, and the seen word has `aria-hidden="true"`. After Alice's Show
+  the region holds, and the label is, "Votes revealed"; after her Re-vote,
+  "Voting open"; each time the region is still the marked live region
+  (`expectLiveRegion`). The region has `clip-path: inset(50%)` and
+  `text-transform: none` (`toHaveCSS`). Mutations: the region keyed by
+  `votesRevealed`; `role="status"` moved back to the wrapper; `role="status"`
+  kept on the wrapper as well; the region moved beside the `h2`; the sentence
+  wrapped in a span inside the region; the `h2`'s `aria-label` removed; the
+  label's sentences swapped; the region's sentences swapped; `aria-hidden`
+  removed from the seen word; the region's class misspelt; `clip-path`
+  dropped from the shared rule; the shared rule without `text-transform:
+  none`.
 - **'the phase line stays one region through a reconnect that finds the round
-  changed'** (`room.spec.js`): Bob's phase line is marked, Bob is cut, Alice
-  shows, Bob is restored; his line is heard as "Votes revealed" and is still
-  the marked live region. Mutation: `RoomPage` keyed by the connection's lost
+  changed'** (`room.spec.js`): Bob's region is marked, Bob is cut, Alice
+  shows, Bob is restored; his region holds "Votes revealed" and is still the
+  marked live region. Mutation: `RoomPage` keyed by the connection's lost
   flag.
 - **The Result's hidden text**: an existing Result case, such as 'the tally
   counts only the votes that were cast' (`room.spec.js`), gains the same
@@ -167,9 +218,10 @@ case's opening check. The seen word after a Show and a Re-vote stays pinned by
 **Hand check**, Orca on Firefox, before the PR is pushed.
 
 - **Judged runs**: another's Show and a Re-vote, focus elsewhere; an own
-  Show; heading navigation to the phase line. In each, the flip is announced
-  (heading navigation: the sentence is read), speaking the heard sentence
-  once and never the seen word. A failure stops the plan and comes back here.
+  Show; heading navigation to the phase line, and reading that line in
+  browse mode. In each, the flip is announced (heading navigation and
+  reading: the sentence is read), speaking the heard sentence once and never
+  the seen word. A failure stops the plan and comes back here.
 - **Recorded runs**: another's Show, and an own vote that auto-reveals, each
   with focus on a card (step 4a-reveal-focus's question). They cannot stop
   this step.
@@ -183,9 +235,12 @@ recorded in the PR's Verified section.
   4a-reveal-focus rows; step 4a's paragraph points here, with new paragraphs
   for both follow-ups; step 3's paragraph points here for the progress staying
   outside the region; Appendix B points here; the Terms gain **Phase line**;
-  steps after 5 gain a spoken result on a reveal.
+  steps after 5 gain a spoken result on a reveal. After the hand check, the
+  Phase line term and step 4a's paragraph say the line holds the region.
 - **`docs/known-issues.md`**: "A reveal drops a voter's focus", closed by
-  4a-reveal-focus.
+  4a-reveal-focus. After the hand check: the app's other regions may lose a
+  change to Orca's filter (rule 1), and Firefox's heading names keep
+  `text-transform`.
 
 ## Branches and commits
 
@@ -194,4 +249,6 @@ One PR on `20260930.ui_refresh_4a_round_live_region`, stacked on 4d's
 changes, the known issue and the plan first; then the shared
 `visually-hidden` class with the `tally-sr` test ids and the Result's
 assertion (decision 3), so that commit has a case that can fail; then the region with its cases and the
-fixtures (decision 4).
+fixtures (decision 4); then this document's correction after the hand check
+and its fix, the region moved onto the heard span and the heading labelled,
+as new commits on top.
