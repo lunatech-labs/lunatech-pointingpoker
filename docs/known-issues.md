@@ -844,8 +844,16 @@ roadmap item instead of leaving it here as stale history.
   which keeps its place but gives the slot its height, so the entries,
   centred in it, move up 50 to 80 px. Layout g, the open swap, would put the
   slot above the table and push it down instead. The progress step, the first
-  step 5+ candidate, fills the slot while voting and ends both. Remove this
-  entry when the progress step lands.
+  step 5+ candidate, fills the slot while voting and ends both. Step 3b2
+  (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`,
+  Accepted costs) accepts the same movement on the facilitator's phone page:
+  its slot appears at a reveal, growing the sheet over the table, and where
+  the page ends on screen or the sheet flows, the round bar moves down by the
+  result's height, until the progress step fills the slot while voting.
+  In the wide layout below 65.75 rem, the facilitator's table also refits
+  its entries smaller at a reveal, since the slot there is taller than the
+  room 3b1 holds for it.
+  Remove this entry when the progress step lands.
 
 ### Only a real e2e failure exercises the artifact upload path
 

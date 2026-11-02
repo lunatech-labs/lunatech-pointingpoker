@@ -68,8 +68,8 @@ document as a whole stays in discussion.
    rewrite and it is what keeps a zoomed page usable (principle 5). Checks on a
    real phone happen on the deployed app only and never gate a merge; phone
    risks go to `docs/known-issues.md`.
-4. **Degrade gradually with room size** (settled; step 3b1 reopened its
-   table). Nothing ever scrolls horizontally. Whether the page scrolls
+4. **Degrade gradually with room size** (settled; steps 3b1 and 3b2
+   reopened its table). Nothing ever scrolls horizontally. Whether the page scrolls
    vertically depends on the viewport, zoom included, since zoom only shrinks
    the viewport in CSS px, and in the wide layout on the issue's length and the
    notices shown:
@@ -78,8 +78,8 @@ document as a whole stays in discussion.
    | --- | --- | --- | --- |
    | The wide layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, the shared screen | never scrolls | scrolls in its own region past a size | that size (L3) |
    | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | the banners (L8), the issue editor's messages (L7) |
-   | The narrow layout, a phone among them | may scroll vertically | flows with the page | the narrow layout (L11) |
-   | The shared screen in the narrow layout, as when zoomed | may scroll vertically, the issue, the progress and the result staying in view; the facilitator's page has no deck, so it has room to | flows with the page | how they stay in view (L10) |
+   | The narrow layout, a phone among them | may scroll vertically | flows with the page | none: step 3b2's phone layout |
+   | The shared screen | the wide layout: a larger screen matches the laptop target at about 125 to 170% zoom; zoom past that may degrade the layout but never breaks it | as in the wide layout | none: step 3b2 |
 
    A notice is a message that ends: a banner reporting a rare event, such as
    the connection lost, a moved link or a restart, until it clears or is
@@ -111,8 +111,9 @@ document as a whole stays in discussion.
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
      unconfirmed and revealed differ by text, shape or a solid fill.
-   - Browser zoom is the facilitator's own lever: at 200% a 1280 px laptop is a
-     640 px layout, so the narrow layout must serve it (principle 4).
+   - Browser zoom is the facilitator's own lever: a larger screen keeps the
+     wide layout up to about 170%, and zoom past that may degrade the layout
+     but never breaks it (principle 4).
 6. **One brand theme**. No light and dark switch, matching lunatech.com.
    Colours exist only as CSS custom properties, so a second theme stays
    possible without touching components.
@@ -253,7 +254,8 @@ the questions that divide its height go together:
 - 3b1, the wide room page: L1, L2, L3, L4, L6, L5's card size and L11's
   breakpoint for the room page;
 - 3b2, narrow and large screens: L5's reflow, L10, and L11 below 3b1's
-  breakpoint;
+  breakpoint
+  (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`);
 - 3b3, the issue editor and the messages: L7 and L8; the editing view, the read
   view being 3b1's heading; the banners' panel's place, stacking and Dismiss;
 - 3b4, the lobby: L9, whose join and create failures are 3b3's messages, and
@@ -266,23 +268,20 @@ button or an input, draws it, and the later ones reuse it. Step 3a2 makes the
 root 3b1 sends back, and the layout tokens with it, before 3b2 draws on them
 (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
 `docs/superpowers/specs/2026-10-14-ui-refresh-3a2-root-height-design.md`).
-On the wide room page the result takes the deck's place after a reveal (step
-3b1), a contract change of step 4 for the suite's "takes no more votes" case;
-whether the deck stays on narrow screens is 3b2's. The layouts include a
-phase line: text
-visible in both phases, saying whether voting is open or the round is revealed,
-outside the deck so the facilitator's page keeps it, and directly above or
-beside the deck's first row, read just before it, and in view whenever that row
-is centred in the viewport, so a voter looking at a frozen deck, where one
-stays after a reveal (3b2), sees why. On the wide room page, where the deck
-leaves on a reveal, the phase word sits instead in the round bar at the column's
-foot, with the actions (3b1, reopened 2026-10-13). Its place and its height
-change with neither the phase, the votes nor the room's size, at every width. Its texts are 3b1's, and the revealed one no
+At every width the result takes the deck's place after a reveal (steps 3b1
+and 3b2), a contract change of step 4 for the suite's "takes no more votes"
+case. The layouts include a phase line: text visible in both phases, saying
+whether voting is open or the round is revealed, outside the deck so the
+facilitator's page keeps it. Since no deck stays after a reveal, the phase word
+sits in the round bar at the column's foot, with the actions (3b1, reopened
+2026-10-13). Its place and its height
+change with neither the phase, the votes nor the room's size, at every width,
+but on the facilitator's phone page until the progress step fills its slot
+while voting (3b2). Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
 step 4. It may share a line with the
 progress, as a separate element (Appendix B). Step 4a makes it the round's live
-region, and the disabled deck needs no description of its own, since the line
-says why.
+region.
 
 **Step 4. Restyle.** The step 3 reference applied, the CSS library chosen,
 Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
@@ -304,7 +303,9 @@ element lists step 3's layouts give:
 - A longer issue, or a window below the floor, scrolls the page and cuts
   nothing: the table keeps its minimum and the slot can be scrolled to.
 - The entries keep their scale through a reveal and never grow past a deck
-  card's height; a room of 0 or 1 voters gets a scale too.
+  card's height; a room of 0 or 1 voters gets a scale too. On the
+  facilitator's page this holds from 65.75 rem; below it, until the progress
+  step, a reveal refits them (3b2's Accepted costs).
 - A reveal with no votes shows the result, "Nobody voted" in place of the most
   voted value, and the slot keeps its height.
 - Every action in the round bar is `aria-disabled` for 1 s after the phase
@@ -312,11 +313,15 @@ element lists step 3's layouts give:
   the round revealed, and a held Enter fires it once.
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
-- The facilitator's page, zoomed to 150% and 200% at least, keeps the issue in
-  view, and in each phase its progress or its result.
+- The facilitator's page, zoomed to 150%, keeps the issue in view, and in each
+  phase its progress or its result; at 200% it scrolls only vertically
+  (principle 4).
+- Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
+  width gives, the table's scale and ☰'s row included (3b2).
 - The phase line keeps its place and its height through a reveal, a reopening
-  and a vote, and sits where step 3 places it.
-- The copy hint moves nothing and covers nothing.
+  and a vote, and sits where step 3 places it, with step 3's exception.
+- The copy hint moves nothing and covers nothing, but the room id it replaces
+  in the phone layout (3b2).
 - No page scrolls horizontally at 320 CSS px, including with a long unbroken
   name, an issue that wraps, and the banners shown.
 
@@ -431,7 +436,7 @@ commitment:
 | Participants above the results | Step 4, as the result placed per page (step 3b1) |
 | "Not Alice?" | A step 5+ candidate |
 | Light and dark theme | Dropped: lunatech.com has one theme |
-| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and the phase line says why a deck is frozen, where one stays after a reveal |
+| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and no deck stays frozen after a reveal (step 3) |
 
 ## Relation to other documents
 
@@ -925,7 +930,7 @@ A rough sketch of the phase idea, a voter's page on a laptop:
 +------------------------------------+    +------------------------------------+
 ```
 
-The revealed sketch leaves the disabled deck out for space; step 3 keeps it.
+The revealed sketch has no deck, as step 3 decides.
 
 ## Appendix B. Inputs for step 4a
 
@@ -984,7 +989,8 @@ spec. Provisional, like the plan.
 - "Moves nothing" records the header's elements, Copy link, Leave and the room
   id, as well as the round's elements; "covers nothing" checks the hint's box
   overlaps none of those same elements. Both run at the laptop target and at
-  320 px, where "beside" may not fit.
+  320 px, where the hint takes the room id's place (3b2) and they check the
+  others.
 - The copy hint becomes a `role="status"` region beside "Copy link": always
   rendered, empty until a copy, holding "Link copied" for the 2 s,
   and checked with step 1a's region helper. Swapping today's `alert` role
@@ -999,10 +1005,6 @@ spec. Provisional, like the plan.
   progress sharing its line. Today's "the reveal
   notice claims its space before the reveal" case runs at the default viewport
   only.
-- Its placement: at a narrow width with the first card scrolled to the
-  viewport's centre, pinned with `scrollIntoView({ block: 'center' })` rather
-  than left to Playwright's default, the phase line is in the viewport and
-  precedes the deck in reading order.
 - The banners are the connection messages, moved and restarted. Moved and
   restarted show together from `?moved=1&restarted=1`; the connection messages,
   lost and ended, and the lobby errors share one slot, `connectionMessage ||
