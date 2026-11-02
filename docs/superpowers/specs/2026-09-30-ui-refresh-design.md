@@ -210,6 +210,7 @@ document as a whole stays in discussion.
 | 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases, the hand check, and the existing cases unchanged but for its listed contract change |
 | 4a-arrival | Arriving in the room: focus moves to a heading when the room appears (to be confirmed) | 4a | Its cases |
+| 4a-reveal-focus | A reveal keeps the voter's focus | 4a | Its cases |
 | 5 | Next issue | 4c1-editor | Its cases |
 | 5+ | One step per feature | 4d | Each one's spec |
 
@@ -325,8 +326,8 @@ but on the facilitator's phone page until the progress step fills its slot
 while voting (3b2). Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
 step 4. It may share a line with the
-progress, as a separate element (Appendix B). Step 4a makes it the round's live
-region.
+progress, as a separate element outside the region (step 4a's spec, decision
+1). Step 4a makes it the round's live region.
 
 **Step 4. Restyle.** It runs as steps sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
@@ -442,6 +443,13 @@ read on a page load but also visible in the tab; a one-off spoken summary,
 which needs a region filled after a delay since text present when a region
 appears is not announced. To decide: what takes focus, and whether join,
 reload, the reload after a refusal and a reconnect behave alike.
+
+**Step 4a-reveal-focus. A reveal keeps the voter's focus.** A reveal replaces
+the deck with the result, so focus on a card falls to the page, whether
+another's Show or the voter's own last vote revealed the round
+(`docs/known-issues.md`, "A reveal drops a voter's focus"). Losing focus may
+also cut off 4a's announcement. To decide: where focus goes, and only when it
+was in the deck or always; step 4a's hand check records what is heard today.
 
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target
