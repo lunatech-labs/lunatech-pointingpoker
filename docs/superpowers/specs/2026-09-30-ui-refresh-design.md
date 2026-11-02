@@ -199,8 +199,10 @@ document as a whole stays in discussion.
 | 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged |
 | 4c1-editor | The editing view's look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-banners | The banners' look and place under the header (J12) | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4c2 | The lobby's look | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
-| 4d | The not-a-room page | 4c2 | Its cases, and `APISpec` |
+| 4c2-form | The lobby's page and form (J13) | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-form | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
+| 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
 | 4a | The round's live region | 4c1-editor | Its cases |
 | 5 | Next issue | 4c1-editor | Its cases |
 | 5+ | One step per feature | 4d | Each one's spec |
@@ -340,8 +342,10 @@ which chooses plain CSS
 (`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`), whose
 muted Save and Cancel are revisited once the stack is deployed and users have
 given feedback, and 4c1-banners, the banners under the header;
-4c2, the lobby's look, which removes
-Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
+4c2, the lobby's look, as 4c2-form, the lobby's page and form
+(`docs/superpowers/specs/2026-10-30-ui-refresh-4c2-form-design.md`),
+4c2-banners, the lobby's banners in the new look, and 4c2-bootstrap, which
+removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import
 in `base.css`, and decides whether to keep Bootstrap's tap highlight removal
 (`-webkit-tap-highlight-color: transparent`); and 4d, the not-a-room page
@@ -461,7 +465,7 @@ commitment:
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
   which nobody can refer to. To decide: trimming at join, a remembered empty
-  name, and a maximum length. The server-side check belongs with
+  name, and a minimum and a maximum length. The server-side check belongs with
   `docs/known-issues.md`, "No request payload is validated on any endpoint that
   takes one". Duplicate names stay allowed. Refusing them would lock out someone
   whose laptop died and who rejoins from a phone without the cookie: their old

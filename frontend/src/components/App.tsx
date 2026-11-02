@@ -12,7 +12,9 @@ import {
 } from '../room/joinRole'
 import { ownRoleOf } from '../room/view'
 import { Alerts } from './Alerts'
-import { Lobby, type LobbyTab } from './Lobby'
+import { LobbyForm } from './LobbyForm'
+import { LobbyPage } from './LobbyPage'
+import type { LobbyTab } from './LobbyTabs'
 import { RoomPage } from './RoomPage'
 import { useRoom } from './useRoom'
 
@@ -27,8 +29,7 @@ if (movedOnLoad || restartedOnLoad) history.replaceState(null, '', window.locati
 const defaultOnLoad = storedDefault(localStorage)
 const joinError = 'Could not join the room. Please try again.'
 // A room remembered from before the cutover is a UUID, which the server's page route redirects.
-const rejoinLabel = (id: string, name: string) =>
-  `Rejoin ${/^[a-z]+-[a-z]+-[a-z]+$/.test(id) ? id : 'your last room'}${name ? ` as ${name}` : ''}`
+const rejoinId = (id: string) => (/^[a-z]+-[a-z]+-[a-z]+$/.test(id) ? id : 'your last room')
 const goTo = (id: string) => window.location.assign('/' + encodeURIComponent(id))
 
 export function App({ connection }: { connection: Connection }) {
@@ -123,20 +124,28 @@ export function App({ connection }: { connection: Connection }) {
       : ''
   const rejoin =
     !pathRoom && remembered
-      ? { href: '/' + encodeURIComponent(remembered), label: rejoinLabel(remembered, name) }
+      ? {
+          href: '/' + encodeURIComponent(remembered),
+          id: rejoinId(remembered),
+          line2: name ? `Rejoin as ${name}` : 'Rejoin'
+        }
       : null
 
-  // The lobby keeps today's markup, fenced from base.css's reset, until 4c2.
+  // The lobby's banners keep today's markup, fenced from base.css's reset, until 4c2-banners.
   return room.snapshot === null ? (
-    <div className="container legacy-page">
-      <Alerts
-        error={connectionMessage || error}
-        moved={moved}
-        onDismissMoved={() => setMoved(false)}
-        restarted={restarted}
-        onDismissRestarted={() => setRestarted(false)}
-      />
-      <Lobby
+    <LobbyPage
+      ended={room.fatal}
+      banners={
+        <Alerts
+          error={connectionMessage || error}
+          moved={moved}
+          onDismissMoved={() => setMoved(false)}
+          restarted={restarted}
+          onDismissRestarted={() => setRestarted(false)}
+        />
+      }
+    >
+      <LobbyForm
         tab={tab}
         onTab={setTab}
         roomId={roomId}
@@ -151,7 +160,7 @@ export function App({ connection }: { connection: Connection }) {
         onCreate={doCreate}
         onJoin={pathRoom ? joinHere : doJoin}
       />
-    </div>
+    </LobbyPage>
   ) : (
     <RoomPage
       roomId={pathRoom}
