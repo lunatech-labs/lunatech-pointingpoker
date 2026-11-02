@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
+import { joinVoters } from '../testkit/voters.js'
 
 // The page is bundled and served by the app, so any other host is a regression. A predicate
 // rather than a glob, so same-origin traffic (the stub, the app, the streams) never reaches it.
@@ -143,6 +144,18 @@ export const test = base.extend({
       return participant
     }
     await use(join)
+  },
+
+  // Voters with no page, on the app rather than the stub, so a case's cuts and buffering leave
+  // them alone. A case gets only the voters: teardown closes every call that resolved.
+  voters: async ({ app, room }, use) => {
+    const calls = []
+    await use(async names => {
+      const call = await joinVoters(app.baseUrl, room, names)
+      calls.push(call)
+      return call.voters
+    })
+    for (const call of calls) call.close()
   },
 
   // The captured output is the whole worker's, which is still the only place a config or
