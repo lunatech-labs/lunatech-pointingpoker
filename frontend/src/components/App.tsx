@@ -126,47 +126,46 @@ export function App({ connection }: { connection: Connection }) {
       ? { href: '/' + encodeURIComponent(remembered), label: rejoinLabel(remembered, name) }
       : null
 
-  // Today's markup, fenced from the reset in base.css, keeps the lobby and the banners; the room
-  // page renders beside it (4c1-wide decision 3).
-  return (
-    <>
-      <div className="container legacy-page">
-        <Alerts
-          error={connectionMessage || error}
-          moved={moved}
-          onDismissMoved={() => setMoved(false)}
-          restarted={restarted}
-          onDismissRestarted={() => setRestarted(false)}
-        />
-        {room.snapshot === null && (
-          <Lobby
-            tab={tab}
-            onTab={setTab}
-            roomId={roomId}
-            fixedRoom={pathRoom !== ''}
-            onRoomId={setRoomId}
-            name={name}
-            onName={setName}
-            defaultRole={shownRole}
-            onChooseRole={chooseRole}
-            rejoin={rejoin}
-            disabled={room.fatal}
-            onCreate={doCreate}
-            onJoin={pathRoom ? joinHere : doJoin}
-          />
-        )}
-      </div>
-      {room.snapshot !== null && (
-        <RoomPage
-          roomId={pathRoom}
-          snapshot={room.snapshot}
-          copied={copied}
-          onCopied={onCopied}
-          onLeave={doLeave}
-          onRefused={() => connection.refused()}
-          onSwitched={role => rememberRole(localStorage, pathRoom, role)}
-        />
-      )}
-    </>
+  // The lobby keeps today's markup, fenced from base.css's reset, until 4c2.
+  return room.snapshot === null ? (
+    <div className="container legacy-page">
+      <Alerts
+        error={connectionMessage || error}
+        moved={moved}
+        onDismissMoved={() => setMoved(false)}
+        restarted={restarted}
+        onDismissRestarted={() => setRestarted(false)}
+      />
+      <Lobby
+        tab={tab}
+        onTab={setTab}
+        roomId={roomId}
+        fixedRoom={pathRoom !== ''}
+        onRoomId={setRoomId}
+        name={name}
+        onName={setName}
+        defaultRole={shownRole}
+        onChooseRole={chooseRole}
+        rejoin={rejoin}
+        disabled={room.fatal}
+        onCreate={doCreate}
+        onJoin={pathRoom ? joinHere : doJoin}
+      />
+    </div>
+  ) : (
+    <RoomPage
+      roomId={pathRoom}
+      snapshot={room.snapshot}
+      copied={copied}
+      onCopied={onCopied}
+      onLeave={doLeave}
+      onRefused={() => connection.refused()}
+      onSwitched={role => rememberRole(localStorage, pathRoom, role)}
+      lost={room.lost}
+      moved={moved}
+      restarted={restarted}
+      onDismissMoved={() => setMoved(false)}
+      onDismissRestarted={() => setRestarted(false)}
+    />
   )
 }

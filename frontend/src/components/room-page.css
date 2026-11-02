@@ -62,6 +62,11 @@
     padding-inline: var(--space-3);
   }
 
+  /* 4c1-banners decision 3: the banners take the column's edges, as the header does */
+  .room-page-banners {
+    padding-inline: var(--space-3);
+  }
+
   .room-page-column,
   .room-page-sidebar {
     display: contents;
