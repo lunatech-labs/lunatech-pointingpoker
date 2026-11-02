@@ -1015,6 +1015,12 @@ The reasons behind each rule, and what was set aside.
   the room page does; each page taking the five props; `querySelector('h1')`; a
   ref threaded from App to each `h1`; no stylesheet, or the page's class passed
   in; a second exception.
+- **4c2-bootstrap.** Removing Bootstrap (the UI refresh design's step
+  4c2-bootstrap) kept its two phone properties on `html` in `page.css`:
+  `-webkit-tap-highlight-color: transparent`, so a tap does not flash grey in
+  Chromium and Safari, and `-webkit-text-size-adjust: 100%`, so iOS Safari does
+  not enlarge text in landscape. Set aside: dropping either; tap feedback
+  through `:active` styles, a question for the designer.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

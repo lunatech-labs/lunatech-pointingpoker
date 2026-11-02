@@ -7,6 +7,9 @@
 html {
   font-size: var(--root-size);
   scrollbar-gutter: stable;
+  /* No grey tap flash, no landscape text boost on phones (4c2-bootstrap decision 2) */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
