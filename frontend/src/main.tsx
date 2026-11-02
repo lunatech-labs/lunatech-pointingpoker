@@ -1,5 +1,5 @@
-import 'bootstrap/dist/css/bootstrap.min.css'
-import './styles.css'
+import './fonts.css'
+import './base.css'
 import { createRoot } from 'react-dom/client'
 import { StrictMode } from 'react'
 import { App } from './components/App'
@@ -20,7 +20,7 @@ const connection = createConnection({
 })
 
 // StrictMode's double effect is safe: the connection lets only the first join and open through.
-createRoot(document.getElementById('app')!).render(
+createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App connection={connection} />
   </StrictMode>
