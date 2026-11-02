@@ -75,7 +75,9 @@ lunatech.com's stylesheet, read 2026-10-06:
 - From 3b1's second look (2026-10-12), the app saturates the brand's hue: the
   designer's red family over burgundy, the same hue (355° against 357°), more
   saturated. His bright red, `--card-back` #DC2F3C, marks shapes without
-  text; darkened to #A31B26 it carries text and the primary button at 7:1.
+  text. Darkened to #9B1A24, it carries the primary button's white at 7.05
+  under deuteranopia, its worst vision, and a problem's text takes #931822,
+  7.05 on its tint under deuteranopia (3a2 decision 6).
 - lunatech.com's restyle of October 2026 is not followed: it came without the
   designer, so it is marketing, not a design system, and the apps follow the
   brand at their own pace.
@@ -100,13 +102,14 @@ lunatech.com's stylesheet, read 2026-10-06:
 
 ### J2. One fluid root, everything else in rem
 
-- The root font size is the only fluid value:
-  `clamp(<min>rem, <a>vmin + <b>rem, <max>rem)`, the `--root-size` token,
-  which the contrast gate (J8) checks against the three rules below. Step 3a2
-  makes it follow the height, `clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem,
-  1.75rem)`, and rewrites the gate's check to match; until then the mockups
-  set it over the value source. Its limits
-  are in `rem`, so the reader's default font size counts.
+- The root font size is the only fluid value, the `--root-size` token,
+  `clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem)`: it follows the
+  height, and the width instead on windows less than 1.28 times as wide as
+  tall. The contrast gate (J8) passes only the shape `clamp(<min>rem,
+  min(<a>vh, <c>vw) + <b>rem, <max>rem)` and checks it against the three
+  rules below; the `vw` term can only lower the root, so no rule bounds `c`
+  before 3b2. Its limits are in `rem`, so the reader's default font size
+  counts.
 - The root sits at its minimum up to the laptop sizes (J1's floor, comfort
   target and hand
   checks below 800 px tall), so browser zoom there is exactly linear.
@@ -115,8 +118,8 @@ lunatech.com's stylesheet, read 2026-10-06:
   Chromium's and Firefox's 500% zoom at any viewport.
 - Every other size is in `rem`, but the label tracking and the tight point
   in "0.5", in `em` so that they follow their own text, and a chart value's
-  fit, in `cqi` so that it follows its column; 3a2 settles the gate's units
-  (3b1 decision 16). No viewport unit appears outside the root but the app
+  fit, in `cqi` so that it follows its column; the gate allows each unit on
+  its tokens only. No viewport unit appears outside the root but the app
   shell's height: exactly `100dvh` in the wide layout, its content overflowing
   it once the table is at its least height, and at least `100dvh` in the
   narrow layout.
@@ -124,8 +127,8 @@ lunatech.com's stylesheet, read 2026-10-06:
   (the Lines tokens but the hairline: control lines, J3's marks, the kept
   frame's band, message bars, the focus ring) is in `rem` with a pixel floor,
   such as `max(2px, 0.125rem)`, so it scales with the root and never rounds to
-  nothing; the shadows' `px` (J9) wait on 3a2 (3b1 decision 16). The gate
-  checks the units in `tokens.css`.
+  nothing, the soft shadow's lengths included (J9). The gate checks the units
+  in `tokens.css`.
 
 ### J3. How each round state is shown
 
@@ -278,10 +281,13 @@ stack and their Dismiss are 3b3's.
   Supporting text is `--grey`, at the body size; the hierarchy comes from a
   600-weight lead in ink. No text is italic.
 - Other indicators at 3:1 at least (WCAG 1.4.11), a line that identifies a
-  control included. Hairlines are decorative and exempt, and so are the
-  roster's avatars, initials on a pale ground in a hue hashed from the name,
-  `aria-hidden` and incidental: the name beside them carries the information.
-- 3b1's new pairs, text and shapes, are listed in its spec's Measured.
+  control included. The decorative colours are exempt, the gate's decorative
+  set: the hairline's pale, and the colours drawn only in a shadow, the soft
+  shadow's, the chosen card's glow and the header mark's offset card, since
+  forced colours drop shadows and the hairline alone tells surfaces apart
+  (J9). So are the roster's avatars, initials on a pale ground in a hue hashed
+  from the name, `aria-hidden` and incidental: the name beside them carries
+  the information.
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
@@ -316,7 +322,9 @@ stack and their Dismiss are 3b3's.
 - **Surfaces**: the page on paper (the room page on paper-pale, J10), content
   surfaces on white panels with rounded corners, a hairline and a soft shadow
   (3b1's second look); the hairline alone tells them apart where a shadow is
-  lost.
+  lost. A shadow is two tokens, its lengths in `tokens.css` and its colour in
+  `colours.css`, joined where it is used: `var(--shadow) var(--shadow-colour)`
+  for a panel, `var(--lift-shadow) var(--lift-colour)` for the chosen card.
 - **No dark sections**: one light theme (principle 6).
 - **Shapes**: lunatech.com's, as measured on 2026-10-07: corners square but the
   scrollbars' 2 and 3 px and the 50% dots; 1 px lines; 2 and 3 px burgundy
@@ -349,13 +357,14 @@ and L11's values in media and container queries, which cannot read a token.
 
 | Kind | Tokens |
 | --- | --- |
-| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, and the shadows |
+| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours |
 | Root | the clamp (J2) |
 | Shell | its height (J2) |
-| Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking |
+| Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking and the tight point |
 | Spacing | one scale |
-| Shape | the radii (J9); the least target size |
+| Shape | the radii (J9); the least target size; the shadows' lengths (J9) |
 | Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
+| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10) |
 | Motion | the one duration (J9) |
 
 - Nothing imports the value source before step 4; 3b's mockups link both
@@ -366,9 +375,8 @@ and L11's values in media and container queries, which cannot read a token.
   element without renaming a token. It is provisional until 3b's assembled
   mockups judge it.
 - 3b may add a token a layout needs: it adds it to the value source, and its
-  reason to the log. 3b1's are declared in `room.html`'s "3a2's tokens"
-  block, which step 3a2 moves to the value source as it stands (3b1 decision
-  16); the weights are then named by weight, not by font.
+  reason to the log. 3b1's moved there from `room.html` in step 3a2 (3b1
+  decision 16); the weights are named by weight, not by font.
 - 3b may send a value back to 3a, the change recorded in the log.
 - A derived value, such as a pixel floor, lives in a token's definition, never
   as a literal in a component.
@@ -665,7 +673,9 @@ The reasons behind each rule, and what was set aside.
     the header at the bottom, the buttons under the deck, no phase word, the
     phase line under the slot.
   - **L. #A31B26 stays** for the button and the chosen card; the bright
-    variants broke B or convinced nobody.
+    variants broke B or convinced nobody. Reopened by 3a2 (decision 6): its
+    figures were measured under normal vision only, and the gate's
+    simulations darken it to #9B1A24, and a problem's text to #931822.
   - **M. From step 5, Clear · toggle · Next issue**, Next issue the primary
     once revealed, since the primary marks the way forward. No place is kept
     for it; the primary chosen by the result is dropped, the designer having
@@ -715,6 +725,18 @@ The reasons behind each rule, and what was set aside.
   primary as a 5+ candidate. Appendix A stays the dated review it is.
 - **3a.** The token values, the gate and the kept frame came with their own
   spec, `docs/superpowers/specs/2026-10-07-ui-refresh-3a-tokens-design.md`.
+- **3a2.** The room page's tokens moved to the value source, checked by the
+  gate, with their own spec,
+  `docs/superpowers/specs/2026-10-14-ui-refresh-3a2-root-height-design.md`.
+  A shadow is two tokens so that each file keeps one kind; a unit maps to the
+  tokens that may use it; the root's `vw` term only lowers it; only colours a
+  reader never needs skip a pair. Five values darkened to pass every vision,
+  each by the least the gate allows. Set aside: a shadow kind in the gate,
+  which adds a parser; shadows as literals, outside the value source; a
+  viewport grid for the root, which turns the rules into samples; exempting
+  the pip and the track; checking the simulations on shapes only, or
+  exempting the button's white, either of which keeps #A31B26 by weakening
+  the gate.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

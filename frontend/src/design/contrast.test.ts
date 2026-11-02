@@ -26,6 +26,8 @@ const figures: [string, Vision, string, string, string][] = [
   ['white on burgundy', 'deuteranopia', white, siteBurgundy, '6.95'],
   ["the app's burgundy on paper", 'deuteranopia', '#8E292E', paper, '7.14'],
   ["white on the app's burgundy", 'deuteranopia', white, '#8E292E', '7.43'],
+  ['white on the primary button', 'deuteranopia', white, '#9B1A24', '7.05'],
+  ["a problem's text on its tint", 'deuteranopia', '#931822', '#FEF3F3', '7.05'],
   ['ink on paper-pale', 'normal', ink, paperPale, '14.78'],
   ['ink on paper-pale', 'protanopia', ink, paperPale, '14.78'],
   ['ink on paper-pale', 'deuteranopia', ink, paperPale, '14.77'],

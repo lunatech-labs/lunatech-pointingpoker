@@ -102,18 +102,31 @@ describe('the pairs', () => {
     expect(hairline('base')).toEqual([])
     expect(hairline('more')).toEqual(['--paper', '--paper-warm', '--paper-pale'])
   })
+
+  it('hold paper-warm on the card back as an indicator, as the back carries no text', () => {
+    const onBack = pairs('base').filter(pair => pair.foreground === '--paper-warm' && pair.ground.token === '--card-back')
+    expect(onBack.map(pair => pair.floor)).toEqual([INDICATOR])
+  })
 })
 
 describe('the colour tokens no pair reaches', () => {
   const every = [
-    '--paper: #FCFAF6; --paper-warm: #FEFDFB; --paper-pale: #F0EBE2; --ink: #1E1815; --grey: #554B43;',
-    '--burgundy: #8E292E; --burgundy-deep: #5C1C20; --burgundy-tint: rgba(142, 41, 46, 0.08);',
-    '--card-back: var(--ink); --mute-soft: #8A7A70; --pale: #D6CABB; --hairline-colour: var(--pale);'
+    '--paper: #FCFAF6; --paper-warm: #FFFFFF; --paper-pale: #F7F5F2; --ink: #1C1917; --grey: #58524F;',
+    '--burgundy: #9B1A24; --burgundy-deep: #931822; --burgundy-tint: #FEF3F3; --card-back: #DC2F3C;',
+    '--mute-soft: #8A8480; --hairline-strong: #8A8480; --pale: #E7E2DC; --hairline-colour: var(--pale);',
+    '--bar-other: #DE656D; --notice-ground: #EEF4FF; --notice-ink: #1E3A8A; --notice-bar: #1D4ED8;',
+    '--ok: #0F5D2C; --ok-tint: #F1F9F2; --kept: #7F3A07; --kept-tint: #FAF6EC; --track: #EFEBE7;',
+    '--pip: rgba(255, 255, 255, 0.85);'
   ].join(' ')
-  const more = '--hairline-colour: var(--mute-soft);'
+  const more = '--hairline-colour: var(--hairline-strong);'
 
-  it('are none when each token is in a pair, maybe through var() or the more run, but --pale', () => {
+  it('are none when each token is in a pair, maybe through var() or the more run, but the decorative set', () => {
     expect(unreached(parseColours(file(every, more)))).toEqual([])
+  })
+
+  it('leave out the decorative set', () => {
+    const decorative = '--mark-offset: #F9C3C6; --shadow-colour: rgba(28, 25, 23, 0.05); --lift-colour: rgba(220, 47, 60, 0.25);'
+    expect(unreached(parseColours(file(`${every} ${decorative}`, more)))).toEqual([])
   })
 
   it('include a token added without a pair', () => {
@@ -121,7 +134,7 @@ describe('the colour tokens no pair reaches', () => {
   })
 
   it('include a token that only an unchecked var() reaches', () => {
-    expect(unreached(parseColours(file(every, '--hairline-colour: #8A7A70;')))).toEqual(['--mute-soft'])
+    expect(unreached(parseColours(file(every, '--hairline-colour: #8A8480;')))).toEqual(['--hairline-strong'])
   })
 })
 
@@ -139,9 +152,15 @@ describe('what tokens.css may hold', () => {
     expect(problems(fine)).toEqual([])
   })
 
-  it('allows ms, no unit, em on the label tracking, vmin on the root and dvh on the shell', () => {
-    const fine = '--tracking-label: 0.12em; --b: 180ms; --c: 1.5; --d: var(--text-2xl); --shell-height: 100dvh;'
-    expect(problems(`${fine} --root-size: clamp(1rem, 1.05vmin + 0.5rem, 1.75rem);`)).toEqual([])
+  it('allows ms, no unit, em on the label tracking and the tight point, cqi on the value fit, dvh on the shell', () => {
+    const fine = '--tracking-label: 0.06em; --tight-point: -0.08em; --value-fit: 66cqi; --b: 180ms; --c: 1.5;'
+    expect(problems(`${fine} --d: var(--text-2xl); --shell-height: 100dvh;`)).toEqual([])
+  })
+
+  it('allows vh and vw on the root, not vmin', () => {
+    expect(problems('--root-size: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem);')).toEqual([])
+    expect(problems('--root-size: clamp(1rem, 1.05vmin + 0.5rem, 1.75rem);'))
+      .toEqual(['--root-size: the unit vmin in clamp(1rem, 1.05vmin + 0.5rem, 1.75rem)'])
   })
 
   it.each([
@@ -162,7 +181,10 @@ describe('what tokens.css may hold', () => {
     ['--a: 100dvh;', '--a: the unit dvh in 100dvh'],
     ['--a: -2vw;', '--a: the unit vw in -2vw'],
     ['--a: calc(1rem - -.5pt);', '--a: the unit pt in calc(1rem - -.5pt)'],
-    ['--a: 0.12em;', '--a: the unit em in 0.12em']
+    ['--a: 0.12em;', '--a: the unit em in 0.12em'],
+    ['--a: 66cqi;', '--a: the unit cqi in 66cqi'],
+    ['--a: 1vh;', '--a: the unit vh in 1vh'],
+    ['--a: 1constructor;', '--a: the unit constructor in 1constructor']
   ])('fails on %s', (declaration, problem) => {
     expect(problems(declaration)).toEqual([problem])
   })
@@ -198,7 +220,8 @@ describe('what tokens.css may hold', () => {
 })
 
 describe("J2's root", () => {
-  const fine = 'clamp(1rem, 1.05vmin + 0.5rem, 1.75rem)'
+  const fine = 'clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem)'
+  const notShape = '--root-size is not clamp(<min>rem, min(<a>vh, <c>vw) + <b>rem, <max>rem)'
   const root = (value: string, more = '') =>
     rootProblems(parseTokens(file(`--root-size: ${value};`, more)))
 
@@ -206,29 +229,44 @@ describe("J2's root", () => {
     expect(root(fine)).toEqual([])
   })
 
+  it('passes the clamp in any case and spacing a formatter may change', () => {
+    expect(root('CLAMP( 1REM , MIN( 1.05VH , 0.82VW ) + 0.5REM , 1.75REM )')).toEqual([])
+  })
+
+  it('passes any vw coefficient, since the vw term can only lower the root', () => {
+    expect(root('clamp(1rem, min(1.05vh, 50vw) + 0.5rem, 1.75rem)')).toEqual([])
+  })
+
   it.each([
-    ['no rem term', 'clamp(1rem, 2vmin + 0rem, 1.75rem)', 'the rem term must be above zero'],
+    ['no rem term', 'clamp(1rem, min(2vh, 0.82vw) + 0rem, 1.75rem)', 'the rem term must be above zero'],
     [
       'a maximum above 2.5 times the minimum',
-      'clamp(1rem, 1.05vmin + 0.5rem, 2.6rem)',
+      'clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 2.6rem)',
       'the maximum 2.6rem is more than 2.5 times the minimum 1rem'
     ],
     [
       'a malformed number',
-      'clamp(1rem, 1.05vmin + 0.5rem, 1..75rem)',
-      '--root-size is not clamp(<min>rem, <a>vmin + <b>rem, <max>rem): clamp(1rem, 1.05vmin + 0.5rem, 1..75rem)'
+      'clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1..75rem)',
+      `${notShape}: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1..75rem)`
     ],
     [
       'a root fluid at the tallest laptop',
-      'clamp(1rem, 1.2vmin + 0.5rem, 1.75rem)',
-      'at a vmin of 757 the root is above its minimum'
+      'clamp(1rem, min(1.2vh, 0.82vw) + 0.5rem, 1.75rem)',
+      'at a height of 757 px the root is above its minimum'
+    ],
+    ['the vmin form', 'clamp(1rem, 1.05vmin + 0.5rem, 1.75rem)', `${notShape}: clamp(1rem, 1.05vmin + 0.5rem, 1.75rem)`],
+    ['no min()', 'clamp(1rem, 1.05vh + 0.5rem, 1.75rem)', `${notShape}: clamp(1rem, 1.05vh + 0.5rem, 1.75rem)`],
+    [
+      'the terms of min() swapped',
+      'clamp(1rem, min(0.82vw, 1.05vh) + 0.5rem, 1.75rem)',
+      `${notShape}: clamp(1rem, min(0.82vw, 1.05vh) + 0.5rem, 1.75rem)`
     ]
   ])('fails on %s', (_, value, problem) => {
     expect(root(value)).toEqual([problem])
   })
 
   it('fails on a root of another shape', () => {
-    expect(root('1rem')).toEqual(['--root-size is not clamp(<min>rem, <a>vmin + <b>rem, <max>rem): 1rem'])
+    expect(root('1rem')).toEqual([`${notShape}: 1rem`])
   })
 
   it('fails when the root is missing', () => {
@@ -236,7 +274,6 @@ describe("J2's root", () => {
   })
 
   it('checks the root the more block sets', () => {
-    expect(root(fine, '--root-size: 2rem;'))
-      .toEqual(['--root-size is not clamp(<min>rem, <a>vmin + <b>rem, <max>rem): 2rem'])
+    expect(root(fine, '--root-size: 2rem;')).toEqual([`${notShape}: 2rem`])
   })
 })
