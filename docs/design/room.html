@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room mockup (ui refresh step 3b1)</title>
+<link rel="stylesheet" href="../../frontend/src/colours.css">
+<link rel="stylesheet" href="../../frontend/src/tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=block">
+<style>
+  /* 3a2's tokens (decision 16): the designer's values under the app's names, the height-first root, and the sizes this page adds */
+  :root {
+    --root-size: clamp(1rem, min(1.05vh, 0.82vw) + 0.5rem, 1.75rem);
+    --paper-pale: #F7F5F2; /* the page, the own row, the waiting pill: the darkest ground that keeps grey at 7:1 */
+    --paper-warm: #FFFFFF; /* panels and cards; figures and labels on a fill */
+    --ink: #1C1917; /* text, controls, the focus ring */
+    --grey: #58524F; /* supporting text, 7:1 on panels and the page (B) */
+    --pale: #E7E2DC; /* hairlines, decorative */
+    --mute-soft: #8A8480; /* the dashed outline, card and button edges, 3:1 (B) */
+    --burgundy: #A31B26; /* the primary button and the confirmed card (L) */
+    --burgundy-deep: #A31B26; /* a problem's text and bar (Q) */
+    --burgundy-tint: #FEF3F3; /* a problem's ground (Q) */
+    --card-back: #DC2F3C; /* shapes without text: the voted mark, the kept frame, the top bar, the header mark */
+    --bar-other: #E06C74; /* the chart's other bars, 3:1 (J) */
+    --notice-ground: #EEF4FF; /* a notice's ground (Q) */
+    --notice-ink: #1E3A8A; /* a notice's text (Q) */
+    --notice-bar: #1D4ED8; /* a notice's icon and bar (Q) */
+    --ok: #10612E; /* the Voted pill's text */
+    --ok-tint: #F1F9F2; /* the Voted pill's ground */
+    --kept: #873E07; /* a kept vote's words: the tag, the pill, the roster's note */
+    --kept-tint: #FAF6EC; /* the kept pill's ground */
+    --track: #EFEBE7; /* the small progress bar's track (later) */
+    --mark-offset: #F9C3C6; /* the header mark's pale offset card */
+    --pip: rgba(255, 255, 255, 0.85); /* the diamond on a voted mark and on the pip fallback */
+    --shadow: 0 1px 2px rgba(28, 25, 23, 0.05); /* a panel's soft shadow (A) */
+    --lift-shadow: 0 0.4rem 0.9rem rgba(220, 47, 60, 0.25); /* a confirmed card's glow */
+    --font-sans: 'Inter', system-ui, sans-serif; /* all text but the room id (A) */
+    --text-xs: 0.75rem; /* labels, pills and small notes */
+    --weight-bold: 700; /* Inter's bold: figures and the app's name */
+    --tracking-label: 0.06em; /* uppercase Inter labels */
+    --leading-figure: 1; /* one line of figures or labels */
+    --text-tag: 0.6875rem; /* the kept tag, a note beside a value, an avatar's initials */
+    --tight-point: -0.08em; /* the point in "0.5", following its figure (J2's em); Inter's point vanishes past it */
+    --radius: 0.875rem; /* panels and messages */
+    --radius-card: 0.5rem; /* cards, rows, the copy button, inputs */
+    --radius-control: 0.625rem; /* buttons and the room chip */
+    --radius-mark: 0.375rem; /* small cards: the header mark and the table's marks */
+    --radius-small: 0.25rem; /* a bar's top corners and the progress track */
+    --radius-pill: 100rem; /* fully rounded ends */
+    --frame-band: max(2px, 0.375rem); /* a card's kept frame (J3) */
+    --panel-gap: 0.875rem; /* between panels, and a panel's block padding */
+    --panel-inline: 1.125rem; /* a panel's inline padding */
+    --page-edge: 1.25rem; /* the page's side margin */
+    --header-height: 3.5rem; /* the header bar */
+    --brand-height: 1.875rem; /* the header mark */
+    --sidebar: 18.125rem; /* the participants sidebar (E) */
+    --icon: 1.125rem; /* an icon beside its words */
+    --avatar: 1.375rem; /* a roster avatar (I) */
+    --row-height: 1.75rem; /* a roster or history row */
+    --action-width: 8.5rem; /* a button's least width */
+    --progress-width: 8rem; /* the voter's small progress bar (later) */
+    --bar-min: 0.375rem; /* the thinnest bar: the progress track, a chart bar's floor */
+    --deck-card: 5.5rem; /* a deck card's greatest height, 5:7 (W) */
+    --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
+    --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */
+    --table-min: 5rem; /* the table's least height: its title and a strip of cards */
+    --slot-height: 7.5rem; /* the slot: deck, progress or result */
+    --chart-value: 2.25rem; /* the chart's value row */
+    --value-fit: 66cqi; /* a chart value's largest size in its column: the widest, a tight "0.5" in Inter bold, is 1.46em, with a margin */
+    --chart-bar: 2rem; /* the chart's tallest bar */
+  }
+  * { box-sizing: border-box; }
+  /* C: the page keeps its scrollbar's gutter, so the layout never depends on whether the page scrolls */
+  html { font-size: var(--root-size); scrollbar-gutter: stable; }
+  body { margin: 0; background: var(--paper-pale); color: var(--ink); font: var(--weight-regular) var(--text-md)/var(--leading-body) var(--font-sans); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  svg { width: var(--icon); height: var(--icon); flex: none; }
+  :focus-visible { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
+  .shell { height: var(--shell-height); display: flex; flex-direction: column; }
+  /* Parts later steps add, shown with later=1 */
+  .later { outline: var(--line-mark) dashed var(--mute-soft); outline-offset: var(--focus-gap); border-radius: var(--radius-card); }
+
+  .header {
+    flex: none; height: var(--header-height); display: flex; align-items: center; gap: var(--panel-gap); padding: 0 var(--page-edge);
+    background: var(--paper-warm); border-bottom: var(--line-hairline) solid var(--hairline-colour);
+  }
+  /* The mark: the Lunatech glyph in white on the card back, with its pale offset card */
+  .logo {
+    height: var(--brand-height); aspect-ratio: 11 / 15; border-radius: var(--radius-mark); background: var(--card-back); color: var(--paper-warm);
+    display: grid; place-items: center; box-shadow: calc(-1 * var(--space-1)) var(--space-1) 0 var(--mark-offset); margin-left: var(--space-1);
+  }
+  .logo svg { width: 62%; height: auto; }
+  .logo.pip::after { content: '◆'; color: var(--pip); font-size: var(--text-xs); }
+  .app { font-weight: var(--weight-bold); font-size: var(--text-md); }
+  .chip {
+    display: flex; align-items: center; gap: var(--space-1); background: var(--paper-pale); border: var(--line-hairline) solid var(--hairline-colour);
+    border-radius: var(--radius-control); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  }
+  .chip h1 { margin: 0; font: var(--weight-medium) var(--text-sm) var(--font-mono); }
+  .chip a {
+    display: flex; gap: var(--space-1); align-items: center; position: relative; font-size: var(--text-sm); font-weight: var(--weight-strong); color: var(--ink);
+    background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-radius: var(--radius-card); padding: var(--space-1) var(--space-2);
+  }
+  .chip a svg { width: var(--text-sm); height: var(--text-sm); }
+  /* Copy link keeps the draft's size; its target reaches 44 px unseen (WCAG 2.5.5) */
+  .chip a::after { content: ''; position: absolute; inset: calc((100% - var(--target-min)) / 2) 0; }
+  /* J6's confirmation: plain text beside its cause; it moves and covers nothing */
+  .copied { flex: 1; color: var(--grey); white-space: nowrap; font-size: var(--text-sm); }
+  .role { font-size: var(--text-sm); color: var(--grey); }
+  .role button, .leave { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; font-size: var(--text-sm); min-height: var(--target-min); }
+  .leave { display: flex; align-items: center; gap: var(--space-1); }
+
+  .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--sidebar); gap: var(--panel-gap); padding: var(--panel-gap) var(--page-edge) var(--space-4); }
+  .col { display: flex; flex-direction: column; gap: var(--panel-gap); min-height: 0; }
+  .panel {
+    background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: var(--panel-gap) var(--panel-inline);
+  }
+  .label { margin: 0; font-size: var(--text-xs); font-weight: var(--weight-strong); letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--grey); }
+  .quiet { display: flex; align-items: center; gap: var(--space-2); min-height: var(--target-min); background: none; border: 0; padding: var(--space-2); font-weight: var(--weight-medium); font-size: var(--text-sm); }
+
+  /* H: the issue at heading size, its margin the panel's side margin all round */
+  .issue-panel { padding-block: var(--panel-inline); }
+  /* One line matches the round bar's height: its --target-min controls and --space-2 padding */
+  .issue { display: flex; align-items: center; gap: var(--space-3); min-height: calc(var(--target-min) + 2 * var(--space-2) - 2 * var(--panel-inline)); }
+  .issue h2 { flex: 1; min-width: 0; margin: 0; font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: var(--leading-tight); overflow-wrap: anywhere; }
+  .issue h2 a { color: var(--ink); }
+  .issue h2.empty { color: var(--grey); font-weight: var(--weight-regular); }
+  /* A link breaks only before a path slash, each segment kept whole (decision 4) */
+  .issue .seg { display: inline-block; text-decoration: inherit; }
+  /* Edit's target reaches into the panel's padding, so it does not grow the panel */
+  .issue .quiet { margin-block: calc(-1 * var(--space-3)); }
+
+  /* K, O: the phase word and the buttons in their own bar */
+  .controls { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); padding-block: var(--space-2); }
+  .controls .quiet { margin-right: var(--space-5); }   /* Clear votes set apart (decision 6) */
+  .phase { flex: 1; min-width: 0; }
+  .phase .label { color: var(--ink); }
+  .progress { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--grey); padding: 0 var(--space-2); }
+  .progress i { display: block; width: var(--progress-width); height: var(--bar-min); border-radius: var(--radius-small); background: var(--track); overflow: hidden; }
+  .progress i::after { content: ''; display: block; height: 100%; width: var(--done); background: var(--card-back); }
+  .btn {
+    min-width: var(--action-width); min-height: var(--target-min); border-radius: var(--radius-control);
+    border: var(--line-control) solid transparent; padding: 0 var(--space-4); font-weight: var(--weight-strong);
+  }
+  .btn.primary { background: var(--burgundy); color: var(--paper-warm); }
+  .btn.secondary { background: var(--paper-warm); border-color: var(--mute-soft); }
+  .controls [aria-disabled="true"] { cursor: default; }
+  .slot { height: var(--slot-height); display: flex; }
+
+  /* W: centred in the slot; cards shrink with the column, from a deck card's height to the touch target's width */
+  .deck { flex: 1; display: flex; gap: var(--space-2); justify-content: center; align-items: flex-start; align-self: center; padding-top: var(--space-2); }
+  .card-place { flex: 1; min-width: var(--target-min); max-width: calc(var(--deck-card) * 5 / 7); position: relative; }
+  .card {
+    width: 100%; aspect-ratio: 5 / 7; padding: 0; border-radius: var(--radius-card); border: var(--line-control) solid var(--mute-soft);
+    background: var(--paper-warm); font-weight: var(--weight-bold); font-size: var(--text-lg); transition: transform var(--duration);
+  }
+  .card:hover { transform: translateY(calc(-1 * var(--space-1))); }
+  .card.confirmed {
+    background: var(--burgundy); border-color: var(--burgundy); color: var(--paper-warm);
+    transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow);
+  }
+  /* A border, not an inset shadow: forced colours drop shadows */
+  .card.kept { border: var(--frame-band) solid var(--card-back); }
+  @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+  .tag {
+    position: absolute; top: calc(100% + var(--space-1)); left: 50%; transform: translateX(-50%);
+    font-size: var(--text-tag); font-weight: var(--weight-strong); color: var(--kept); white-space: nowrap;
+  }
+
+  /* J: Most voted sized to its content, then every deck value in its place */
+  .chart { flex: 1; display: flex; gap: var(--space-5); align-items: stretch; }
+  .most { display: flex; flex-direction: column; justify-content: center; padding-right: var(--space-5); border-right: var(--line-hairline) solid var(--hairline-colour); }
+  .most .figure { font-size: var(--text-4xl); font-weight: var(--weight-bold); line-height: var(--leading-figure); }
+  .most .figure.list { font-size: var(--text-2xl); white-space: nowrap; }
+  .most .sub { font-size: var(--text-sm); color: var(--grey); margin-top: var(--space-1); }
+  .most.later { padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2); }
+  .columns { flex: 1; display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: var(--space-2); align-items: end; }
+  .pt { margin-inline: var(--tight-point); }
+  .colm { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; container-type: inline-size; }
+  /* N: the count without its "×", muted but over the top bar */
+  .count { font-size: var(--text-lg); font-weight: var(--weight-strong); color: var(--grey); }
+  .colm.top .count { color: var(--ink); }
+  .bar {
+    width: 100%; height: calc(var(--chart-bar) * var(--share)); min-height: var(--bar-min);
+    border-radius: var(--radius-small) var(--radius-small) 0 0; background: var(--bar-other);
+  }
+  .colm.top .bar { background: var(--card-back); }
+  /* The 3 m step, shrunk only where a column is narrower than "0.5" at that size */
+  .value {
+    width: 100%; height: var(--chart-value); text-align: center; padding-top: var(--space-1); border-top: var(--line-mark) solid var(--hairline-colour);
+    font-size: min(var(--text-2xl), var(--value-fit)); font-weight: var(--weight-bold); line-height: var(--leading-figure);
+  }
+  .colm.empty .value { color: var(--grey); font-size: var(--text-lg); font-weight: var(--weight-medium); padding-top: var(--space-2); }
+  .big-progress { flex: 1; display: grid; place-content: center; text-align: center; padding: var(--space-1) var(--space-5); }
+  .big-progress b { font-size: var(--text-4xl); line-height: var(--leading-figure); }
+  .big-progress span { color: var(--grey); }
+
+  /* The table: voters as cards, face down while voting, face up once revealed */
+  /* B: the facilitator's table keeps the slot's room while voting, so a reveal moves nothing below it */
+  .people.reserve { min-height: calc(var(--table-min) + var(--slot-height) + 3 * var(--panel-gap) + 2 * var(--line-hairline)); }
+  .people { flex: 1; min-height: var(--table-min); display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; scrollbar-gutter: stable; }
+  .people-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
+  /* --s scales every entry alike to fill the table, from 1 up to a deck card's height */
+  .entries { --s: 1; list-style: none; margin: auto; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-3) 0; }
+  .entries li { width: calc(var(--entry-width) * var(--s)); display: grid; justify-items: center; gap: var(--space-2); text-align: center; }
+  .mark, .face { width: calc(var(--entry-mark) * var(--s) * 5 / 7); aspect-ratio: 5 / 7; border-radius: calc(var(--radius-mark) * var(--s)); }
+  .mark.confirmed {
+    background: var(--card-back); border: calc(var(--space-1) * var(--s)) solid var(--paper-warm);
+    box-shadow: 0 0 0 var(--line-hairline) var(--hairline-colour); display: grid; place-items: center;
+  }
+  .mark.confirmed::after { content: '◆'; color: var(--pip); font-size: calc(var(--text-xs) * var(--s)); }
+  .mark.none { border: var(--line-mark) dashed var(--mute-soft); }
+  .mark.kept { border: calc(var(--frame-band) * var(--s)) solid var(--card-back); }
+  .face { display: grid; place-items: center; border: var(--line-mark) solid var(--ink); font-weight: var(--weight-bold); font-size: calc(var(--text-lg) * var(--s)); }
+  .face > * { grid-area: 1 / 1; }
+  /* A revealed kept vote: a thinner band than the deck's, outside a paper gap, clear of the name */
+  .face.kept { outline: calc(var(--space-1) * var(--s)) solid var(--card-back); outline-offset: var(--focus-gap); }
+  .face.none { border: var(--line-mark) solid var(--hairline-colour); color: var(--grey); font-weight: var(--weight-medium); }
+  .name { font-size: calc(var(--text-sm) * var(--s)); line-height: var(--leading-tight); max-width: 100%; overflow-wrap: anywhere; }
+  .name .you { color: var(--grey); font-weight: var(--weight-regular); }
+
+  /* E, I: the roster, for the reader; facilitators as rows at the bottom */
+  .side { display: flex; flex-direction: column; gap: var(--panel-gap); min-height: 0; }
+  .side > .later { outline-offset: calc(-1 * var(--line-hairline)); border-style: dashed; }
+  .roster { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+  .roster ul { list-style: none; margin: var(--space-1) 0 0; padding: 0; }
+  .row {
+    display: flex; align-items: center; gap: var(--space-2); height: var(--row-height); padding: 0 var(--space-2);
+    margin: 0 calc(-1 * var(--space-2)); border-radius: var(--radius-card); font-size: var(--text-sm);
+  }
+  .row.me { background: var(--paper-pale); }
+  /* The name truncates; "(you)" stays whole beside it */
+  .row .who { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: var(--space-1); font-weight: var(--weight-medium); white-space: nowrap; }
+  .row .who > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .row .who small { flex: none; font-weight: var(--weight-regular); color: var(--grey); font-size: var(--text-xs); }
+  .av {
+    flex: none; width: var(--avatar); height: var(--avatar); border-radius: 50%; display: grid; place-items: center;
+    font-size: var(--text-tag); font-weight: var(--weight-bold); color: var(--h); background: var(--t);
+  }
+  .pill { flex: none; font-size: var(--text-xs); font-weight: var(--weight-strong); padding: calc(var(--space-1) / 2) var(--space-2); border-radius: var(--radius-pill); }
+  .pill.confirmed { color: var(--ok); background: var(--ok-tint); }
+  .pill.none { color: var(--grey); background: var(--paper-pale); }
+  .pill.kept { color: var(--kept); background: var(--kept-tint); }
+  .val { flex: none; font-weight: var(--weight-bold); font-size: var(--text-md); display: flex; gap: var(--space-2); align-items: baseline; }
+  .val.none { color: var(--grey); font-weight: var(--weight-medium); }
+  .val small { font-size: var(--text-tag); font-weight: var(--weight-strong); color: var(--kept); }
+  .fac { flex: none; font-size: var(--text-xs); color: var(--grey); }
+  .sep { border: 0; border-top: var(--line-hairline) solid var(--hairline-colour); margin: var(--space-1) 0; }
+  /* The round history (step 9), at the sidebar's top */
+  .history { flex: none; display: flex; flex-direction: column; gap: var(--space-1); }
+  .history ol { list-style: none; margin: 0; padding: 0; height: calc(5 * var(--row-height)); overflow: auto; }
+  .history li { display: flex; gap: var(--space-2); align-items: baseline; height: var(--row-height); font-size: var(--text-sm); }
+  .history li .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history li b { flex: none; min-width: var(--space-6); text-align: right; }
+  .history li:last-child { font-weight: var(--weight-strong); }
+
+  /* Q: full width under the header, each message a panel of its own; the icon and the words carry the tone */
+  /* The gap below the banners is their own, so no ancestor of the view changes and scroll anchoring holds (decision 3) */
+  .messages { flex: none; display: flex; flex-direction: column; gap: var(--space-2); padding: var(--panel-gap) var(--page-edge) 0; margin-bottom: calc(var(--space-2) - var(--panel-gap)); }
+  .msg {
+    display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+    background: var(--paper-warm); border: var(--line-hairline) solid var(--hairline-colour); border-left: var(--line-bar) solid var(--ink);
+    border-radius: var(--radius); box-shadow: var(--shadow); font-weight: var(--weight-medium);
+  }
+  .msg p { flex: 1; margin: 0; }
+  .msg .quiet { color: inherit; padding: var(--space-2); }
+  .msg.problem { background: var(--burgundy-tint); color: var(--burgundy-deep); border-left-color: var(--burgundy-deep); }
+  .msg.notice { background: var(--notice-ground); color: var(--notice-ink); border-left-color: var(--notice-bar); }
+  .msg.notice svg { color: var(--notice-bar); }
+  /* The editing view is 3b3's, drawn dashed only to hold its messages */
+  .issue-edit { display: flex; flex-direction: column; gap: var(--space-2); }
+  .issue-edit .msg { box-shadow: none; }
+  .issue-edit input {
+    font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans); padding: var(--space-1) var(--space-2);
+    border: var(--line-control) solid var(--mute-soft); border-radius: var(--radius-card); width: 100%;
+  }
+  .sr { position: absolute; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
+  @media (forced-colors: active) {
+    .card.confirmed, .mark.confirmed, .logo { forced-color-adjust: none; background: CanvasText; color: Canvas; border-color: CanvasText; box-shadow: none; }
+    .mark.confirmed { border-color: Canvas; outline: var(--line-hairline) solid CanvasText; }
+    .mark.confirmed::after, .logo.pip::after { color: Canvas; }
+    .card.confirmed:focus-visible { outline-color: CanvasText; }
+    .bar, .colm.top .bar, .progress i::after { forced-color-adjust: none; background: CanvasText; }
+    .msg { border-left-color: CanvasText; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
+// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, ended, restarted, moved, conflict, save-failed).
+const q = new URLSearchParams(location.search)
+const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
+const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
+const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
+const nobody = sample === '0'
+const voterCount = Number(q.get('voters') || 14)
+const issue = q.get('issue') ?? 'https://lunatech.atlassian.net/browse/PP-1234'   // issue= draws the empty issue (E)
+let phase = q.get('phase') || 'voting'
+let from = phase === 'revealed-revote' ? 'revote' : 'voting'   // the round a reveal shows
+if (phase === 'revealed-revote') phase = 'revealed'
+
+// "0.5" sets its point tight wherever it shows, its text staying "0.5" (decision 13)
+const fig = v => v === '0.5' ? '<span>0<span class="pt">.</span>5</span>' : v
+const deck = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+const names = [q.get('name0') || 'Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
+const facilitators = ['Peggy', 'Victor']
+// me: the own row, a voter kept in the room when voters cuts the list short, or a facilitator
+const asked = q.get('me')
+const me = voter ? (names.slice(0, voterCount).includes(asked || 'Ivan') ? asked || 'Ivan' : names[0]) : facilitators.includes(asked) ? asked : facilitators[0]
+// v1's sample: each voter's value, its state while voting, and after a re-vote
+const cases = {
+  sample: ['5', '0.5', '5', '8', '5', '13', '5', '3', '5', '8', null, '5', '2', '5'],
+  tie3: ['3', '5', '13', '8', '3', '5', '5', '13', '3', '5', null, '13', '2', '8'],
+  tie4: ['2', '3', '5', '1', '8', '2', '5', '3', '5', '8', null, '13', '2', '1'],
+}
+const values = cases[sample] || cases.sample
+const voting = ['confirmed', 'confirmed', 'confirmed', 'none', 'confirmed', 'confirmed', 'none', 'confirmed', 'confirmed', 'confirmed', 'none', 'confirmed', 'none', 'confirmed']
+const revote = ['kept', 'confirmed', 'confirmed', 'kept', 'confirmed', 'kept', 'none', 'confirmed', 'kept', 'confirmed', 'none', 'confirmed', 'none', 'kept']
+const rounds = [['PP-1233', '5'], ['Rework the login page so that a returning user lands on their last room', '8'], ['PP-1231', '3']]
+const history = [['PP-1226', '3'], ['PP-1227', '8'], ['Spike: SSE reconnect strategy', '13'], ['PP-1229', '2'], ['PP-1230', '5'], ...[...rounds].reverse()]
+let ownChoice = null
+let settling = false, settled   // the round bar's 1 s guard and its timer
+let copied = false   // as today: each copy hides the hint 2 s later, so it lasts 2 s from the first
+
+const icon = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${d}"/></svg>`
+const messages = (q.get('message') || '').split(',').filter(Boolean)
+const alertIcon = icon('M12 3l10 18H2zM12 10v5M12 18v.5'), infoIcon = icon('M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v6M12 7.5v.5'), close = icon('M6 6l12 12M18 6L6 18')
+const msg = (tone, text, dismiss) => `<div class="msg ${tone}" role="${tone === 'problem' ? 'alert' : 'status'}">${tone === 'problem' ? alertIcon : infoIcon}<p>${text}</p>${
+  dismiss ? `<button class="quiet" type="button" aria-label="Dismiss">${close}</button>` : ''}</div>`
+const banners = {
+  lost: msg('problem', 'Connection to the room was lost'),
+  ended: msg('problem', 'Your session has ended. Please reload the page to rejoin.'),
+  restarted: msg('notice', 'Reconnected. Please check your vote.', true),
+  moved: msg('notice', 'The old link you followed now opens this address. Please update your invitation or bookmark to use it.', true)
+}
+const pencil = icon('M4 20h4L19 9l-4-4L4 16v4z'), trash = icon('M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13')
+const link = icon('M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1'), exit = icon('M14 4h5v16h-5M10 8l-4 4 4 4M6 12h10')
+// I: soft avatars, the hue hashed from the name over the full wheel; decoration only
+const hues = [['#6D28D9', '#EDE9FE'], ['#15803D', '#DCFCE7'], ['#B91C1C', '#FEE2E2'], ['#1D4ED8', '#DBEAFE'], ['#C2410C', '#FFEDD5'], ['#0F766E', '#CCFBF1'], ['#BE185D', '#FCE7F3'],
+  ['#4D7C0F', '#ECFCCB'], ['#0369A1', '#E0F2FE'], ['#7C4A1E', '#F3E8DC'], ['#A16207', '#FEF9C3'], ['#4338CA', '#E0E7FF'], ['#A21CAF', '#FAE8FF'], ['#475569', '#E2E8F0']]
+const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
+const initials = n => n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+const avatar = n => { const [h, t] = hues[hash(n) % hues.length]; return `<span class="av" style="--h:${h};--t:${t}" aria-hidden="true">${initials(n)}</span>` }
+const stateName = { none: 'No vote', confirmed: 'Voted', kept: 'Previous vote, not confirmed' }
+
+function draw() {
+  const revealed = phase === 'revealed'
+  const people = names.slice(0, voterCount).map((name, i) => {
+    const round = revealed ? from : phase
+    const state = round === 'cleared' || nobody ? 'none' : round === 'revote' ? revote[i] : voting[i]
+    if (voter && name === me && ownChoice !== null) return { name, value: ownChoice, state: 'confirmed' }
+    return { name, value: state === 'none' ? null : values[i], state }
+  })
+  const own = people.find(p => p.name === me)
+  const counts = {}
+  if (revealed) people.forEach(p => p.value && (counts[p.value] = (counts[p.value] || 0) + 1))
+  const tally = deck.filter(v => counts[v]).map(v => [v, counts[v]]).sort((x, y) => y[1] - x[1])
+  const votes = tally.reduce((n, [, c]) => n + c, 0), top = tally.length ? tally[0][1] : 1
+  // Step 4 keeps today's tie-break, JavaScript's key order: integer values first; later=1 shows the ties step's rule
+  const tied = deck.filter(v => counts[v] === top), allTied = tied.length === tally.length
+  const first = tied.find(v => /^\d+$/.test(v)) ?? tied[0]
+  const red = v => counts[v] === top && (later ? !(tied.length > 1 && allTied) : v === first)
+  const each = `${top} vote${top > 1 ? 's' : ''} each`
+  const mostVoted = () => !later || tied.length === 1
+    ? `<span class="label">Most voted</span><span class="figure" data-testid="most-voted">${fig(first)}</span><span class="sub">${top} of ${votes} votes</span>`
+    : allTied ? `<span class="label">Most voted</span><span class="figure">None</span><span class="sub">Every value tied, ${each}</span>`
+    : tied.length <= 3 ? `<span class="label">Most voted</span><span class="figure list">${tied.join(' · ')}</span><span class="sub">Tied, ${each}</span>`
+    : `<span class="label">Most voted</span><span class="figure">Tie</span><span class="sub">${tied.length} values, ${each}</span>`
+  const voted = people.filter(p => p.state === 'confirmed').length
+
+  // The mark: the Lunatech glyph (traced from lunatech.com's logo, as in v1) on the card back; brand=pip is the fallback
+  const logo = q.get('brand') === 'pip' ? '<span class="logo pip" aria-hidden="true"></span>'
+    : `<span class="logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
+  const header = `<header class="header">${logo}<span class="app">Pointing Poker</span>
+    <span class="chip"><h1>brave-golden-otter</h1><a href="#" data-copy>${link}Copy link</a></span>
+    <span class="copied" role="status">${copied ? 'Link copied' : ''}</span>
+    <span class="role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
+    <a class="leave" href="#">${exit}Leave</a></header>`
+  const issueHtml = /^https?:\/\//.test(issue)
+    ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${seg}</span>`).join('')}</a>` : issue
+  const editorMsg = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="quiet" type="button">Use theirs</button>')
+    : messages.includes('save-failed') ? msg('problem', 'Could not save the issue') : ''
+  const issueBlock = editorMsg ? `<section class="panel issue-panel"><div class="issue-edit"><input class="later" aria-label="Current issue" value="${issue}">${editorMsg}</div></section>`
+    : `<section class="panel issue-panel"><div class="issue"><h2${issue ? '' : ' class="empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div></section>`
+  const bannerList = messages.filter(m => banners[m]).map(m => banners[m]).join('')
+  const bannerBlock = bannerList && `<section class="messages" aria-label="Messages">${bannerList}</section>`
+
+  const phaseLine = `<div class="phase" data-testid="phase-line"><h2 class="label">${revealed ? 'Revealed' : 'Voting'}</h2></div>`
+  // G: the voter's small count in the bar (later); the facilitator's big one in the slot
+  const small = later && voter && !revealed ? `<span class="progress later" style="--done:${100 * voted / people.length}%"><i></i>${voted} of ${people.length} voted</span>` : ''
+  // M: Clear · toggle · Next issue, right-aligned; the toggle is the primary until Next issue exists (step 5)
+  const guard = settling ? ' aria-disabled="true"' : ''
+  const nextLeads = later && revealed
+  const toggle = `<button class="btn ${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? 'Re-vote' : 'Show votes'}</button>`
+  const next = nextLeads ? `<button class="btn primary later" type="button"${guard}>Next issue</button>` : ''
+  const actions = `${small}<button class="quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
+
+  const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards"><span id="kept-note" hidden>Previous vote, not confirmed</span>${deck.map(v => {
+    const mine = own?.value === v && own.state !== 'none'
+    const kept = mine && own.state === 'kept' ? ' aria-describedby="kept-note"' : ''
+    return `<div class="card-place"><button class="card ${mine ? own.state : ''}" data-vote="${v}" type="button" aria-pressed="${mine && own.state === 'confirmed'}"${kept}>${fig(v)}</button>
+      ${mine && own.state === 'kept' ? '<span class="tag" aria-hidden="true">Not confirmed</span>' : ''}</div>` }).join('')}</div>`
+  const chart = `<div class="chart" role="region" aria-label="Results">
+    <div class="most${later && tied.length > 1 ? ' later' : ''}">${tally.length ? mostVoted() : '<span class="label">Nobody voted</span>'}</div>
+    <div class="columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
+      ? `<div class="colm${red(v) ? ' top' : ''}" role="listitem" data-testid="tally-entry"><span class="sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
+      : `<div class="colm empty" aria-hidden="true"><span class="value">${fig(v)}</span></div>`).join('')}</div></div>`
+  const bigProgress = `<div class="big-progress later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
+  // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
+  let slot = ''
+  if (voter) slot = revealed ? chart : deckBlock
+  else if (revealed) slot = chart
+  else if (later) slot = bigProgress
+  const controls = `<section class="panel controls" aria-label="Round">${phaseLine}${actions}</section>`
+  const round = slot ? `<section class="panel round"><div class="slot">${slot}</div></section>` : ''
+
+  const entry = p => {
+    const face = revealed
+      ? p.value
+        ? `<span class="face ${p.state}"><span data-testid="participant-estimation">${fig(p.value)}</span>${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
+        : `<span class="face none"><span data-testid="participant-estimation"></span><span role="img" aria-label="No vote">–</span></span>`
+      : `<span class="mark ${p.state}" role="img" aria-label="${stateName[p.state]}"></span>`
+    const self = p.name === me
+    return `<li data-testid="participant">${face}<span class="name">${self ? `<b>${p.name}</b> <span class="you">(you)</span>` : p.name}</span></li>`
+  }
+  const table = `<section class="panel people${!voter && !later && phase !== 'revealed' ? ' reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="people-top"><h2 class="label">Voters · ${people.length}</h2></div>
+    <ul class="entries">${people.map(entry).join('')}</ul></section>`
+
+  const right = p => revealed
+    ? p.value ? `<span class="val">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="val none">–</span>'
+    : `<span class="pill ${p.state}">${{ none: 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
+  // A roster row never carries the participant test id: the table's entries are the contract's
+  const row = (n, end, self, id = '') => `<li class="row${self ? ' me' : ''}">${avatar(n)}<span class="who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
+  const historyPanel = `<section class="panel history later" aria-label="Rounds"><h2 class="label">Rounds · ${history.length}</h2>
+    <ol>${history.map(([w, v]) => `<li><span class="what" title="${w}">${w}</span><b>${v}</b></li>`).join('')}</ol></section>`
+  const roster = `<aside class="panel roster" aria-label="Participants" tabindex="0"><h2 class="label">Participants · ${people.length + facilitators.length}</h2>
+    <ul>${people.map(p => row(p.name, right(p), voter && p.name === me)).join('')}</ul>${facilitators.length ? '<hr class="sep">' : ''}
+    <ul>${facilitators.map(n => row(n, '<span class="fac">Facilitator</span>', false, ' data-testid="facilitator"')).join('')}</ul></aside>`
+
+  const keep = [...document.querySelectorAll('.controls button')].indexOf(document.activeElement)
+  document.getElementById('root').innerHTML = `<div class="shell">${header}${bannerBlock}<main class="main"><div class="col">${issueBlock}${
+    layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="side">${later ? historyPanel : ''}${roster}</div></main></div>`
+  if (keep >= 0) document.querySelectorAll('.controls button')[keep]?.focus()   // focus stays on its place
+  document.querySelector('.history ol')?.scrollTo(0, 1e6)   // the latest round in view
+  watched.disconnect(); watched.observe(document.querySelector('.people'))
+}
+
+// v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
+function fitEntries() {
+  const list = document.querySelector('.entries'), box = document.querySelector('.people')
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
+  // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
+  const reserve = !voter && !later && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
+  const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (box.children.length - 1)
+  const used = () => [...box.children].reduce((h, c) => h + c.getBoundingClientRect().height, pad)
+  const room = Math.floor(box.clientHeight - reserve)
+  const fits = v => { list.style.setProperty('--s', v); list.style.maxWidth = ''; return used() <= room }
+  let lo = 1, hi = token('--deck-card') / token('--entry-mark')
+  if (fits(hi)) lo = hi
+  else for (let i = 0; i < 10; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid }
+  fits(Math.floor(lo * 50) / 50)   // in steps of 0.02, clear of subpixel rounding
+  const items = [...list.children]
+  const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
+  const perRow = Math.ceil(items.length / rows), width = items[0].getBoundingClientRect().width
+  if (rows > 1) list.style.maxWidth = `${perRow * width + 1}px`
+}
+const watched = new ResizeObserver(fitEntries)
+document.fonts.addEventListener('loadingdone', fitEntries)
+
+// Every action in the round bar is aria-disabled for 1 s after the phase changes, so a late click acts on nothing
+function moveTo(next) {
+  const turns = (phase === 'revealed') !== (next === 'revealed')
+  phase = next
+  if (turns) { settling = true; clearTimeout(settled); settled = setTimeout(() => { settling = false; draw() }, 1000) }
+  draw()
+}
+document.addEventListener('keydown', e => e.repeat && e.key === 'Enter' && e.target.closest('.controls') && e.preventDefault())
+document.addEventListener('click', e => {
+  if (e.target.closest('[aria-disabled="true"]')) return
+  const act = e.target.closest('[data-do]')?.dataset.do, vote = e.target.closest('[data-vote]')?.dataset.vote
+  if (act === 'show') { from = phase; moveTo('revealed') }
+  if (act === 'revote') { ownChoice = null; moveTo('revote') }
+  if (act === 'clear') { ownChoice = null; moveTo('cleared') }
+  if (vote && phase !== 'revealed') { ownChoice = vote; draw() }
+  if (e.target.closest('[data-copy]')) { copied = true; draw(); setTimeout(() => { copied = false; draw() }, 2000) }
+  if (e.target.closest('a')) e.preventDefault()
+})
+draw()
+
+if (q.get('probe') === '1') {
+  const badge = Object.assign(document.createElement('output'), { style: 'position:fixed;right:8px;bottom:8px;padding:4px 8px;background:var(--ink);color:var(--paper-warm);font:12px/1.4 var(--font-mono);z-index:9' })
+  const show = () => { const px = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    badge.textContent = `${innerWidth}×${innerHeight} · root ${px.toFixed(1)}px · ${(innerWidth / px).toFixed(1)} rem wide` }
+  document.body.append(badge); addEventListener('resize', show); show()
+}
+</script>
+</body>
+</html>
