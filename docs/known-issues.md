@@ -1033,13 +1033,13 @@ roadmap item instead of leaving it here as stale history.
   written but stopped being true once `ProbeRoutes` shipped: it serves
   `GET /probe` when the probe is enabled, a single-segment `GET`. If `PageRoutes`
   moved ahead of `ProbeRoutes`, an enabled probe would silently start answering
-  with the "not a room name" rejection page instead of the probe page, and no
+  with the not-a-room page instead of the probe page, and no
   existing test would catch it - `ProbeRoutesSpec` tests `ProbeRoutes.route` on
   its own, and `APISpec`'s `/probe` case expects a `404` either way, which a
   swallowed probe also produces.
 - **Resolution:** Stays open. A cheap fix is one `APISpec` case that builds
   `API` with an enabled `ProbeConfig` and asserts `GET /probe` serves the probe
-  page, not the rejection page.
+  page, not the not-a-room page.
 
 ### `Suggestion.suggest` runs the full edit-distance table against every pool word, for any input length
 

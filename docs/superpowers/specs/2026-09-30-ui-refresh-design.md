@@ -362,6 +362,7 @@ Bootstrap's two phone properties, its tap highlight removal and its text size
 adjustment, and 4c2-focus-ring, the controls' rounded focus ring
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-focus-ring-design.md`); and
 4d, the not-a-room page
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4d-not-a-room-design.md`),
 in React with the Join tab's URL flag (3b4 decision 15). What follows is the
 whole of step 4, each step's spec taking its part. The step 3 reference
 applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot
