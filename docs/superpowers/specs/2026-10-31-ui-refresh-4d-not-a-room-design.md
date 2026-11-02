@@ -150,10 +150,11 @@ back here.
   the shell not built answers 503. Mutation: the not-a-room page skips the
   built check.
 - **'a mistyped room name is refused with a suggestion that reaches the
-  room'** (`slug.spec.js`): its link lookup by `brave-golden-otter` still
-  matches the row, "brave-golden-otter Join" (inferred), and it changes its `getByText('is not a room name')` to the heading
-  `brave-golden-oter is not a valid room name.` by role. Mutation:
-  `main.tsx` ignores the hand-over.
+  room'** (`slug.spec.js`): its link lookup becomes the row's exact name,
+  "brave-golden-otter Join" (inferred), so a line 2 other than "Join" fails
+  it. It changes its `getByText('is not a room name')` to the heading
+  `brave-golden-oter is not a valid room name.` by role. Mutations:
+  `main.tsx` ignores the hand-over; line 2 always "Join as <name>".
 - **New, 'a name near no room name offers only Join a different room, which
   opens the Join tab'** (`slug.spec.js`): `/nothing-like-this` answers 404,
   the heading shows, "Did you mean" is absent, and the link "Join a

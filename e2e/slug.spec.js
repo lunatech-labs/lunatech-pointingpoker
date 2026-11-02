@@ -61,7 +61,7 @@ test('a mistyped room name is refused with a suggestion that reaches the room', 
     page.getByRole('heading', { name: 'brave-golden-oter is not a valid room name.' })
   ).toBeVisible()
   await expect(page).toHaveTitle('Not a room name')
-  await page.getByRole('link', { name: 'brave-golden-otter' }).click()
+  await page.getByRole('link', { name: 'brave-golden-otter Join', exact: true }).click()
   await expect(page).toHaveURL(`${origin}/brave-golden-otter`)
   await joinAs(page, 'Alice')
 })
