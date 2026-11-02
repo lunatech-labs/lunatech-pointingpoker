@@ -352,14 +352,16 @@ given feedback, and 4c1-banners, the banners under the header;
 4c2-rejoin-name, the rejoin row joining with the typed name
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-rejoin-name-design.md`),
 4c2-banners, the lobby's banners in the new look
-(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`), and
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`),
 4c2-bootstrap, Bootstrap removed
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-bootstrap-design.md`), which
 removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import
 in `base.css`, the `legacy` layer and the fence itself, and keeps
 Bootstrap's two phone properties, its tap highlight removal and its text size
-adjustment; and 4d, the not-a-room page
+adjustment, and 4c2-focus-ring, the controls' rounded focus ring
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-focus-ring-design.md`); and
+4d, the not-a-room page
 in React with the Join tab's URL flag (3b4 decision 15). What follows is the
 whole of step 4, each step's spec taking its part. The step 3 reference
 applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot

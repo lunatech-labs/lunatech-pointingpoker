@@ -11,6 +11,8 @@
   align-items: center;
   min-height: var(--target-min);
   padding-inline: var(--space-3);
+  /* Square: a radius would curve the current tab's bar (4c2-focus-ring decision 2) */
+  border-radius: 0;
 }
 
 .lobby-tabs a[aria-current] {
