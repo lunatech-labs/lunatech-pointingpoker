@@ -190,7 +190,7 @@ function draw() {
   const chart = `<div class="result" role="region" aria-label="Results">
     <div class="result-most${later && tied.length > 1 ? ' later' : ''}">${tally.length ? mostVoted() : '<span class="panel-label">Nobody voted</span>'}</div>
     <div class="result-columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
-      ? `<div class="result-column${red(v) ? ' result-column-top' : ''}" role="listitem" data-testid="tally-entry"><span class="result-sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="result-count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="result-bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="result-value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
+      ? `<div class="result-column${red(v) ? ' result-column-top' : ''}" role="listitem" data-testid="tally-entry"><span class="visually-hidden" data-testid="tally-sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="result-count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="result-bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="result-value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
       : `<div class="result-column result-column-empty" aria-hidden="true"><span class="result-value">${fig(v)}</span></div>`).join('')}</div></div>`
   const bigProgress = `<div class="round-progress-big later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
   // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)

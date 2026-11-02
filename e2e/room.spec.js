@@ -385,6 +385,10 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   // Before step 3 Bob's empty estimation was an entry of its own, and could out-count a real one.
   await expect(tallyEntries(alice.page)).toHaveCount(1, { timeout: 2000 })
+  await expect(tallyEntries(alice.page).first().getByTestId('tally-sr')).toHaveCSS(
+    'clip-path',
+    'inset(50%)'
+  )
   await expectSummaryMatchesParticipants(alice.page)
 })
 
