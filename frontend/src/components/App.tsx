@@ -20,11 +20,12 @@ import { useRoom } from './useRoom'
 
 // Read once at startup: the path alone decides the page, and every change of room is a page load.
 const pathRoom = window.location.pathname.split('/')[1] ?? ''
-// Set by the legacy-link redirect and the reload on a refusal; cleared so a copied link is clean.
+// Set by the legacy-link redirect, the reload on a refusal and the not-a-room page; cleared on load.
 const params = new URLSearchParams(window.location.search)
 const movedOnLoad = params.get('moved') === '1'
 const restartedOnLoad = params.get('restarted') === '1'
-if (movedOnLoad || restartedOnLoad) history.replaceState(null, '', window.location.pathname)
+const joinTabOnLoad = params.get('tab') === 'join'
+if (movedOnLoad || restartedOnLoad || joinTabOnLoad) history.replaceState(null, '', window.location.pathname)
 // Decision 7: the auto-join and the radio first checked follow the default role stored at load.
 const defaultOnLoad = storedDefault(localStorage)
 const joinError = 'Could not join the room. Please try again.'
@@ -37,7 +38,7 @@ export function App({ connection }: { connection: Connection }) {
   const [roomId, setRoomId] = useState(pathRoom)
   const [name, setName] = useState(localStorage.getItem('name') ?? '')
   const [shownRole, setShownRole] = useState<Role>(defaultOnLoad ?? 'Voter')
-  const [tab, setTab] = useState<LobbyTab>(pathRoom ? 'join' : 'create')
+  const [tab, setTab] = useState<LobbyTab>(pathRoom || joinTabOnLoad ? 'join' : 'create')
   const [error, setError] = useState('')
   const [moved, setMoved] = useState(movedOnLoad)
   const [restarted, setRestarted] = useState(restartedOnLoad)
