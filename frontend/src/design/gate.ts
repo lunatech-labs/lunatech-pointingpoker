@@ -111,8 +111,9 @@ export const pairs = (run: Run): Pair[] => [
   ...(run === 'more' ? on('--hairline-colour', surfaces, INDICATOR) : [])
 ]
 
-// The colours drawn only as a hairline or in a box-shadow, which a reader never needs (J9).
-const decorative = new Set(['--pale', '--mark-offset', '--shadow-colour', '--lift-colour'])
+// The colours drawn only as a hairline or in a box-shadow (J9), or as the avatars' incidental initials (J8), which a reader never needs.
+const avatars = Array.from({ length: 14 }, (_, i) => [`--avatar-ink-${i + 1}`, `--avatar-ground-${i + 1}`]).flat()
+const decorative = new Set(['--pale', '--mark-offset', '--shadow-colour', '--lift-colour', ...avatars])
 
 // Colour tokens no pair reaches in either run, directly or through var(), but the decorative set.
 export const unreached = (runs: Record<Run, Tokens>): string[] => {
