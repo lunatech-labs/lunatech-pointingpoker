@@ -12,8 +12,8 @@ export default defineConfig({
   failOnFlakyTests: true,
   // A stray test.only would narrow a characterization suite to one case and still exit 0.
   forbidOnly: !!process.env.CI,
-  // Each worker boots its own JVM and stub; two is the ceiling worth paying for on CI.
-  workers: process.env.CI ? 2 : undefined,
+  // Each worker boots its own JVM and stub; four matches the CI runner's vCPUs.
+  workers: process.env.CI ? 4 : undefined,
   // Three reconnect cases can exceed the 30s default once their own assertion timeouts sum.
   timeout: 60_000,
   // Bounds a navigation that hangs, which waitUntil cannot and the mount assertion never reaches.
