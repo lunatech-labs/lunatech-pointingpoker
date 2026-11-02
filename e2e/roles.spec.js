@@ -11,7 +11,7 @@ import {
   noVoteMark,
   ownEstimation,
   participantEntry,
-  phaseLine,
+  phaseWord,
   results,
   revealedEstimation,
   roomIdInput,
@@ -91,16 +91,16 @@ test("a facilitator's page has no deck, and keeps Show, Re-vote and Clear", asyn
 
   await vote(bob.page, '5')
   // Bob is the only voter, so his vote reveals; Re-vote then reopens it for the Show below.
-  await expect(phaseLine(bob.page)).toHaveText('Revealed')
-  await expect(phaseLine(alice.page)).toHaveText('Revealed')
+  await expect(phaseWord(bob.page)).toHaveText('Revealed')
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   await expect(unconfirmedCard(bob.page)).toHaveText('5')
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(phaseLine(bob.page)).toHaveText('Revealed')
+  await expect(phaseWord(bob.page)).toHaveText('Revealed')
   // Alice's own page must have flipped, or her Clear can land as the flip guards it.
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
   await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(phaseLine(bob.page)).toHaveText('Voting')
+  await expect(phaseWord(bob.page)).toHaveText('Voting')
   await expect(ownEstimation(bob.page)).toHaveCount(0)
   await expect(deck(alice.page)).toHaveCount(0)
 })

@@ -20,8 +20,16 @@ export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
       // A held Enter's repeats are dropped, guarded or not.
       onKeyDownCapture={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
     >
-      <div className="round-bar-phase" data-testid="phase-line">
-        <h2 className="panel-label">{revealed ? 'Revealed' : 'Voting'}</h2>
+      {/* The word is seen, the sentence heard, and the wrapper announces each flip. */}
+      <div className="round-bar-phase" role="status" data-testid="phase-line">
+        <h2 className="panel-label">
+          <span aria-hidden="true" data-testid="phase-word">
+            {revealed ? 'Revealed' : 'Voting'}
+          </span>
+          <span className="visually-hidden" data-testid="phase-heard">
+            {revealed ? 'Votes revealed' : 'Voting open'}
+          </span>
+        </h2>
       </div>
       <button
         type="button"
