@@ -242,9 +242,10 @@ A button shows only in the phases where it does something.
   button, the toggle, at the edge until step 5; from step 5 Next issue takes
   the edge once revealed, the primary there, and no place is kept for it
   while voting.
-- Show is hidden while revealed (a contract change of step 4, after step 1c
-  has removed Show's incidental uses). Re-vote still shows only while
-  revealed, a guard principle 8 carries over.
+- Show is hidden while revealed by becoming the toggle, built with its guard
+  in step 4b (a contract change, after step 1c removed Show's incidental
+  uses). Re-vote still shows only while revealed, a guard principle 8 carries
+  over.
 - **The round bar's guard**: every action in the round bar ignores presses
   for 1 s after any phase change, defined in 3b1 decision 6.
 - An action is **destructive** when it discards votes nobody has seen: Clear
@@ -569,7 +570,7 @@ and L8 by 3b3 (J12), and L9 by 3b4 (J13).
 - **The lobby's open costs** (3b4's Accepted costs): a Reload button on "Your
   session has ended"; a "Joining…" look from a press to the first snapshot;
   accepting a full URL pasted into Join.
-- **The not-a-room page's React shape** (3b4 decision 15), which step 4's
+- **The not-a-room page's React shape** (3b4 decision 15), which step 4d's
   brainstorm raises first: an entry point of its own or a view of the room app,
   and how the server hands over the typed name and the suggestion, keeping its
   404 status.
@@ -936,6 +937,10 @@ The reasons behind each rule, and what was set aside.
   room's marker serves (Contract reads). Set aside: the room id as a
   heading, which a lobby giving the id a heading would pass; Edit issue;
   the round region, absent from today's page.
+- **4b.** The round bar's toggle and guard (the UI refresh design's step 4b)
+  reopened J5's set-aside "a separate step to hide Show": Show is now hidden
+  by becoming the toggle, and the toggle needs the guard, a behaviour judged
+  by its own cases. Set aside: hiding Show inside the restyle.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
