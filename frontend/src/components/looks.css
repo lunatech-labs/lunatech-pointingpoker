@@ -1,0 +1,148 @@
+/* The looks shared across areas; it comes before the area files, which override it at equal specificity. */
+
+/* The mark: the Lunatech glyph in white on the card back, with its pale offset card */
+.brand-logo {
+  height: var(--brand-height);
+  aspect-ratio: 11 / 15;
+  border-radius: var(--radius-mark);
+  background: var(--card-back);
+  color: var(--paper-warm);
+  display: grid;
+  place-items: center;
+  box-shadow: calc(-1 * var(--space-1)) var(--space-1) 0 var(--mark-offset);
+  margin-left: var(--space-1);
+}
+
+.brand-logo svg {
+  width: 62%;
+  height: auto;
+}
+
+.brand-logo-name {
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+}
+
+.panel {
+  background: var(--paper-warm);
+  border: var(--line-hairline) solid var(--hairline-colour);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow) var(--shadow-colour);
+  padding: var(--panel-gap) var(--panel-inline);
+}
+
+.panel-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+.button-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  background: none;
+  border: 0;
+  padding: var(--space-2);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+}
+
+/* Each page adds its own display, width and padding-block */
+.button {
+  min-height: var(--target-min);
+  padding-inline: var(--space-4);
+  border: var(--line-control) solid transparent;
+  border-radius: var(--radius-control);
+  font-weight: var(--weight-strong);
+  align-items: center;
+  justify-content: center;
+}
+
+.button svg {
+  display: none;
+}
+
+.button-primary {
+  background: var(--burgundy);
+  color: var(--paper-warm);
+}
+
+.button-secondary {
+  background: var(--paper-warm);
+  border-color: var(--mute-soft);
+}
+
+.button-outline {
+  background: var(--paper-warm);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.tight-point {
+  margin-inline: var(--tight-point);
+}
+
+.message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--paper-warm);
+  border: var(--line-hairline) solid var(--hairline-colour);
+  border-left: var(--line-bar) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow) var(--shadow-colour);
+  font-weight: var(--weight-medium);
+}
+
+@media (forced-colors: active) {
+  .message {
+    border-left-color: CanvasText;
+  }
+}
+
+.message p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.message .button-quiet {
+  color: inherit;
+  padding: var(--space-2);
+  min-width: var(--target-min);
+  justify-content: center;
+}
+
+.message-problem {
+  background: var(--burgundy-tint);
+  color: var(--burgundy-deep);
+  border-left-color: var(--burgundy-deep);
+}
+
+.message-notice {
+  background: var(--notice-ground);
+  color: var(--notice-ink);
+  border-left-color: var(--notice-bar);
+}
+
+.message-notice svg {
+  color: var(--notice-bar);
+}
+
+/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
+@media (forced-colors: active) {
+  .brand-logo {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+}

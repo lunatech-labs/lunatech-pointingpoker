@@ -1,0 +1,42 @@
+/* The element rules both mockups open with; it goes into the base layer after the reset (4c1-mockups decision 3). */
+* {
+  box-sizing: border-box;
+}
+
+/* C: the page keeps its scrollbar's gutter, so the layout never depends on whether the page scrolls */
+html {
+  font-size: var(--root-size);
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  background: var(--paper-pale);
+  color: var(--ink);
+  font: var(--weight-regular) var(--text-md)/var(--leading-body) var(--font-sans);
+}
+
+a {
+  color: var(--ink);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+svg {
+  width: var(--icon);
+  height: var(--icon);
+  flex: none;
+}
+
+:focus-visible {
+  outline: var(--focus-width) solid var(--ink);
+  outline-offset: var(--focus-gap);
+}

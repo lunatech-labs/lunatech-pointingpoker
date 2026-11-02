@@ -1,0 +1,21 @@
+/* 3b4 decision 6: links; the active one is bold with a bar, the others underlined (J4) */
+.lobby-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+  border-bottom: var(--line-hairline) solid var(--hairline-colour);
+}
+
+.lobby-tabs a {
+  display: flex;
+  align-items: center;
+  min-height: var(--target-min);
+  padding-inline: var(--space-3);
+}
+
+.lobby-tabs a[aria-current] {
+  font-weight: var(--weight-strong);
+  text-decoration: none;
+  border-bottom: var(--line-bar) solid var(--ink);
+  margin-bottom: calc(-1 * var(--line-hairline));
+}

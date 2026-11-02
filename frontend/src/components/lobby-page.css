@@ -1,0 +1,86 @@
+/* 3b4 decisions 2 and 3: the room page's header bar, then one centred column that the header's content, the banners and the panel share */
+.lobby-page-column {
+  width: min(var(--lobby-width), 100% - 2 * var(--page-edge));
+  margin-inline: auto;
+}
+
+.lobby-page-header {
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  background: var(--paper-warm);
+  border-bottom: var(--line-hairline) solid var(--hairline-colour);
+}
+
+.lobby-page-header .lobby-page-column {
+  display: flex;
+  align-items: center;
+  gap: var(--panel-gap);
+}
+
+.lobby-page-main {
+  padding-block: var(--panel-gap) var(--space-6);
+}
+
+/* J6's banners, as the room page draws them, in the column (3b4 decision 10) */
+.lobby-page-banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--panel-gap);
+}
+
+.lobby-page-title {
+  margin: 0 0 var(--space-3);
+  font: var(--weight-strong) var(--text-lg)/var(--leading-tight) var(--font-sans);
+}
+
+/* 3b4 decision 12: the typed name wraps anywhere; its bdi isolates it, so a pasted bidi character cannot reorder the sentence */
+.lobby-page-title code {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--paper-pale);
+  border-radius: var(--radius-small);
+  font: var(--weight-medium) var(--text-md)/var(--leading-body) var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.lobby-page-lead {
+  margin: 0 0 var(--space-2);
+  font-weight: var(--weight-strong);
+}
+
+.lobby-page-panel .button {
+  display: flex;
+  width: 100%;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* 3b4 decision 11: inert after "session ended"; the muted look, on the pale ground since grey on the track is 6.47:1, below J8's 7:1 for text */
+.lobby-page-inert .lobby-form-input:disabled,
+.lobby-page-inert .button:disabled {
+  background: var(--paper-pale);
+  color: var(--grey);
+  border-color: var(--hairline-colour);
+  cursor: default;
+}
+
+.lobby-page-inert .lobby-form-label {
+  color: var(--grey);
+}
+
+.lobby-page-inert .lobby-form-radio:disabled {
+  accent-color: var(--grey);
+}
+
+@media (forced-colors: active) {
+  .lobby-page-inert .lobby-form-input:disabled,
+  .lobby-page-inert .button:disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}

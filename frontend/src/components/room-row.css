@@ -1,0 +1,65 @@
+/* The room row (Terms): the square, the id and a second line, the arrow; the whole row is the link */
+.room-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--target-min);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper-pale);
+  border: var(--line-hairline) solid var(--hairline-colour);
+  border-radius: var(--radius-card);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.room-row-square {
+  width: var(--space-6);
+  height: var(--space-6);
+  flex: none;
+  border-radius: var(--radius-mark);
+  background: var(--card-back);
+}
+
+.room-row .room-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-row-id {
+  display: block;
+  font: var(--weight-medium) var(--text-sm)/var(--leading-body) var(--font-mono);
+  overflow-wrap: break-word;
+}
+
+.room-row-line2 {
+  display: block;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.room-row-go {
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  flex: none;
+  margin-left: auto;
+}
+
+/* 3b4 decision 9: the arrow is a burgundy chip only where the row is the page's primary; rejoin=chip outlines the root's arrow */
+.room-row-go-primary {
+  background: var(--burgundy);
+  color: var(--paper-warm);
+  border-radius: var(--radius-card);
+}
+
+@media (forced-colors: active) {
+  .room-row-square,
+  .room-row-go-primary {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+  }
+}
