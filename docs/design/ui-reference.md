@@ -38,9 +38,10 @@ the decisions log at the end.
 
 - They live beside this file, under `docs/design/`, as clickable HTML linking
   the app's stylesheets: the value source, `looks.css`, `message.css`,
-  `brand-logo.css` and their area files in `frontend/src/components/`, with
-  `reset.css` and `page.css` imported into the `base` layer. Their own `<style>`
-  keeps only the later steps' parts and the parameters' design alternatives.
+  `banners.css`, `brand-logo.css` and their area files in
+  `frontend/src/components/`, with `reset.css` and `page.css` imported into the
+  `base` layer. Their own `<style>` keeps only the later steps' parts and the
+  parameters' design alternatives.
 - They show what step 4 builds and, behind a "later steps" toggle, the parts
   later steps add (progress count, Next issue, recent rounds), dashed, so step
   4 leaves room for them.
@@ -408,9 +409,10 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 
 - **The banners** stack by tone: the lost connection, then the moved link, then
   the restart. Only the notices have a Dismiss, an × alone named "Dismiss" at
-  the panel's right, which moves focus to the page's `h1` (`tabindex="-1"`, so it
-  takes focus without joining the tab order). The Messages section mounts only
-  while a banner shows.
+  the panel's right, which moves focus to the dismiss target, the page's `h1`
+  marked `data-dismiss-focus` (`tabindex="-1"`, so it takes focus without
+  joining the tab order). The Messages section mounts only while a banner
+  shows.
 - **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
   issue", which grows to fit by `field-sizing: content` (a browser without it
   keeps one line). Enter saves and never inserts a line break; `oneLine` keeps
@@ -583,7 +585,9 @@ Contract).
   the phase line's test id, the round bar's region "Round") are listed in its
   spec, and step 4c1-wide made them, with those found after 3b1's list (its
   spec's Contract). Step 4c1-banners made the banners' region "Messages" and
-  named the issue panel the region "Issue".
+  named the issue panel the region "Issue". Step 4c2-banners made the lobby's
+  region "Messages" too and gave the lobby's panel the test id `lobby-panel`
+  (`lobbyPanel`).
 
 ## Open
 
@@ -1000,6 +1004,17 @@ The reasons behind each rule, and what was set aside.
   its rules moved from `looks.css` to `brand-logo.css`. Set aside: 24 rem,
   which the longest id nearly fills; 28 rem, which turns the pinned panel
   landscape; the outlined chip.
+- **4c2-banners.** The banners on both pages (the UI refresh design's step
+  4c2-banners) became one component, `Banners`, drawn once by App and handed to
+  the page shown as a slot, so the notice texts, their order and their roles are
+  written once. A Dismiss focuses the dismiss target, the one element marked
+  `data-dismiss-focus`, which is the page's `h1`; the marker names it on
+  purpose, so a moved or second heading changes nothing. `banners.css` owns the
+  stacking and each page places it by context (`.room-page .banners`,
+  `.lobby-page-main .banners`). Set aside: the lobby drawing its own section as
+  the room page does; each page taking the five props; `querySelector('h1')`; a
+  ref threaded from App to each `h1`; no stylesheet, or the page's class passed
+  in; a second exception.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the

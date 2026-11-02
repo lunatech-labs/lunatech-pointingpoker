@@ -11,7 +11,7 @@ import {
   storedDefault
 } from '../room/joinRole'
 import { ownRoleOf } from '../room/view'
-import { Alerts } from './Alerts'
+import { Banners } from './Banners'
 import { LobbyForm } from './LobbyForm'
 import { LobbyPage } from './LobbyPage'
 import type { LobbyTab } from './LobbyTabs'
@@ -122,6 +122,15 @@ export function App({ connection }: { connection: Connection }) {
     : room.lost
       ? 'Connection to the room was lost'
       : ''
+  const banners = (
+    <Banners
+      problem={connectionMessage || error}
+      moved={moved}
+      restarted={restarted}
+      onDismissMoved={() => setMoved(false)}
+      onDismissRestarted={() => setRestarted(false)}
+    />
+  )
   const rejoin =
     !pathRoom && remembered
       ? {
@@ -132,19 +141,10 @@ export function App({ connection }: { connection: Connection }) {
         }
       : null
 
-  // The lobby's banners keep today's markup, fenced from base.css's reset, until 4c2-banners.
   return room.snapshot === null ? (
     <LobbyPage
       ended={room.fatal}
-      banners={
-        <Alerts
-          error={connectionMessage || error}
-          moved={moved}
-          onDismissMoved={() => setMoved(false)}
-          restarted={restarted}
-          onDismissRestarted={() => setRestarted(false)}
-        />
-      }
+      banners={banners}
     >
       <LobbyForm
         tab={tab}
@@ -171,11 +171,7 @@ export function App({ connection }: { connection: Connection }) {
       onLeave={doLeave}
       onRefused={() => connection.refused()}
       onSwitched={role => rememberRole(localStorage, pathRoom, role)}
-      lost={room.lost}
-      moved={moved}
-      restarted={restarted}
-      onDismissMoved={() => setMoved(false)}
-      onDismissRestarted={() => setRestarted(false)}
+      banners={banners}
     />
   )
 }

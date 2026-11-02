@@ -23,10 +23,7 @@
 }
 
 /* J6's banners, as the room page draws them, in the column (3b4 decision 10) */
-.lobby-page-banners {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.lobby-page-main .banners {
   margin-bottom: var(--panel-gap);
 }
 

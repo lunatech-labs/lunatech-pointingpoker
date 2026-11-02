@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
 <link rel="stylesheet" href="../../frontend/src/components/message.css">
+<link rel="stylesheet" href="../../frontend/src/components/banners.css">
 <link rel="stylesheet" href="../../frontend/src/components/lobby-page.css">
 <link rel="stylesheet" href="../../frontend/src/components/room-row.css">
 <link rel="stylesheet" href="../../frontend/src/components/lobby-tabs.css">
@@ -75,13 +76,13 @@ const nameField = `<label class="lobby-form-label" for="name">Your name</label><
 const roles = `<fieldset class="lobby-form-roles" aria-describedby="help"><legend class="lobby-form-label">Your default role</legend><div class="lobby-form-radios">${['Voter', 'Facilitator'].map(r =>
   `<label class="lobby-form-label"><input class="lobby-form-radio" type="radio" name="role" value="${r}"${r === role ? ' checked' : ''}${dis}> ${r}</label>`).join('')}</div>
   <small class="lobby-form-help" id="help">Used for rooms you have not joined before. In a room you have joined before, you keep your previous role there.</small></fieldset>`
-const form = (heading, extra, button) => `<h1 class="lobby-page-title" tabindex="-1">${heading}</h1>${extra}${nameField}${roles}<button type="button" class="button button-primary"${dis}>${button}</button>`
+const form = (heading, extra, button) => `<h1 class="lobby-page-title" tabindex="-1" data-dismiss-focus>${heading}</h1>${extra}${nameField}${roles}<button type="button" class="button button-primary"${dis}>${button}</button>`
 
 function rootForm() {
   const tabs = `<nav class="lobby-tabs" aria-label="Create or join"><a href="#" ${tab === 'create' ? 'aria-current="true"' : ''} data-tab="create">Create</a><a href="#" ${tab === 'join' ? 'aria-current="true"' : ''} data-tab="join">Join</a></nav>`
   const roomField = `<label class="lobby-form-label" for="room">Room id</label><input class="lobby-form-input lobby-form-input-mono" id="room" type="text" value="">`
-  return tab === 'create' ? `<h1 class="lobby-page-title" tabindex="-1">Create room</h1>${rejoinRow()}${tabs}${nameField}${roles}<button type="button" class="button button-primary">Create</button>`
-    : `<h1 class="lobby-page-title" tabindex="-1">Join room</h1>${rejoinRow()}${tabs}${roomField}${nameField}${roles}<button type="button" class="button button-primary">Join</button>`
+  return tab === 'create' ? `<h1 class="lobby-page-title" tabindex="-1" data-dismiss-focus>Create room</h1>${rejoinRow()}${tabs}${nameField}${roles}<button type="button" class="button button-primary">Create</button>`
+    : `<h1 class="lobby-page-title" tabindex="-1" data-dismiss-focus>Join room</h1>${rejoinRow()}${tabs}${roomField}${nameField}${roles}<button type="button" class="button button-primary">Join</button>`
 }
 const pinnedForm = () => form('Join room', badge, 'Join')
 
@@ -95,7 +96,7 @@ function notARoom() {
 function draw() {
   const body = page === 'notaroom' ? notARoom() : page === 'pinned' ? pinnedForm() : rootForm()
   const list = page === 'notaroom' ? '' : banners()
-  document.getElementById('root').innerHTML = `${header}<main class="lobby-page-main"><div class="lobby-page-column">${list ? `<section class="lobby-page-banners" aria-label="Messages">${list}</section>` : ''}<div class="panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}">${body}</div></div></main>`
+  document.getElementById('root').innerHTML = `${header}<main class="lobby-page-main"><div class="lobby-page-column">${list ? `<section class="banners" aria-label="Messages">${list}</section>` : ''}<div class="panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}">${body}</div></div></main>`
   // 3b4 decision 13: "Join as <name>" from the stored name, textContent only; an empty stored name counts as none
   const line = document.getElementById('join-line')
   if (line && stored.trim()) line.textContent = 'Join as ' + stored.trim()
@@ -103,7 +104,7 @@ function draw() {
 document.addEventListener('click', e => {
   const tabLink = e.target.closest('[data-tab]'), dismiss = e.target.closest('[aria-label="Dismiss"]')
   if (tabLink) { e.preventDefault(); tab = tabLink.dataset.tab; draw(); document.querySelector(`[data-tab="${tab}"]`).focus() }
-  if (dismiss) { dismissed.add(dismiss.closest('[data-notice]').dataset.notice); draw(); document.querySelector('h1').focus() }   // 3b3 decision 5
+  if (dismiss) { dismissed.add(dismiss.closest('[data-notice]').dataset.notice); draw(); document.querySelector('[data-dismiss-focus]').focus() }   // 4c2-banners decision 3
   if (e.target.closest('a[href="#"]')) e.preventDefault()
 })
 draw()

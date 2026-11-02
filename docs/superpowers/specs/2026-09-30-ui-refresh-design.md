@@ -351,7 +351,9 @@ given feedback, and 4c1-banners, the banners under the header;
 (`docs/superpowers/specs/2026-10-30-ui-refresh-4c2-form-design.md`),
 4c2-rejoin-name, the rejoin row joining with the typed name
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-rejoin-name-design.md`),
-4c2-banners, the lobby's banners in the new look, and 4c2-bootstrap, which
+4c2-banners, the lobby's banners in the new look
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`), and
+4c2-bootstrap, which
 removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import
 in `base.css`, and decides whether to keep Bootstrap's tap highlight removal
