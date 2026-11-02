@@ -22,11 +22,11 @@ shares the line.
 
 ## Terms
 
-The parent's Terms hold, **phase line** among them.
+The parent's Terms hold, **phase line** and **phase word** among them.
 
 - **Flip**: `votesRevealed` changing between two snapshots within one mounted
   room page.
-- **Seen word**: what the line shows, "Voting" or "Revealed", hidden from
+- **Seen word**: the phase word as shown, "Voting" or "Revealed", hidden from
   assistive technology.
 - **Heard sentence**: what assistive technology gets instead, "Voting open" or
   "Votes revealed", visually hidden.
@@ -43,16 +43,14 @@ The parent's Terms hold, **phase line** among them.
 2. **Two separate texts, each complete** (product owner's ruling): inside the
    `h2`, the seen word in a span with `aria-hidden="true"` and the heard
    sentence in a span with the `visually-hidden` class. Both are picked by
-   `votesRevealed` in the same render, so the line has no state of its own.
-   The heading's name becomes the heard sentence, so heading navigation reads
-   "Votes revealed, heading level 2", how a user arriving mid-round finds the
-   phase until 4a-arrival. This is not step 1a's rejected hidden copy: that
-   was a second element beside the line, kept in step with it; here the
-   sentence is inside the one region, from the same render. Rejected: the
-   bare word spoken (unclear out of context); a hidden word spliced onto the
-   seen one, "Votes " + "Revealed" (two fragments joined by whitespace and
-   casing); the two words shown on screen (reopens 3b2 decision 6, the
-   one-row bar).
+   `votesRevealed` in the same render, so the line has no state of its own:
+   one region, one render, unlike step 1a's rejected hidden copy beside the
+   line. The heading's name becomes the heard sentence, so heading navigation
+   reads "Votes revealed, heading level 2", how a user arriving mid-round
+   finds the phase until 4a-arrival. Rejected: the bare word spoken (unclear
+   out of context); a hidden word spliced onto the seen one, "Votes " +
+   "Revealed" (two fragments joined by whitespace and casing); the two words
+   shown on screen (reopens 3b2 decision 6, the one-row bar).
 3. **`visually-hidden` is a shared class in `components/looks.css`**
    (unlayered; product owner's ruling): the Result's `.result-sr` rule
    (checked, `result.css`) moved and renamed, with `Result.tsx` and
@@ -63,15 +61,18 @@ The parent's Terms hold, **phase line** among them.
    letter (inferred). Rejected: a local copy in `round-bar.css`, the same rule
    twice; moving `.panel-label` onto the seen word, which leaves the `h2` on
    the browser's heading font and changes the line's box (checked: the reset
-   does not restyle headings).
+   leaves headings' font alone).
 4. **The fixtures follow the Terms** (product owner's ruling): `phaseLine` is
-   the phase line, the region, found by role and test id as `issueStatus` is;
-   `phaseWord` is the seen word, a `data-testid="phase-word"` on its span, as
-   `tally-count` is on the Result's hidden-from-readers spans. Every existing
-   assertion on the phase line's text reads `phaseWord` instead
+   the phase line, the region, found by role and test id as `issueStatus` is,
+   since `expectLiveRegion` passes an element with no live attributes at all
+   (checked); `phaseWord` is the seen word, a `data-testid="phase-word"` on its
+   span, as `tally-count` is on the Result's hidden-from-readers spans. Every
+   existing assertion on the phase line's text reads `phaseWord` instead
    (`roles.spec.js`, `room.spec.js`, `layout.spec.js`), and `phaseLine`'s
    comment, which says "phase word", is corrected. This is the step's contract
-   change.
+   change. The two hidden spans get test ids too, `phase-heard` and `tally-sr`
+   (and `room.html`'s, which mirrors the Result's test ids), so a case finds
+   each by its own name, never by the class that hides it.
 5. **Out of scope**: who flipped the round (the snapshot does not say); a
    spoken result, a step 5+ candidate; orientation on arriving in the room,
    step 4a-arrival; focus lost when a reveal unmounts the deck, step
@@ -92,13 +93,15 @@ the region; the heard sentence is what is spoken.
 | Stream lost, or an invalid snapshot dropped | Unchanged | Unchanged |
 | In-place reconnect, the round changed meanwhile | Becomes revealed: announced | Becomes open: announced |
 | In-place reconnect, the round changed and changed back | Unchanged | Unchanged |
-| Session ended | Cannot happen: a page that reached the room reloads instead (the next row; checked, `connection.ts` `check`) | Likewise |
+| Session ended | Cannot happen: a page that reached the room reloads onto `?restarted=1` instead (the next row; checked, `connection.ts` `check`) | Likewise |
 | Join, or a reload, including the one after a refusal or a restart | Appears holding it: not announced | Likewise |
 | Leave | The page unloads | Likewise |
 
 Accepted race: two flips in quick succession, such as a Show and then
-another's Re-vote, render one after the other, but the reader may merge them
-or drop the earlier polite message (inferred).
+another's Re-vote, may render one after the other, and the reader may merge
+them or drop the earlier polite message; if both land before React commits,
+the line renders once, and a flip and its reversal are not announced at all,
+like the changed-and-back reconnect (inferred).
 
 ## Accepted costs
 
@@ -116,35 +119,35 @@ From Appendix B, unchanged but for the first's pointer:
 
 New:
 
-- Whoever has focus on the Show/Re-vote button, the presser or not, may hear
-  its new name on a flip as well as the heard sentence, and the round guard's
-  `aria-disabled` may be announced as unavailable (inferred; checked,
-  `RoundBar.tsx`, `useRoundGuard.ts`). Accepted under the hand check's rule.
+- On a flip the Show/Re-vote button is renamed and both buttons take the
+  round guard's `aria-disabled` (checked, `RoundBar.tsx`, `useRoundGuard.ts`).
+  Whoever has focus there, the presser or not, may hear the new name or
+  "unavailable" as well as the heard sentence (inferred). Accepted under the
+  hand check's rule.
 
 ## Contract
 
 **Changed**: decision 4. The layout cases measuring the phase line's box
-(`readBoxes`) keep measuring the wrapper through `phaseLine`. 'an old UUID
-link opens its derived room under a banner that covers no card'
-(`slug.spec.js`) treats any `role="status"` as a banner, so it now also
-checks the phase line covers no card; it passes unchanged (inferred: the bar
-sits below the round panel).
+(`readBoxes`) keep measuring the wrapper through `phaseLine`. The phase line
+joins the no-cover check of 'an old UUID link opens its derived room under a
+banner that covers no card' (`slug.spec.js`), which passes unchanged
+(inferred).
 
 **New**, both browsers, each shown to fail by the mutations named. If one
 does not fail under its mutation, the plan stops and the case comes back
 here. "Heard" is the `h2`'s accessible name, which leaves `aria-hidden`
-content out; the region is found by its role, since `expectLiveRegion`
-passes an element with no live attributes at all (checked).
+content out; the region is `phaseLine` (decision 4).
 
 - **'the phase line announces each flip from one region'** (`room.spec.js`):
   Alice and Bob join; Bob's phase line is marked (`markRegion`) and heard as
   "Voting open". After Alice's Show it is heard as "Votes revealed", after her
   Re-vote as "Voting open", and each time it is still the marked live region
-  (`expectLiveRegion`). Its heard span has `clip-path: inset(50%)` and
+  (`expectLiveRegion`). Its `phase-heard` span has `clip-path: inset(50%)` and
   `text-transform: none` (`toHaveCSS`). Mutations: the wrapper keyed by
   `votesRevealed`; `role="status"` removed; `aria-hidden` removed from the
-  seen word; the sentences swapped; the heard span's class misspelt; the
-  shared class without `text-transform: none`.
+  seen word; the sentences swapped; the heard span's class misspelt;
+  `clip-path` dropped from the shared rule; the shared rule without
+  `text-transform: none`.
 - **'the phase line stays one region through a reconnect that finds the round
   changed'** (`room.spec.js`): Bob's phase line is marked, Bob is cut, Alice
   shows, Bob is restored; his line is heard as "Votes revealed" and is still
@@ -152,9 +155,8 @@ passes an element with no live attributes at all (checked).
   flag.
 - **The Result's hidden text**: an existing Result case, such as 'the tally
   counts only the votes that were cast' (`room.spec.js`), gains the same
-  `clip-path` assertion on a column's hidden text. Mutation: the class
-  misspelt in `Result.tsx`. It lands with decision 3's move, so that commit
-  has a case that can fail.
+  `clip-path` assertion on a column's `tally-sr` span. Mutations: the class
+  misspelt in `Result.tsx`; `clip-path` dropped from the shared rule.
 
 Left without a case: Clear, auto-reveal and the facilitator switch (the same
 render from `votesRevealed` as a Re-vote or a Show); the changed-and-back
@@ -162,37 +164,34 @@ reconnect (nothing changes to observe); join and reload, beyond the first
 case's opening check. The seen word after a Show and a Re-vote stays pinned by
 'a revealed round takes no more votes until Re-vote'.
 
-**Hand check**, Orca on Firefox, before the PR is pushed. Pass rule: each
-announcement speaks the heard sentence once and never the seen word. Runs:
-another's Show and a Re-vote, focus elsewhere; another's Show, and an own vote
-that auto-reveals, each with focus on a card (step 4a-reveal-focus's
-question); an own Show; heading navigation to the phase line. Anything else
-heard, the button's rename or focus loss included, is recorded in the PR's
-Verified section. A failure of the pass rule stops the plan and comes back
-here.
+**Hand check**, Orca on Firefox, before the PR is pushed.
+
+- **Judged runs**: another's Show and a Re-vote, focus elsewhere; an own
+  Show; heading navigation to the phase line. In each, the flip is announced
+  (heading navigation: the sentence is read), speaking the heard sentence
+  once and never the seen word. A failure stops the plan and comes back here.
+- **Recorded runs**: another's Show, and an own vote that auto-reveals, each
+  with focus on a card (step 4a-reveal-focus's question). They cannot stop
+  this step.
+
+Anything else heard, the button's rename or a focus loss included, is
+recorded in the PR's Verified section.
 
 ## The docs' changes
 
-- **Parent, steps table**: 4a's row is judged by "Its cases, the hand check,
-  and the existing cases unchanged but for its listed contract change". New
-  rows after it, each waiting on 4a and judged by "Its cases":
-  **4a-arrival**, "Arriving in the room: focus moves to a heading when the
-  room appears (to be confirmed)"; **4a-reveal-focus**, "A reveal keeps the
-  voter's focus".
-- **Parent, step 4a's paragraph** gains this document's path; new paragraphs
-  for 4a-arrival (its preferred solution, to be confirmed, and the
-  alternatives weighed) and 4a-reveal-focus.
-- **Parent, step 3's paragraph** points to this document, not Appendix B,
-  for the progress staying outside the region.
-- **Parent, Appendix B** gains a first line pointing to this document.
-- **Parent, steps after 5** gains a candidate: a spoken result on a reveal.
-- **`docs/known-issues.md`**: a reveal drops a voter's focus from the
-  unmounted deck, closed by 4a-reveal-focus.
+- **Parent**: the steps table's 4a row (its judging), and its 4a-arrival and
+  4a-reveal-focus rows; step 4a's paragraph points here, with new paragraphs
+  for both follow-ups; step 3's paragraph points here for the progress staying
+  outside the region; Appendix B points here; the Terms gain **Phase line**;
+  steps after 5 gain a spoken result on a reveal.
+- **`docs/known-issues.md`**: "A reveal drops a voter's focus", closed by
+  4a-reveal-focus.
 
 ## Branches and commits
 
 One PR on `20260930.ui_refresh_4a_round_live_region`, stacked on 4d's
 `20260930.ui_refresh_4d_not_a_room` (#481): this document, the parent's
 changes, the known issue and the plan first; then the shared
-`visually-hidden` class with the Result's assertion (decision 3); then the
-region with its cases and the fixtures (decision 4).
+`visually-hidden` class with the Result's assertion (decision 3), so that
+commit has a case that can fail; then the region with its cases and the
+fixtures (decision 4).
