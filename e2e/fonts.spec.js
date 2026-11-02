@@ -88,8 +88,8 @@ test('the room is drawn in Inter, a name in other scripts too, and the room id i
   const { page } = await join(name)
   await settle(page)
   await expectPainted(page, browserName, page.getByRole('link', { name: 'Leave' }), 'Inter', 'a')
-  const cell = participantEntry(page, name).getByRole('cell', { name, exact: true })
-  await expectPainted(page, browserName, cell, 'Inter', 'ŁДΝễ')
+  const entryName = participantEntry(page, name).getByText(name, { exact: true })
+  await expectPainted(page, browserName, entryName, 'Inter', 'ŁДΝễ')
   const id = page.getByRole('heading', { name: room, exact: true })
   await expectPainted(page, browserName, id, 'JetBrains Mono', 'a')
 })
@@ -168,7 +168,9 @@ test('a held-back Inter draws the fallback, then Inter once it arrives', async (
 test("today's lobby stays centred and keeps Bootstrap's form spacing", async ({ page, origin }) => {
   await page.goto(`${origin}/`)
   const heading = await page.getByRole('heading', { name: 'Create Room' }).boundingBox()
-  const right = page.viewportSize().width - heading.x - heading.width
+  // page.css's scrollbar gutter narrows the body in Chromium, which the root's clientWidth omits.
+  const width = await page.evaluate(() => document.body.clientWidth)
+  const right = width - heading.x - heading.width
   expect(Math.abs(heading.x - right)).toBeLessThan(1)
   const name = await nameInput(page).boundingBox()
   const role = await defaultRoleChoice(page).boundingBox()

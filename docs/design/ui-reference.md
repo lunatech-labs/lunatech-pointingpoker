@@ -203,8 +203,8 @@ shape or fill from afar, and words explain the rest up close.
 - Each look has one mark with an accessible name, written for the listener
   (WCAG 1.1.1, and 4.1.2 for a card's state), one wording per state: "No
   vote", as on the revealed "–"; "Voted"; and "Previous vote, not confirmed",
-  as on the kept card. Step 4 rewrites the mark reads to match (see "Contract
-  reads").
+  as on the kept card. Step 4c1-wide rewrote the mark reads to match (see
+  "Contract reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
 - **Forced colours** (Windows' contrast themes) repaint backgrounds, which
@@ -515,50 +515,73 @@ in its spec
 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
 Contract).
 
-- The text "Facilitator" inside a facilitator's entry (`facilitatorMark`), and
-  one list holding every participant (`participantEntries`). The roster changes
-  both, a contract change of step 4: each facilitator's name in the roster is
-  an element with the test id `facilitator`, and the list holds voters only.
-- Images named "Voted" and "Vote hidden" (`votedMark`, `hiddenMark`), matched as
-  case-insensitive substrings, since neither read sets `exact`. A confirmed
-  entry carries both while voting and "Voted" once revealed; a kept one only
-  "Vote hidden" while voting. J3's named marks change them, a contract change of
-  step 4: each mark is read by its exact name. `hiddenMark` becomes the kept
-  mark's read, which serves the read after a Re-vote and, since only
-  `hasEstimation` gives that look, proves it survives redaction. On a confirmed
-  entry, the reads of "Vote hidden" are dropped where a read of "Voted" or of
-  the value sits beside them; the last, in `stragglerDepartsWithVotesHidden`,
-  the only proof that the votes survive a departure, becomes a `votedMark` read.
-  Step 1c moved every read of "Voted" on a revealed entry to the value (its list
-  names the cases).
+- Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
+  (`facilitatorMark`), and one list holding every participant
+  (`participantEntries`). The roster changed both, a contract change of step
+  4: each facilitator's name in the roster is an element with the test id
+  `facilitator`, read exactly (`facilitatorName`), and the list holds voters
+  only.
+- Until step 4c1-wide, images named "Voted" and "Vote hidden" (`votedMark`,
+  `hiddenMark`), matched as case-insensitive substrings, since neither read
+  set `exact`. A confirmed entry carried both while voting and "Voted" once
+  revealed; a kept one only "Vote hidden" while voting. J3's named marks
+  changed them, a contract change of step 4: each mark is read by its exact
+  name, "Voted" (`votedMark`), "Previous vote, not confirmed" (`keptMark`)
+  and "No vote" (`noVoteMark`). `hiddenMark` became the kept mark's read,
+  `keptMark`, which serves the read after a Re-vote and, since only
+  `hasEstimation` gives that look, proves it survives redaction. On a
+  confirmed entry, the reads of "Vote hidden" were dropped where a read of
+  "Voted" or of the value sat beside them; the last, in
+  `stragglerDepartsWithVotesHidden`, the only proof that the votes survive a
+  departure, became a `votedMark` read. Step 1c moved every read of "Voted" on
+  a revealed entry to the value (its list names the cases).
 - The kept card's description, "Previous vote, not confirmed"
   (`unconfirmedCard`), from a hidden note, and the card's text, its figure
   alone (`toHaveText('5')`). J3's tag, `aria-hidden` and outside the button,
-  leaves both unchanged.
+  left both unchanged.
+- Each card by its figure as its exact name (`card`), "0.5" included:
+  `Figure` sets its point tight and keeps its text "0.5".
 - A revealed entry's `participant-estimation` holds the value and nothing else,
   empty for no vote (`revealedEstimation`, `expectSummaryMatchesParticipants`).
-  J3's "–" and "not confirmed" sit outside it. Step 4 adds a read of both, a
-  contract addition: at the third reveal of 'a session of rounds keeps the
-  summary honest across them', Alice and Bob kept, Carol confirmed and Dave with
-  no estimate, only Alice's and Bob's entries carry the kept mark, and only
-  Dave's the no-vote mark, each read by J3's name.
+  J3's "–" and "not confirmed" sit outside it. Step 4c1-wide added a read of
+  both, a contract addition: at the third reveal of 'a session of rounds keeps
+  the summary honest across them', Alice and Bob kept, Carol confirmed and
+  Dave with no estimate, only Alice's and Bob's entries carry the kept mark,
+  and only Dave's the no-vote mark, each read by J3's name.
 - The room id as a heading, any level (`lobby.spec.js`).
 - The room's marker, the test id `room` on the room view's root (`inRoom`),
   the sign a join reached the room: it sits on what renders from a snapshot,
   never on a look drawn while joining, as 'the room's marker waits for the
   first snapshot' (`smoke.spec.js`) holds it.
+- The issue while viewing, the heading with the test id `issue-text`
+  (`issueText`), holding "No issue yet" when there is none, and Edit by its
+  name, "Edit issue" (`issueEdit`), though it shows "Edit".
+- The issue editor's notices, the status region with the test id
+  `issue-status` (`issueStatus`), rendered once, outside both views.
+- The round panel's slot, the test id `round-slot` (`roundSlot`), holding the
+  deck while voting and the result once revealed; a facilitator's page has
+  none while voting.
 - `tally-entry`, inside the region "Results", marks a value someone voted
   for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
-  and the nobody-voted case reads none.
-- The copy hint's text, "Link copied to clipboard", which 3b1 shortens to
-  "Link copied", a contract change of step 4.
-- The table region's name, "Participants", which 3b1 changes to "Voters", its
-  title "Voters · 14", the name "Participants" going to the roster; the
-  tally's test ids and `participant-estimation` read the same text, and
-  each tally entry gains a spoken reading ("3: 2 votes") beside it.
+  reading each entry's `tally-value` and `tally-count`, and the nobody-voted
+  case reads none. `most-voted` holds the most voted value (`mostVoted`).
+- The copy hint's text, "Link copied to clipboard" until step 4c1-wide, which
+  put 3b1's shortened hint, "Link copied", in place, a contract change of
+  step 4. The hint is the header's status region (`copyHint`), always
+  rendered and empty but for the 2 s after a copy, and "Copy link" is read as
+  a link by that name.
+- The role switches, the header's and ☰'s, one shown at a time, each a button
+  named for the role it switches to, "Switch to facilitator" or "Switch to
+  voter" (`switchTo`).
+- The table region's name, "Participants", which step 4c1-wide changed to
+  3b1's "Voters", its title "Voters · 14", the name "Participants" going to
+  the roster; the tally's test ids and `participant-estimation` read the same
+  text, and each tally entry gained a spoken reading ("3: 2 votes") beside it.
 - 3b1's other contract changes (the deck leaving on a reveal, `frozenNotice`,
   the issue's read view and its empty "No issue yet", the nobody-voted read,
-  the phase line's test id) are listed in its spec.
+  the phase line's test id, the round bar's region "Round") are listed in its
+  spec, and step 4c1-wide made them, with those found after 3b1's list (its
+  spec's Contract). The banners' region "Messages" waits for 4c1-editor.
 
 ## Open
 

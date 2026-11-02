@@ -3,6 +3,7 @@ import {
   expect,
   connectionLost,
   issueBox,
+  issueText,
   issueSave,
   issueEdit,
   nameInput,
@@ -114,5 +115,5 @@ test('a save refused by a different instance recovers like any command', async (
 
   // The reload drops the draft; the failure line before it can last too briefly to assert.
   await expect(restartNotice(alice.page)).toBeVisible({ timeout: 20_000 })
-  await expect(issueBox(alice.page)).toHaveValue('')
+  await expect(issueText(alice.page)).toHaveText('No issue yet')
 })

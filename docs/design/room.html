@@ -109,9 +109,10 @@ const banners = {
 const pencil = icon('pencil'), trash = icon('trash')
 const link = icon('link'), exit = icon('log-out')
 // I: soft avatars, the pair hashed from the name, from colours.css's avatar tokens; decoration only
-const avatarPairs = 14   // the --avatar-ink-N and --avatar-ground-N pairs in colours.css
+const avatarPairs = (() => { const css = getComputedStyle(document.documentElement); let n = 0; while (css.getPropertyValue(`--avatar-ink-${n + 1}`).trim()) n++; return n })()   // counted from colours.css
 const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)
-const initials = n => n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' })   // a word's first grapheme keeps an emoji whole
+const initials = n => n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => graphemes.segment(w).containing(0).segment).join('').toUpperCase()
 const avatar = n => { const i = hash(n) % avatarPairs + 1; return `<span class="roster-avatar" style="--h:var(--avatar-ink-${i});--t:var(--avatar-ground-${i})" aria-hidden="true">${initials(n)}</span>` }
 const stateName = { none: 'No vote', confirmed: 'Voted', kept: 'Previous vote, not confirmed' }
 
@@ -245,15 +246,20 @@ function fitEntries() {
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
   const used = () => shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad)
   const room = Math.floor(box.clientHeight - reserve)
-  const fits = v => { list.style.setProperty('--s', v); list.style.maxWidth = ''; return used() <= room }
-  let lo = 1, hi = token('--deck-card') / token('--entry-mark')
-  if (fits(hi)) lo = hi
-  else for (let i = 0; i < 10; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid }
-  fits(Math.floor(lo * 50) / 50)   // in steps of 0.02, clear of subpixel rounding
   const items = [...list.children]
-  const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
-  const perRow = Math.ceil(items.length / rows), width = items[0].getBoundingClientRect().width
-  if (rows > 1) list.style.maxWidth = `${perRow * width + 1}px`
+  // Balanced before it measures, since the balance can move a wrapping name to another row
+  const fits = v => {
+    list.style.setProperty('--s', v); list.style.maxWidth = ''
+    const rows = new Set(items.map(e => Math.round(e.offsetTop))).size
+    if (rows > 1) list.style.maxWidth = `${Math.ceil(items.length / rows) * items[0].getBoundingClientRect().width + 1}px`
+    return used() <= room
+  }
+  // Whole steps of 0.02, clear of subpixel rounding: lo is 0 or a step that fit, hi one that did not
+  const scale = k => (50 + k) / 50
+  let lo = 0, hi = Math.floor(token('--deck-card') / token('--entry-mark') * 50) - 50
+  if (fits(scale(hi))) lo = hi
+  else while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (fits(scale(mid))) lo = mid; else hi = mid }
+  fits(scale(lo))
 }
 const watched = new ResizeObserver(fitEntries)
 document.fonts.addEventListener('loadingdone', fitEntries)

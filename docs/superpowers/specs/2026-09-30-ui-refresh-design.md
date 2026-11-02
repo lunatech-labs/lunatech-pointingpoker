@@ -128,22 +128,22 @@ document as a whole stays in discussion.
    effect, as Re-vote's hiding does. Behaviour components still hold is carried
    over unchanged. The e2e cases guard most of it; these are, notably, the parts
    a restyle breaks most easily, several with no case:
-   - `IssueEditor.tsx`: the Enter guard during input-method composition, focus
-     taken back after a failed save unless the user has moved elsewhere,
-     `flushSync` so a phone shows its keyboard, and the refocus in
-     `takeTheirs`.
-   - `Deck.tsx`: the cards disabled while revealed.
+   - `IssueEditor.tsx`: the Enter guard during input-method composition.
+     `IssuePanel.tsx`: focus taken back after a failed save unless the user has
+     moved elsewhere, `flushSync` so a phone shows its keyboard, and the
+     refocus in `takeTheirs`.
+   - `RoundPanel.tsx`: draws `Deck` only while voting, so a revealed round has
+     no card to press, a guarantee the structure now holds.
    - `App.tsx`: the join, create and leave flow, the name and room in
      `localStorage`, the trimmed room id, reading and stripping `?moved=1` and
      `?restarted=1`, and the "Link copied" hint's 2 s timeout, started on each
      copy and not reset by the next.
-   - The copy hint, wherever it lives, today in `Alerts.tsx`: rendered only
-     while shown, as a `role="alert"`, so it is announced wherever step 4 moves
-     it.
-   - `Room.tsx`: the revealed-round vote guard and the refusal routing,
-     including `saveIssue`'s rethrow, which is what makes the editor show a
-     failure.
-   - `Controls.tsx`: Re-vote shown only while revealed. The server's re-vote
+   - The copy hint: `RoomHeader.tsx`'s `role="status"` region, always
+     rendered, only its text changing (4c1-wide's decision 9).
+   - `RoomPage.tsx`: the refusal routing, including `saveIssue`'s rethrow,
+     which is what makes the editor show a failure. The revealed-round vote
+     guard was dropped, unreachable with the deck unmounted while revealed.
+   - `RoundBar.tsx`: Re-vote shown only while revealed. The server's re-vote
      has no guard, so one click during voting unconfirms every vote.
    - `Lobby.tsx`: Enter submits on keyUp from the name field only, and a fixed
      room hides the tabs and makes the room id read-only.
@@ -186,7 +186,7 @@ document as a whole stays in discussion.
 | 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
 | 4c1-wide-prep | The mockups' icons and the avatars' tokens | 4c1-mockups | The product owner, on a computed-style diff of the mockups, and its unit tests |
 | 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
-| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-narrow | Narrow and large screens' look (J11) | 4c1-wide | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c1-editor | The issue editor's and the messages' look (J12) | 4c1-narrow | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2 | The lobby's look | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
@@ -324,16 +324,21 @@ which chooses plain CSS
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-prep-design.md`),
 4c1-voters, voters without a browser for the layout cases
 (`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
-4c1-wide, 4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
+4c1-wide, the wide room page's look
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-design.md`),
+4c1-narrow and 4c1-editor, the last re-challenging 4b2's muted
 Save and Cancel against the contrast gate and taking the two cases 4b2's
 final review deferred, a failed save with focus fallen to the page and a
 double-click selecting a word in the field;
 4c2, the lobby's look, which removes
-Bootstrap and its pin; and 4d, the not-a-room page in React with the Join
-tab's URL flag (3b4 decision 15). What follows is the whole of step 4, each
-step's spec taking its part. The step 3 reference applied in plain CSS
-(4c1-foundation), Bootstrap 4 and its Dependabot major-version pin removed, mobile-first
-layout,
+Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
+undoing Bootstrap's base styles outside the legacy-page fence, and its import
+in `base.css`, and decides whether to keep Bootstrap's tap highlight removal
+(`-webkit-tap-highlight-color: transparent`); and 4d, the not-a-room page
+in React with the Join tab's URL flag (3b4 decision 15). What follows is the
+whole of step 4, each step's spec taking its part. The step 3 reference
+applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot
+major-version pin removed, mobile-first layout,
 and the result placed as step 3b1 decides: in the deck's place on the voter's
 page, and below the table on the facilitator's page (layout f), the table
 giving it its height, which narrows that entry in `docs/known-issues.md`, and the
@@ -414,7 +419,7 @@ commitment:
   denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
   fills the facilitator's slot that step 4 leaves empty while voting, which
   ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
-  votes still pushes the participants list down").
+  votes still moves the facilitator's entries").
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.

@@ -126,8 +126,7 @@
 
   .room-header-copy-word,
   .room-header-role,
-  .room-header-leave,
-  .room-header-copy-note:empty {
+  .room-header-leave {
     display: none;
   }
 
