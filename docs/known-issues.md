@@ -86,17 +86,6 @@ roadmap item instead of leaving it here as stale history.
   choice is made with Copy link's, so both follow one rule, by mockup with the
   designer. The link's place and behaviour do not change.
 
-### The issue editor's field needs a script fit where `field-sizing` is unsupported
-
-- **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
-  in step 4c1-editor.
-- **Issue:** The mockup's field grows by CSS `field-sizing: content`, which
-  Firefox ESR 140 lacks (confirmed by hand) and Safari's support is unchecked.
-  The mockup fits the field by script there; the app needs the same.
-- **Resolution:** Built in step 4; remove this entry when step 4 lands the fit
-  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 7).
-
 ### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
 
 - **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
@@ -106,10 +95,10 @@ roadmap item instead of leaving it here as stale history.
   fits them. The page already scrolls sideways there on the plain read view
   (checked on the mockup). Page zoom, which WCAG's reflow case uses, is not
   affected.
-- **Resolution:** Step 4 lets the buttons wrap onto two rows or keep only
-  their words at that size, or accepts the limit with the rest of the page
-  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 8); never a merge gate.
+- **Resolution:** Accepted, with the rest of the page: the product caters for
+  up to 200% zoom at the largest viewport, so 400% on a 400 px window is out of
+  range (`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`,
+  decision 3).
 
 ### A layout journey failing inside a shared helper does not name its guarantee
 
