@@ -251,8 +251,7 @@ export const vote = (page, value) => card(page, value).click()
 // The phase line, holding the round's live region.
 export const phaseLine = page => page.getByTestId('phase-line')
 // The round's live region, the phase line's heard sentence.
-export const phaseRegion = page =>
-  page.getByRole('status').and(page.getByTestId('phase-heard'))
+export const phaseRegion = page => page.getByRole('status').and(page.getByTestId('phase-heard'))
 // The seen word of the phase line: 'Voting' or 'Revealed'.
 export const phaseWord = page => page.getByTestId('phase-word')
 // The round panel's slot, the deck or the result; none on a facilitator's page while voting.
