@@ -438,7 +438,10 @@ line, and stays out of it because a restyle adds no behaviour. Its spec,
 started from Appendix B.
 
 **Step 4a-arrival. Arriving in the room.** A screen reader user who joins or
-reloads hears nothing: no element takes focus when the room appears. The
+reloads gets no starting point: no element takes focus when the room appears.
+On a reload, Orca on Firefox reads the whole page until the user acts (heard
+in step 4a's hand check; that this is Orca's own page-load reading is
+inferred), and this step's spec weighs focus moving against it. The
 preferred solution, to be confirmed by its own spec, is focus moving to a
 heading when the room appears, the usual practice when a single-page app
 changes view. Weighed and not preferred: the round's state in the page title,
