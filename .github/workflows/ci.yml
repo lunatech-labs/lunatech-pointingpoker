@@ -111,3 +111,6 @@ jobs:
 
       - name: styleCheck
         run: sbt styleCheck
+
+      - name: deploy script tests
+        run: bash .github/scripts/deploy-production.test.sh

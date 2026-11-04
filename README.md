@@ -239,6 +239,15 @@ Without this, `/join` will appear to succeed but every subsequent request will g
 
 ### Deployment
 
+**A push to `production` deploys.** Clever deploys from that branch, not
+`main`. To deploy, run Actions, Deploy, Run workflow on `main`. The
+`production` ruleset refuses deletion, force pushes and commits whose `test` and
+`style-check` have not passed, admins excepted.
+
+To roll back, redeploy a previous build in Clever's console. Only if
+`production` holds a commit that is not on `main` does an admin force-push it
+back to a commit on `main`.
+
 **Do not let a reverse proxy buffer the SSE response.** The server pushes room
 updates over a long-lived `text/event-stream` on `GET /rooms/{roomId}/events`. A
 proxy that buffers response bodies holds those frames until its buffer fills or

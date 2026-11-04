@@ -1,0 +1,31 @@
+name: Deploy
+
+run-name: Deploy main by ${{ github.actor }}
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout the repo
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: deploy to production
+        run: bash .github/scripts/deploy-production.sh
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          TARGET: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
