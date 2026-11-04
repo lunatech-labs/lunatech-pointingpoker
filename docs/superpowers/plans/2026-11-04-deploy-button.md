@@ -161,6 +161,6 @@ Done by the controller, not a subagent; every push needs the user's approval. It
 
 1. Ruleset: point it at `production` only and add the repository-admin bypass; then delete `ruleset-trial`.
 2. Mark the pull request ready; the user merges it in the GitHub UI.
-3. A first click that cannot deploy: Actions → Deploy → Run workflow, "Use workflow from" set to `20261104.deploy_1_button`. Expected: the run is titled `Deploy main by <actor>` and fails with `Start the deploy from main.`, nothing pushed. It proves the dispatch trigger and the ref check.
+3. A first click that cannot deploy: Actions → Deploy → Run workflow, "Use workflow from" set to a throwaway branch `deploy-dispatch-check` cut from the new `main` (the repo deletes merged branches, so the PR branch is gone); delete it after. Expected: the run is titled `Deploy main by <actor>` and fails with `Start the deploy from main.`, nothing pushed. It proves the dispatch trigger and the ref check.
 4. First real run, when no room is in use: the user clicks Deploy; the controller watches `clever activity` for the deploy the push should start.
 5. Comment on #460: step 1 shipped, and the spec's departures (decisions 1 and 3).
