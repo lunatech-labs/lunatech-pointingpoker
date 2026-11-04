@@ -159,9 +159,9 @@ Orca on Firefox, against the app the executor starts for the user (`SECURE_COOKI
 
 ## Amendment after the hand check (Tasks 4 and 5)
 
-Task 3's judged runs failed: a flip was spoken only with focus on the phase line. The spec's decisions 1, 2 and 4, its Contract and "Checked in Firefox and Orca" were amended (`c030591`). Tasks 4 and 5 build and hand check that amendment on top of Task 2, as new commits.
+Task 3's judged runs failed: a flip was spoken only with focus on the phase line. The spec's decisions 1, 2 and 4, its Contract and "Checked in Firefox and Orca" were amended in the spec's amendment commit. Tasks 4 and 5 build and hand check that amendment on top of Task 2, as new commits.
 
-**Checked in the code** (at `c030591`): `RoundBar.tsx`'s wrapper carries `role="status"` and `data-testid="phase-line"`; its `h2` holds the `phase-word` span (`aria-hidden`) and the `phase-heard` span (`visually-hidden`), each with its own ternary on `revealed`. `phaseLine` is `getByRole('status').and(getByTestId('phase-line'))`; `readBoxes` reads it in two `layout.spec.js` cases; `room.spec.js`'s two new cases read the heading with `toHaveAccessibleName`. Playwright is 1.63, so `not.toHaveAttribute('role')` with no value is available.
+**Checked in the code** (at the spec's amendment commit): `RoundBar.tsx`'s wrapper carries `role="status"` and `data-testid="phase-line"`; its `h2` holds the `phase-word` span (`aria-hidden`) and the `phase-heard` span (`visually-hidden`), each with its own ternary on `revealed`. `phaseLine` is `getByRole('status').and(getByTestId('phase-line'))`; `readBoxes` reads it in two `layout.spec.js` cases; `room.spec.js`'s two new cases read the heading with `toHaveAccessibleName`. Playwright is 1.63, so `not.toHaveAttribute('role')` with no value is available.
 
 ### Rulings, for the user's review
 
@@ -171,7 +171,7 @@ Task 3's judged runs failed: a flip was spoken only with focus on the phase line
 - **R10. `RoundBar` computes `heard` once**, read by the `h2`'s `aria-label` and the region (spec decision 2, "the same value"). The two swap mutations each inline a swapped literal in one place. Set aside: two ternaries, which can drift with no case seeing it until the swap mutations run.
 - **R11. The wrapper's lost role is pinned by `expect(phaseLine(page)).not.toHaveAttribute('role')`.** Set aside: counting `status` roles on the page, which couples to the issue status, also a `status`.
 - **R12. The reconnect case reads `phaseRegion(bob.page)` unscoped**: the first case pins its place. Set aside: scoping it under the heading too, the same pin twice.
-- **R13. Task 1 and its mutations are not rerun**: Task 4 touches none of its files. Task 2's mutations are superseded by Task 4's list, which is the spec's, and R1 and R2 by R8 and R9.
+- **R13. Task 1 and its mutations are not rerun**: Task 4 touches none of its files. Task 2's mutations are superseded by Task 4's list, which is the spec's, and R1 and R2 by R8 and R9; the header's Goal and Architecture by spec decision 1.
 - **R14. The hand check runs on the built app at the user's address** (`npm run build`, then `HOST=192.168.4.46 SECURE_COOKIES=false sbt run`), as the user reaches it from another machine. Set aside: Task 3's `npm run dev`, which the user does not want.
 
 ### Task 4: The region on the heard sentence (spec decisions 1, 2, 4)

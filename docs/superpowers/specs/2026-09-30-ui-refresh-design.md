@@ -453,9 +453,9 @@ reload, the reload after a refusal and a reconnect behave alike.
 **Step 4a-reveal-focus. A reveal keeps the voter's focus.** A reveal replaces
 the deck with the result, so focus on a card falls to the page, whether
 another's Show or the voter's own last vote revealed the round
-(`docs/known-issues.md`, "A reveal drops a voter's focus"). Losing focus may
-also cut off 4a's announcement. To decide: where focus goes, and only when it
-was in the deck or always; step 4a's hand check records what is heard today.
+(`docs/known-issues.md`, "A reveal drops a voter's focus"). Step 4a's hand
+check still heard its announcement with focus on a card (Orca on Firefox). To
+decide: where focus goes, and only when it was in the deck or always.
 
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target

@@ -87,8 +87,11 @@ The parent's Terms hold, **phase line** and **phase word** among them.
    not as an accessible name: Playwright computes names in its own injected
    script, not from the browser's tree (checked, `toHaveAccessibleName`
    evaluates `getElementAccessibleNameText`), so a name check cannot see rule
-   2 and would pass with the label removed (inferred). `room.html`'s phase
-   line stays as it is: nothing seen changes.
+   2 and would pass with the label removed (inferred). The region's having no
+   element inside it is read as page structure (`locator('*')`), the step's
+   one exception to the parent's test contract: rule 3 is about structure,
+   which no role, name or test id can say. `room.html`'s phase line stays as
+   it is: nothing seen changes.
 5. **Out of scope**: who flipped the round (the snapshot does not say); a
    spoken result, a step 5+ candidate; orientation on arriving in the room,
    step 4a-arrival; focus lost when a reveal unmounts the deck, step
@@ -118,11 +121,11 @@ its text-change events and the hand check's ear.
    inside the region, there for `aria-labelledby`, took the text change, and
    rule 1 dropped it again.
 
-On the spike, the markup of decisions 1 and 2 passed by ear another's Show
-and Re-vote with focus elsewhere, heading navigation and reading the line in
+On the spike, the markup of decisions 1 and 2 passed by ear another's Show and
+Re-vote with focus elsewhere, heading navigation and reading the line in
 browse mode; an own Show was not run on it. On its first markup, the region
-without the `h2`'s label, an own last
-vote auto-revealing was spoken with focus on a card.
+without the `h2`'s label, an own last vote auto-revealing was spoken with
+focus on a card.
 
 ## States and events
 
@@ -244,11 +247,10 @@ recorded in the PR's Verified section.
 
 ## Branches and commits
 
-One PR on `20260930.ui_refresh_4a_round_live_region`, on `main` once 4d
-(#481) merged: this document, the parent's
-changes, the known issue and the plan first; then the shared
-`visually-hidden` class with the `tally-sr` test ids and the Result's
-assertion (decision 3), so that commit has a case that can fail; then the region with its cases and the
-fixtures (decision 4); then this document's correction after the hand check
-and its fix, the region moved onto the heard span and the heading labelled,
-as new commits on top.
+One PR on `20260930.ui_refresh_4a_round_live_region`, on `main` once 4d (#481)
+merged: this document, the parent's changes, the known issue and the plan
+first; then the shared `visually-hidden` class with the `tally-sr` test ids
+and the Result's assertion (decision 3), so that commit has a case that can
+fail; then the region with its cases and the fixtures (decision 4); then this
+document's correction after the hand check and its fix, the region moved onto
+the heard span and the heading labelled, as new commits on top.

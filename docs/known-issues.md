@@ -83,8 +83,9 @@ roadmap item instead of leaving it here as stale history.
   the result on a reveal).
 - **Issue:** Focus on a card falls to the page when the round is revealed,
   by another's Show or by the voter's own last vote. A keyboard or screen
-  reader user loses their place, and the focus loss may cut off step 4a's
-  "Votes revealed" (inferred; 4a's hand check records what is heard).
+  reader user loses their place, though "Votes revealed" is still spoken:
+  step 4a's hand check heard it with focus on a card, on another's Show and on
+  an own last vote (Orca on Firefox).
 - **Resolution:** Step 4a-reveal-focus of
   `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
 
