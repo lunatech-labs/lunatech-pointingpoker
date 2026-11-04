@@ -244,6 +244,16 @@ Without this, `/join` will appear to succeed but every subsequent request will g
 `production` ruleset refuses deletion, force pushes and commits whose `test`
 and `style-check` have not passed, admins excepted.
 
+If a deploy does not go through:
+
+- When the button refuses although CI has passed: wait and click again. A
+  check can still read "in progress" after its job has finished, until
+  GitHub catches up.
+- When Clever's build fails after the push: retry it in Clever, with
+  Re-deploy in the console or `clever restart --commit <full hash>`.
+  Clicking Deploy again only says there is nothing to deploy, since
+  `production` already holds the commit.
+
 To roll back, redeploy a previous build in Clever's console. Only if
 `production` holds a commit that is not on `main` does an admin force-push it
 back to a commit on `main`.
