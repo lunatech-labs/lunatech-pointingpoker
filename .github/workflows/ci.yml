@@ -26,7 +26,7 @@ jobs:
       - uses: sbt/setup-sbt@v1
 
       # Reads mise.toml, the file Clever's build installs Node from too.
-      - uses: jdx/mise-action@v4
+      - uses: jdx/mise-action@v5
 
       # setup-node's npm cache went with setup-node; the lockfile hash retires this one.
       - uses: actions/cache@v6
