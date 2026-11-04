@@ -94,6 +94,13 @@ want "$(label "$C")"
 wantnot "$(label "$B")"
 finish 0 "$C"
 
+begin first_row_wins_over_red_checks
+set_prod "$C"
+checks='{"check_runs":[{"name":"test","status":"completed","conclusion":"failure"},{"name":"style-check","status":"completed","conclusion":"success"}]}'
+run
+want 'Nothing to deploy'
+finish 0 "$C"
+
 begin refuses_diverged
 set_prod "$X"
 run
@@ -104,6 +111,8 @@ begin not_green_lists_states
 checks='{"check_runs":[{"name":"test","status":"in_progress"},{"name":"style-check","status":"completed","conclusion":"failure"}]}'
 run
 want 'test in progress, style-check failure'
+want "CI on $(label "$C") is not green:"
+want 'Deploy once both pass.'
 finish 1 "$A"
 
 begin not_green_missing_check
@@ -166,7 +175,7 @@ begin literal_subject_in_error C 'fix: 100% `tick`'
 set_prod "$X"
 run
 want_one_error
-want_out '100%25'
+want_out '100%25 `tick`'
 want '100%'
 finish 1 "$X"
 
