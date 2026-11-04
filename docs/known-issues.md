@@ -77,6 +77,43 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;
   never a merge gate. Remove this entry if they read well there.
 
+### A reveal drops a voter's focus
+
+- **Where:** `frontend/src/components/RoundPanel.tsx` (the deck replaced by
+  the result on a reveal).
+- **Issue:** Focus on a card falls to the page when the round is revealed,
+  by another's Show or by the voter's own last vote. A keyboard or screen
+  reader user loses their place, though "Votes revealed" is still spoken:
+  step 4a's hand check heard it with focus on a card, on another's Show and on
+  an own last vote (Orca on Firefox).
+- **Resolution:** Step 4a-reveal-focus of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
+
+### Orca may drop a change to the app's other live regions
+
+- **Where:** `frontend/src/components/IssuePanel.tsx` (the `issue-status`
+  region, its notice inside a `Message`) and `Banners.tsx` (the `Message`
+  banners, their text in a paragraph).
+- **Issue:** Orca 51.1 drops a text change arriving within 0.1 s of another
+  from the same app, unless the changed object has focus or its own `live`
+  attribute (rule 1 of step 4a's spec, "Checked in Firefox and Orca"). Text
+  changing inside a child of these regions is reported on the child, which has
+  no `live`, so it is lost when it lands in a burst of other changes. Both
+  inferred, not heard: this loss, and that a child inserted whole is reported
+  on the region itself and so kept.
+- **Resolution:** Stays open until a step next touches these regions; its hand
+  check listens for a change landing with others.
+
+### Firefox's heading names keep their capitals from `text-transform`
+
+- **Where:** `frontend/src/components/looks.css` (`.panel-label`, `uppercase`)
+  and the panel headings using it.
+- **Issue:** Firefox's accessibility tree names the headings as shown, such as
+  "PARTICIPANTS · 2", and some readers spell capitals letter by letter
+  (checked in the tree during step 4a's spike; not heard in Orca). Step 4a's
+  phase heading escapes it through its `aria-label`.
+- **Resolution:** Stays open until a step next touches the panel labels.
+
 ### The Leave link's icon before the word looks slightly off
 
 - **Where:** `frontend/src/components/RoomHeader.tsx` (the Leave link) and

@@ -34,7 +34,7 @@ export function Result({ summary }: { summary: [string, number][] }) {
               role="listitem"
               data-testid="tally-entry"
             >
-              <span className="result-sr">
+              <span className="visually-hidden" data-testid="tally-sr">
                 {value}: {count} {count > 1 ? 'votes' : 'vote'}
               </span>
               <span className="result-count" aria-hidden="true" data-testid="tally-count">
