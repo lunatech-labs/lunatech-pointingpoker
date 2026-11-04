@@ -65,7 +65,13 @@ The first matching row applies.
 A push refused anyway fails the run with git's refusal, after the target's
 label. That covers the accepted races: `production` moved by an admin between
 the check and the push, or a re-run of a check on the target turning red in
-that window. A failure to read `production`, the target or its checks fails
+that window. A refusal because the pushed range changes workflow files
+(git's "refusing to allow … workflow" line; the workflow's token cannot hold
+that permission) instead says: GitHub does not let this button push changes to
+workflow files, and *label* includes some. Deploy it from a terminal instead:
+`git push origin <target's full hash>:production`. The full hash, not `main`:
+admins bypass the ruleset, so the command deploys exactly the commit the run
+checked. A failure to read `production`, the target or its checks fails
 the run before any push, with the error.
 
 - **One at a time**: a concurrency group on the workflow, without
@@ -90,7 +96,10 @@ build; `production` only needs an admin reset, a force push to a commit on
   tried; it falls under the same "must have passed" rule.
 - Before merging: the workflow cannot be dispatched until it is on `main`, so
   its decision logic is exercised against a stand-in branch in place of
-  `production`, covering each row of the table. The plan says how.
+  `production`, covering each row of the table. The plan says how. A trial
+  run with the workflow's own token then pushes a range that changes workflow
+  files to the stand-in branch; if GitHub refuses it, the token question comes
+  back to this spec.
 - First real run, after merging: confirm with `clever activity` that a push
   made with the workflow's token starts a Clever deploy. If it does not, the
   token needs replacing, and that goes back to this spec.
@@ -110,5 +119,10 @@ build; `production` only needs an admin reset, a force push to a commit on
 4. The ruleset, not a credential only the button holds, guards `production`.
    Locking updates to the button would need a GitHub App or deploy key kept
    as an environment secret; the gap it closes is the accepted one above.
-5. No GitHub deployment record (`environment:`): it would record the push,
+5. Keep the workflow's own token. GitHub refuses it a push that changes
+   workflow files, at least in some cases (community reports, not documented);
+   the refusal message hands over the exact terminal command. A GitHub App or
+   personal token with the workflow permission is the alternative if the trial
+   shows the refusal is the common case.
+6. No GitHub deployment record (`environment:`): it would record the push,
    not Clever's build, and the Actions tab already lists every deploy run.
