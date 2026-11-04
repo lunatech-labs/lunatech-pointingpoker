@@ -137,6 +137,8 @@ Under `### Deployment`, before the SSE paragraph, a short part with a bold lead 
 Run: `bash .github/scripts/deploy-production.test.sh && ruby -ryaml -e 'YAML.load_file(".github/workflows/deploy.yml"); YAML.load_file(".github/workflows/ci.yml")' && echo yaml-ok`
 Expected: every case `ok`, then `yaml-ok`. (If `ruby` is absent, `python3 -c 'import yaml…'` or `npx --yes js-yaml` does the same.)
 
+Then, once, not added to CI: `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:latest -color` (or `podman`). Expected: no findings for `deploy.yml` or `ci.yml`; a finding is fixed before the commit.
+
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -159,5 +161,6 @@ Done by the controller, not a subagent; every push needs the user's approval. It
 
 1. Ruleset: point it at `production` only and add the repository-admin bypass; then delete `ruleset-trial`.
 2. Mark the pull request ready; the user merges it in the GitHub UI.
-3. First real run, when no room is in use: the user clicks Deploy; the controller watches `clever activity` for the deploy the push should start.
-4. Comment on #460: step 1 shipped, and the spec's departures (decisions 1 and 3).
+3. A first click that cannot deploy: Actions → Deploy → Run workflow, "Use workflow from" set to `20261104.deploy_1_button`. Expected: the run is titled `Deploy main by <actor>` and fails with `Start the deploy from main.`, nothing pushed. It proves the dispatch trigger and the ref check.
+4. First real run, when no room is in use: the user clicks Deploy; the controller watches `clever activity` for the deploy the push should start.
+5. Comment on #460: step 1 shipped, and the spec's departures (decisions 1 and 3).
