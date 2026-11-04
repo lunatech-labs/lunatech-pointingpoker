@@ -1,8 +1,24 @@
-import type { MouseEvent } from 'react'
+import './room-header.css'
+import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { Link, LogOut, Menu } from 'lucide-react'
+import type { Role } from '../protocol/snapshot'
+import { BrandLogo } from './BrandLogo'
+import { useRoleSwitch } from './useRoleSwitch'
 
-type Props = { roomId: string; onCopied: () => void; onLeave: () => void }
+type Props = {
+  roomId: string
+  role: Role | null
+  copied: boolean
+  onCopy: () => void
+  onLeave: () => void
+  onSwitch: (role: Role) => void
+}
 
-export function RoomHeader({ roomId, onCopied, onLeave }: Props) {
+export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: Props) {
+  const [menuShown, setMenuShown] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  // Called whatever the role, as a hook must be; nothing it returns is drawn without one.
+  const { sentence, label, press } = useRoleSwitch(role ?? 'Voter', onSwitch)
   const copy = (event: MouseEvent) => {
     event.preventDefault()
     const el = document.createElement('textarea')
@@ -11,38 +27,71 @@ export function RoomHeader({ roomId, onCopied, onLeave }: Props) {
     el.select()
     document.execCommand('copy')
     document.body.removeChild(el)
-    onCopied()
+    onCopy()
   }
   const leave = (event: MouseEvent) => {
     event.preventDefault()
     onLeave()
   }
+  const closeOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || !menuShown) return
+    menuButton.current?.focus()
+    setMenuShown(false)
+  }
   return (
-    <div className="card-header">
-      <div className="row align-items-center">
-        <div className="col">
-          <h2>Pointing Poker</h2>
+    <header className={copied ? 'room-header room-header-copied' : 'room-header'}>
+      <BrandLogo />
+      <span className="room-header-chip">
+        <h1 className="room-header-id" tabIndex={-1} data-dismiss-focus>
+          {roomId}
+        </h1>
+        <a className="room-header-copy" href="#" aria-label="Copy link" onClick={copy}>
+          <Link />
+          <span className="room-header-copy-word">Copy link</span>
+        </a>
+      </span>
+      <span className="room-header-copy-note" role="status">
+        {copied ? 'Link copied' : ''}
+      </span>
+      {role && (
+        <span className="room-header-role">
+          {sentence}{' '}
+          <button type="button" {...press}>
+            {label}
+          </button>
+        </span>
+      )}
+      <a className="room-header-leave" href="#" onClick={leave}>
+        <LogOut />
+        Leave
+      </a>
+      <button
+        ref={menuButton}
+        className="room-header-menu-button button-quiet"
+        type="button"
+        aria-expanded={menuShown}
+        aria-label="Menu"
+        onClick={() => setMenuShown(shown => !shown)}
+        onKeyDown={closeOnEscape}
+      >
+        <Menu />
+      </button>
+      {menuShown && (
+        <div className="room-header-menu panel" onKeyDown={closeOnEscape}>
+          {role && (
+            <>
+              <span className="room-header-menu-role">{sentence}</span>
+              <button className="button-quiet" type="button" {...press}>
+                {label}
+              </button>
+            </>
+          )}
+          <a className="button-quiet" href="#" onClick={leave}>
+            <LogOut />
+            Leave
+          </a>
         </div>
-        <div className="col">
-          <div className="row">
-            <div className="col">
-              <h5 className="card-title room-header-id">{roomId}</h5>
-            </div>
-          </div>
-          <div className="row">
-            <div className="col">
-              <a className="nav-link" href="#" onClick={copy}>
-                Copy link
-              </a>
-            </div>
-            <div className="col">
-              <a className="nav-link" href="#" onClick={leave}>
-                Leave
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      )}
+    </header>
   )
 }

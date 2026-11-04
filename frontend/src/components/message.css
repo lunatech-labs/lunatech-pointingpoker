@@ -1,0 +1,48 @@
+.message {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--paper-warm);
+  border: var(--line-hairline) solid var(--hairline-colour);
+  border-left: var(--line-bar) solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow) var(--shadow-colour);
+  font-weight: var(--weight-medium);
+}
+
+@media (forced-colors: active) {
+  .message {
+    border-left-color: CanvasText;
+  }
+}
+
+.message p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.message .button-quiet {
+  color: inherit;
+  padding: var(--space-2);
+  min-width: var(--target-min);
+  justify-content: center;
+}
+
+.message-problem {
+  background: var(--burgundy-tint);
+  color: var(--burgundy-deep);
+  border-left-color: var(--burgundy-deep);
+}
+
+.message-notice {
+  background: var(--notice-ground);
+  color: var(--notice-ink);
+  border-left-color: var(--notice-bar);
+}
+
+.message-notice svg {
+  color: var(--notice-bar);
+}

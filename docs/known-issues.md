@@ -14,15 +14,15 @@ roadmap item instead of leaving it here as stale history.
 
 ### The issue editor's phone keyboard behaviour is unverified
 
-- **Where:** `frontend/src/components/IssueEditor.tsx` (`open` and the box's
-  `onKeyDown`).
+- **Where:** `frontend/src/components/IssuePanel.tsx` (`open`) and
+  `frontend/src/components/IssueEditor.tsx` (the box's `onKeyDown`).
 - **Issue:** Two behaviours only a real phone can show. On Android, the guard
   that ignores a keydown with `keyCode` 229, which keeps Safari's composition
   Enter from saving, may also swallow the keyboard's Enter while Gboard still
   holds the typed word in a composition. On an iPhone, the pencil must bring up
   the keyboard; `flushSync` makes the box editable before it takes focus, which
   the e2e suite checks on desktop only. Step 3b3 makes Enter always save and
-  never insert a line break (`oneLine` in `room/issueEditor.ts`), so a
+  never insert a line break (3b3's `oneLine`, built in 4c1-editor), so a
   swallowed Gboard Enter at the end of the draft does nothing, as today, and one
   inside the text becomes a space and moves the caret to the end.
 - **Resolution:** Stays open until the rollout's step 8b phone check in
@@ -35,18 +35,20 @@ roadmap item instead of leaving it here as stale history.
 
 ### On a phone, the virtual keyboard and the pinned sheet may leave the editing view little room
 
-- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in step 4.
+- **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
+  step 4c1-editor.
 - **Issue:** The phone layout pins the sheet to the viewport's bottom, and the
   virtual keyboard rises over it. With the keyboard open, the field, Save and
   Cancel and the editor's messages may have little room to show (inferred, not
-  checked on a phone).
+  checked on a phone). A field the sheet hides scrolls to the top when focused
+  (step 4c1-narrow-keys), unchecked on a phone.
 - **Resolution:** Stays open until a phone is at hand on the deployed app
   (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
   Accepted costs); never a merge gate.
 
 ### A fast double-tap on the round bar may send its command twice
 
-- **Where:** `frontend/src/components/Controls.tsx` (the bar's
+- **Where:** `frontend/src/components/RoundBar.tsx` (the bar's
   `onClickCapture`).
 - **Issue:** The bar drops a click whose `detail` is above 1. A browser that
   reports a fast double-tap as two single clicks lets the second through if it
@@ -56,30 +58,116 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a phone is at hand on the deployed app; never
   a merge gate.
 
-### The issue editor's field needs a script fit where `field-sizing` is unsupported
+### On a phone, the lobby's banners now lay out at the phone's width, unchecked
 
-- **Where:** the editing view's field, `docs/design/room.html` (`edit=1`), built
-  in step 4.
-- **Issue:** The mockup's field grows by CSS `field-sizing: content`, which
-  Firefox ESR 140 lacks (confirmed by hand) and Safari's support is unchecked.
-  The mockup fits the field by script there; the app needs the same.
-- **Resolution:** Built in step 4; remove this entry when step 4 lands the fit
-  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 7).
+- **Where:** `frontend/index.html` (the viewport meta); the lobby's banners,
+  `Banners`.
+- **Issue:** Since step 4c1-wide the viewport meta makes a phone lay out every
+  page at its own width, not at 980 px. The room page laying out at the
+  phone's width is pinned by 'a phone lays the room page out at its own width'
+  (`e2e/phone.spec.js`).
+  The lobby's banners lay out at the phone's width too. The lobby's root form
+  is pinned at 320 px by 'the lobby scrolls no page sideways, 320 by 640', the
+  pinned form sharing its column and row, the lobby's banners by 'the lobby's
+  banners sit in the column above the panel, 320 by 640', and the room page's
+  banners by 'no page scrolls sideways, 320 by 640' (all `e2e/layout.spec.js`);
+  the editing view is drawn since 4c1-editor. 'an old UUID link opens its
+  derived room under a banner that covers no card' (`e2e/slug.spec.js`) shows a
+  lobby banner at 390 px, and no hand test has seen them there.
+- **Resolution:** Stays open until a phone is at hand on the deployed app;
+  never a merge gate. Remove this entry if they read well there.
+
+### A reveal drops a voter's focus
+
+- **Where:** `frontend/src/components/RoundPanel.tsx` (the deck replaced by
+  the result on a reveal).
+- **Issue:** Focus on a card falls to the page when the round is revealed,
+  by another's Show or by the voter's own last vote. A keyboard or screen
+  reader user loses their place, though "Votes revealed" is still spoken:
+  step 4a's hand check heard it with focus on a card, on another's Show and on
+  an own last vote (Orca on Firefox).
+- **Resolution:** Step 4a-reveal-focus of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
+
+### Orca may drop a change to the app's other live regions
+
+- **Where:** `frontend/src/components/IssuePanel.tsx` (the `issue-status`
+  region, its notice inside a `Message`) and `Banners.tsx` (the `Message`
+  banners, their text in a paragraph).
+- **Issue:** Orca 51.1 drops a text change arriving within 0.1 s of another
+  from the same app, unless the changed object has focus or its own `live`
+  attribute (rule 1 of step 4a's spec, "Checked in Firefox and Orca"). Text
+  changing inside a child of these regions is reported on the child, which has
+  no `live`, so it is lost when it lands in a burst of other changes. Both
+  inferred, not heard: this loss, and that a child inserted whole is reported
+  on the region itself and so kept.
+- **Resolution:** Stays open until a step next touches these regions; its hand
+  check listens for a change landing with others.
+
+### Firefox's heading names keep their capitals from `text-transform`
+
+- **Where:** `frontend/src/components/looks.css` (`.panel-label`, `uppercase`)
+  and the panel headings using it.
+- **Issue:** Firefox's accessibility tree names the headings as shown, such as
+  "PARTICIPANTS · 2", and some readers spell capitals letter by letter
+  (checked in the tree during step 4a's spike; not heard in Orca). Step 4a's
+  phase heading escapes it through its `aria-label`.
+- **Resolution:** Stays open until a step next touches the panel labels.
+
+### The Leave link's icon before the word looks slightly off
+
+- **Where:** `frontend/src/components/RoomHeader.tsx` (the Leave link) and
+  `docs/design/room.html`.
+- **Issue:** The link keeps its icon before the word, with its arrow pointing
+  at the word, and that looks slightly off (step 4c1-narrow-keys, decision 5).
+- **Resolution:** Stays open until the designer chooses among the icon after
+  the word, the icon alone (his Figma), and a mirrored or other icon. The
+  choice is made with Copy link's, so both follow one rule, by mockup with the
+  designer. The link's place and behaviour do not change.
 
 ### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
 
 - **Where:** the editing view, `docs/design/room.html` (`edit=1`), built in
-  step 4.
+  step 4c1-editor.
 - **Issue:** With the root font at 400% (text-only zoom) and a viewport under
   about 400 px, Save and Cancel overflow the issue panel in Firefox; Chromium
   fits them. The page already scrolls sideways there on the plain read view
   (checked on the mockup). Page zoom, which WCAG's reflow case uses, is not
   affected.
-- **Resolution:** Step 4 lets the buttons wrap onto two rows or keep only
-  their words at that size, or accepts the limit with the rest of the page
-  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
-  decision 8); never a merge gate.
+- **Resolution:** Accepted, with the rest of the page: the product caters for
+  up to 200% zoom at the largest viewport, so 400% on a 400 px window is out of
+  range (`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`,
+  decision 3).
+
+### The layout cases written under the first test budget run in Chromium alone
+
+- **Where:** `e2e/layout.spec.js`, the describes 'the narrow layouts' and
+  'the editing view', each skipped outside Chromium.
+- **Issue:** From 4c1-narrow-cases to 4c2-form, the parent's principle 11
+  ran layout cases in Chromium alone and shared one setup across several
+  guarantees: 'the middle layout, 860 by 600, on both pages', 'the phone
+  layout, 392 by 800, on both pages, then a crossing', 'no page scrolls
+  sideways' at each size, 'the lobby scrolls no page sideways, 320 by 640'
+  and 'a long issue shows whole while edited, 1280 by 680, on the voter's
+  page'. Since 2026-10-31 the budget runs every case in both browsers, but
+  these still skip Firefox, so a Firefox-only break in these layouts goes
+  unseen.
+- **Resolution:** Accepted for now (product owner, 2026-10-31): browsers do
+  not drift in weeks, and the narrow layouts see little use soon, with no
+  phone users and the product owner beta-testing the middle layout. Revisit
+  the coverage: drop the skips, fixing what Firefox shows, and weigh
+  splitting the shared setups case by case.
+
+### A layout journey failing inside a shared helper does not name its guarantee
+
+- **Where:** `e2e/layout.spec.js`, `scrollsAndCutsNothing` and `expectInView`.
+- **Issue:** The journeys' own expects each carry a message naming their
+  guarantee (4c1-narrow-cases plan, R3), but these helpers' expects have none
+  or only the boxes' JSON. A journey failing in one reads as a bare matcher
+  error, the stack's call site the only pointer to the stop.
+- **Resolution:** Stays open until a step next touches these helpers; adding
+  messages changes only the failure text, so the existing cases stay unchanged
+  in behaviour (4c1-narrow-cases decision 7).
 
 ### An unrecognized `roomId` silently creates an empty room, with no bookmark continuity
 
@@ -776,7 +864,8 @@ roadmap item instead of leaving it here as stale history.
 ### A tied vote is broken by JavaScript key order, not by a rule anyone chose
 
 - **Where:** the `votesSummary` sort in `applySnapshot`,
-  `frontend/src/room/view.ts`, read under the "Most voted estimation" heading.
+  `frontend/src/room/view.ts`, whose first entry `Result`
+  (`frontend/src/components/Result.tsx`) shows under the "Most voted" label.
 - **Issue:** The comparator is `(a, b) => b[1] - a[1]` over
   `Object.entries(tally)`. It reads only counts, and `Array.prototype.sort` is
   stable, so a tie falls through to `Object.entries` order. That order is not
@@ -788,13 +877,15 @@ roadmap item instead of leaving it here as stale history.
   determined by the values alone. A 2-2 split is an ordinary planning poker
   outcome, not an edge case. It is the same failure class as the non-voter tally
   step 3 fixed, the headline decided by something other than the votes, but a
-  good deal milder: the summary table renders every row and count beside the
-  headline, so the tie is visible to anyone who looks down rather than hidden.
+  good deal milder: `Result`'s columns draw every value's count beside the
+  headline, the tied bars of one height though only the first is red, and
+  `Voters` shows each entry's value, so the tie is visible to anyone who looks
+  across rather than hidden.
 - **Resolution:** Unscheduled, and deliberately not decided here, because the
   rule is a product question rather than a bug with one right answer.
   Lowest-wins, highest-wins, and refusing to name a winner while showing the tie
-  are all defensible, and the third is worth weighing since the table already
-  shows it. Whoever builds step 9's history views should decide it there:
+  are all defensible, and the third is worth weighing since the columns already
+  show it. Whoever builds step 9's history views should decide it there:
   `docs/superpowers/specs/2026-08-31-protocol-target-architecture-design.md`,
   under "Round history, within the session",
   already lists highest and lowest, majority, and most voted as additive views
@@ -812,7 +903,7 @@ roadmap item instead of leaving it here as stale history.
 - **Where:** `src/main/scala/com/lunatech/pointingpoker/actors/Room.scala`
   (`RoomData.reVote` keeping every estimation and `RoomData.vote` overwriting
   one), with the tally built in `applySnapshot`, `frontend/src/room/view.ts`,
-  read under the "Most voted estimation" heading.
+  read by `Result` under the "Most voted" label.
 - **Issue:** A `reVote` clears every confirmation and keeps every estimation, so a
   round that some participants have re-voted and others have not holds answers to
   two different rounds at once. A Show there counts both. Alice, Bob and Carol
@@ -832,10 +923,10 @@ roadmap item instead of leaving it here as stale history.
   `e2e/room.spec.js`'s "the tally counts only the votes that were cast" case
   asserts. It is the same failure class as the tie-break above, a headline
   decided by something other than this round's votes, and it is mitigated the
-  same way but only halfway: the table renders a stale row with no check-circle
-  (the icon gated on `u.voted`), so anyone looking down from the headline can see
-  who has not confirmed. The distribution itself carries no such mark, and it is
-  the distribution that names the winner.
+  same way but only halfway: `Voters` draws a stale value with the kept band
+  (`voteState` in `room/view.ts`, `voted` false), so anyone looking from the
+  headline can see who has not confirmed. The distribution itself carries no
+  such mark, and it is the distribution that names the winner.
 - **Resolution:** The durable fix is the roadmap's unchecked entry for showing the
   previous estimate beside the current one, which comes out of step 3a for this
   reason: once a revealed round refuses votes, a changed mind is a room-level act
@@ -882,45 +973,36 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open. Only a round number in the command would close
   it, as for the late Re-vote above.
 
-### A reveal with votes still pushes the participants list down
+### A reveal with votes still moves the facilitator's entries
 
-- **Where:** `frontend/src/components/Results.tsx` (the summary block, rendered
-  only while revealed with a non-empty tally) above `Participants.tsx`. The
-  frozen-round notice it contrasts with is the hidden row in `Deck.tsx`.
-- **Issue:** Revealing a round with votes in it inserts the most-voted card and
-  the distribution table between the buttons and the participants list, so the
-  list a facilitator is reading jumps down by the height of that block. The
-  neighbouring case is fixed rather than open: the frozen-round notice, the
-  hidden row in `Deck.tsx`, used to appear conditionally, which resized the
-  estimation card sharing its row (`.estimation-card` is `height: 100%`) and
-  shifted every row below it even in a room where nobody voted and no summary
-  appeared. That notice now toggles `visibility` and holds its line at all
-  times, pinned by "the reveal notice claims its space before the reveal" in
-  `e2e/room.spec.js`.
-- **Resolution:** Left to the UI refresh's step 4, and deliberately not fixed
-  the same way. Reserving the summary block's space would put an empty card and
-  an empty table on the page for the whole pre-reveal round, which is a worse
-  page than one that grows when there is something to show: unlike the notice,
-  this block is real content arriving, and the movement is honest feedback that
-  the reveal landed. What step 4 should carry over is that the shift is the
-  block's position rather than its existence, so placing the participants list
-  above the results would settle it without hiding anything. Step 3b1
-  (`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`)
-  narrows it: on the voter's page the result takes the deck's place; on the
-  facilitator's page, in layout f, the result's slot appears below the table,
-  which keeps its place but gives the slot its height, so the entries,
-  centred in it, move up 50 to 80 px. Layout g, the open swap, would put the
-  slot above the table and push it down instead. The progress step, the first
-  step 5+ candidate, fills the slot while voting and ends both. Step 3b2
+- **Where:** `frontend/src/components/Result.tsx`, in the round panel's slot
+  (`RoundPanel.tsx`) below `Voters.tsx` in layout f, and the room the
+  facilitator's table holds for the slot while voting (`.voters-reserve` in
+  `voters.css`, `useFitEntries`).
+- **Issue:** Since step 4c1-wide a reveal fills the slot rather than inserting
+  a block above the list. On the voter's page `Result` takes the deck's place,
+  the slot keeping its height ('nobody voted: the slot keeps its height
+  through a reveal', `e2e/layout.spec.js`), and nothing moves. What still
+  moves is the facilitator's page. Its slot appears at a reveal below the
+  table, which held the slot's room while voting, so the round bar keeps its
+  place ('the phase line keeps its box through a reveal, a Re-vote and a
+  vote') and the entries their scale ("the entries' scale holds through a
+  reveal"), but the entries, centred in the table, move up, about 60 px at the
+  floor and 80 px at the comfort target, within 3b1's accepted 50 to 80 px.
+  Below 65.75 rem the slot is taller than the room held, so the table also
+  refits its entries smaller at a reveal; on the phone no room is held (3b2
+  decision 11), so the slot grows the sheet over the table, and where the page
+  ends on screen or the sheet flows, the round bar moves down by the result's
+  height
   (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`,
-  Accepted costs) accepts the same movement on the facilitator's phone page:
-  its slot appears at a reveal, growing the sheet over the table, and where
-  the page ends on screen or the sheet flows, the round bar moves down by the
-  result's height, until the progress step fills the slot while voting.
-  In the wide layout below 65.75 rem, the facilitator's table also refits
-  its entries smaller at a reveal, since the slot there is taller than the
-  room 3b1 holds for it.
-  Remove this entry when the progress step lands.
+  Accepted costs). The frozen-round notice this entry once contrasted with
+  left with the deck's hidden row; 'a reveal with no vote moves no entry'
+  (`e2e/room.spec.js`) guards the entries' scale and what sits above the
+  table.
+- **Resolution:** Left to the progress step, the first step 5+ candidate,
+  which fills the facilitator's slot while voting and ends the movement.
+  Layout g, the open swap, would put the slot above the table and push it
+  down instead. Remove this entry when the progress step lands.
 
 ### Only a real e2e failure exercises the artifact upload path
 
@@ -988,13 +1070,13 @@ roadmap item instead of leaving it here as stale history.
   written but stopped being true once `ProbeRoutes` shipped: it serves
   `GET /probe` when the probe is enabled, a single-segment `GET`. If `PageRoutes`
   moved ahead of `ProbeRoutes`, an enabled probe would silently start answering
-  with the "not a room name" rejection page instead of the probe page, and no
+  with the not-a-room page instead of the probe page, and no
   existing test would catch it - `ProbeRoutesSpec` tests `ProbeRoutes.route` on
   its own, and `APISpec`'s `/probe` case expects a `404` either way, which a
   swallowed probe also produces.
 - **Resolution:** Stays open. A cheap fix is one `APISpec` case that builds
   `API` with an enabled `ProbeConfig` and asserts `GET /probe` serves the probe
-  page, not the rejection page.
+  page, not the not-a-room page.
 
 ### `Suggestion.suggest` runs the full edit-distance table against every pool word, for any input length
 
@@ -1053,7 +1135,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A screen reader hears the editor's conflict notice, but not its "Use theirs" button
 
-- **Where:** `frontend/src/components/IssueEditor.tsx` (the `issue-status` region).
+- **Where:** `frontend/src/components/IssuePanel.tsx` (the `issue-status` region).
 - **Issue:** When another player saves the issue under an open editor, Orca with
   Firefox speaks "Changed by someone else to: ...", but not the "Use theirs"
   button inside the same region. A screen reader user learns of the conflict, but
@@ -1063,7 +1145,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A screen reader hears the connection lost, but never that it came back
 
-- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+- **Where:** `frontend/src/components/Banners.tsx` (the problem slot) and
   `frontend/src/components/App.tsx` (`connectionMessage`).
 - **Issue:** "Connection to the room was lost" shows in a `role="alert"`, so a
   screen reader announces it. When the connection recovers in place, the
@@ -1076,23 +1158,27 @@ roadmap item instead of leaving it here as stale history.
   recovered connection". Announcing it is a behaviour change with its own
   decisions, such as the wording and whether a short flap is announced.
 
-### A deliberate re-click on the role line, the round bar or the issue editor within the double-click time is ignored
+### A deliberate re-click on a role switch, the round bar or the issue editor within the double-click time is ignored
 
-- **Where:** `frontend/src/components/RoleLine.tsx` (the button's `onClick`),
-  `frontend/src/components/Controls.tsx` (the bar's `onClickCapture`),
-  `frontend/src/components/IssueEditor.tsx` (the editor's `onClickCapture` and
-  `onMouseDownCapture`).
-- **Issue:** The line ignores a click whose `detail` is above 1, so a double-click
-  switches once. A browser counts any click within the OS double-click time and
-  without a mouse move as part of the same run, so switching and then switching
-  back at once, on the same spot, is ignored until a pause or a move. The line
-  keeps showing the role held, so nothing wrong is shown. The round bar does
+- **Where:** `frontend/src/components/useRoleSwitch.ts` (the switches'
+  `onClick`), `frontend/src/components/RoundBar.tsx` (the bar's
+  `onClickCapture`), `frontend/src/components/IssuePanel.tsx` (the panel's
+  `onClickCapture` and `onMouseDownCapture`).
+- **Issue:** A role switch ignores a click whose `detail` is above 1, so a
+  double-click switches once. A browser counts any click within the OS
+  double-click time and without a mouse move as part of the same run, so
+  switching and then switching back at once, on the same spot, is ignored until
+  a pause or a move. The header keeps showing the role held, so nothing wrong is
+  shown. The round bar does
   the same since step 4b. There it matters only for a press that flips
   nothing, such as Clear votes pressed twice while voting; after a flip, the
   1 s guard ignores the second click anyway. The issue editor's buttons do the
   same since step 4b2, where a double-click's second click would land on Cancel
   editing in Edit issue's place. On a touch screen the window is the double-tap
-  distance, which can reach a neighbouring button (inferred for Android).
+  distance, which can reach a neighbouring button (inferred for Android). ☰
+  (`frontend/src/components/RoomHeader.tsx`) deliberately keeps no such rule,
+  since it sends nothing and stays in place, so a double-tap's open then close
+  is seen and undone by one more tap.
 - **Resolution:** Stays open, since the cost is a pause before the second click.
 
 ### The frontend's type check stops at ES2022 APIs
@@ -1116,7 +1202,7 @@ roadmap item instead of leaving it here as stale history.
 
 ### A failure that repeats unchanged is not announced twice by a screen reader
 
-- **Where:** `frontend/src/components/Alerts.tsx` (the error slot) and
+- **Where:** `frontend/src/components/Banners.tsx` (the problem slot) and
   `frontend/src/components/App.tsx` (`joinError`, `joinHere`, `doCreate`).
 - **Issue:** The join and create failures show in a `role="alert"`. When a second
   attempt fails with the same text, the text does not change, so a screen reader

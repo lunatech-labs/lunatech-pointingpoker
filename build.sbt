@@ -7,14 +7,14 @@ ThisBuild / organizationName := "lunatech"
 
 lazy val V = new {
   val apispec      = "0.11.10"
-  val circe        = "0.14.16"
+  val circe        = "0.14.17"
   val commonsText  = "1.15.0"
-  val logback      = "1.6.3"
-  val owaspEncoder = "1.3.1"
-  val pekko        = "1.7.0"
-  val pekkoHttp    = "1.4.0"
+  val logback      = "1.6.5"
+  val owaspEncoder = "1.6.0"
+  val pekko        = "1.7.1"
+  val pekkoHttp    = "1.4.2"
   val scalatest    = "3.2.20"
-  val tapir        = "1.13.31"
+  val tapir        = "1.13.33"
 }
 
 lazy val root = project
