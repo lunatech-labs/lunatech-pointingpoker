@@ -1,0 +1,104 @@
+/* W: centred in the slot; cards shrink with the column, from a deck card's height to the touch target's width */
+.deck {
+  flex: 1;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  align-items: flex-start;
+  align-self: center;
+  padding-top: var(--space-2);
+}
+
+.deck-place {
+  flex: 1;
+  min-width: var(--target-min);
+  max-width: calc(var(--deck-card) * 5 / 7);
+  position: relative;
+}
+
+.deck-card {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  padding: 0;
+  border-radius: var(--radius-card);
+  border: var(--line-control) solid var(--mute-soft);
+  background: var(--paper-warm);
+  font-weight: var(--weight-bold);
+  font-size: var(--text-lg);
+  transition: transform var(--duration);
+}
+
+.deck-card:hover {
+  transform: translateY(calc(-1 * var(--space-1)));
+}
+
+.deck-card[aria-pressed="true"] {
+  background: var(--burgundy);
+  border-color: var(--burgundy);
+  color: var(--paper-warm);
+  transform: translateY(calc(-1 * var(--space-2)));
+  box-shadow: var(--lift-shadow) var(--lift-colour);
+}
+
+/* A border, not an inset shadow: forced colours drop shadows */
+.deck-card-kept {
+  border: var(--frame-band) solid var(--card-back);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-card {
+    transition: none;
+  }
+}
+
+.deck-tag {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: var(--text-tag);
+  font-weight: var(--weight-strong);
+  color: var(--kept);
+  white-space: nowrap;
+}
+
+/* J3's opt-out: the voted card, the bars and the header mark keep their fill in system colours */
+@media (forced-colors: active) {
+  .deck-card[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .deck-card[aria-pressed="true"]:focus-visible {
+    outline-color: CanvasText;
+  }
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  .deck {
+    display: grid;
+    grid-template-columns: repeat(var(--cols), minmax(0, calc(var(--deck-card) * 5 / 7)));
+    justify-content: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding-block: var(--space-2);
+    margin-block: auto;
+  }
+
+  .deck-place {
+    position: static;
+    max-width: none;
+  }
+
+  /* The kept tag leaves its card for the top line's right; the kept frame marks the card */
+  .deck-tag {
+    top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1));
+    left: auto;
+    right: var(--panel-inline);
+    transform: none;
+  }
+}
