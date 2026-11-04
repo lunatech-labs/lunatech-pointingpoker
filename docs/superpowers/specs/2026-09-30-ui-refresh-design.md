@@ -42,8 +42,15 @@ document as a whole stays in discussion.
 - **Progress**: who has voted and who is still waiting, however step 3 shows
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
+- **Phase line**: the round bar's element saying whether voting is open or
+  the round is revealed; from step 4a, it holds the round's live region. Its
+  shown text is the **phase word**.
+- **Desktop layout**: the wide layout from 65.75 rem, the laptop target's.
+  **Middle layout**: the wide layout below 65.75 rem, with its compact foot.
+  The wide and phone layouts and the compact foot are settled in step 3b2's
+  spec, "Terms".
 - **Test contract**: defined in step 1, under "The test contract"; steps 1a,
-  1b, 2c, 4 and 4a each add to it in their own sections.
+  1b, 1c, 2c, 4, 4a and 5 each add to it or change it in their own sections.
 - **Live region**: an element the browser watches, so text added or changed
   inside it is spoken without its user moving there.
 
@@ -56,35 +63,43 @@ document as a whole stays in discussion.
    1. A laptop screen, about 1280 to 1440 by 700 CSS px of viewport at 100%
       zoom. This is the design target for principle 4. A 1366 by 768 laptop,
       or 1920 by 1080 at 150% scaling, leaves nearer 600; step 3 settles
-      which height the target is.
+      which height the target is (the reference's J1: a floor of 1280 by 600
+      and a comfort target of 1280 by 680, step 3b1).
    2. A desktop monitor: the same layout at a capped width, not stretched.
    3. The facilitator's shared screen, legible on a meeting-room TV of 40 to 60
       inches, a projector in a lit room, and a compressed video-call tile.
    4. Narrow windows and phones, including a laptop split between the call and
       the page. The floor is that nothing breaks.
 3. **Mobile-first CSS** (settled), as a method. Base styles target the narrow
-   layout and `min-width` media queries add the wider ones. It costs little in a
+   layout and `min-width` queries, media or container, add the wider ones. It costs little in a
    rewrite and it is what keeps a zoomed page usable (principle 5). Checks on a
    real phone happen on the deployed app only and never gate a merge; phone
    risks go to `docs/known-issues.md`.
-4. **Degrade gradually with room size** (settled). At 100% zoom on the laptop
-   target, a monitor or the shared screen, the page as a whole never scrolls;
-   the narrow layout, phones and a zoomed page included, may scroll vertically,
-   never horizontally. A notice that ends may push the room down and let the
-   page scroll vertically while it shows: a banner reporting a rare event, such
-   as the connection lost, a moved link or a restart, until it clears or is
+4. **Degrade gradually with room size** (settled; steps 3b1 and 3b2
+   reopened its table, and step 3b3 closed its last cell).
+   Nothing ever scrolls horizontally. Whether the page scrolls
+   vertically depends on the viewport, zoom included (the effective viewport),
+   since zoom only shrinks the viewport in CSS px, and in the wide layout on
+   the issue's length and the notices shown:
+
+   | Viewport | The page | The participant area | The reference's open question |
+   | --- | --- | --- | --- |
+   | The desktop layout at or above the height floor, with an issue of up to two lines and no notice: the laptop target, a monitor, a zoomed screen | never scrolls | scrolls in its own region past a size | that size (L3) |
+   | The middle layout at or above the height floor, with an issue of up to two lines and no notice | never scrolls, as a goal: a step may give it up by weighing it in its spec and listing the contract change (4c1-narrow-cases decision 2) | scrolls in its own region past a size | that size (L3) |
+   | The wide layout otherwise: a longer issue, a notice shown, or below the height floor | may scroll vertically | scrolls in its own region down to a least height, past which the page scrolls | none: step 3b3 |
+   | The phone layout | may scroll vertically | flows with the page | none: step 3b2's phone layout |
+
+   A notice is a message that ends: a banner reporting a rare event, such as
+   the connection lost, a moved link or a restart, until it clears or is
    dismissed; and a failure or a conflict, such as a failed save, join or
    create, or the issue changed by someone else while the user edits it, until
    the user resolves it or ends the action it belongs to. Left unresolved, such
    a notice is an unfinished action, and the degraded layout is accepted.
    Routine confirmation of the user's own action, today only the "Link copied"
-   hint, shows beside its cause and moves nothing. A zoomed shared screen still
-   keeps the issue, the progress and the result in view without scrolling; the
-   facilitator's page has no deck, so it has room to. As the room grows, only
-   the participant area and the results grow. The participant area, past a size,
-   scrolls in its own region, and any line that names people summarizes
-   ("waiting: Bob, Eve and 3 more"). The results are bounded by the deck's 13
-   values for votes cast from the page; the server accepts any value
+   hint, shows beside its cause and moves nothing. As the room grows, only the
+   participant area and the results grow. Any line that names people
+   summarizes ("waiting: Bob, Eve and 3 more"). The results are bounded by the
+   deck's 13 values for votes cast from the page; the server accepts any value
    (`docs/known-issues.md`, "No request payload is validated on any endpoint
    that takes one"). Step 3 decides whether they scroll or summarize. Nothing
    else on the page moves because of the room's size. The thresholds belong to
@@ -93,42 +108,48 @@ document as a whole stays in discussion.
    than imposed on it. A design excellent up to 8 and degrading gently past it
    can beat one that holds 12 unchanged. Whatever the thresholds, rooms of 4 to
    14 stay usable.
+
 5. **Shared-screen legibility** (settled), its numbers not:
-   - The issue, the progress and the result are sized relative to the viewport,
-     so they read from the back of a room on a 40 inch TV.
+   - The progress and the result are sized to read from the back of a room on
+     a 40 inch TV at the laptop target, and scale with the viewport above it
+     (reopened 2026-10-07 for zoom; the reference's J2). The issue left this
+     list in step 3b1 (reopened 2026-10-13): the room hears it, and remote
+     people read it on their own screen.
    - Their text meets WCAG AAA contrast (7:1), since a lit projector and video
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
      unconfirmed and revealed differ by text, shape or a solid fill.
-   - Browser zoom is the facilitator's own lever: at 200% a 1280 px laptop is a
-     640 px layout, so the narrow layout must serve it (principle 4).
+   - Browser zoom is the facilitator's own lever; a zoom gives the layout of
+     its effective viewport (principle 4).
 6. **One brand theme**. No light and dark switch, matching lunatech.com.
    Colours exist only as CSS custom properties, so a second theme stays
    possible without touching components.
 7. **Two audiences** (settled). Voters get the deck. Facilitators get no deck,
    and their page is what the room sees. Controls stay open to everyone, and
    there is no control-less observer mode.
-8. **Logic stays out of markup** (settled). State and protocol logic lives
-   under `room/` and `protocol/` and in the `use*` hooks; step 4, a restyle,
-   changes none of it. Behaviour components still hold is carried over
-   unchanged. The e2e cases guard most of it; these are, notably, the parts a
-   restyle breaks most easily, several with no case:
-   - `IssueEditor.tsx`: the Enter guard during input-method composition, focus
-     taken back after a failed save unless the user has moved elsewhere,
-     `flushSync` so a phone shows its keyboard, and the refocus in
-     `takeTheirs`.
-   - `Deck.tsx`: the cards disabled while revealed.
+8. **Logic stays out of markup** (settled). State and protocol logic lives under
+   `room/` and `protocol/` and in the `use*` hooks; step 4, a restyle, changes
+   none of it. Behaviour is what a user can achieve and what the room sees as a
+   result; which controls show is presentation, unless hiding one prevents an
+   effect, as Re-vote's hiding does. Behaviour components still hold is carried
+   over unchanged. The e2e cases guard most of it; these are, notably, the parts
+   a restyle breaks most easily, several with no case:
+   - `IssueEditor.tsx`: the Enter guard during input-method composition.
+     `IssuePanel.tsx`: focus taken back after a failed save unless the user has
+     moved elsewhere, `flushSync` so a phone shows its keyboard, and the
+     refocus in `takeTheirs`.
+   - `RoundPanel.tsx`: draws `Deck` only while voting, so a revealed round has
+     no card to press, a guarantee the structure now holds.
    - `App.tsx`: the join, create and leave flow, the name and room in
      `localStorage`, the trimmed room id, reading and stripping `?moved=1` and
      `?restarted=1`, and the "Link copied" hint's 2 s timeout, started on each
      copy and not reset by the next.
-   - The copy hint, wherever it lives, today in `Alerts.tsx`: rendered only
-     while shown, as a `role="alert"`, so it is announced wherever step 4 moves
-     it.
-   - `Room.tsx`: the revealed-round vote guard and the refusal routing,
-     including `saveIssue`'s rethrow, which is what makes the editor show a
-     failure.
-   - `Controls.tsx`: Re-vote shown only while revealed. The server's re-vote
+   - The copy hint: `RoomHeader.tsx`'s `role="status"` region, always
+     rendered, only its text changing (4c1-wide's decision 9).
+   - `RoomPage.tsx`: the refusal routing, including `saveIssue`'s rethrow,
+     which is what makes the editor show a failure. The revealed-round vote
+     guard was dropped, unreachable with the deck unmounted while revealed.
+   - `RoundBar.tsx`: Re-vote shown only while revealed. The server's re-vote
      has no guard, so one click during voting unconfirms every vote.
    - `Lobby.tsx`: Enter submits on keyUp from the name field only, and a fixed
      room hides the tabs and makes the room id read-only.
@@ -136,6 +157,25 @@ document as a whole stays in discussion.
 9. **The suite reads only the test contract** (settled), so a restyle is judged
    by the suite staying unchanged. A step that changes the contract lists each
    change as a decision in its own spec.
+10. **Accessibility first**. Low-vision and screen-reader users are served as
+    fully as anyone, as a mark of the product and of the company:
+    - All text at AAA contrast (7:1), other indicators at 3:1, and WCAG 2.2's
+      AAA focus appearance, checked with colour-blind simulations.
+    - No state by colour alone (principle 5), and every state, a solid fill
+      included, survives `forced-colors`, Windows' contrast themes.
+    - Live regions announce what changes (steps 1a and 4a), browser zoom stays
+      effective (principle 5), and motion stops under `prefers-reduced-motion`.
+
+    The numbers are J8's in `docs/design/ui-reference.md`.
+11. **A test budget** (settled 2026-10-30, 4c1-narrow-cases decision 1;
+    revised 2026-10-31 by the product owner, 4c2-rejoin-name). Every case
+    runs in both browsers: their drift comes from outside, unannounced. One
+    width stands for each layout. A setup is shared across guarantees only
+    where its cost earns it, weighed case by case in each spec's Contract;
+    otherwise each behaviour gets its own case, each still failed by its own
+    mutation. A spec or plan flags each case that pins incidental behaviour,
+    stated by no spec, for the product owner to keep or drop. The cases
+    written under the first version wait in `docs/known-issues.md`.
 
 ## Steps
 
@@ -148,13 +188,38 @@ document as a whole stays in discussion.
 | 2b | Roles on the server and the wire | 2a | Unit and API tests, and the existing cases unchanged |
 | 2c | Roles in the page | 2b | Its cases |
 | 3 | Design direction (no code) | nothing | The product owner, then the specialist |
-| 4 | Restyle | 1b, 2c, 3 | By eye, and the existing cases unchanged |
-| 4a | The round's live region | 4 | Its cases |
-| 5+ | One step per feature | 4 | Each one's spec |
+| 3a | Tokens | 3 | The contrast gate, then the product owner |
+| 3b1 | The wide room page | 3a | The product owner, then the specialist |
+| 3a2 | The root follows the height | 3b1 | The contrast gate's tests, each change shown to fail |
+| 3b2 | Narrow and large screens | 3a2 | The product owner |
+| 3b3 | The issue editor and the messages | 3b2 | The product owner |
+| 3b4 | The lobby | 3b3 | The product owner, then the specialist on all four |
+| 1c | Test contract audit | 3b4 | Every case passing on today's page, each rewritten one shown to fail |
+| 4b | The round bar's toggle and guard | 1b, 1c, 2c | Its cases, and the existing cases unchanged but for one wait |
+| 4b2 | The editor's save guard and closing focus | 4b | Its cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-foundation | The stylesheets and the fonts | 4b2, 3b4 | Its cases, the existing cases unchanged, and a computed-style diff of today's pages |
+| 4c1-mockups | The mockups' CSS moved into the app | 4c1-foundation | The product owner, on a computed-style diff of the mockups |
+| 4c1-wide-prep | The mockups' icons and the avatars' tokens | 4c1-mockups | The product owner, on a computed-style diff of the mockups, and its unit tests |
+| 4c1-voters | Voters without a browser, for the layout cases | 4c1-wide-prep | Its cases, and the existing cases unchanged |
+| 4c1-wide | The wide room page's look (J10) | 4c1-voters | By eye, a computed-style diff against the mockup, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-narrow-keys | ☰'s row and a keyboard focus on the phone | 4c1-wide | Its new cases, and the existing cases unchanged |
+| 4c1-narrow-cases | Step 4's remaining phone, zoom and width guarantees (J11) | 4c1-narrow-keys | By eye, its new cases, and the existing cases unchanged |
+| 4c1-editor | The editing view's look (J12), the field as 3b3 decision 7's wrapping `<textarea>` | 4c1-narrow-cases | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c1-banners | The banners' look and place under the header (J12) | 4c1-editor | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-form | The lobby's page and form (J13) | 4c1-banners | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-rejoin-name | The rejoin row joins with the typed name | 4c2-form | Its case, and the existing cases unchanged |
+| 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-rejoin-name | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
+| 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
+| 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
+| 4a | The round's live region | 4c1-editor | Its cases, the hand check, and the existing cases unchanged but for its listed contract change |
+| 4a-arrival | Arriving in the room: focus moves to a heading when the room appears (to be confirmed) | 4a | Its cases |
+| 4a-reveal-focus | A reveal keeps the voter's focus | 4a | Its cases |
+| 5 | Next issue | 4c1-editor | Its cases |
+| 5+ | One step per feature | 4d | Each one's spec |
 
 **Order**: 1, 1a and 1b stacked and merged in the same window, then 2a, 2b and
-2c likewise, then 4
-and 4a stacked, while 3 runs alongside from now.
+2c likewise, then 1c, step 4's steps and 4a stacked, while 3 runs
+alongside from now, and 5 after 4c1-editor.
 The mockups are the critical path to a visible change, and step 2 is built
 while they are drawn, so putting roles before the restyle costs the new look
 little or no time. The specialist's critique does not gate step 4: step 3's
@@ -173,6 +238,40 @@ ways to fail.
 change judged by its own tests, and keeping it out of step 1 keeps that step's
 unchanged look literally true.
 
+**Step 1c. Test contract audit.** Each case keeps the behaviour it guards and
+loses the elements it reaches it through by chance, so step 4 and step 5 can
+change which controls show. Its list, completed from step 3b's layouts:
+
+- Show votes read while revealed, the cases step 4 would fail: the reveal's
+  layout-shift case ('the reveal notice claims its space before the reveal'),
+  which measures the first participant entry alone, and 'a Show survives
+  someone joining' and 'an auto-revealed round stays revealed when a straggler
+  arrives', whose `join` enters a revealed room.
+- Show votes as the sign a join or rejoin succeeded, in every helper and case
+  that waited for it (`join`, `newTab`, `joinAs`, the lobby, smoke and reload
+  cases, 'a submit from a tab showing Voter keeps the Facilitator another tab
+  chose', and 'a room remembered from before the cutover reopens under its
+  derived name'). The room's marker serves (the reference's "Contract reads").
+  Leave and the role line, chosen first, sit behind ☰ in the phone layout
+  (3b2), where the moved-banner case joins; a room id heading would pass in a
+  lobby that gave the id a heading.
+- Clear votes clicked only to send traffic or to hold focus. An issue edit
+  sends it where another page reads it (`departureWhileCut`, the grace-period
+  and frozen-stream cases), a second vote where only the sender's page is
+  live, and a join in 'a draft survives blur and room activity'; a card holds
+  the focus in 'a failed save leaves focus the user moved elsewhere'.
+- Every "Voted" mark read on a revealed entry, where the revealed value serves
+  (the reference's "Contract reads"): 'a vote survives its own reconnect' and
+  'two tabs on one room are one participant'.
+- 'a Show in a room where nobody voted renders no summary' reads no tally entry
+  rather than a hidden region (3b1's Contract).
+- The rejoin link is found by the room id, or "your last room", with "as
+  <name>" in its text, so 3b4's `<id> Rejoin as <name>` passes unchanged.
+
+Simulated on today's page and not kept: with Show hidden while revealed every
+case passes, where the first item's cases failed before; with Clear removed
+only the cases step 5 names below fail; 3b4's rejoin name passes.
+
 **Step 2. Roles: voter and facilitator.** Product owners who facilitate and
 never vote keep the round from completing, so auto-reveal never fires
 (Appendix A, "How sessions run"), and a "4 of 6 voted" count would never reach
@@ -187,52 +286,140 @@ then roles in the page.
 **Step 3. Design direction.** Mockups of the voter's and the facilitator's
 pages, before and after a reveal, at the screens in principle 2, and the lobby.
 They can be clickable HTML built from lunatech.com's palette and type. The
-output is a short design reference committed to the repo: palette as custom
-properties, type scale, spacing, component looks, and the layouts. Appendix A is
-its starting input. After a reveal the deck stays on the page, disabled, at
-every width, as the suite's "takes no more votes" case expects; the result
-appears near it, not in its place. The layouts include a phase line: text
-visible in both phases, saying whether voting is open or the round is revealed,
-outside the deck so the facilitator's page keeps it, and directly above or
-beside the deck's first row, read just before it, and in view whenever that row
-is centred in the viewport, so a voter looking at the deck sees why it is
-frozen. Its place and its height change with neither the phase, the votes nor
-the room's size, at every width. Its revealed text contains "The round is
-revealed", which appears once on the page, and its open text does not, ignoring
-case, so `frozenNotice` reads it unchanged. It may share a line with the
-progress, as a separate element (Appendix B). Step 4a makes it the round's live
-region, and the disabled deck needs no description of its own, since the line
-says why.
+output is a short design reference committed to the repo: palette, type scale,
+spacing, component looks, and the layouts, the token values living in
+`frontend/src/colours.css` and `frontend/src/tokens.css`. Appendix A is
+its starting input. It runs as 3a, the tokens, then 3b, the layouts, and its
+reference is `docs/design/ui-reference.md`. 3a is specified in its own
+document, `docs/superpowers/specs/2026-10-07-ui-refresh-3a-tokens-design.md`.
+3b runs as four steps, which take the reference's open questions grouped by
+what they share. At the laptop target, with an issue of up to two lines and no
+notice, the page never scrolls (principle 4), so
+the questions that divide its height go together:
 
-**Step 4. Restyle.** The step 3 reference applied, the CSS library chosen,
-Bootstrap 4 and its Dependabot major-version pin removed, mobile-first layout,
-and the result placed so a reveal no longer pushes the participants down, which
-closes that entry in `docs/known-issues.md`, and the "Link copied" hint moved
-beside the "Copy link" link (principle 4; Appendix A, improve 10). It keeps the
-interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
+- 3b1, the wide room page: L1, L2, L3, L4, L6, L5's card size and L11's
+  breakpoint for the room page;
+- 3b2, narrow and large screens: L5's reflow, L10, and L11 below 3b1's
+  breakpoint
+  (`docs/superpowers/specs/2026-10-15-ui-refresh-3b2-narrow-and-large-design.md`);
+- 3b3, the issue editor and the messages: L7 and L8; the editing view, the read
+  view being 3b1's heading; the banners' stacking, Dismiss and mounting
+  (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`);
+- 3b4, the lobby: L9 and the lobby's messages, the join and create failures and
+  "Your session has ended", which show only over the lobby, and its
+  arrangement at every width
+  (`docs/superpowers/specs/2026-10-19-ui-refresh-3b4-lobby-design.md`).
+
+Each step works on the pages the steps before it drew. One that finds an
+earlier decision does not hold reopens it, said so in the reference's log, as
+3b sends a value back to 3a. The first step that needs a look, such as a
+button or an input, draws it, and the later ones reuse it. Step 3a2 makes the
+root 3b1 sends back, and the layout tokens with it, before 3b2 draws on them
+(`docs/superpowers/specs/2026-10-09-ui-refresh-3b1-wide-room-page-design.md`,
+`docs/superpowers/specs/2026-10-14-ui-refresh-3a2-root-height-design.md`).
+At every width the result takes the deck's place after a reveal (steps 3b1
+and 3b2), a contract change of step 4 for the suite's "takes no more votes"
+case. The layouts include a phase line: text visible in both phases, saying
+whether voting is open or the round is revealed, outside the deck so the
+facilitator's page keeps it. Since no deck stays after a reveal, the phase word
+sits in the round bar at the column's foot, with the actions (3b1, reopened
+2026-10-13). Its place and its height
+change with neither the phase, the votes nor the room's size, at every width,
+but on the facilitator's phone page until the progress step fills its slot
+while voting (3b2). Its texts are 3b1's, and the revealed one no
+longer says "The round is revealed", so `frozenNotice` is a contract change of
+step 4. It may share a line with the
+progress, as a separate element outside the region (step 4a's spec, decision
+1). Step 4a gives it the round's live region.
+
+**Step 4. Restyle.** It runs as steps sliced by how each is judged, each
+with its own spec: 4b, the round bar's toggle and guard, built on today's look
+(`docs/superpowers/specs/2026-10-20-ui-refresh-4b-round-toggle-design.md`);
+4b2, the editor's save guard and closing focus (3b3 decisions 9 and 10),
+likewise (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`);
+4c1, the room page's look, as 4c1-foundation, the stylesheets and the fonts,
+which chooses plain CSS
+(`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-foundation-design.md`),
+4c1-mockups, the mockups' CSS moved into the app
+(`docs/superpowers/specs/2026-10-21-ui-refresh-4c1-mockups-design.md`),
+4c1-wide-prep, the mockups' icons and the avatars' tokens
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-prep-design.md`),
+4c1-voters, voters without a browser for the layout cases
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-voters-design.md`), then
+4c1-wide, the wide room page's look
+(`docs/superpowers/specs/2026-10-22-ui-refresh-4c1-wide-design.md`),
+4c1-narrow-keys, 4c1-narrow-cases, 4c1-editor, the editing view
+(`docs/superpowers/specs/2026-10-30-ui-refresh-4c1-editor-design.md`), whose
+muted Save and Cancel are revisited once the stack is deployed and users have
+given feedback, and 4c1-banners, the banners under the header;
+4c2, the lobby's look, as 4c2-form, the lobby's page and form
+(`docs/superpowers/specs/2026-10-30-ui-refresh-4c2-form-design.md`),
+4c2-rejoin-name, the rejoin row joining with the typed name
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-rejoin-name-design.md`),
+4c2-banners, the lobby's banners in the new look
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`),
+4c2-bootstrap, Bootstrap removed
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-bootstrap-design.md`), which
+removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
+undoing Bootstrap's base styles outside the legacy-page fence, and its import
+in `base.css`, the `legacy` layer and the fence itself, and keeps
+Bootstrap's two phone properties, its tap highlight removal and its text size
+adjustment, and 4c2-focus-ring, the controls' rounded focus ring
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-focus-ring-design.md`); and
+4d, the not-a-room page
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4d-not-a-room-design.md`),
+in React with the Join tab's URL flag (3b4 decision 15). What follows is the
+whole of step 4, each step's spec taking its part. The step 3 reference
+applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot
+major-version pin removed, mobile-first layout,
+and the result placed as step 3b1 decides: in the deck's place on the voter's
+page, and below the table on the facilitator's page (layout f), the table
+giving it its height, which narrows that entry in `docs/known-issues.md`, and the
+"Link copied" hint moved beside the "Copy link" link (principle 4; Appendix A,
+improve 10), and the round bar's toggle and guard (4b) and the editor's save
+guard and closing focus (4b2). It keeps
+the interactions steps 1 to 2 leave. Its spec gives each of these guarantees a
 browser case that fails against a layout breaking it, with the viewports and
 element lists step 3's layouts give:
 
-- At the laptop target, in each phase, with a room of 14, as many distinct
-  values once revealed as step 3's layouts allow, and no notice shown, the page
-  does not scroll and each element step 3's layouts list, the phase line among
-  them, is wholly in view.
+- At the floor, in each phase, with a room of 14, as many distinct values
+  once revealed as step 3's layouts allow, an issue of two lines and no notice
+  shown, the page does not scroll and each element step 3's layouts list, the phase line among them,
+  is wholly in view. At the comfort target the 14 entries are too.
+- A longer issue, or a window below the floor, scrolls the page and cuts
+  nothing: the table keeps its minimum and the slot can be scrolled to.
+- The entries keep their scale through a reveal and never grow past a deck
+  card's height; a room of 0 or 1 voters gets a scale too. On the
+  facilitator's page this holds from 65.75 rem; below it, until the progress
+  step, a reveal refits them (3b2's Accepted costs).
+- A reveal with no votes shows the result, "Nobody voted" in place of the most
+  voted value, and the slot keeps its height.
+- The round bar's toggle and guard: 4b's cases.
 - The elements that do not grow keep their place between a room of 2 and a room
   of 14.
-- The facilitator's page, zoomed to 150% and 200% at least, keeps the issue in
-  view, and in each phase its progress or its result.
+- Guarantees are stated by effective viewport (4c1-narrow-cases decision 3).
+  A laptop at 100% is 1280 by 600 to 700. A 1920 by 1080 screen is shown at
+  100% or 150%, about 1280 by 630 at 150%. A 4K screen is shown at 100 to
+  200%. Each is the desktop layout at or above the floor. At 200% of the
+  laptop, 640 by 300, the page scrolls only vertically.
+- Resizing a window across 51.75 or 65.75 rem gives the layout a load at that
+  width gives, the table's scale included, ☰'s row keeping its state
+  (4c1-narrow-keys).
 - The phase line keeps its place and its height through a reveal, a reopening
-  and a vote, and on the voter's page sits by the deck's first row (step 3).
-- The copy hint moves nothing and covers nothing.
+  and a vote, and sits where step 3 places it, with step 3's exception.
+- The copy hint moves nothing and covers nothing, but the room id it replaces
+  in the phone layout (3b2).
 - No page scrolls horizontally at 320 CSS px, including with a long unbroken
   name, an issue that wraps, and the banners shown.
 
-Principle 8's Re-vote and copy-hint timing are guarded from step 1. The progress
-and the phase line get test ids, and the moved copy hint becomes a
-`role="status"` region, all listed as contract changes (principle 9).
-Two options for its spec to weigh. A CSS reset: `bootstrap.min.css` brings
-Reboot, Bootstrap's reset, so removing Bootstrap removes it too, and the
-chosen library may or may not ship one. The deck as a `<fieldset>` with a
+Principle 8's Re-vote and copy-hint timing are guarded from step 1. The phase
+line gets a test id, the moved copy hint becomes a `role="status"` region, Show
+votes is absent while revealed, facilitators are the roster's last rows rather
+than entries (3b1 decision 17), and the mark reads change
+as the reference's "Contract reads" lists, all listed as contract changes
+(principle 9).
+An option for the room's specs to weigh, the reset being 4c1-foundation's:
+the deck as a `<fieldset>` with a
 `<legend>`: the same `group` role and name step 1 gives its `div`, so no case
 changes, and `<fieldset disabled>` freezes every card at once. Step 1 keeps
 the `div` for the look (its "Considered and not taken"). Without Bootstrap, a
@@ -241,26 +428,85 @@ hidden style.
 Appendix C holds what this design's reviews found about writing these cases.
 
 **Step 4a. The round's live region.** Announces a reveal and a reopened round,
-by making step 3's phase line a live region. Today's reveal row cannot be one:
+with a live region inside step 3's phase line. Today's reveal row cannot be one:
 it is hidden with `visibility` while the round is open, and an announcement
 needs text that changes in place. A visually hidden copy beside it was step
 1a's first design, and nearly every review finding on it came from the copy,
-so this waits for a visible line instead. It follows step 4 because a restyle
-adds no behaviour. Its spec starts from Appendix B.
+so this waits for a visible line instead. It follows step 4c1, which draws the
+line, and stays out of it because a restyle adds no behaviour. Its spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+started from Appendix B.
 
-**Steps 5 and after.** One step per feature, each with its own short spec,
+**Step 4a-arrival. Arriving in the room.** A screen reader user who joins or
+reloads gets no starting point: no element takes focus when the room appears.
+On a reload, Orca on Firefox reads the whole page until the user acts (heard
+in step 4a's hand check; that this is Orca's own page-load reading is
+inferred), and this step's spec weighs focus moving against it. The
+preferred solution, to be confirmed by its own spec, is focus moving to a
+heading when the room appears, the usual practice when a single-page app
+changes view. Weighed and not preferred: the round's state in the page title,
+read on a page load but also visible in the tab; a one-off spoken summary,
+which needs a region filled after a delay since text present when a region
+appears is not announced. To decide: what takes focus, and whether join,
+reload, the reload after a refusal and a reconnect behave alike.
+
+**Step 4a-reveal-focus. A reveal keeps the voter's focus.** A reveal replaces
+the deck with the result, so focus on a card falls to the page, whether
+another's Show or the voter's own last vote revealed the round
+(`docs/known-issues.md`, "A reveal drops a voter's focus"). Step 4a's hand
+check still heard its announcement with focus on a card (Orca on Firefox). To
+decide: where focus goes, and only when it was in the deck or always.
+
+**Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
+improve 7), and the round's actions per phase it makes possible: the target
+column of the reference's J5. Its spec decides when the round clears, one
+request or two, its name and whether Clear stays. The actions' order, Next
+issue's place and the round bar's guard, which this step inherits, are 3b1's
+decision 6 (reopened 2026-10-13). The cases that click Clear votes for its own
+behaviour, in
+either phase ('a clear re-arms the auto-reveal, and the last vote fires it',
+the Re-vote guard, 'a re-vote leaves the caster shown as selected but
+unconfirmed', the session case and a roles case), are this step's contract
+changes, not 1c's, if Clear leaves the phase they click it in.
+
+**Steps after 5.** One step per feature, each with its own short spec,
 picked from these candidates and whatever the mockups raise. None is a
 commitment:
 
 - A progress count, "4 of 6 voted, waiting: Bob, Eve", which needs step 2's
-  denominator (Appendix A, improve 3).
-- "Next issue" as one action instead of Clear, then edit the issue (improve 7).
+  denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
+  fills the facilitator's slot that step 4 leaves empty while voting, which
+  ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
+  votes still moves the facilitator's entries"). It also revisits the round bar's
+  case, which 4c1-narrow-keys left without one. It adds the phase line's
+  reserve and its cases outside the desktop layout (4c1-narrow-cases decision
+  4).
 - Results that show the spread and the lowest and highest voters (improve 5).
+  The leading idea, from step 3b1: the voters' cards sorted by value on a
+  reveal, lowest first in the chart's deck order, no vote last, ties by name.
+  The position carries the spread, so it needs no colour and no hover. Every
+  card moves at the reveal (animated, not under reduced motion), and a re-vote
+  returns them to name order.
+- Ties shown rather than broken: "Most voted: 3 · 5", where today JavaScript's
+  key order picks one (`docs/known-issues.md`, "A tied vote is broken by
+  JavaScript key order"). "The highest when in doubt", a rule some teams use,
+  is a decision rather than a fact, so it belongs to step 9's recorded outcome
+  as a pre-selection. The rule, drawn in step 3b1's mockup (`later=1`): up to
+  three tied values on one
+  line, two size steps down ("0.5 · 13 · 89" the widest), read as "3, 5 and 13";
+  from four, "Tie" with "N values, k votes each"; no red bar when every voted
+  value ties, the figure's wording to decide ("None" in the mockup). The
+  `most-voted` read is a contract
+  change.
+- From the designer's mockup (2026-10), each a step of its own: statistics, the
+  average and the median in a compact form (an agreement percentage would
+  repeat "6 of 10 votes"); a "share your reasoning" callout; the round counter
+  and its start time; the coffee card.
 - A pasted ticket link made clickable in the issue (improve 8).
 - "Not Alice?", joining under another name than the remembered one.
 - Names checked at join: today an empty or blank name joins as a blank row,
   which nobody can refer to. To decide: trimming at join, a remembered empty
-  name, and a maximum length. The server-side check belongs with
+  name, and a minimum and a maximum length. The server-side check belongs with
   `docs/known-issues.md`, "No request payload is validated on any endpoint that
   takes one". Duplicate names stay allowed. Refusing them would lock out someone
   whose laptop died and who rejoins from a phone without the cookie: their old
@@ -286,6 +532,10 @@ commitment:
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
+- A spoken result on a reveal: step 4a announces only "Votes revealed", and the
+  outcome is found by reading the Results region. To decide: what to say when
+  votes are spread or tied, and whether a leave that changes the result is
+  announced again.
 
 ## Where step 8c's list went
 
@@ -298,10 +548,10 @@ commitment:
 | Component library and look | Step 4, from step 3's reference |
 | Responsive layout | Step 4 |
 | Restyling the editor | Step 4 |
-| Participants above the results | Step 4, as "the result placed so a reveal no longer pushes the participants down" |
+| Participants above the results | Step 4, as the result placed per page (step 3b1) |
 | "Not Alice?" | A step 5+ candidate |
 | Light and dark theme | Dropped: lunatech.com has one theme |
-| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and the visible "The round is revealed" sentence already says why the deck is frozen |
+| Frozen-deck tooltip | Dropped (settled): hover does not exist on a phone, and no deck stays frozen after a reveal (step 3) |
 
 ## Relation to other documents
 
@@ -584,8 +834,8 @@ both notices show, a change to either reads both. One going is a removal, which
 - A failed save by mouse on the Save issue button goes unheard in Orca with
   Firefox, and Space or Enter on the button is expected to behave the same: Save
   is disabled while saving, so the editor moves focus back to the box, and
-  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. See
-  `docs/known-issues.md`.
+  reading the box cuts off the polite line. The line stays on screen, and Enter in the box keeps focus. Step
+  4b2 removes it (`docs/superpowers/specs/2026-10-20-ui-refresh-4b2-save-guard-design.md`).
 - Until step 4a, a reveal and a reopened round are not announced, as today.
 
 ## Step 1b. Alphabetical participants
@@ -751,11 +1001,14 @@ their teams run sessions.
    reds, while red conventionally means danger, and Clear, the one destructive
    action, is a red outline like the cards, at the other end of the row from a
    filled red Show, with nothing marking it destructive. The brand colour is an
-   accent, and destructive actions get their own treatment.
+   accent, and destructive actions get their own treatment. Reopened
+   2026-10-12: where red goes is 3b1's decision 14; Clear stays quiet.
 3. Information only on hover, which phones do not have.
 4. Layout shifts on reveal or on a notice.
 5. Scope creep toward a platform: accounts, a gating facilitator role,
-   onboarding tours, avatars, sounds, gamification, settings pages.
+   onboarding tours, avatars, sounds, gamification, settings pages. The
+   roster's initials, drawn from the name (step 3b1), need no account and are
+   not these avatars.
 6. A confirmation dialog on routine actions; protect Clear by position and
    styling, or later by undo.
 7. Colour or an icon alone as a state; words first, icons beside them.
@@ -792,9 +1045,13 @@ A rough sketch of the phase idea, a voter's page on a laptop:
 +------------------------------------+    +------------------------------------+
 ```
 
-The revealed sketch leaves the disabled deck out for space; step 3 keeps it.
+The revealed sketch has no deck, as step 3 decides.
 
 ## Appendix B. Inputs for step 4a
+
+Superseded by step 4a's spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+which holds the rulings.
 
 What step 1a's first design learned about announcing the round, kept for step
 4a's spec. Provisional, like the plan.
@@ -851,25 +1108,24 @@ spec. Provisional, like the plan.
 - "Moves nothing" records the header's elements, Copy link, Leave and the room
   id, as well as the round's elements; "covers nothing" checks the hint's box
   overlaps none of those same elements. Both run at the laptop target and at
-  320 px, where "beside" may not fit.
+  320 px, where the hint takes the room id's place (3b2) and they check the
+  others.
 - The copy hint becomes a `role="status"` region beside "Copy link": always
-  rendered, empty until a copy, holding "Link copied to clipboard" for the 2 s,
+  rendered, empty until a copy, holding "Link copied" for the 2 s,
   and checked with step 1a's region helper. Swapping today's `alert` role
   alone would silence it, since a status that appears with its text is not
   announced. A second copy within the 2 s changes no text and is not announced
   again, which is accepted.
 - The phase line's height is reserved by sizing, such as a `min-height`, not by
   keeping the revealed text rendered and hidden as `Deck.tsx` does today: step
-  4a needs text that changes in place.
+  4a needs text that changes in place. Outside the desktop layout the reserve
+  waits for the progress step (4c1-narrow-cases decision 4).
 - Its height is compared before a reveal and after it, which covers a reopening
-  too, at the laptop target and at 320 px, and across a vote that changes a
-  progress sharing its line. Today's "the reveal
+  too, at the laptop target (the 320 px case waits for the progress step, as
+  the reserve does), and across a vote that changes a progress sharing its
+  line. Today's "the reveal
   notice claims its space before the reveal" case runs at the default viewport
   only.
-- Its placement: at a narrow width with the first card scrolled to the
-  viewport's centre, pinned with `scrollIntoView({ block: 'center' })` rather
-  than left to Playwright's default, the phase line is in the viewport and
-  precedes the deck in reading order.
 - The banners are the connection messages, moved and restarted. Moved and
   restarted show together from `?moved=1&restarted=1`; the connection messages,
   lost and ended, and the lobby errors share one slot, `connectionMessage ||

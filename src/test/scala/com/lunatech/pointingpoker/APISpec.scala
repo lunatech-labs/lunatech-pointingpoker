@@ -39,7 +39,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
 
   // A built page stands in for `npm run build`, so the spec does not depend on the frontend.
   val fixtureDir: Path = Files.createTempDirectory("pages")
-  val fixtureIndex     = "<!DOCTYPE html><html><body>fixture index</body></html>"
+  val fixtureIndex     = "<!DOCTYPE html><html><head></head><body>fixture index</body></html>"
   val fixtureAsset     = "console.log('fixture asset');"
   val fixtureIndexPath = Files.writeString(fixtureDir.resolve("index.html"), fixtureIndex)
   val fixtureAssetPath =
@@ -151,6 +151,11 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
         responseAs[String] mustBe "The page is not built: run `npm run build`"
       }
     }
+    "answer 503 for a name outside the vocabulary when the page is not built" in
+      Get("/brave-golden-oter") ~> missingRoute ~> check {
+        status mustBe StatusCodes.ServiceUnavailable
+        responseAs[String] mustBe "The page is not built: run `npm run build`"
+      }
     "warn at construction when the page is not built" in {
       pageLog(PageRoutes(missingConfig)) mustBe
         List(("WARN", "The page is not built: run `npm run build`"))
@@ -206,22 +211,22 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       Get("/brave-golden-oter") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
         contentType mustBe ContentTypes.`text/html(UTF-8)`
-        val page = responseAs[String]
-        page must include("<code>brave-golden-oter</code> is not a room name.")
-        page must include("""Did you mean <a href="/brave-golden-otter">brave-golden-otter</a>?""")
-        page must include("""<a href="/">Create a room</a>""")
+        val handOver =
+          """<meta name="not-a-room" content="brave-golden-oter" data-suggestion="brave-golden-otter">"""
+        responseAs[String] mustBe
+          s"<!DOCTYPE html><html><head>$handOver</head><body>fixture index</body></html>"
+        header("Cache-Control").map(_.value) mustBe Some("no-cache")
       }
     "refuse a name near no room name without a suggestion" in
       Get("/nothing-like-this") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
-        responseAs[String] must include("is not a room name")
-        (responseAs[String] must not).include("Did you mean")
+        responseAs[String] must include("""<meta name="not-a-room" content="nothing-like-this">""")
       }
     "escape the refused name before echoing it" in
-      Get("/%3Cimg%20src=x%20onerror=alert(1)%3E") ~> apiRoute ~> check {
+      Get("/%22%3E%3Cimg%20src=x%20onerror=alert(1)%3E$1%5C") ~> apiRoute ~> check {
         status mustBe StatusCodes.NotFound
         val page = responseAs[String]
-        page must include("&lt;img src=x onerror=alert(1)&gt;")
+        page must include("""content="&#34;&gt;&lt;img src=x onerror=alert(1)&gt;$1\"""")
         (page must not).include("<img")
       }
     "redirect a legacy UUID link to its derived room, flagged as moved, and log it once" in {
