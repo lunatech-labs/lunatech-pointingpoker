@@ -22,6 +22,7 @@ import {
   participantEntries,
   participantEntry,
   phaseLine,
+  phaseWord,
   readBoxes,
   restartNotice,
   roomIdInput,
@@ -100,7 +101,7 @@ const voteAllButOne = async (page, role, joined) => {
 
 const voteLast = async (page, role, joined) => {
   await joined.at(-1).vote(ESTIMATIONS[(joined.length - 1) % 13])
-  await expect(phaseLine(page)).toHaveText('Revealed')
+  await expect(phaseWord(page)).toHaveText('Revealed')
   const count = joined.length + (role === 'Voter' ? 1 : 0)
   await expect(tallyEntries(page)).toHaveCount(Math.min(count, 13))
 }
@@ -298,7 +299,7 @@ cases(
     const read = () => readBoxes(page, watched)
     const before = await read()
     await page.getByRole('button', { name: 'Show votes' }).click()
-    await expect(phaseLine(page)).toHaveText('Revealed')
+    await expect(phaseWord(page)).toHaveText('Revealed')
     await expect(roundSlot(page)).toContainText('Nobody voted')
     const after = await read()
     if (voter) expect(moved(before.boxes, after.boxes, ['height'])).toEqual([])
@@ -341,7 +342,7 @@ cases(
     await voteLast(page, role, joined)
     expect(moved(before, await read()), 'revealed').toEqual([])
     await page.getByRole('button', { name: 'Re-vote' }).click()
-    await expect(phaseLine(page)).toHaveText('Voting')
+    await expect(phaseWord(page)).toHaveText('Voting')
     expect(moved(before, await read()), 'after Re-vote').toEqual([])
     await joined[0].vote(ESTIMATIONS[0])
     await expect(votedMark(table(page))).toHaveCount(1)
@@ -404,7 +405,7 @@ cases(
     await inView()
     // The facilitator's table gives up its reserve to the slot here.
     await page.getByRole('button', { name: 'Show votes' }).click()
-    await expect(phaseLine(page)).toHaveText('Revealed')
+    await expect(phaseWord(page)).toHaveText('Revealed')
     await inView()
   }
 )
@@ -429,14 +430,14 @@ const nobodyVoted = async (alice, bob) => {
   const voting = await slot()
   await bob.page.getByRole('button', { name: 'Show votes' }).click()
   for (const { page } of [alice, bob]) {
-    await expect(phaseLine(page), 'nobody voted: revealed').toHaveText('Revealed')
+    await expect(phaseWord(page), 'nobody voted: revealed').toHaveText('Revealed')
     await expect(roundSlot(page), 'nobody voted: shown').toContainText('Nobody voted')
   }
   const revealed = await slot()
   expect(moved(voting, revealed, ['height']), "nobody voted: the slot's height").toEqual([])
   await bob.page.getByRole('button', { name: 'Re-vote' }).click()
   for (const { page } of [alice, bob]) {
-    await expect(phaseLine(page), 'nobody voted: voting again').toHaveText('Voting')
+    await expect(phaseWord(page), 'nobody voted: voting again').toHaveText('Voting')
   }
 }
 
@@ -632,7 +633,7 @@ test.describe('the narrow layouts', () => {
         await vote(alice.page, '13')
         await bob.page.getByRole('button', { name: 'Show votes' }).click()
         for (const page of pages) {
-          await expect(phaseLine(page), `revealed, ${size}`).toHaveText('Revealed')
+          await expect(phaseWord(page), `revealed, ${size}`).toHaveText('Revealed')
           const over = await sideways(page)
           expect(over, `no sideways scroll once revealed, ${size}`).toBeLessThanOrEqual(0)
         }

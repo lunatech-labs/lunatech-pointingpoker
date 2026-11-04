@@ -63,3 +63,12 @@
 .tight-point {
   margin-inline: var(--tight-point);
 }
+
+/* Hidden text is exposed as written, so it must not inherit a text-transform */
+.visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  text-transform: none;
+}

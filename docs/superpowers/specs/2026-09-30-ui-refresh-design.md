@@ -42,6 +42,9 @@ document as a whole stays in discussion.
 - **Progress**: who has voted and who is still waiting, however step 3 shows
   it, as a summary line or a participant area that fits, kept in view as
   principle 4 requires.
+- **Phase line**: the round bar's element saying whether voting is open or
+  the round is revealed; from step 4a, it holds the round's live region. Its
+  shown text is the **phase word**.
 - **Desktop layout**: the wide layout from 65.75 rem, the laptop target's.
   **Middle layout**: the wide layout below 65.75 rem, with its compact foot.
   The wide and phone layouts and the compact foot are settled in step 3b2's
@@ -208,7 +211,9 @@ document as a whole stays in discussion.
 | 4c2-banners | The lobby's banners in the new look (J12, J13) | 4c2-rejoin-name | By eye, its new cases, and the existing cases unchanged but for its listed contract changes |
 | 4c2-bootstrap | Bootstrap removed | 4c2-banners | The existing cases unchanged |
 | 4d | The not-a-room page | 4c2-bootstrap | Its cases, and `APISpec` |
-| 4a | The round's live region | 4c1-editor | Its cases |
+| 4a | The round's live region | 4c1-editor | Its cases, the hand check, and the existing cases unchanged but for its listed contract change |
+| 4a-arrival | Arriving in the room: focus moves to a heading when the room appears (to be confirmed) | 4a | Its cases |
+| 4a-reveal-focus | A reveal keeps the voter's focus | 4a | Its cases |
 | 5 | Next issue | 4c1-editor | Its cases |
 | 5+ | One step per feature | 4d | Each one's spec |
 
@@ -324,8 +329,8 @@ but on the facilitator's phone page until the progress step fills its slot
 while voting (3b2). Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
 step 4. It may share a line with the
-progress, as a separate element (Appendix B). Step 4a makes it the round's live
-region.
+progress, as a separate element outside the region (step 4a's spec, decision
+1). Step 4a gives it the round's live region.
 
 **Step 4. Restyle.** It runs as steps sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
@@ -352,14 +357,17 @@ given feedback, and 4c1-banners, the banners under the header;
 4c2-rejoin-name, the rejoin row joining with the typed name
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-rejoin-name-design.md`),
 4c2-banners, the lobby's banners in the new look
-(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`), and
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-banners-design.md`),
 4c2-bootstrap, Bootstrap removed
 (`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-bootstrap-design.md`), which
 removes Bootstrap and its pin, with `frontend/src/bootstrap-undo.css`, the rules
 undoing Bootstrap's base styles outside the legacy-page fence, and its import
 in `base.css`, the `legacy` layer and the fence itself, and keeps
 Bootstrap's two phone properties, its tap highlight removal and its text size
-adjustment; and 4d, the not-a-room page
+adjustment, and 4c2-focus-ring, the controls' rounded focus ring
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4c2-focus-ring-design.md`); and
+4d, the not-a-room page
+(`docs/superpowers/specs/2026-10-31-ui-refresh-4d-not-a-room-design.md`),
 in React with the Join tab's URL flag (3b4 decision 15). What follows is the
 whole of step 4, each step's spec taking its part. The step 3 reference
 applied in plain CSS (4c1-foundation), Bootstrap 4 and its Dependabot
@@ -420,12 +428,34 @@ hidden style.
 Appendix C holds what this design's reviews found about writing these cases.
 
 **Step 4a. The round's live region.** Announces a reveal and a reopened round,
-by making step 3's phase line a live region. Today's reveal row cannot be one:
+with a live region inside step 3's phase line. Today's reveal row cannot be one:
 it is hidden with `visibility` while the round is open, and an announcement
 needs text that changes in place. A visually hidden copy beside it was step
 1a's first design, and nearly every review finding on it came from the copy,
 so this waits for a visible line instead. It follows step 4c1, which draws the
-line, and stays out of it because a restyle adds no behaviour. Its spec starts from Appendix B.
+line, and stays out of it because a restyle adds no behaviour. Its spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+started from Appendix B.
+
+**Step 4a-arrival. Arriving in the room.** A screen reader user who joins or
+reloads gets no starting point: no element takes focus when the room appears.
+On a reload, Orca on Firefox reads the whole page until the user acts (heard
+in step 4a's hand check; that this is Orca's own page-load reading is
+inferred), and this step's spec weighs focus moving against it. The
+preferred solution, to be confirmed by its own spec, is focus moving to a
+heading when the room appears, the usual practice when a single-page app
+changes view. Weighed and not preferred: the round's state in the page title,
+read on a page load but also visible in the tab; a one-off spoken summary,
+which needs a region filled after a delay since text present when a region
+appears is not announced. To decide: what takes focus, and whether join,
+reload, the reload after a refusal and a reconnect behave alike.
+
+**Step 4a-reveal-focus. A reveal keeps the voter's focus.** A reveal replaces
+the deck with the result, so focus on a card falls to the page, whether
+another's Show or the voter's own last vote revealed the round
+(`docs/known-issues.md`, "A reveal drops a voter's focus"). Step 4a's hand
+check still heard its announcement with focus on a card (Orca on Firefox). To
+decide: where focus goes, and only when it was in the deck or always.
 
 **Step 5. Next issue.** One action for Clear, then edit the issue (Appendix A,
 improve 7), and the round's actions per phase it makes possible: the target
@@ -502,6 +532,10 @@ commitment:
 - Announce a recovered connection: a screen reader hears the connection lost
   but not its return (`docs/known-issues.md`, "A screen reader hears the
   connection lost, but never that it came back").
+- A spoken result on a reveal: step 4a announces only "Votes revealed", and the
+  outcome is found by reading the Results region. To decide: what to say when
+  votes are spread or tied, and whether a leave that changes the result is
+  announced again.
 
 ## Where step 8c's list went
 
@@ -1014,6 +1048,10 @@ A rough sketch of the phase idea, a voter's page on a laptop:
 The revealed sketch has no deck, as step 3 decides.
 
 ## Appendix B. Inputs for step 4a
+
+Superseded by step 4a's spec,
+`docs/superpowers/specs/2026-11-02-ui-refresh-4a-round-live-region-design.md`,
+which holds the rulings.
 
 What step 1a's first design learned about announcing the round, kept for step
 4a's spec. Provisional, like the plan.

@@ -77,6 +77,43 @@ roadmap item instead of leaving it here as stale history.
 - **Resolution:** Stays open until a phone is at hand on the deployed app;
   never a merge gate. Remove this entry if they read well there.
 
+### A reveal drops a voter's focus
+
+- **Where:** `frontend/src/components/RoundPanel.tsx` (the deck replaced by
+  the result on a reveal).
+- **Issue:** Focus on a card falls to the page when the round is revealed,
+  by another's Show or by the voter's own last vote. A keyboard or screen
+  reader user loses their place, though "Votes revealed" is still spoken:
+  step 4a's hand check heard it with focus on a card, on another's Show and on
+  an own last vote (Orca on Firefox).
+- **Resolution:** Step 4a-reveal-focus of
+  `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
+
+### Orca may drop a change to the app's other live regions
+
+- **Where:** `frontend/src/components/IssuePanel.tsx` (the `issue-status`
+  region, its notice inside a `Message`) and `Banners.tsx` (the `Message`
+  banners, their text in a paragraph).
+- **Issue:** Orca 51.1 drops a text change arriving within 0.1 s of another
+  from the same app, unless the changed object has focus or its own `live`
+  attribute (rule 1 of step 4a's spec, "Checked in Firefox and Orca"). Text
+  changing inside a child of these regions is reported on the child, which has
+  no `live`, so it is lost when it lands in a burst of other changes. Both
+  inferred, not heard: this loss, and that a child inserted whole is reported
+  on the region itself and so kept.
+- **Resolution:** Stays open until a step next touches these regions; its hand
+  check listens for a change landing with others.
+
+### Firefox's heading names keep their capitals from `text-transform`
+
+- **Where:** `frontend/src/components/looks.css` (`.panel-label`, `uppercase`)
+  and the panel headings using it.
+- **Issue:** Firefox's accessibility tree names the headings as shown, such as
+  "PARTICIPANTS · 2", and some readers spell capitals letter by letter
+  (checked in the tree during step 4a's spike; not heard in Orca). Step 4a's
+  phase heading escapes it through its `aria-label`.
+- **Resolution:** Stays open until a step next touches the panel labels.
+
 ### The Leave link's icon before the word looks slightly off
 
 - **Where:** `frontend/src/components/RoomHeader.tsx` (the Leave link) and
@@ -87,22 +124,6 @@ roadmap item instead of leaving it here as stale history.
   the word, the icon alone (his Figma), and a mirrored or other icon. The
   choice is made with Copy link's, so both follow one rule, by mockup with the
   designer. The link's place and behaviour do not change.
-
-### The focus ring is square on quiet buttons, rounded on the others
-
-- **Where:** `frontend/src/components/looks.css` (`.button-quiet`, `.button`)
-  and `frontend/src/page.css` (`:focus-visible`).
-- **Issue:** The ring follows the element's corner radius. `.button` sets
-  `--radius-control`, so Save, Cancel, Join and Show votes get a rounded ring;
-  `.button-quiet` sets none, so Dismiss, Edit, Clear votes and the header's
-  quiet controls get a square one, as do the `h1`s focused after a Dismiss.
-  The design (J8) fixes the ring's colour, width and gap, not its shape. Not
-  caused by Bootstrap's removal: Bootstrap and both browsers give a button no
-  radius (checked in Chromium and Firefox, 4c2-bootstrap).
-- **Resolution:** Stays open until the designer rules on the shape. The likely
-  fix is `border-radius: var(--radius-control)` on `.button-quiet`, unseen at
-  rest since it has no border or background; planned as a small step before
-  the UI refresh stack merges.
 
 ### At 400% text zoom below 400 px, the editing view's buttons leave the panel in Firefox
 
@@ -1049,13 +1070,13 @@ roadmap item instead of leaving it here as stale history.
   written but stopped being true once `ProbeRoutes` shipped: it serves
   `GET /probe` when the probe is enabled, a single-segment `GET`. If `PageRoutes`
   moved ahead of `ProbeRoutes`, an enabled probe would silently start answering
-  with the "not a room name" rejection page instead of the probe page, and no
+  with the not-a-room page instead of the probe page, and no
   existing test would catch it - `ProbeRoutesSpec` tests `ProbeRoutes.route` on
   its own, and `APISpec`'s `/probe` case expects a `404` either way, which a
   swallowed probe also produces.
 - **Resolution:** Stays open. A cheap fix is one `APISpec` case that builds
   `API` with an enabled `ProbeConfig` and asserts `GET /probe` serves the probe
-  page, not the rejection page.
+  page, not the not-a-room page.
 
 ### `Suggestion.suggest` runs the full edit-distance table against every pool word, for any input length
 

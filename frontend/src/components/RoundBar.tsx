@@ -6,6 +6,7 @@ type Props = { revealed: boolean; onShow: () => void; onRevote: () => void; onCl
 
 export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
   const guarded = useRoundGuard(revealed)
+  const heard = revealed ? 'Votes revealed' : 'Voting open'
   return (
     <section
       className="panel round-bar"
@@ -21,7 +22,16 @@ export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
       onKeyDownCapture={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
     >
       <div className="round-bar-phase" data-testid="phase-line">
-        <h2 className="panel-label">{revealed ? 'Revealed' : 'Voting'}</h2>
+        {/* The word is seen, the sentence heard from its region. */}
+        {/* The h2 copies it as its label: Firefox names no heading from a status. */}
+        <h2 className="panel-label" aria-label={heard}>
+          <span aria-hidden="true" data-testid="phase-word">
+            {revealed ? 'Revealed' : 'Voting'}
+          </span>
+          <span className="visually-hidden" role="status" data-testid="phase-heard">
+            {heard}
+          </span>
+        </h2>
       </div>
       <button
         type="button"

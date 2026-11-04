@@ -90,16 +90,16 @@ function notARoom() {
   const row = suggestion ? `<p class="lobby-page-lead">Did you mean</p>
     <a class="room-row" href="#"><span class="room-row-square" aria-hidden="true"></span><span class="room-row-text"><span class="room-row-id">${esc(suggestion)}</span> <span class="room-row-line2" id="join-line">Join</span></span><span class="room-row-go room-row-go-primary" aria-hidden="true">${arrow}</span></a>` : ''
   const other = `<a class="button button-${suggestion ? 'outline' : 'primary'}" href="lobby.html?tab=join">Join a different room</a>`
-  return `<h1 class="lobby-page-title"><code><bdi>${esc(typed)}</bdi></code> is not a room name.</h1>${row}${other}`
+  return `<h1 class="lobby-page-title"><code><bdi>${esc(typed)}</bdi></code> is not a valid room name.</h1>${row}${other}`
 }
 
 function draw() {
   const body = page === 'notaroom' ? notARoom() : page === 'pinned' ? pinnedForm() : rootForm()
   const list = page === 'notaroom' ? '' : banners()
   document.getElementById('root').innerHTML = `${header}<main class="lobby-page-main"><div class="lobby-page-column">${list ? `<section class="banners" aria-label="Messages">${list}</section>` : ''}<div class="panel lobby-page-panel${ended ? ' lobby-page-inert' : ''}">${body}</div></div></main>`
-  // 3b4 decision 13: "Join as <name>" from the stored name, textContent only; an empty stored name counts as none
+  // 3b4 decision 13, 4d decision 4: "Join as <name>" from the stored name, untrimmed as the app; empty counts as none
   const line = document.getElementById('join-line')
-  if (line && stored.trim()) line.textContent = 'Join as ' + stored.trim()
+  if (line && stored) line.textContent = 'Join as ' + stored
 }
 document.addEventListener('click', e => {
   const tabLink = e.target.closest('[data-tab]'), dismiss = e.target.closest('[aria-label="Dismiss"]')

@@ -9,6 +9,8 @@ import {
   deck,
   expectSummaryMatchesParticipants,
   phaseLine,
+  phaseRegion,
+  phaseWord,
   revealedEstimation,
   results,
   tallyEntries,
@@ -209,15 +211,61 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   // Bob never voted, so this covers a first vote as well as Alice changing hers.
   await expect(deck(alice.page)).toHaveCount(0)
   await expect(deck(bob.page)).toHaveCount(0)
-  await expect(phaseLine(bob.page)).toHaveText('Revealed')
+  await expect(phaseWord(bob.page)).toHaveText('Revealed')
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // Alice's mark clearing on Bob's page is the proof the re-vote reached him, not just her.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
-  await expect(phaseLine(bob.page)).toHaveText('Voting')
+  await expect(phaseWord(bob.page)).toHaveText('Voting')
 
   await vote(bob.page, '3')
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+})
+
+test('the phase line announces each flip from one region', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const line = phaseLine(bob.page)
+  const heading = line.getByRole('heading')
+  const region = heading.locator(phaseRegion(bob.page))
+
+  await expect(region).toHaveText('Voting open')
+  await expect(region.locator('*')).toHaveCount(0)
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expect(line).not.toHaveAttribute('role')
+  await expect(phaseWord(bob.page)).toHaveAttribute('aria-hidden', 'true')
+  await expect(region).toHaveCSS('clip-path', 'inset(50%)')
+  await expect(region).toHaveCSS('text-transform', 'none')
+  await markRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(region).toHaveText('Votes revealed')
+  await expect(heading).toHaveAttribute('aria-label', 'Votes revealed')
+  await expectLiveRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  await expect(region).toHaveText('Voting open')
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expectLiveRegion(region)
+})
+
+test('the phase line stays one region through a reconnect that finds the round changed', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const region = phaseRegion(bob.page)
+  await markRegion(region)
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(results(alice.page)).toBeVisible()
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  await expect(region).toHaveText('Votes revealed')
+  await expectLiveRegion(region)
 })
 
 test('a reveal with no vote moves no entry', async ({ join }) => {
@@ -228,7 +276,7 @@ test('a reveal with no vote moves no entry', async ({ join }) => {
   // Nobody votes, so the reveal only turns each mark into its "–" face, of the same size.
   const before = await top()
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(phaseLine(alice.page)).toHaveText('Revealed')
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
   expect(await top()).toEqual(before)
 })
@@ -385,6 +433,10 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   // Before step 3 Bob's empty estimation was an entry of its own, and could out-count a real one.
   await expect(tallyEntries(alice.page)).toHaveCount(1, { timeout: 2000 })
+  await expect(tallyEntries(alice.page).first().getByTestId('tally-sr')).toHaveCSS(
+    'clip-path',
+    'inset(50%)'
+  )
   await expectSummaryMatchesParticipants(alice.page)
 })
 
