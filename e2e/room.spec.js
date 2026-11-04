@@ -9,6 +9,7 @@ import {
   deck,
   expectSummaryMatchesParticipants,
   phaseLine,
+  phaseRegion,
   phaseWord,
   revealedEstimation,
   results,
@@ -225,21 +226,27 @@ test('the phase line announces each flip from one region', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
   const line = phaseLine(bob.page)
-  const heard = line.getByRole('heading')
-  const hidden = line.getByTestId('phase-heard')
+  const heading = line.getByRole('heading')
+  const region = heading.locator(phaseRegion(bob.page))
 
-  await expect(heard).toHaveAccessibleName('Voting open')
-  await expect(hidden).toHaveCSS('clip-path', 'inset(50%)')
-  await expect(hidden).toHaveCSS('text-transform', 'none')
-  await markRegion(line)
+  await expect(region).toHaveText('Voting open')
+  await expect(region.locator('*')).toHaveCount(0)
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expect(line).not.toHaveAttribute('role')
+  await expect(phaseWord(bob.page)).toHaveAttribute('aria-hidden', 'true')
+  await expect(region).toHaveCSS('clip-path', 'inset(50%)')
+  await expect(region).toHaveCSS('text-transform', 'none')
+  await markRegion(region)
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
-  await expect(heard).toHaveAccessibleName('Votes revealed')
-  await expectLiveRegion(line)
+  await expect(region).toHaveText('Votes revealed')
+  await expect(heading).toHaveAttribute('aria-label', 'Votes revealed')
+  await expectLiveRegion(region)
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
-  await expect(heard).toHaveAccessibleName('Voting open')
-  await expectLiveRegion(line)
+  await expect(region).toHaveText('Voting open')
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expectLiveRegion(region)
 })
 
 test('the phase line stays one region through a reconnect that finds the round changed', async ({
@@ -247,9 +254,8 @@ test('the phase line stays one region through a reconnect that finds the round c
 }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
-  const line = phaseLine(bob.page)
-  const heard = line.getByRole('heading')
-  await markRegion(line)
+  const region = phaseRegion(bob.page)
+  await markRegion(region)
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
@@ -258,8 +264,8 @@ test('the phase line stays one region through a reconnect that finds the round c
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  await expect(heard).toHaveAccessibleName('Votes revealed')
-  await expectLiveRegion(line)
+  await expect(region).toHaveText('Votes revealed')
+  await expectLiveRegion(region)
 })
 
 test('a reveal with no vote moves no entry', async ({ join }) => {

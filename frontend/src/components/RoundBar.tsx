@@ -6,6 +6,7 @@ type Props = { revealed: boolean; onShow: () => void; onRevote: () => void; onCl
 
 export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
   const guarded = useRoundGuard(revealed)
+  const heard = revealed ? 'Votes revealed' : 'Voting open'
   return (
     <section
       className="panel round-bar"
@@ -20,14 +21,15 @@ export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
       // A held Enter's repeats are dropped, guarded or not.
       onKeyDownCapture={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
     >
-      {/* The word is seen, the sentence heard, and the wrapper announces each flip. */}
-      <div className="round-bar-phase" role="status" data-testid="phase-line">
-        <h2 className="panel-label">
+      <div className="round-bar-phase" data-testid="phase-line">
+        {/* The word is seen, the sentence heard from its region. */}
+        {/* The h2 copies it as its label: Firefox names no heading from a status. */}
+        <h2 className="panel-label" aria-label={heard}>
           <span aria-hidden="true" data-testid="phase-word">
             {revealed ? 'Revealed' : 'Voting'}
           </span>
-          <span className="visually-hidden" data-testid="phase-heard">
-            {revealed ? 'Votes revealed' : 'Voting open'}
+          <span className="visually-hidden" role="status" data-testid="phase-heard">
+            {heard}
           </span>
         </h2>
       </div>
