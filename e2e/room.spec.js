@@ -6,20 +6,28 @@ import {
   participantEntry,
   participantEntries,
   card,
+  deck,
   expectSummaryMatchesParticipants,
-  frozenNotice,
+  phaseLine,
+  phaseRegion,
+  phaseWord,
   revealedEstimation,
   results,
   tallyEntries,
   issueBox,
+  issueText,
   issueCancel,
   issueSave,
   issueStatus,
   markRegion,
+  messages,
+  movedBanner,
   expectLiveRegion,
   issueEdit,
+  inRoom,
+  copyHint,
   votedMark,
-  hiddenMark,
+  keptMark,
   vote,
   ownEstimation,
   restartNotice,
@@ -68,19 +76,16 @@ test('a cast vote is withheld, shown on the reveal, and withheld again on a re-v
   await vote(alice.page, '5')
   const aliceOnBob = participantEntry(bob.page, 'Alice')
   await expect(votedMark(aliceOnBob)).toHaveCount(1)
-  // Redaction blanks the estimation, so this marker can only come from hasEstimation.
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
   await expect(aliceOnBob).not.toContainText('5')
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await expect(aliceOnBob).toContainText('5')
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(0)
 
   // The mark clearing proves the re-vote reached Bob: the value goes back behind the marker while
   // the entry still has one, which showUserEstimation reading voted would lose.
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   await expect(votedMark(aliceOnBob)).toHaveCount(0)
-  await expect(hiddenMark(aliceOnBob)).toHaveCount(1)
+  await expect(keptMark(aliceOnBob)).toHaveCount(1)
   await expect(aliceOnBob).not.toContainText('5')
 })
 
@@ -120,12 +125,23 @@ test('a page without crypto.randomUUID still joins and leaves', async ({ join })
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(0)
 })
 
-test('the issue box is readonly until Edit issue is pressed', async ({ join }) => {
+test('the issue is text until Edit issue is pressed', async ({ join }) => {
   const alice = await join('Alice')
 
-  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+  await expect(issueBox(alice.page)).toHaveCount(0)
+  await expect(issueText(alice.page)).toHaveText('No issue yet')
   await issueEdit(alice.page).click()
-  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  await expect(issueBox(alice.page)).toBeEditable()
+  await expect(issueBox(alice.page)).toBeFocused()
+
+  // The caret starts at the end of a stored issue.
+  await issueCancel(alice.page).click()
+  await setIssue(alice, 'alpha beta')
+  await expect(issueText(alice.page)).toHaveText('alpha beta')
+  await issueEdit(alice.page).click()
+  await expect(issueBox(alice.page)).toBeFocused()
+  const caret = f => [f.selectionStart, f.selectionEnd]
+  expect(await issueBox(alice.page).evaluate(caret)).toEqual([10, 10])
 })
 
 // Carol departs while Bob is cut, and Bob is back before his own removal fires. Alice learns it
@@ -145,8 +161,8 @@ async function departureWhileCut(join) {
   const aliceOnBob = participantEntry(bob.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnBob)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnBob)).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueText(bob.page)).toHaveText('PP-1')
 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
@@ -193,36 +209,76 @@ test('a revealed round takes no more votes until Re-vote', async ({ join }) => {
   await expect(results(alice.page)).toBeVisible()
 
   // Bob never voted, so this covers a first vote as well as Alice changing hers.
-  await expect(card(alice.page, '5')).toBeDisabled()
-  await expect(card(alice.page, '8')).toBeDisabled()
-  await expect(card(bob.page, '3')).toBeDisabled()
-  await expect(frozenNotice(bob.page)).toBeVisible()
+  await expect(deck(alice.page)).toHaveCount(0)
+  await expect(deck(bob.page)).toHaveCount(0)
+  await expect(phaseWord(bob.page)).toHaveText('Revealed')
 
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // Alice's mark clearing on Bob's page is the proof the re-vote reached him, not just her.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
-  await expect(frozenNotice(bob.page)).toBeHidden()
+  await expect(phaseWord(bob.page)).toHaveText('Voting')
 
   await vote(bob.page, '3')
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 })
 
-test('the reveal notice claims its space before the reveal', async ({ join }) => {
+test('the phase line announces each flip from one region', async ({ join }) => {
   const alice = await join('Alice')
-  const showVotes = alice.page.getByRole('button', { name: 'Show votes' })
-  // Two rows, since a reveal adds the notice to one and the Re-vote button to the other. Neither
-  // may take height: the notice's row also sizes the estimation card.
-  const tops = async () => [
-    (await showVotes.boundingBox()).y,
-    (await participantEntries(alice.page).first().boundingBox()).y
-  ]
+  const bob = await join('Bob')
+  const line = phaseLine(bob.page)
+  const heading = line.getByRole('heading')
+  const region = heading.locator(phaseRegion(bob.page))
 
-  // Nobody votes, so no summary block appears and what is left is the two in-place appearances.
-  const before = await tops()
-  await showVotes.click()
-  await expect(frozenNotice(alice.page)).toBeVisible()
+  await expect(region).toHaveText('Voting open')
+  await expect(region.locator('*')).toHaveCount(0)
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expect(line).not.toHaveAttribute('role')
+  await expect(phaseWord(bob.page)).toHaveAttribute('aria-hidden', 'true')
+  await expect(region).toHaveCSS('clip-path', 'inset(50%)')
+  await expect(region).toHaveCSS('text-transform', 'none')
+  await markRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(region).toHaveText('Votes revealed')
+  await expect(heading).toHaveAttribute('aria-label', 'Votes revealed')
+  await expectLiveRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  await expect(region).toHaveText('Voting open')
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expectLiveRegion(region)
+})
+
+test('the phase line stays one region through a reconnect that finds the round changed', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const region = phaseRegion(bob.page)
+  await markRegion(region)
+
+  await bob.cut()
+  await expect(connectionLost(bob.page)).toBeVisible()
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(results(alice.page)).toBeVisible()
+  await bob.restore()
+  await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
+
+  await expect(region).toHaveText('Votes revealed')
+  await expectLiveRegion(region)
+})
+
+test('a reveal with no vote moves no entry', async ({ join }) => {
+  const alice = await join('Alice')
+  // Layout f puts the table above the slot, so a move here comes from above it or the scale.
+  const top = async () => (await participantEntries(alice.page).first().boundingBox()).y
+
+  // Nobody votes, so the reveal only turns each mark into its "–" face, of the same size.
+  const before = await top()
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
   await expect(alice.page.getByRole('button', { name: 'Re-vote' })).toBeVisible()
-  expect(await tops()).toEqual(before)
+  expect(await top()).toEqual(before)
 })
 
 // A reset has to re-arm the latch, and the two reach it from different state: reVote keeps the
@@ -285,8 +341,8 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   // write. Edits, not votes, since a vote after the prune could reveal the round legitimately.
   for (const issue of ['PP-1', 'PP-2']) {
     await setIssue(alice, issue)
-    // Bob's box is the proof the publish went out, and therefore that Carol was written to.
-    await expect(issueBox(bob.page)).toHaveValue(issue)
+    // Bob's issue is the proof the publish went out, and therefore that Carol was written to.
+    await expect(issueText(bob.page)).toHaveText(issue)
   }
 
   // What the pruned roster looks like differs by departure mode, so each case brings its own.
@@ -299,7 +355,7 @@ async function stragglerDepartsWithVotesHidden(join, depart, prunedRoster) {
   }
   await expect(participantEntry(alice.page, 'Bob')).not.toContainText('3')
   await expect(participantEntry(bob.page, 'Alice')).not.toContainText('5')
-  await expect(hiddenMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 }
 
 test('a straggler closing their tab leaves the votes hidden', async ({ join }) => {
@@ -344,9 +400,10 @@ test('two tabs on one room are one participant', async ({ join }) => {
   await expect(participantEntries(alice.page)).toHaveCount(2)
 
   await second.close()
-  // The surviving tab keeps the member: only its own ref went.
+  // The surviving tab keeps the member: only its own ref went. Alice's vote reveals the round,
+  // so her value is what reaches the surviving tab.
   await vote(alice.page, '3')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
+  await expect(revealedEstimation(participantEntry(bob.page, 'Alice'))).toHaveText('3')
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1)
 })
 
@@ -358,7 +415,7 @@ test('a reload keeps its identity and its vote', async ({ join }) => {
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
 
   await bob.page.reload()
-  await expect(bob.page.getByRole('button', { name: 'Show votes' })).toBeVisible()
+  await expect(inRoom(bob.page)).toBeVisible()
 
   // One Bob, not two, and the estimation came back with him rather than being recast.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(1, { timeout: 10_000 })
@@ -376,6 +433,10 @@ test('the tally counts only the votes that were cast', async ({ join }) => {
 
   // Before step 3 Bob's empty estimation was an entry of its own, and could out-count a real one.
   await expect(tallyEntries(alice.page)).toHaveCount(1, { timeout: 2000 })
+  await expect(tallyEntries(alice.page).first().getByTestId('tally-sr')).toHaveCSS(
+    'clip-path',
+    'inset(50%)'
+  )
   await expectSummaryMatchesParticipants(alice.page)
 })
 
@@ -426,9 +487,11 @@ test('a Show in a room where nobody voted renders no summary', async ({ join }) 
 
   await alice.page.getByRole('button', { name: 'Show votes' }).click()
   // The reveal has to be shown to have landed, or the assertion below passes on a snapshot that
-  // never arrived. Without the guard an empty tally aborts the root render, so this fails first.
+  // never arrived. Without Result's fallback for an empty tally the render aborts, so this fails.
   await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
-  await expect(results(alice.page)).toBeHidden()
+  // No entry rather than no region, so a region saying nobody voted still passes.
+  await expect(tallyEntries(alice.page)).toHaveCount(0)
+  await expect(results(alice.page)).toContainText('Nobody voted')
 })
 
 test('no duplicate participants after a reconnect', async ({ join }) => {
@@ -470,11 +533,12 @@ test('a vote survives its own reconnect', async ({ join }) => {
   await bob.restore()
   await expect(connectionAlert(bob.page)).toBeHidden({ timeout: 10_000 })
 
-  // The room's own state, not Bob's stale copy: Alice never disconnected, so her entry for
-  // Bob is redrawn from a snapshot published after the reconnect.
+  // The room's own state, not Bob's stale copy: Alice never disconnected, and her vote reveals
+  // the round, so Bob's value on her page comes from a snapshot published after the reconnect.
   await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1, { timeout: 10_000 })
-  await expect(participantEntry(alice.page, 'Bob')).toContainText('8')
+  await expect(revealedEstimation(participantEntry(alice.page, 'Bob'))).toHaveText('8', {
+    timeout: 10_000
+  })
 })
 
 test('a disconnection outlasting the grace period comes back without a reload', async ({
@@ -488,12 +552,12 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await bob.cut()
   await expect(connectionLost(bob.page)).toBeVisible()
   // Detection rides on the room's own traffic, so two writes to Bob's dead stream start his
-  // grace period; both are asserted on Alice's entry, since Bob's page is stale while cut.
+  // grace period; both are asserted on Alice's page, since Bob's page is stale while cut.
   const aliceOnAlice = participantEntry(alice.page, 'Alice')
   await vote(alice.page, '5')
   await expect(votedMark(aliceOnAlice)).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(aliceOnAlice)).toHaveCount(0)
+  await vote(alice.page, '8')
+  await expect(ownEstimation(alice.page)).toHaveText('8')
   // Bob's own entry going is the grace period expiring, which is what this case needs and what
   // departureWhileCut's reconnect stays inside: restoring sooner would prove nothing.
   await expect(participantEntry(alice.page, 'Bob')).toHaveCount(0, { timeout: 20_000 })
@@ -509,8 +573,8 @@ test('a disconnection outlasting the grace period comes back without a reload', 
   await expect(participantEntries(bob.page)).toHaveCount(2, { timeout: 10_000 })
 
   // A frame arriving after the reconnect, since the alert clearing is only onopen firing.
-  await vote(alice.page, '5')
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1, { timeout: 10_000 })
+  await setIssue(alice, 'PP-1')
+  await expect(issueText(bob.page)).toHaveText('PP-1', { timeout: 10_000 })
   expect(await bob.page.evaluate(() => window.sameLoad)).toBe(true)
   await expect(restartNotice(bob.page)).toHaveCount(0)
 })
@@ -537,8 +601,8 @@ test('a stream frozen without an error is noticed and reopened on its own', asyn
 
   // The reopened stream's first snapshot, then a frame sent after it.
   await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(1)
-  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(bob.page, 'Alice'))).toHaveCount(0)
+  await setIssue(alice, 'PP-1')
+  await expect(issueText(bob.page)).toHaveText('PP-1')
 })
 
 test('a draft survives blur and room activity', async ({ join }) => {
@@ -556,9 +620,9 @@ test('a draft survives blur and room activity', async ({ join }) => {
 
   // Edit mode, not focus, guards the draft, so alt-tabbing away to copy a title loses nothing.
   await issueBox(alice.page).blur()
-  // Clear, not a re-vote: Bob's mark only disappears once the frame lands.
-  await bob.page.getByRole('button', { name: 'Clear votes' }).click()
-  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
+  // A join, since Carol's entry only appears once the frame lands.
+  await join('Carol')
+  await expect(participantEntry(alice.page, 'Carol')).toHaveCount(1)
   await expect(issueBox(alice.page)).toHaveValue('Alice is still typing')
 })
 
@@ -570,13 +634,13 @@ test('an edit committed with the Save issue button reaches the other browser', a
   await issueBox(alice.page).fill('PP-42')
   await issueSave(alice.page).click()
 
-  await expect(issueBox(bob.page)).toHaveValue('PP-42')
-  await expect(issueBox(alice.page)).toHaveValue('PP-42')
+  await expect(issueText(bob.page)).toHaveText('PP-42')
+  await expect(issueText(alice.page)).toHaveText('PP-42')
 
   // Alice's own saved text cannot distinguish an applied snapshot from a blocked one, so
   // move the room past it and require her to follow.
   await setIssue(bob, 'PP-43')
-  await expect(issueBox(alice.page)).toHaveValue('PP-43')
+  await expect(issueText(alice.page)).toHaveText('PP-43')
 })
 
 test('a commit that never blurred the box still lets the room resync it', async ({ join }) => {
@@ -589,10 +653,10 @@ test('a commit that never blurred the box still lets the room resync it', async 
   // mousedown, so the box keeps focus through the save, which must not hold the room off.
   await issueSave(alice.page).dispatchEvent('click')
   // Proves the commit posted, so a failure below is the editor and not a dead synthetic click.
-  await expect(issueBox(bob.page)).toHaveValue('PP-42')
+  await expect(issueText(bob.page)).toHaveText('PP-42')
 
   await setIssue(bob, 'PP-43')
-  await expect(issueBox(alice.page)).toHaveValue('PP-43')
+  await expect(issueText(alice.page)).toHaveText('PP-43')
 })
 
 // Sets the room's issue from one browser; the caller waits for whatever proves it landed.
@@ -609,36 +673,38 @@ test('Enter saves and Escape cancels', async ({ join }) => {
   const bob = await join('Bob')
 
   // iOS shows no keyboard for focus that lands on a readonly input, so record readOnly then.
-  await issueBox(alice.page).evaluate(box =>
-    box.addEventListener('focus', () => (box.dataset.readOnlyAtFocus = String(box.readOnly)), {
-      once: true
+  // Edit takes focus at the press, before the field mounts, so the field's first focus counts.
+  await alice.page.evaluate(() =>
+    document.addEventListener('focusin', ({ target }) => {
+      if ('readOnly' in target) document.body.dataset.readOnlyAtFocus ??= String(target.readOnly)
     })
   )
   await issueEdit(alice.page).click()
-  await expect(issueBox(alice.page)).toHaveAttribute('data-read-only-at-focus', 'false')
+  await expect(alice.page.locator('body')).toHaveAttribute('data-read-only-at-focus', 'false')
   // Edit issue focuses the box, so the keys work without clicking into it first.
   await alice.page.keyboard.type('PP-7')
   // An input method's Enter confirms its composition and must not save the draft.
   await issueBox(alice.page).dispatchEvent('keydown', { key: 'Enter', isComposing: true })
   // Safari ends the composition before that Enter's keydown, which reports keyCode 229.
   await issueBox(alice.page).dispatchEvent('keydown', { key: 'Enter', keyCode: 229 })
-  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  await expect(issueBox(alice.page)).toBeEditable()
   await alice.page.keyboard.press('Enter')
-  await expect(issueBox(bob.page)).toHaveValue('PP-7')
-  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+  await expect(issueText(bob.page)).toHaveText('PP-7')
+  await expect(issueBox(alice.page)).toHaveCount(0)
+  await expect(issueText(alice.page)).toHaveText('PP-7')
 
   await issueEdit(alice.page).click()
   await issueBox(alice.page).fill('scrapped')
   await alice.page.keyboard.press('Escape')
-  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
-  await expect(issueBox(alice.page)).toHaveValue('PP-7')
+  await expect(issueBox(alice.page)).toHaveCount(0)
+  await expect(issueText(alice.page)).toHaveText('PP-7')
 })
 
 test("cancel drops the draft for the room's issue", async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
   await setIssue(bob, 'PP-1')
-  await expect(issueBox(alice.page)).toHaveValue('PP-1')
+  await expect(issueText(alice.page)).toHaveText('PP-1')
 
   await issueEdit(alice.page).click()
   await issueBox(alice.page).fill('scrapped')
@@ -646,7 +712,7 @@ test("cancel drops the draft for the room's issue", async ({ join }) => {
   await expect(conflictNotice(alice.page)).toBeVisible()
   await issueCancel(alice.page).click()
 
-  await expect(issueBox(alice.page)).toHaveValue('PP-2')
+  await expect(issueText(alice.page)).toHaveText('PP-2')
   await expect(issueEdit(alice.page)).toBeVisible()
 })
 
@@ -678,8 +744,8 @@ test('saving over a concurrent change replaces it', async ({ join }) => {
   await expect(conflictNotice(alice.page)).toBeVisible()
 
   await issueSave(alice.page).click()
-  await expect(issueBox(bob.page)).toHaveValue('mine')
-  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(issueText(bob.page)).toHaveText('mine')
+  await expect(issueText(alice.page)).toHaveText('mine')
   await expect(conflictNotice(alice.page)).toHaveCount(0)
 })
 
@@ -694,7 +760,7 @@ test('a double-clicked Save issue posts once', async ({ join, room }) => {
   await issueEdit(alice.page).click()
   await issueBox(alice.page).fill('mine')
   await issueSave(alice.page).dblclick()
-  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await expect(issueText(bob.page)).toHaveText('mine')
   // A second POST would follow the first within a round trip; Bob's vote is a later frame.
   await vote(bob.page, '5')
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
@@ -714,11 +780,11 @@ test('a save the network drops keeps the draft and says so', async ({ join, room
   await expect(issueBox(alice.page)).toHaveValue('mine')
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
 
-  // The disabled Save issue dropped focus, so the box takes it back and Enter retries.
-  await expect(issueBox(alice.page)).toBeFocused()
+  // Save issue keeps focus through the failure, so the failure is read from it and Enter retries.
+  await expect(issueSave(alice.page)).toBeFocused()
   await alice.page.unroute(editIssue)
   await alice.page.keyboard.press('Enter')
-  await expect(issueBox(bob.page)).toHaveValue('mine')
+  await expect(issueText(bob.page)).toHaveText('mine')
   await expect(alice.page.getByText('Could not save the issue')).toHaveCount(0)
 })
 
@@ -732,11 +798,234 @@ test('a failed save leaves focus the user moved elsewhere', async ({ join, room 
   })
 
   await setIssue(alice, 'mine')
-  const clear = alice.page.getByRole('button', { name: 'Clear votes' })
-  await clear.focus()
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
   release()
   await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
-  await expect(clear).toBeFocused()
+  await expect(elsewhere).toBeFocused()
+})
+
+test('a failed save with focus fallen puts focus in the field', async ({ join, room }) => {
+  const alice = await join('Alice')
+  let release
+  const stalled = new Promise(resolve => (release = resolve))
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await stalled
+    await route.abort()
+  })
+
+  await setIssue(alice, 'mine')
+  await expect(issueSave(alice.page)).toBeFocused()
+  await alice.page.evaluate(() => document.activeElement.blur())
+  await expect(alice.page.locator('body')).toBeFocused()
+  release()
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+})
+
+// The issue saves a page sends; read only once a later frame has landed.
+const issueSaves = (page, room) => {
+  const sent = []
+  page.on('request', request => {
+    if (request.url().endsWith(`/rooms/${room}/edit-issue`)) sent.push(request.postData())
+  })
+  return sent
+}
+
+// Holds every issue save in flight until the returned release is called.
+const holdSaves = async (page, room) => {
+  let release
+  const held = new Promise(resolve => (release = resolve))
+  await page.route(new RegExp(`/rooms/${room}/edit-issue$`), async route => {
+    await held
+    await route.continue()
+  })
+  return release
+}
+
+// By the time the voter's vote shows on the watcher's page, an earlier press has sent its request.
+const laterVote = async (voter, watcher) => {
+  await vote(voter.page, '5')
+  await expect(votedMark(participantEntry(watcher.page, voter.name))).toHaveCount(1)
+}
+
+test('a mouse save keeps focus on Save issue, and presses on it or Cancel mid-save do nothing', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  const release = await holdSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await issueSave(alice.page).click()
+  await expect(issueSave(alice.page)).toHaveAttribute('aria-disabled', 'true')
+  await expect(issueSave(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+  const looks = el =>
+    el.evaluate(node => {
+      const style = getComputedStyle(node)
+      return {
+        color: style.color,
+        background: style.backgroundColor,
+        border: style.borderTopColor
+      }
+    })
+  const save = await looks(issueSave(alice.page))
+  const cancel = await looks(issueCancel(alice.page))
+  const probe = await alice.page.evaluate(() => {
+    const span = document.createElement('span')
+    span.style.color = 'var(--grey)'
+    span.style.backgroundColor = 'var(--paper-pale)'
+    document.body.append(span)
+    const style = getComputedStyle(span)
+    const read = { color: style.color, background: style.backgroundColor }
+    span.remove()
+    return read
+  })
+  expect(save).toEqual(cancel)
+  expect([save.color, save.background]).toEqual([probe.color, probe.background])
+
+  // Forced, since a plain click waits while the button is aria-disabled.
+  await issueSave(alice.page).click({ force: true })
+  await issueCancel(alice.page).click({ force: true })
+  await expect(issueCancel(alice.page)).toBeFocused()
+  await expect(issueEdit(alice.page)).toHaveCount(0)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', true)
+
+  release()
+  await expect(issueText(bob.page)).toHaveText('mine')
+  await laterVote(bob, alice)
+  expect(saves).toHaveLength(1)
+})
+
+test('Escape, Cancel and a save each end with focus on Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).click()
+  await alice.page.keyboard.press('Escape')
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  await issueEdit(alice.page).click()
+  await issueCancel(alice.page).click()
+  await expect(issueEdit(alice.page)).toBeFocused()
+
+  // Save issue unmounts with the save, which would drop focus to the page.
+  await setIssue(alice, 'PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+})
+
+test('focus moved elsewhere during a save stays there after it succeeds', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const release = await holdSaves(alice.page, room)
+
+  await setIssue(alice, 'mine')
+  const elsewhere = card(alice.page, '5')
+  await elsewhere.focus()
+  release()
+  await expect(issueText(bob.page)).toHaveText('mine')
+  // The close's effect has run by a later frame, so a focus it moved would show.
+  await laterVote(bob, alice)
+  await expect(elsewhere).toBeFocused()
+})
+
+test('a page load leaves focus off Edit issue', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).not.toBeFocused()
+})
+
+// Cancel editing takes Edit issue's place, under the second click.
+test('a double-click on Edit issue leaves the editor open, focus in the field', async ({
+  join
+}) => {
+  const alice = await join('Alice')
+
+  await issueEdit(alice.page).dblclick()
+  await expect(issueCancel(alice.page)).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+
+  // A double-click in the field still selects a word, so only buttons lose the second press.
+  await issueBox(alice.page).fill('alpha beta')
+  const spot = await issueBox(alice.page).evaluate(f => ({
+    x: parseFloat(getComputedStyle(f).paddingLeft) + 4,
+    y: f.clientHeight / 2
+  }))
+  await issueBox(alice.page).dblclick({ position: spot })
+  const word = f => f.value.slice(f.selectionStart, f.selectionEnd).trim()
+  expect(await issueBox(alice.page).evaluate(word)).toBe('alpha')
+  await expect(issueCancel(alice.page)).toBeVisible()
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+})
+
+test('a held Enter in the field saves once and leaves the editor closed', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('PP-1')
+  await alice.page.keyboard.down('Enter')
+  await expect(issueText(bob.page)).toHaveText('PP-1')
+  await expect(issueEdit(alice.page)).toBeFocused()
+  // A down without an up is a repeat, sent where it could reopen the editor.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueEdit(alice.page)).toBeVisible()
+  expect(saves).toHaveLength(1)
+})
+
+test('a held Enter on Edit issue opens the editor and saves nothing', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+
+  await issueEdit(alice.page).focus()
+  await alice.page.keyboard.down('Enter')
+  await expect(issueBox(alice.page)).toBeFocused()
+  // Sent once the field has focus, where a repeat would save the unchanged text.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
+  expect(saves).toHaveLength(0)
+})
+
+test('a held Enter in the field while saves fail sends one request', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const saves = issueSaves(alice.page, room)
+  await alice.page.route(new RegExp(`/rooms/${room}/edit-issue$`), route => route.abort())
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await alice.page.keyboard.down('Enter')
+  await expect(alice.page.getByText('Could not save the issue')).toBeVisible()
+  await expect(issueBox(alice.page)).toBeFocused()
+  await issueBox(alice.page).evaluate(f => f.setSelectionRange(2, 2))
+  // Sent after the failure, where each repeat would retry.
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterVote(bob, alice)
+  await expect(issueBox(alice.page)).toHaveValue('mine')
+  expect(saves).toHaveLength(1)
 })
 
 // Read by its own text throughout, since a region's text is announced as a whole.
@@ -759,7 +1048,7 @@ test("the editor's notices are announced from one live region", async ({ join, r
   const editIssue = new RegExp(`/rooms/${room}/edit-issue$`)
   await alice.page.route(editIssue, route => route.abort())
   await issueSave(alice.page).click()
-  await expect(status).toHaveText(conflict + failure)
+  await expect(status).toHaveText(failure + conflict)
   await expectLiveRegion(status)
 
   await alice.page.getByRole('button', { name: 'Use theirs' }).click()
@@ -775,6 +1064,8 @@ test("the editor's notices are announced from one live region", async ({ join, r
 
 test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ join }) => {
   const alice = await join('Alice')
+  // Bob keeps the round open, so Alice's card is read while voting: a revealed round has no deck.
+  await join('Bob')
   const selected = ownEstimation(alice.page)
   const unconfirmed = unconfirmedCard(alice.page)
 
@@ -784,6 +1075,7 @@ test('a re-vote leaves the caster shown as selected but unconfirmed', async ({ j
   // The role filter pressed: false would also match a card with no aria-pressed at all.
   await expect(card(alice.page, '3')).toHaveAttribute('aria-pressed', 'false')
 
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
   await alice.page.getByRole('button', { name: 'Re-vote' }).click()
   // reVote clears voted and keeps estimation, which is the only state this description means.
   await expect(unconfirmed).toHaveText('5')
@@ -808,23 +1100,194 @@ test('Re-vote is offered only while the round is revealed', async ({ join }) => 
   await expect(reVote).toHaveCount(0)
 })
 
+// The round bar's toggle: Show votes while voting, Re-vote while revealed, one element.
+const toggle = page => page.getByRole('button', { name: /^(Show votes|Re-vote)$/ })
+
+// The round commands a page sends, in order; read only once a later snapshot has landed.
+const commandsSent = (page, room) => {
+  const sent = []
+  const command = new RegExp(`/rooms/${room}/(show|revote|clear)$`)
+  page.on('request', request => {
+    const match = request.url().match(command)
+    if (match) sent.push(match[1])
+  })
+  return sent
+}
+
+// By the time this shows on the other page, a press made before it would have sent its request.
+const laterSnapshot = async (from, to, issue) => {
+  await setIssue(from, issue)
+  await expect(issueText(to.page)).toHaveText(issue)
+}
+
+// Both clicks usually land before the flip, so only the detail rule drops the second.
+test('a double-click sends one request', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).dblclick()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+})
+
+test('a held Enter fires once, and focus stays on the toggle across the flip', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).focus()
+  await alice.page.keyboard.down('Enter')
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await expect(toggle(alice.page)).toBeFocused()
+  // Past the guard, so only the Enter rule drops them; a down without an up is a repeat.
+  await expect(toggle(alice.page)).not.toHaveAttribute('aria-disabled')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.down('Enter')
+  await alice.page.keyboard.up('Enter')
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+})
+
+test('a forced single press just after a flip sends nothing, and one after the 1 s acts', async ({
+  join,
+  room
+}) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  // Forced, since a plain click waits while the button is aria-disabled.
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+
+  await expect(toggle(alice.page)).not.toHaveAttribute('aria-disabled')
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Show votes')
+  expect(sent).toEqual(['show', 'revote'])
+})
+
+test("someone else's Show guards my bar", async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(bob.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await toggle(alice.page).click({ force: true })
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual([])
+})
+
+// On a paused clock, so both bounds are exact rather than raced.
+test('a second flip restarts the guard', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+  await alice.page.clock.install()
+  await alice.page.clock.pauseAt(Date.now() + 2000)
+
+  await toggle(alice.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await alice.page.clock.runFor(700)
+  // Straight to the API: every bar is guarded, so a second flip comes from outside them.
+  expect((await bob.page.request.post(`/rooms/${room}/revote`)).ok()).toBe(true)
+  await expect(toggle(alice.page)).toHaveText('Show votes')
+  await alice.page.clock.runFor(999)
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-1')
+  expect(sent).toEqual(['show'])
+  await alice.page.clock.runFor(1)
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['show', 'show'])
+})
+
+test('a Clear while voting starts no guard', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+
+  await vote(bob.page, '5')
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await alice.page.getByRole('button', { name: 'Clear votes' }).click()
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(0)
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['clear', 'show'])
+})
+
+test('the first snapshot mounts the bar unguarded', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const sent = commandsSent(alice.page, room)
+
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  expect(sent).toEqual(['show'])
+})
+
+// On a paused clock, so both bounds are exact rather than raced.
+test('the guard lasts 1 s from the flip', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = commandsSent(alice.page, room)
+  await alice.page.clock.install()
+  await alice.page.clock.pauseAt(Date.now() + 2000)
+
+  await toggle(alice.page).click()
+  await expect(toggle(alice.page)).toHaveText('Re-vote')
+  await alice.page.clock.runFor(999)
+  // A snapshot without a flip, which must neither end nor restart the guard.
+  await laterSnapshot(bob, alice, 'PP-1')
+  await toggle(alice.page).click({ force: true })
+  await laterSnapshot(bob, alice, 'PP-2')
+  expect(sent).toEqual(['show'])
+  await alice.page.clock.runFor(1)
+  await toggle(alice.page).click({ force: true })
+  await expect(toggle(alice.page)).toHaveText('Show votes')
+  expect(sent).toEqual(['show', 'revote'])
+})
+
 test('the copy hint lasts 2 s from the first copy, not the last', async ({ join }) => {
   const alice = await join('Alice')
   const page = alice.page
   const copy = page.getByRole('link', { name: 'Copy link' })
-  // By its text, so step 4's move to a status region breaks no lookup.
-  const hint = page.getByText('Link copied to clipboard')
   // Paused just after real time: the tick's heartbeat was heard on the real clock.
   await page.clock.install()
   await page.clock.pauseAt(Date.now() + 2000)
 
   await copy.click()
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(1500)
   await copy.click()
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(490)
-  await expect(hint).toBeVisible()
+  await expect(copyHint(page)).toHaveText('Link copied')
   await page.clock.runFor(10)
-  await expect(hint).toBeHidden()
+  await expect(copyHint(page)).toBeEmpty()
+})
+
+test('Dismiss focuses the room id, and the Messages section leaves with the last notice', async ({
+  join,
+  room
+}) => {
+  const { page } = await join('Alice')
+  await page.goto(`/${room}?moved=1&restarted=1`)
+  await expect(inRoom(page)).toBeVisible()
+  const id = page.getByRole('heading', { name: room, exact: true })
+  await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(movedBanner(page)).toHaveCount(0)
+  await expect(id).toBeFocused()
+  await restartNotice(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(restartNotice(page)).toHaveCount(0)
+  await expect(id).toBeFocused()
+  await expect(messages(page)).toHaveCount(0)
 })

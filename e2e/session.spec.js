@@ -2,7 +2,9 @@ import {
   test,
   expect,
   expectSummaryMatchesParticipants,
+  keptMark,
   mostVoted,
+  noVoteMark,
   participantEntry,
   participantEntries,
   results,
@@ -52,6 +54,12 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await show(alice.page)
   await expect(tallyEntries(alice.page)).toHaveCount(3)
   await expectSummaryMatchesParticipants(alice.page)
+  // Alice and Bob kept, Carol confirmed, Dave with no estimate: each mark on its entries only.
+  const marks = { Alice: [1, 0], Bob: [1, 0], Carol: [0, 0], Dave: [0, 1] }
+  for (const [name, [kept, none]] of Object.entries(marks)) {
+    await expect(keptMark(participantEntry(alice.page, name))).toHaveCount(kept)
+    await expect(noVoteMark(participantEntry(alice.page, name))).toHaveCount(none)
+  }
 
   // Somebody changes their mind, which converges two participants on one estimate and gives
   // the headline a majority to report.

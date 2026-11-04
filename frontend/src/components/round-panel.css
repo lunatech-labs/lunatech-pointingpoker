@@ -1,0 +1,60 @@
+.round-panel-slot {
+  height: var(--slot-height);
+  display: flex;
+}
+
+.round-panel {
+  container: deck / inline-size;
+}
+
+/* 3b2: the compact foot below 65.75 rem, in both layouts (decisions 2 to 6) */
+@container page (width < 65.75rem) {
+  /* The slot keeps one height through a reveal: its deck's rows, at least the result's least height */
+  .round-panel {
+    position: relative;
+  }
+
+  .round-panel-slot {
+    --cols: 5;
+    --rows: 3;
+    --least: var(--result-least);
+    margin-top: var(--space-2);
+    height: max(var(--least), calc(var(--rows) * min(var(--deck-card), max(var(--target-min), (var(--deck-width) - (var(--cols) - 1) * var(--space-2)) / var(--cols)) * 7 / 5) + (var(--rows) + 1) * var(--space-2)));
+  }
+
+  @container deck (width >= 22.25rem) {
+    .round-panel-slot {
+      --cols: 7;
+      --rows: 2;
+    }
+  }
+}
+
+/* 3b2: the phone layout below 51.75 rem (decisions 1, 7 to 10) */
+@container page (width < 51.75rem) {
+  /* The sheet: the round panel and the round bar as one, its shadow over the table */
+  .round-panel {
+    order: 3;
+    z-index: 1;
+    box-shadow: 0 calc(-1 * var(--space-1)) var(--space-4) var(--shadow-colour);
+    border-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: 0;
+  }
+
+  .round-panel-slot {
+    --least: var(--result-least-narrow);
+    margin-top: 0;
+  }
+}
+
+/* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */
+@media (min-height: 39rem) {
+  @container page (width < 51.75rem) {
+    .round-panel {
+      position: sticky;
+      bottom: calc(var(--target-min) + 2 * var(--space-2) + var(--line-hairline));
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import postcss, { type AtRule, type ChildNode, type Container, type Rule } from 'postcss'
 import valueParser, { type Node } from 'postcss-value-parser'
 import { composite, parseColour, type Rgba } from './contrast'
+import { AVATAR_PAIRS } from '../room/avatar'
 
 export const TEXT = 7
 export const INDICATOR = 3
@@ -88,21 +89,34 @@ export const paint = (tokens: Tokens, pair: Pair): [Rgba, Rgba] => {
 
 const surfaces: Ground[] = ['--paper', '--paper-warm', '--paper-pale'].map(token => ({ token }))
 const tints: Ground[] = ['--paper', '--paper-warm'].map(over => ({ token: '--burgundy-tint', over }))
-const fills: Ground[] = ['--card-back', '--grey', '--burgundy'].map(token => ({ token }))
+const fills: Ground[] = ['--grey', '--burgundy'].map(token => ({ token }))
+const only = (token: string): Ground[] => [{ token }]
 const on = (foreground: string, grounds: Ground[], floor: number): Pair[] =>
   grounds.map(ground => ({ foreground, ground, floor }))
 
-// The 3a spec's table of pairs; the hairline is an indicator only in the more run.
+// The 3a and 3a2 specs' tables of pairs; the hairline is an indicator only in the more run.
 export const pairs = (run: Run): Pair[] => [
   ...['--ink', '--grey'].flatMap(text => on(text, [...surfaces, ...tints], TEXT)),
   ...on('--burgundy-deep', surfaces.slice(0, 2), INDICATOR),
   ...on('--burgundy-deep', tints, TEXT),
   ...on('--paper-warm', fills, TEXT),
-  ...['--card-back', '--burgundy'].flatMap(mark => on(mark, surfaces, INDICATOR)),
+  ...on('--paper-warm', only('--card-back'), INDICATOR),
+  ...['--card-back', '--burgundy', '--mute-soft'].flatMap(mark => on(mark, surfaces, INDICATOR)),
+  ...on('--bar-other', only('--paper-warm'), INDICATOR),
+  ...on('--notice-ink', only('--notice-ground'), TEXT),
+  ...on('--notice-bar', only('--notice-ground'), INDICATOR),
+  ...on('--ok', only('--ok-tint'), TEXT),
+  ...on('--kept', [...only('--kept-tint'), ...surfaces.slice(1)], TEXT),
+  ...on('--pip', only('--card-back'), INDICATOR),
+  ...on('--card-back', only('--track'), INDICATOR),
   ...(run === 'more' ? on('--hairline-colour', surfaces, INDICATOR) : [])
 ]
 
-// Colour tokens no pair reaches in either run, directly or through var(); --pale is decorative.
+// The colours drawn only as a hairline or in a box-shadow (J9), or as the avatars' incidental initials (J8), which a reader never needs.
+const avatars = Array.from({ length: AVATAR_PAIRS }, (_, i) => [`--avatar-ink-${i + 1}`, `--avatar-ground-${i + 1}`]).flat()
+const decorative = new Set(['--pale', '--mark-offset', '--shadow-colour', '--lift-colour', ...avatars])
+
+// Colour tokens no pair reaches in either run, directly or through var(), but the decorative set.
 export const unreached = (runs: Record<Run, Tokens>): string[] => {
   const reached = new Set<string>()
   for (const run of ['base', 'more'] as const) {
@@ -112,16 +126,22 @@ export const unreached = (runs: Record<Run, Tokens>): string[] => {
       }
     }
   }
-  return [...runs.more.keys()].filter(name => name !== '--pale' && !reached.has(name))
+  return [...runs.more.keys()].filter(name => !decorative.has(name) && !reached.has(name))
 }
 
 // '' allows bare parentheses and a number with no unit.
 const allowedFunctions = new Set(['', 'calc', 'min', 'max', 'clamp', 'var'])
 const allowedUnits = new Set(['', 'rem', 'ms', 'px'])
-// J2: the viewport appears only in the root and the shell's height, em only in the label tracking.
-const unitOnlyOn: Record<string, string> = { em: '--tracking-label', vmin: '--root-size', dvh: '--shell-height' }
+// J2: the viewport appears only in the root and the shell's height; em follows its text, cqi its column or deck.
+const unitOnlyOn = new Map<string, readonly string[]>([
+  ['em', ['--tracking-label', '--tight-point']],
+  ['cqi', ['--value-fit', '--deck-width']],
+  ['vh', ['--root-size']],
+  ['vw', ['--root-size']],
+  ['dvh', ['--shell-height']]
+])
 // The generic font families; any other word, a colour name included, fails.
-const allowedWords = new Set(['system-ui', 'sans-serif', 'ui-monospace', 'monospace', 'ui-serif', 'serif'])
+const allowedWords = new Set(['system-ui', 'sans-serif', 'ui-monospace', 'monospace'])
 
 // Each node of a value with the name of the function it sits directly in.
 const walk = (nodes: Node[], visit: (node: Node, inside?: string) => void, inside?: string) => {
@@ -153,34 +173,78 @@ export const tokenProblems = (
         return
       }
       const lower = unit.unit.toLowerCase()
-      if (!allowedUnits.has(lower) && unitOnlyOn[lower] !== name) say(`the unit ${unit.unit}`)
+      if (!allowedUnits.has(lower) && !unitOnlyOn.get(lower)?.includes(name)) say(`the unit ${unit.unit}`)
       if (lower === 'px' && inside !== 'max' && name !== '--line-hairline') say('a px outside max()')
     })
   }
   return [...problems]
 }
 
-const defaultRoot = 16
-const tallestLaptopVmin = 7.57
-const rootShape = new RegExp(
-  String.raw`^clamp\(\s*(\d*\.?\d+)rem\s*,\s*(\d*\.?\d+)vmin\s*\+\s*(\d*\.?\d+)rem\s*,\s*(\d*\.?\d+)rem\s*\)$`,
-  'i')
+// CSS Color 4's named colours (https://www.w3.org/TR/css-color-4/#named-colors); no system colour among them.
+const namedColours = new Set(`aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown
+burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan
+darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred
+darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue
+dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray
+green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen
+lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink
+lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen
+linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue
+mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy
+oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip
+peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown
+seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal
+thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen`.split(/\s+/))
+const literalFunctions = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'])
+const checkedAtRules = new Set(['media', 'container', 'supports'])
 
-// J2's three rules on --root-size in each run, at a default font size of 16 px.
+// Every stylesheet but the token files: no literal colour and no px (4c1-foundation).
+export const literalProblems = (css: string): string[] => {
+  const problems = new Set<string>()
+  const check = (value: string, where: string) => void valueParser(value).walk(node => {
+    const say = (what: string) => problems.add(`${what} in ${where}`)
+    if (node.type === 'function') {
+      const name = node.value.toLowerCase()
+      if (name === 'url') return false
+      if (literalFunctions.has(name)) say(`${node.value}()`)
+    }
+    if (node.type !== 'word') return
+    const unit = valueParser.unit(node.value)
+    if (unit) {
+      if (unit.unit.toLowerCase() === 'px') say('a px')
+    } else if (node.value.startsWith('#')) say('a hex colour')
+    else if (namedColours.has(node.value.toLowerCase())) say(`the colour ${node.value}`)
+  })
+  const root = postcss.parse(css)
+  // A custom property's value keeps its spacing.
+  root.walkDecls(decl => check(decl.value, `${decl.prop}: ${decl.value.trim()}`))
+  root.walkAtRules(rule => {
+    if (checkedAtRules.has(rule.name.toLowerCase())) check(rule.params, `@${rule.name} ${rule.params}`)
+  })
+  return [...problems]
+}
+
+const defaultRoot = 16
+const tallestLaptopVh = 7.57
+const number = String.raw`(\d*\.?\d+)`
+const rootShape = new RegExp(String.raw`^clamp\(\s*${number}rem\s*,\s*min\(\s*${number}vh\s*,\s*${number}vw\s*\)` +
+  String.raw`\s*\+\s*${number}rem\s*,\s*${number}rem\s*\)$`, 'i')
+
+// J2's three rules on --root-size in each run, at a default font size of 16 px; the vw term only lowers it.
 export const rootProblems = (runs: Record<Run, Tokens>): string[] => {
   const problems: string[] = []
   for (const declared of new Set([runs.base.get('--root-size'), runs.more.get('--root-size')])) {
     const terms = declared === undefined ? null : rootShape.exec(declared)
     if (!terms) {
       problems.push(declared === undefined ? '--root-size is missing'
-        : `--root-size is not clamp(<min>rem, <a>vmin + <b>rem, <max>rem): ${declared}`)
+        : `--root-size is not clamp(<min>rem, min(<a>vh, <c>vw) + <b>rem, <max>rem): ${declared}`)
       continue
     }
-    const [min, a, b, max] = terms.slice(1).map(Number)
+    const [min, a, , b, max] = terms.slice(1).map(Number)
     if (!(b > 0)) problems.push('the rem term must be above zero')
     if (max > 2.5 * min) problems.push(`the maximum ${max}rem is more than 2.5 times the minimum ${min}rem`)
-    if (a * tallestLaptopVmin + b * defaultRoot > min * defaultRoot) {
-      problems.push('at a vmin of 757 the root is above its minimum')
+    if (a * tallestLaptopVh + b * defaultRoot > min * defaultRoot) {
+      problems.push('at a height of 757 px the root is above its minimum')
     }
   }
   return problems
