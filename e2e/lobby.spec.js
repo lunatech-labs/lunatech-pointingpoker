@@ -1,4 +1,13 @@
-import { test, expect, inRoom, nameInput, roomIdInput } from './fixtures.js'
+import {
+  test,
+  expect,
+  LONGEST_ID,
+  inRoom,
+  movedBanner,
+  nameInput,
+  participantEntry,
+  roomIdInput
+} from './fixtures.js'
 
 const ROOM_URL = /\/[a-z]+-[a-z]+-[a-z]+$/
 
@@ -36,6 +45,17 @@ test('the lobby offers the remembered room rather than joining it', async ({ joi
   await expect(inRoom(alice.page)).toBeVisible()
 })
 
+test('the rejoin row joins with the name typed over the stored one', async ({ join, room }) => {
+  const alice = await join('Alice')
+  await alice.page.goto('/')
+  const rejoin = alice.page.getByRole('link', { name: room })
+  await nameInput(alice.page).fill('Bob')
+  await expect(rejoin).toContainText('as Bob')
+  await rejoin.click()
+  await expect(inRoom(alice.page)).toBeVisible()
+  await expect(participantEntry(alice.page, 'Bob')).toBeVisible()
+})
+
 test('Create, Leave and Join change the address, and Leave keeps the name', async ({
   page,
   origin,
@@ -56,4 +76,32 @@ test('Create, Leave and Join change the address, and Leave keeps the name', asyn
   await page.getByRole('button', { name: 'Join' }).click()
   await expect(page).toHaveURL(`${origin}/${room}`)
   await expect(inRoom(page)).toBeVisible()
+})
+
+test('the h1 names the form and the active tab is marked', async ({ page, origin }) => {
+  await page.goto(`${origin}/`)
+  const h1 = page.getByRole('heading', { level: 1 })
+  const create = page.getByRole('link', { name: 'Create', exact: true })
+  const join = page.getByRole('link', { name: 'Join', exact: true })
+  await expect(h1).toHaveText('Create room')
+  await expect(create).toHaveAttribute('aria-current', 'true')
+  await expect(join).not.toHaveAttribute('aria-current')
+  await join.click()
+  await expect(h1).toHaveText('Join room')
+  await expect(join).toHaveAttribute('aria-current', 'true')
+  await expect(create).not.toHaveAttribute('aria-current')
+  // A room's own path with nothing stored: the pinned form, waiting for a name.
+  await page.goto(`${origin}/${LONGEST_ID}`)
+  await expect(h1).toHaveText('Join room')
+  await expect(page.getByText(LONGEST_ID, { exact: true })).toBeVisible()
+  await expect(create).toHaveCount(0)
+  await expect(join).toHaveCount(0)
+  await expect(roomIdInput(page)).toHaveCount(0)
+})
+
+test('Dismiss on the lobby focuses its h1', async ({ page, origin, room }) => {
+  await page.goto(`${origin}/${room}?moved=1&restarted=1`)
+  await movedBanner(page).getByRole('button', { name: 'Dismiss' }).click()
+  await expect(movedBanner(page)).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Join room' })).toBeFocused()
 })

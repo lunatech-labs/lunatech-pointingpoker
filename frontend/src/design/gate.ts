@@ -1,6 +1,7 @@
 import postcss, { type AtRule, type ChildNode, type Container, type Rule } from 'postcss'
 import valueParser, { type Node } from 'postcss-value-parser'
 import { composite, parseColour, type Rgba } from './contrast'
+import { AVATAR_PAIRS } from '../room/avatar'
 
 export const TEXT = 7
 export const INDICATOR = 3
@@ -111,8 +112,9 @@ export const pairs = (run: Run): Pair[] => [
   ...(run === 'more' ? on('--hairline-colour', surfaces, INDICATOR) : [])
 ]
 
-// The colours drawn only as a hairline or in a box-shadow, which a reader never needs (J9).
-const decorative = new Set(['--pale', '--mark-offset', '--shadow-colour', '--lift-colour'])
+// The colours drawn only as a hairline or in a box-shadow (J9), or as the avatars' incidental initials (J8), which a reader never needs.
+const avatars = Array.from({ length: AVATAR_PAIRS }, (_, i) => [`--avatar-ink-${i + 1}`, `--avatar-ground-${i + 1}`]).flat()
+const decorative = new Set(['--pale', '--mark-offset', '--shadow-colour', '--lift-colour', ...avatars])
 
 // Colour tokens no pair reaches in either run, directly or through var(), but the decorative set.
 export const unreached = (runs: Record<Run, Tokens>): string[] => {
@@ -196,7 +198,7 @@ thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen`.split
 const literalFunctions = new Set(['rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'])
 const checkedAtRules = new Set(['media', 'container', 'supports'])
 
-// Every stylesheet but the token files and styles.css: no literal colour and no px (4c1-foundation).
+// Every stylesheet but the token files: no literal colour and no px (4c1-foundation).
 export const literalProblems = (css: string): string[] => {
   const problems = new Set<string>()
   const check = (value: string, where: string) => void valueParser(value).walk(node => {

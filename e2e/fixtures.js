@@ -1,6 +1,7 @@
 import { test as base, expect } from '@playwright/test'
 import { startApp } from '../testkit/app.js'
 import { createStub } from '../testkit/stub.js'
+import { joinVoters } from '../testkit/voters.js'
 
 // The page is bundled and served by the app, so any other host is a regression. A predicate
 // rather than a glob, so same-origin traffic (the stub, the app, the streams) never reaches it.
@@ -145,6 +146,18 @@ export const test = base.extend({
     await use(join)
   },
 
+  // Voters with no page, on the app rather than the stub, so a case's cuts and buffering leave
+  // them alone. A case gets only the voters: teardown closes every call that resolved.
+  voters: async ({ app, room }, use) => {
+    const calls = []
+    await use(async names => {
+      const call = await joinVoters(app.baseUrl, room, names)
+      calls.push(call)
+      return call.voters
+    })
+    for (const call of calls) call.close()
+  },
+
   // The captured output is the whole worker's, which is still the only place a config or
   // startup failure is visible.
   appLog: [
@@ -159,24 +172,50 @@ export const test = base.extend({
 })
 
 // The test contract: roles, names, text and test ids only (ui refresh design, step 1).
-export const nameInput = page => page.getByLabel('User name')
+export const nameInput = page => page.getByLabel('Your name')
 export const roomIdInput = page => page.getByLabel('Room id')
 // The room's marker: the room view's root, rendered on the first snapshot, never before.
 export const inRoom = page => page.getByTestId('room')
+// The lobby's panel, by its test id (4c2-banners decision 5).
+export const lobbyPanel = page => page.getByTestId('lobby-panel')
+// The header's status region, always rendered, holding 'Link copied' for 2 s after a copy.
+export const copyHint = page => page.getByRole('banner').getByRole('status')
 export const issueBox = page => page.getByRole('textbox', { name: 'Current issue' })
+// The issue while viewing: its heading, holding 'No issue yet' when there is none.
+export const issueText = page => page.getByTestId('issue-text')
+// The issue panel, named so a layout case can read its box (4c1-banners decision 5).
+export const issuePanel = page => page.getByRole('region', { name: 'Issue' })
 export const issueEdit = page => page.getByRole('button', { name: 'Edit issue' })
 export const issueSave = page => page.getByRole('button', { name: 'Save issue' })
 export const issueCancel = page => page.getByRole('button', { name: 'Cancel editing' })
+export const setIssue = async (page, text) => {
+  await issueEdit(page).click()
+  await issueBox(page).fill(text)
+  await issueSave(page).click()
+  await expect(issueText(page)).toHaveText(text)
+}
+// The longest id the slug vocabulary makes, 26 characters, as the lobby mockup's longest=1.
+export const LONGEST_ID = 'fearless-speckled-flamingo'
+// room.html's 240 characters: the table above its 5 rem, its foot behind the phone's round panel.
+export const ISSUE_240 =
+  'Rework the login page so that a returning user lands on their last room, and keep the room ' +
+  'list in sync with the rooms they were invited to since their last visit, including the ' +
+  'rooms that were renamed or archived meanwhile by a facilitator'
+export const table = page => page.getByRole('region', { name: 'Voters' })
 export const results = page => page.getByRole('region', { name: 'Results' })
 export const tallyEntries = page => results(page).getByTestId('tally-entry')
 export const mostVoted = page => results(page).getByTestId('most-voted')
 export const participantEntries = page =>
-  page.getByRole('region', { name: 'Participants' }).getByTestId('participant')
+  page.getByRole('region', { name: 'Voters' }).getByTestId('participant')
 // not.toContainText needs exactly one match: zero fails as element(s) not found and two as a
 // strict mode violation, so an entry assertion cannot pass vacuously and needs no existence pin.
 export const participantEntry = (page, name) => participantEntries(page).filter({ hasText: name })
-export const votedMark = entry => entry.getByRole('img', { name: 'Voted' })
-export const hiddenMark = entry => entry.getByRole('img', { name: 'Vote hidden' })
+export const votedMark = entry => entry.getByRole('img', { name: 'Voted', exact: true })
+// A kept vote's mark while voting, and its image on the face once revealed.
+export const keptMark = entry =>
+  entry.getByRole('img', { name: 'Previous vote, not confirmed', exact: true })
+// A voter without an estimation: the mark while voting, the face's "–" once revealed.
+export const noVoteMark = entry => entry.getByRole('img', { name: 'No vote', exact: true })
 // Rendered only while the round is revealed, so it is the one signal a reveal landed in a room
 // where nobody has voted and the value is empty.
 export const revealedEstimation = entry => entry.getByTestId('participant-estimation')
@@ -209,9 +248,15 @@ export const expectSummaryMatchesParticipants = async page => {
 export const card = (page, value) => page.getByRole('button', { name: value, exact: true })
 export const deck = page => page.getByRole('group', { name: 'Estimation cards' })
 export const vote = (page, value) => card(page, value).click()
-// The line under the deck that says why the cards are frozen, keyed on its text rather than
-// its lock icon.
-export const frozenNotice = page => page.getByText('The round is revealed')
+// The phase line, holding the round's live region.
+export const phaseLine = page => page.getByTestId('phase-line')
+// The round's live region, the phase line's heard sentence.
+export const phaseRegion = page => page.getByRole('status').and(page.getByTestId('phase-heard'))
+// The seen word of the phase line: 'Voting' or 'Revealed'.
+export const phaseWord = page => page.getByTestId('phase-word')
+// The round panel's slot, the deck or the result; none on a facilitator's page while voting.
+export const roundSlot = page => page.getByTestId('round-slot')
+export const roundBar = page => page.getByRole('region', { name: 'Round' })
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
 // After a Re-vote the cast card is not pressed but keeps this description.
@@ -223,15 +268,21 @@ export const defaultRoleChoice = page => page.getByRole('group', { name: 'Your d
 export const defaultRoleRadio = (page, role) =>
   defaultRoleChoice(page).getByRole('radio', { name: role, exact: true })
 
-// The role line's one button, named for the role it switches to: 'facilitator' or 'voter'.
+// The role switch shown, named for the role it switches to: 'facilitator' or 'voter'.
 export const switchTo = (page, role) => page.getByRole('button', { name: `Switch to ${role}` })
-// What a facilitator's row shows in place of the voted mark.
-export const facilitatorMark = entry => entry.getByText('Facilitator', { exact: true })
+// A facilitator's name in the roster, matched exactly, as participantEntry matches a substring.
+export const facilitatorName = (page, name) =>
+  page
+    .getByRole('complementary', { name: 'Participants' })
+    .getByTestId('facilitator')
+    .and(page.getByText(name, { exact: true }))
 
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.
 export const restartNotice = page => page.getByRole('status').filter({ hasText: 'Reconnected' })
+// The Messages section, on either page, mounted only while a banner shows.
+export const messages = page => page.getByRole('region', { name: 'Messages' })
 
 // The issue editor's notices as a screen reader hears them: a role lookup skips a hidden region.
 export const issueStatus = page => page.getByRole('status').and(page.getByTestId('issue-status'))
@@ -258,6 +309,38 @@ export const expectLiveRegion = async region => {
     return found
   }, implied)
   expect(problems, 'what keeps the region from announcing').toEqual([])
+}
+
+// room.html's names: its first wraps, which the scales it measured and the 4c1-wide plan's R10
+// rely on.
+export const NAMES = ['Alexandra Vasquez-Ferreira', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank',
+  'Grace', 'Heidi', 'Ivan', 'Judy', 'Mallory', 'Niaj', 'Olivia', 'Rupert']
+// Deck.tsx's estimationValues, so 13 voters give 13 distinct values.
+export const ESTIMATIONS = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+
+// Every box in one call, after the fonts and two frames, so a swap or the fit's rerun lands first.
+export const readBoxes = async (page, locators) => {
+  const names = Object.keys(locators)
+  const handles = await Promise.all(names.map(name => locators[name].elementHandle()))
+  try {
+    return await page.evaluate(
+      async ([names, elements]) => {
+        await document.fonts.ready
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        const root = document.documentElement
+        const boxes = {}
+        names.forEach((name, i) => {
+          const { x, y, width, height } = elements[i].getBoundingClientRect()
+          boxes[name] = { x, y, width, height }
+        })
+        const rem = parseFloat(getComputedStyle(root).fontSize)
+        return { rem, scrolls: root.scrollHeight - root.clientHeight, boxes }
+      },
+      [names, handles]
+    )
+  } finally {
+    await Promise.all(handles.map(handle => handle.dispose()))
+  }
 }
 
 export { expect }

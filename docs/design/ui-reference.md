@@ -37,7 +37,11 @@ the decisions log at the end.
 ## Mockups
 
 - They live beside this file, under `docs/design/`, as clickable HTML linking
-  the value source.
+  the app's stylesheets: the value source, `looks.css`, `message.css`,
+  `banners.css`, `brand-logo.css` and their area files in
+  `frontend/src/components/`, with `reset.css` and `page.css` imported into the
+  `base` layer. Their own `<style>` keeps only the later steps' parts and the
+  parameters' design alternatives.
 - They show what step 4 builds and, behind a "later steps" toggle, the parts
   later steps add (progress count, Next issue, recent rounds), dashed, so step
   4 leaves room for them.
@@ -56,13 +60,15 @@ the decisions log at the end.
   the window's size.
 - `lobby.html`, the lobby's three pages (J13). Its parameters, listed at the top
   of its script: `page` (`root`, `pinned`, `notaroom`), `tab` (`create`,
-  `join`), `name`, `remembered` (`slug`, `legacy`, `none`), `rejoin` (`chip`
-  outlines the row's arrow), `role`, `message` (the join and create failures,
-  the lost connection, the ended session, the moved and restart notices),
-  `room`, `typed`, `suggestion`, `stored`, `longest` (the longest valid id) and
-  `probe`.
+  `join`), `name`, `remembered` (`slug`, `legacy`, `none`), `role`, `message`
+  (the join and create failures, the lost connection, the ended session, the
+  moved and restart notices), `room`, `typed`, `suggestion`, `stored`, `longest`
+  (the longest valid id) and `probe`.
 - `lobby-cells.html`, the lobby's pages side by side at a chosen width
   (1280, 800, 392 or 320 px), each with a link that opens it alone.
+- `icons.js`, the icons both mockups draw, lucide's, copied from `lucide-react`
+  by name; `frontend/src/design/icons.test.ts` keeps it equal to the package,
+  and lucide's licence sits beside it as `lucide-LICENSE.txt`.
 
 ## Brand source
 
@@ -197,8 +203,8 @@ shape or fill from afar, and words explain the rest up close.
 - Each look has one mark with an accessible name, written for the listener
   (WCAG 1.1.1, and 4.1.2 for a card's state), one wording per state: "No
   vote", as on the revealed "–"; "Voted"; and "Previous vote, not confirmed",
-  as on the kept card. Step 4 rewrites the mark reads to match (see "Contract
-  reads").
+  as on the kept card. Step 4c1-wide rewrote the mark reads to match (see
+  "Contract reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
 - **Forced colours** (Windows' contrast themes) repaint backgrounds, which
@@ -304,9 +310,11 @@ stacking, Dismiss and mounting are J12's.
   set: the hairline's pale, and the colours drawn only in a shadow, the soft
   shadow's, the chosen card's glow and the header mark's offset card, since
   forced colours drop shadows and the hairline alone tells surfaces apart
-  (J9). So are the roster's avatars, initials on a pale ground in a hue hashed
-  from the name, `aria-hidden` and incidental: the name beside them carries
-  the information.
+  (J9). So are the roster's avatars, initials on a pale ground, the pair
+  picked by a hash of the name, `aria-hidden` and incidental: the name beside
+  them carries the information. The set lists their tokens by name,
+  `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
+  `--avatar-ground-14`, so a later avatar token is not exempt by its prefix.
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
@@ -343,8 +351,9 @@ stacking, Dismiss and mounting are J12's.
   bars; a 2 px focus outline, offset 2 px; transitions of 0.18 to 0.25 s;
   buttons at least 44 px tall, kept as `--target-min`.
 - **Corners** are rounded (3b1's second look): panels and messages take
-  `--radius`, cards, rows and inputs `--radius-card`, buttons
-  `--radius-control`; the tokens hold the rest.
+  `--radius`, cards, rows and inputs `--radius-card`, buttons and links
+  `--radius-control` unless their component sets its own, the lobby's tabs
+  square; the tokens hold the rest.
 - **Two line weights**: controls keep the brand's 1 px line, `--line-control`;
   J3's marks take 2 px, `--line-mark`; both within J8's 3:1 for indicators.
 
@@ -383,8 +392,8 @@ and `room.html` draws them.
   scroll margins and, for Firefox, a scroll to the top of what the sheet
   covers.
 - **The cap** stops the page at 106 rem, centred, the header's bar full width
-  and its content aligned with the page; in the phone layout the header
-  shares the column's edges.
+  and its content aligned with the page; in the phone layout the header and
+  the banners share the column's edges.
 - **The shared screen** is the wide layout, as principle 4's last row says
   (3b2 decision 14).
 - The room page keeps its scrollbar's gutter, so the two layouts never
@@ -401,13 +410,14 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
 
 - **The banners** stack by tone: the lost connection, then the moved link, then
   the restart. Only the notices have a Dismiss, an × alone named "Dismiss" at
-  the panel's right, which moves focus to the page's `h1` (`tabindex="-1"`, so it
-  takes focus without joining the tab order). The Messages section mounts only
-  while a banner shows.
+  the panel's right, which moves focus to the dismiss target, the page's `h1`
+  marked `data-dismiss-focus` (`tabindex="-1"`, so it takes focus without
+  joining the tab order). The Messages section mounts only while a banner
+  shows.
 - **The editing view** is a wrapping `<textarea>` at `--text-lg` named "Current
-  issue", which grows to fit (by `field-sizing: content`, with a script fit in
-  Firefox ESR 140, which lacks it). Enter saves and never inserts a line break;
-  `oneLine` keeps the draft to one line. Save and Cancel, icon and word, sit
+  issue", which grows to fit by `field-sizing: content` (a browser without it
+  keeps one line). Enter saves and never inserts a line break; `oneLine` keeps
+  the draft to one line. Save and Cancel, icon and word, sit
   beside the field at and above 65.75 rem and below it under 65.75 rem, in both
   layouts (J11's compact switch), in the DOM order field, Save, Cancel,
   messages at every width. In the band between 51.75 and 65.75 rem a panel
@@ -415,9 +425,10 @@ and `room.html` draws them (`edit=1`, `edit=saving`, and `message` with
   editing view closes (Escape, Cancel, a save that succeeded), focus returns to
   Edit if it was inside the panel or had dropped; focus the user moved elsewhere
   is left alone.
-- **While saving**, Save and Cancel are `aria-disabled`, keep focus and look
-  muted; the field is read-only. After a failure the field takes focus only if
-  focus fell to the page.
+- **While saving**, Save and Cancel are `aria-disabled`, keep focus and take
+  the lobby's inert look (`--grey` on `--paper-pale`, 7.06:1); the field is
+  read-only. After a failure the field takes focus only if focus fell to the
+  page.
 - **The editor's two messages** are message panels under the buttons, inside
   the editor region (step 1a's `issue-status`, always rendered and never
   `display: none`), the problem above the notice, with no role of their own.
@@ -432,9 +443,9 @@ Step 3b4's spec holds its rules,
 
 - **The regions** are the room page's: the header bar with the brand lockup,
   then one centred column that the header's content, the banners and the panel
-  share a left edge with. The column is `--lobby-width`, 24 rem until judged,
-  and `min(--lobby-width, 100% - 2 × --page-edge)` on a narrow screen; one
-  column at every width, no breakpoint and no hero.
+  share a left edge with. The column is `--lobby-width`, 26 rem, judged by
+  4c2-form, and `min(--lobby-width, 100% - 2 × --page-edge)` on a narrow screen;
+  one column at every width, no breakpoint and no hero.
 - **The `h1` names the form**: "Create room" or "Join room". Dismiss's focus
   lands on it. The tabs are links, the active one `aria-current="true"` and
   marked by weight and a bar, the others underlined (J4); the pinned form has
@@ -443,7 +454,8 @@ Step 3b4's spec holds its rules,
   id in monospace, a second line, an ink arrow. Its name is its content in
   visible order, `<id> <line 2>`, with no `aria-label`, a literal space between
   the two lines so the name reads the same in any layout. Line 2 reads "Rejoin"
-  alone when the typed name is empty or only spaces. Line 2 is underlined, J4's
+  alone when the typed name is empty; a name of only spaces shows as typed until
+  names are checked at join (4c2-form decision 6). Line 2 is underlined, J4's
   cue; a link drawn as a button is not. An id wraps at its hyphens and is never
   cut, in a row and in the badge.
 - **One burgundy-filled control per page**: the primary button, or, where the
@@ -453,11 +465,11 @@ Step 3b4's spec holds its rules,
   then lost, then a failure) and the notices by tone. A form shows only the
   messages it can have: the lost connection and the ended session on the pinned
   form, the only one with a stream, and the create failure on the root form. After "Your session has
-  ended" the panel stays, its name, roles and Join inert in the saving look's
-  muted text on `--paper-pale`, since grey on `--track` is 6.47:1 and J8 asks
-  7:1 for text; an inert control's edge is exempt from J8's 3:1.
+  ended" the panel stays, its name, roles and Join inert in the app's inert
+  look, `--grey` on `--paper-pale` (the editor's saving look too); an inert
+  control's edge is exempt from J8's 3:1.
 - **The not-a-room page** is drawn in the same regions. Its `h1` reads
-  `<code><bdi>x</bdi></code> is not a room name.`, the typed name wrapping
+  `<code><bdi>x</bdi></code> is not a valid room name.`, the typed name wrapping
   anywhere and isolated by the `<bdi>`. A suggestion is a room row under the
   plain text "Did you mean", reading "Join as <name>" from the stored name; the
   secondary action is "Join a different room", which opens `/` on the Join tab.
@@ -473,7 +485,7 @@ read a token.
 
 | Kind | Tokens |
 | --- | --- |
-| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours |
+| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours; from 4c1-wide-prep, the avatars' pairs |
 | Root | the clamp (J2) |
 | Shell | its height (J2) |
 | Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking and the tight point |
@@ -507,50 +519,76 @@ in its spec
 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
 Contract).
 
-- The text "Facilitator" inside a facilitator's entry (`facilitatorMark`), and
-  one list holding every participant (`participantEntries`). The roster changes
-  both, a contract change of step 4: each facilitator's name in the roster is
-  an element with the test id `facilitator`, and the list holds voters only.
-- Images named "Voted" and "Vote hidden" (`votedMark`, `hiddenMark`), matched as
-  case-insensitive substrings, since neither read sets `exact`. A confirmed
-  entry carries both while voting and "Voted" once revealed; a kept one only
-  "Vote hidden" while voting. J3's named marks change them, a contract change of
-  step 4: each mark is read by its exact name. `hiddenMark` becomes the kept
-  mark's read, which serves the read after a Re-vote and, since only
-  `hasEstimation` gives that look, proves it survives redaction. On a confirmed
-  entry, the reads of "Vote hidden" are dropped where a read of "Voted" or of
-  the value sits beside them; the last, in `stragglerDepartsWithVotesHidden`,
-  the only proof that the votes survive a departure, becomes a `votedMark` read.
-  Step 1c moved every read of "Voted" on a revealed entry to the value (its list
-  names the cases).
+- Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
+  (`facilitatorMark`), and one list holding every participant
+  (`participantEntries`). The roster changed both, a contract change of step
+  4: each facilitator's name in the roster is an element with the test id
+  `facilitator`, read exactly (`facilitatorName`), and the list holds voters
+  only.
+- Until step 4c1-wide, images named "Voted" and "Vote hidden" (`votedMark`,
+  `hiddenMark`), matched as case-insensitive substrings, since neither read
+  set `exact`. A confirmed entry carried both while voting and "Voted" once
+  revealed; a kept one only "Vote hidden" while voting. J3's named marks
+  changed them, a contract change of step 4: each mark is read by its exact
+  name, "Voted" (`votedMark`), "Previous vote, not confirmed" (`keptMark`)
+  and "No vote" (`noVoteMark`). `hiddenMark` became the kept mark's read,
+  `keptMark`, which serves the read after a Re-vote and, since only
+  `hasEstimation` gives that look, proves it survives redaction. On a
+  confirmed entry, the reads of "Vote hidden" were dropped where a read of
+  "Voted" or of the value sat beside them; the last, in
+  `stragglerDepartsWithVotesHidden`, the only proof that the votes survive a
+  departure, became a `votedMark` read. Step 1c moved every read of "Voted" on
+  a revealed entry to the value (its list names the cases).
 - The kept card's description, "Previous vote, not confirmed"
   (`unconfirmedCard`), from a hidden note, and the card's text, its figure
   alone (`toHaveText('5')`). J3's tag, `aria-hidden` and outside the button,
-  leaves both unchanged.
+  left both unchanged.
+- Each card by its figure as its exact name (`card`), "0.5" included:
+  `Figure` sets its point tight and keeps its text "0.5".
 - A revealed entry's `participant-estimation` holds the value and nothing else,
   empty for no vote (`revealedEstimation`, `expectSummaryMatchesParticipants`).
-  J3's "–" and "not confirmed" sit outside it. Step 4 adds a read of both, a
-  contract addition: at the third reveal of 'a session of rounds keeps the
-  summary honest across them', Alice and Bob kept, Carol confirmed and Dave with
-  no estimate, only Alice's and Bob's entries carry the kept mark, and only
-  Dave's the no-vote mark, each read by J3's name.
+  J3's "–" and "not confirmed" sit outside it. Step 4c1-wide added a read of
+  both, a contract addition: at the third reveal of 'a session of rounds keeps
+  the summary honest across them', Alice and Bob kept, Carol confirmed and
+  Dave with no estimate, only Alice's and Bob's entries carry the kept mark,
+  and only Dave's the no-vote mark, each read by J3's name.
 - The room id as a heading, any level (`lobby.spec.js`).
 - The room's marker, the test id `room` on the room view's root (`inRoom`),
   the sign a join reached the room: it sits on what renders from a snapshot,
   never on a look drawn while joining, as 'the room's marker waits for the
   first snapshot' (`smoke.spec.js`) holds it.
+- The issue while viewing, the heading with the test id `issue-text`
+  (`issueText`), holding "No issue yet" when there is none, and Edit by its
+  name, "Edit issue" (`issueEdit`), though it shows "Edit".
+- The issue editor's notices, the status region with the test id
+  `issue-status` (`issueStatus`), rendered once, outside both views.
+- The round panel's slot, the test id `round-slot` (`roundSlot`), holding the
+  deck while voting and the result once revealed; a facilitator's page has
+  none while voting.
 - `tally-entry`, inside the region "Results", marks a value someone voted
   for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
-  and the nobody-voted case reads none.
-- The copy hint's text, "Link copied to clipboard", which 3b1 shortens to
-  "Link copied", a contract change of step 4.
-- The table region's name, "Participants", which 3b1 changes to "Voters", its
-  title "Voters · 14", the name "Participants" going to the roster; the
-  tally's test ids and `participant-estimation` read the same text, and
-  each tally entry gains a spoken reading ("3: 2 votes") beside it.
+  reading each entry's `tally-value` and `tally-count`, and the nobody-voted
+  case reads none. `most-voted` holds the most voted value (`mostVoted`).
+- The copy hint's text, "Link copied to clipboard" until step 4c1-wide, which
+  put 3b1's shortened hint, "Link copied", in place, a contract change of
+  step 4. The hint is the header's status region (`copyHint`), always
+  rendered and empty but for the 2 s after a copy, and "Copy link" is read as
+  a link by that name.
+- The role switches, the header's and ☰'s, one shown at a time, each a button
+  named for the role it switches to, "Switch to facilitator" or "Switch to
+  voter" (`switchTo`).
+- The table region's name, "Participants", which step 4c1-wide changed to
+  3b1's "Voters", its title "Voters · 14", the name "Participants" going to
+  the roster; the tally's test ids and `participant-estimation` read the same
+  text, and each tally entry gained a spoken reading ("3: 2 votes") beside it.
 - 3b1's other contract changes (the deck leaving on a reveal, `frozenNotice`,
   the issue's read view and its empty "No issue yet", the nobody-voted read,
-  the phase line's test id) are listed in its spec.
+  the phase line's test id, the round bar's region "Round") are listed in its
+  spec, and step 4c1-wide made them, with those found after 3b1's list (its
+  spec's Contract). Step 4c1-banners made the banners' region "Messages" and
+  named the issue panel the region "Issue". Step 4c2-banners made the lobby's
+  region "Messages" too and gave the lobby's panel the test id `lobby-panel`
+  (`lobbyPanel`).
 
 ## Open
 
@@ -561,24 +599,12 @@ L1 to L4, L6, L5's card size and L11's breakpoint for the room page are
 settled by 3b1 (J10), L5, L10 and L11 for the room page by 3b2 (J11), and L7
 and L8 by 3b3 (J12), and L9 by 3b4 (J13).
 
-- **The lobby's column width**: `--lobby-width` is 24 rem until the product
-  owner judges `lobby.html` (J13).
-- **The rejoin row's arrow**: the plain ink arrow (the default) or the outlined
-  chip (`rejoin=chip`), after the product owner and the designer have seen both.
 - **Three rejoin-row variants, deferred for the designer and not rejected**:
   no square with an outlined "Rejoin" button on the right, with the outlined
   arrow chip on the right, and with it in the square's place on the left.
 - **The lobby's open costs** (3b4's Accepted costs): a Reload button on "Your
   session has ended"; a "Joining…" look from a press to the first snapshot;
   accepting a full URL pasted into Join.
-- **The not-a-room page's React shape** (3b4 decision 15), which step 4d's
-  brainstorm raises first: an entry point of its own or a view of the room app,
-  and how the server hands over the typed name and the suggestion, keeping its
-  404 status.
-- **The saving look's text contrast**: Save in `--grey` on `--track` is 6.47:1
-  (3b3 decision 10), under J8's 7:1 for text, though an inactive control is
-  exempt (WCAG 1.4.3 and 1.4.6). The lobby's inert look uses `--paper-pale` (7.06:1);
-  whether the editor follows it is for the product owner.
 - **Layout f or g**, the slot below or above the table: f by default, g the
   open swap, after the users' feedback; with the button's and the chosen
   card's darker red against the designer's brighter one.
@@ -950,6 +976,68 @@ The reasons behind each rule, and what was set aside.
   once. Set aside: `optional`; `block`, which hides late text up to about 3 s
   and jumps just the same; a fallback scaled to Inter's size, which narrows the
   jump without removing it.
+- **4c1-editor.** The editing view (the UI refresh design's step 4c1-editor)
+  reopened two of 3b3's choices. The saving look takes the lobby's inert look,
+  as Save in `--grey` on `--track` was 6.47:1, under J8's 7:1, and one inert
+  look serves the app; revisited after the stack is deployed. The script fit
+  goes: every current browser has `field-sizing`, Firefox ESR 140 having ended.
+  Set aside: a white fill, a second inert look; a fallback script no CI browser
+  runs.
+- **4c1-banners.** The banners (the UI refresh design's step 4c1-banners) drew
+  the message panel as one component, `Message`, its rules moved from
+  `looks.css` to `message.css`, so each component's prefix names its file and
+  `Figure` stays the one exception. In the phone layout the banners take the
+  column's edges, `--space-3`, as the panels and the header do. The issue
+  panel became the region "Issue", as the table and the round bar are. Set
+  aside: `.message` left in `looks.css`; `--page-edge` on the phone, which
+  lines the banners up with nothing; the issue panel named by its heading,
+  which changes each round.
+- **4c2-form.** The lobby's page and form (the UI refresh design's step
+  4c2-form) took the column at 26 rem, judged on `lobby.html` at 1280 by 700:
+  the longest id keeps a fifth of its line, the help line takes two lines, and
+  every form stays taller than wide but the pinned one, about square. The room
+  row's arrow stays plain: the outlined chip, a box with no role of its own,
+  mirrored the square. The brand lockup became one component, `BrandLogo`,
+  its rules moved from `looks.css` to `brand-logo.css`. Set aside: 24 rem,
+  which the longest id nearly fills; 28 rem, which turns the pinned panel
+  landscape; the outlined chip.
+- **4c2-banners.** The banners on both pages (the UI refresh design's step
+  4c2-banners) became one component, `Banners`, drawn once by App and handed to
+  the page shown as a slot, so the notice texts, their order and their roles are
+  written once. A Dismiss focuses the dismiss target, the one element marked
+  `data-dismiss-focus`, which is the page's `h1`; the marker names it on
+  purpose, so a moved or second heading changes nothing. `banners.css` owns the
+  stacking and each page places it by context (`.room-page .banners`,
+  `.lobby-page-main .banners`). Set aside: the lobby drawing its own section as
+  the room page does; each page taking the five props; `querySelector('h1')`; a
+  ref threaded from App to each `h1`; no stylesheet, or the page's class passed
+  in; a second exception.
+- **4c2-bootstrap.** Removing Bootstrap (the UI refresh design's step
+  4c2-bootstrap) kept its two phone properties on `html` in `page.css`:
+  `-webkit-tap-highlight-color: transparent`, so a tap does not flash grey in
+  Chromium and Safari, and `-webkit-text-size-adjust: 100%`, so iOS Safari does
+  not enlarge text in landscape. Set aside: dropping either; tap feedback
+  through `:active` styles, a question for the designer.
+- **4c2-focus-ring.** Buttons and links (the UI refresh design's step
+  4c2-focus-ring) take `--radius-control` by default, from `page.css` in the
+  `base` layer, so every control's focus ring is rounded and a component's own
+  radius wins. The lobby's tabs opt out, as a radius would curve the current
+  tab's bar; the `h1`s a Dismiss focuses stay square, J9 rounding controls,
+  not headings. Ruled by the project's owner; the designer validates it on the
+  deployed app. Set aside: the radius per component, a list a new control
+  must remember to join; a shared class in the markup; waiting for the
+  designer's ruling.
+- **4d.** The not-a-room page (the UI refresh design's step 4d) became a view
+  of the room app, `main.tsx` rendering `NotARoom` before `App` and never
+  creating the connection, and the server hands it the typed name and the
+  suggestion in a `not-a-room` meta element, inserted before the first
+  `</head>` by `indexOf` and encoded with `Encode.forHtml`, the 404 kept. The
+  sentence reads "is not a valid room name": any well-formed name opens a room,
+  so the page only refuses a name's form. Set aside: an entry of its own, a
+  second Vite input and shell; a JSON block in a `<script>`, whose safety needs
+  a hand-made rule on top of the encoder; the app reading the typed name from
+  its own URL, splitting one fact between two decoders; keeping "is not a room
+  name", which reads as "that room is gone"; a hint at a name's shape.
 - **Review.** A review with three lenses (the code, consistency, accessibility)
   brought: the contract reads; step 1c's failing cases; J3's three looks,
   facilitators apart and forced-colours marks; the offset ink focus ring; the
