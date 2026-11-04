@@ -244,8 +244,8 @@ recorded in the PR's Verified section.
 
 ## Branches and commits
 
-One PR on `20260930.ui_refresh_4a_round_live_region`, stacked on 4d's
-`20260930.ui_refresh_4d_not_a_room` (#481): this document, the parent's
+One PR on `20260930.ui_refresh_4a_round_live_region`, on `main` once 4d
+(#481) merged: this document, the parent's
 changes, the known issue and the plan first; then the shared
 `visually-hidden` class with the `tally-sr` test ids and the Result's
 assertion (decision 3), so that commit has a case that can fail; then the region with its cases and the

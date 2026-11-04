@@ -31,11 +31,12 @@
 ## Global Constraints
 
 **Branch and commits:**
-- Branch `20260930.ui_refresh_4a_round_live_region`, stacked on `20260930.ui_refresh_4d_not_a_room` (#481). The spec, the parent's changes and the known issue are committed. New commits only: no amend, rebase or force-push, and nothing pushed until the user asks.
+- Branch `20260930.ui_refresh_4a_round_live_region`, rebased onto `main` once 4d (#481) merged. The spec, the parent's changes and the known issue are committed. New commits only: no amend, rebase or force-push, and nothing pushed until the user asks.
 - Commit subjects, verbatim:
   - Task 0: `docs: plan the round's live region (ui refresh step 4a)`
   - Task 1: `refactor: share the visually hidden rule (ui refresh step 4a)`
   - Task 2: `feat: announce the round's phase from its line (ui refresh step 4a)`
+  - Task 4: `fix: announce the round's phase from its heard sentence (ui refresh step 4a)`
 - No "Generated with Claude Code" or co-author line.
 
 **Code:**
@@ -153,3 +154,87 @@ Orca on Firefox, against the app the executor starts for the user (`SECURE_COOKI
   - heading navigation to the phase line reads the sentence.
 - [ ] **Recorded runs**, which cannot stop the step: Alice's Show, and Bob's own last vote auto-revealing, each with Bob's focus on a card; Bob reloading a revealed round (nothing announced, the accepted cost).
 - [ ] **Record** what was heard, the button's rename and any focus loss included, for the PR's Verified section. A judged failure stops the plan; the finding goes back to the spec.
+
+---
+
+## Amendment after the hand check (Tasks 4 and 5)
+
+Task 3's judged runs failed: a flip was spoken only with focus on the phase line. The spec's decisions 1, 2 and 4, its Contract and "Checked in Firefox and Orca" were amended (`c030591`). Tasks 4 and 5 build and hand check that amendment on top of Task 2, as new commits.
+
+**Checked in the code** (at `c030591`): `RoundBar.tsx`'s wrapper carries `role="status"` and `data-testid="phase-line"`; its `h2` holds the `phase-word` span (`aria-hidden`) and the `phase-heard` span (`visually-hidden`), each with its own ternary on `revealed`. `phaseLine` is `getByRole('status').and(getByTestId('phase-line'))`; `readBoxes` reads it in two `layout.spec.js` cases; `room.spec.js`'s two new cases read the heading with `toHaveAccessibleName`. Playwright is 1.63, so `not.toHaveAttribute('role')` with no value is available.
+
+### Rulings, for the user's review
+
+- **R7. One fix commit for the markup, fixtures and cases**, as R6. Set aside: a test-only commit first, which fails until the markup lands.
+- **R8. `phaseLine` is `page.getByTestId('phase-line')` again; `phaseRegion` is `page.getByRole('status').and(page.getByTestId('phase-heard'))`** (spec decision 4). The first case reads its region as `heading.locator(phaseRegion(page))`, so the one locator pins "inside the heading". Set aside: a separate containment assertion, a second spelling of the same fact.
+- **R9. The cases drop `toHaveAccessibleName`** and pin markup only (spec decision 4: a name check passes with the label removed). Set aside: keeping both, a check that cannot fail on rule 2.
+- **R10. `RoundBar` computes `heard` once**, read by the `h2`'s `aria-label` and the region (spec decision 2, "the same value"). The two swap mutations each inline a swapped literal in one place. Set aside: two ternaries, which can drift with no case seeing it until the swap mutations run.
+- **R11. The wrapper's lost role is pinned by `expect(phaseLine(page)).not.toHaveAttribute('role')`.** Set aside: counting `status` roles on the page, which couples to the issue status, also a `status`.
+- **R12. The reconnect case reads `phaseRegion(bob.page)` unscoped**: the first case pins its place. Set aside: scoping it under the heading too, the same pin twice.
+- **R13. Task 1 and its mutations are not rerun**: Task 4 touches none of its files. Task 2's mutations are superseded by Task 4's list, which is the spec's, and R1 and R2 by R8 and R9.
+- **R14. The hand check runs on the built app at the user's address** (`npm run build`, then `HOST=192.168.4.46 SECURE_COOKIES=false sbt run`), as the user reaches it from another machine. Set aside: Task 3's `npm run dev`, which the user does not want.
+
+### Task 4: The region on the heard sentence (spec decisions 1, 2, 4)
+
+**Files:**
+- Modify: `frontend/src/components/RoundBar.tsx`, `e2e/fixtures.js`, `e2e/room.spec.js`
+
+**Interfaces:**
+- Produces: `phaseLine` (the wrapper, by test id), `phaseRegion` (the region), both exported from `e2e/fixtures.js`; `phaseWord` unchanged.
+
+- [ ] **Step 1: Fixtures** (R8). `phaseLine`'s comment: the phase line, holding the round's live region. Add `phaseRegion` below it, comment: the round's live region, the phase line's heard sentence.
+- [ ] **Step 2: Rewrite the first case** in `room.spec.js`, importing `phaseRegion`:
+
+```js
+test('the phase line announces each flip from one region', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const line = phaseLine(bob.page)
+  const heading = line.getByRole('heading')
+  const region = heading.locator(phaseRegion(bob.page))
+
+  await expect(region).toHaveText('Voting open')
+  await expect(region.locator('*')).toHaveCount(0)
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expect(line).not.toHaveAttribute('role')
+  await expect(phaseWord(bob.page)).toHaveAttribute('aria-hidden', 'true')
+  await expect(region).toHaveCSS('clip-path', 'inset(50%)')
+  await expect(region).toHaveCSS('text-transform', 'none')
+  await markRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Show votes' }).click()
+  await expect(region).toHaveText('Votes revealed')
+  await expect(heading).toHaveAttribute('aria-label', 'Votes revealed')
+  await expectLiveRegion(region)
+
+  await alice.page.getByRole('button', { name: 'Re-vote' }).click()
+  await expect(region).toHaveText('Voting open')
+  await expect(heading).toHaveAttribute('aria-label', 'Voting open')
+  await expectLiveRegion(region)
+})
+```
+
+- [ ] **Step 3: The reconnect case** (R12): `const region = phaseRegion(bob.page)` replaces `line` and `heard`; it is marked, and at the end holds "Votes revealed" (`toHaveText`) and passes `expectLiveRegion(region)`.
+- [ ] **Step 4: Run the two cases** (both projects): FAIL, the first at its opening `toHaveText` (no `status` on `phase-heard`), the reconnect case at the 60 s test timeout (`markRegion` waits for the element).
+- [ ] **Step 5: The markup** (R10). The wrapper loses `role="status"`. `const heard = revealed ? 'Votes revealed' : 'Voting open'`; the `h2` takes `aria-label={heard}`; the `phase-heard` span takes `role="status"` and holds `{heard}`. The comment, two lines at most: the word is seen, the sentence heard from its own region, and the `h2` copies it as its label since Firefox names no heading from a status's text.
+- [ ] **Step 6: Run the two cases**: PASS in both projects.
+- [ ] **Step 7: Mutations** (the spec's Contract), after `git add` of the task's files, each FAIL where named; `looks.css` and `App.tsx` are unchanged, so their revert to HEAD is right:
+  - the region keyed by `revealed`: `expectLiveRegion` after the Show;
+  - `role="status"` moved back to the wrapper: the opening `toHaveText`;
+  - `role="status"` kept on the wrapper as well: `not.toHaveAttribute('role')`;
+  - the region moved beside the `h2`, inside the wrapper: the opening `toHaveText`;
+  - the sentence wrapped in a `<span>` inside the region: `toHaveCount(0)`;
+  - the `h2`'s `aria-label` removed: the opening `aria-label` assertion;
+  - the label's sentences swapped: the opening `aria-label` assertion;
+  - the region's sentences swapped: the opening `toHaveText`;
+  - `aria-hidden` removed from the seen word: the `aria-hidden` assertion;
+  - the region's class misspelt: the `clip-path` assertion;
+  - `clip-path` dropped from `.visually-hidden`: the `clip-path` assertion;
+  - `text-transform: none` dropped from `.visually-hidden`: the `text-transform` assertion;
+  - `RoomPage` keyed by the lost flag in `App.tsx` (`key={String(room.lost)}`): the reconnect case's `expectLiveRegion`.
+- [ ] **Step 8: Full run**, as Task 2's Step 8: checks, then `room`, `roles` and `slug` in both projects and `layout` in Chromium: PASS. `layout.spec.js`'s `readBoxes` and `slug.spec.js`'s no-cover check run unchanged.
+- [ ] **Step 9: Commit**: `fix: announce the round's phase from its heard sentence (ui refresh step 4a)`.
+
+### Task 5: The hand check, rerun (the user's, after the fix review)
+
+As Task 3, on the app of R14, with these changes: the judged runs add an own Show and reading the line in browse mode (spec, Hand check); the recorded runs keep another's Show and an own auto-reveal with focus on a card, and Bob's reload of a revealed round. A judged failure stops the plan and goes back to the spec.
