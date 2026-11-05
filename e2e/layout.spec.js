@@ -484,11 +484,18 @@ test('a roster avatar draws on one line and is clipped at its disc', async ({ jo
 
   const cut = await avatar(page, 'Ǆemal Ǳonić').evaluate(el => {
     const d = el.getBoundingClientRect()
-    // Just outside the disc, where the overflowing text would be the hit without a clip.
+    // Just outside the disc, where overflowing text would be the hit without a clip; a range ignores clipping.
     const hit = document.elementFromPoint(d.right + 2, d.top + d.height / 2)
-    return { inView: hit !== null, self: hit === el }
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const overflows = range.getBoundingClientRect().right > d.right + 2
+    return { inView: hit !== null, self: hit === el, overflows }
   })
-  expect(cut, 'ǄǱ cut at the circle').toEqual({ inView: true, self: false })
+  expect(cut, 'ǄǱ overflows and is cut at the circle').toEqual({
+    inView: true,
+    self: false,
+    overflows: true
+  })
 })
 
 test.describe('the narrow layouts', () => {
