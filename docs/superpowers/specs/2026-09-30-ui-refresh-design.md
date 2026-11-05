@@ -487,17 +487,8 @@ commitment:
   The position carries the spread, so it needs no colour and no hover. Every
   card moves at the reveal (animated, not under reduced motion), and a re-vote
   returns them to name order.
-- Ties shown rather than broken: "Most voted: 3 · 5", where today JavaScript's
-  key order picks one (`docs/known-issues.md`, "A tied vote is broken by
-  JavaScript key order"). "The highest when in doubt", a rule some teams use,
-  is a decision rather than a fact, so it belongs to step 9's recorded outcome
-  as a pre-selection. The rule, drawn in step 3b1's mockup (`later=1`): up to
-  three tied values on one
-  line, two size steps down ("0.5 · 13 · 89" the widest), read as "3, 5 and 13";
-  from four, "Tie" with "N values, k votes each"; no red bar when every voted
-  value ties, the figure's wording to decide ("None" in the mockup). The
-  `most-voted` read is a contract
-  change.
+- Ties shown rather than broken:
+  `docs/superpowers/specs/2026-11-05-tied-vote-design.md`.
 - From the designer's mockup (2026-10), each a step of its own: statistics, the
   average and the median in a compact form (an agreement percentage would
   repeat "6 of 10 votes"); a "share your reasoning" callout; the round counter

@@ -15,7 +15,6 @@
   .round-progress { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--grey); padding: 0 var(--space-2); }
   .round-progress i { display: block; width: var(--progress-width); height: var(--bar-min); border-radius: var(--radius-small); background: var(--track); overflow: hidden; }
   .round-progress i::after { content: ''; display: block; height: 100%; width: var(--done); background: var(--card-back); }
-  .result-most.later { padding: var(--space-1) var(--space-4) var(--space-1) var(--space-2); }
   .round-progress-big { flex: 1; display: grid; place-content: center; text-align: center; padding: var(--space-1) var(--space-5); }
   .round-progress-big b { font-size: var(--text-4xl); line-height: var(--leading-figure); }
   .round-progress-big span { color: var(--grey); }
@@ -132,16 +131,15 @@ function draw() {
   if (revealed) people.forEach(p => p.value && (counts[p.value] = (counts[p.value] || 0) + 1))
   const tally = deck.filter(v => counts[v]).map(v => [v, counts[v]]).sort((x, y) => y[1] - x[1])
   const votes = tally.reduce((n, [, c]) => n + c, 0), top = tally.length ? tally[0][1] : 1
-  // Step 4 keeps today's tie-break, JavaScript's key order: integer values first; later=1 shows the ties step's rule
-  const tied = deck.filter(v => counts[v] === top), allTied = tied.length === tally.length
-  const first = tied.find(v => /^\d+$/.test(v)) ?? tied[0]
-  const red = v => counts[v] === top && (later ? !(tied.length > 1 && allTied) : v === first)
-  const each = `${top} vote${top > 1 ? 's' : ''} each`
-  const mostVoted = () => !later || tied.length === 1
-    ? `<span class="panel-label">Most voted</span><span class="result-figure" data-testid="most-voted">${fig(first)}</span><span class="result-sub">${top} of ${votes} votes</span>`
-    : allTied ? `<span class="panel-label">Most voted</span><span class="result-figure">None</span><span class="result-sub">Every value tied, ${each}</span>`
-    : tied.length <= 3 ? `<span class="panel-label">Most voted</span><span class="result-figure result-figure-list">${tied.join(' · ')}</span><span class="result-sub">Tied, ${each}</span>`
-    : `<span class="panel-label">Most voted</span><span class="result-figure">Tie</span><span class="result-sub">${tied.length} values, ${each}</span>`
+  // Every tied value shows, in chart order, and every tied column is red; four or more read "Tie"
+  const tied = deck.filter(v => counts[v] === top)
+  const red = v => counts[v] === top
+  const noun = n => `${n} vote${n === 1 ? '' : 's'}`
+  const each = `${noun(top)} each`
+  const figure = tied.length >= 4 ? 'Tie' : tied.map(fig).join(' · ')
+  const spoken = tied.length >= 4 ? 'Tie' : tied.length === 1 ? tied[0] : `${tied.slice(0, -1).join(', ')} and ${tied[tied.length - 1]}`
+  const sub = tied.length === 1 ? `${top} of ${noun(votes)}` : tied.length >= 4 ? `${tied.length} values, ${each}` : `Tied, ${each}`
+  const mostVoted = () => `<span class="panel-label">Most voted</span><span class="result-figure${tied.length > 1 && tied.length <= 3 ? ' result-figure-list' : ''}" data-testid="most-voted" aria-hidden="true">${figure}</span><span class="visually-hidden">${spoken}</span><span class="result-sub">${sub}</span>`
   const voted = people.filter(p => p.state === 'confirmed').length
   // The phone's facilitators' line names two, then the rest as a count
   const facNames = facilitators.length > 2 ? `${facilitators.slice(0, 2).join(', ')} and ${facilitators.length - 2} more` : facilitators.join(', ')
@@ -188,7 +186,7 @@ function draw() {
     return `<div class="deck-place"><button class="deck-card${mine && own.state === 'kept' ? ' deck-card-kept' : ''}" data-vote="${v}" type="button" aria-pressed="${mine && own.state === 'confirmed'}"${kept}>${fig(v)}</button>
       ${mine && own.state === 'kept' ? '<span class="deck-tag" aria-hidden="true">Not confirmed</span>' : ''}</div>` }).join('')}</div>`
   const chart = `<div class="result" role="region" aria-label="Results">
-    <div class="result-most${later && tied.length > 1 ? ' later' : ''}">${tally.length ? mostVoted() : '<span class="panel-label">Nobody voted</span>'}</div>
+    <div class="result-most">${tally.length ? mostVoted() : '<span class="panel-label">Nobody voted</span>'}</div>
     <div class="result-columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
       ? `<div class="result-column${red(v) ? ' result-column-top' : ''}" role="listitem" data-testid="tally-entry"><span class="visually-hidden" data-testid="tally-sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="result-count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="result-bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="result-value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
       : `<div class="result-column result-column-empty" aria-hidden="true"><span class="result-value">${fig(v)}</span></div>`).join('')}</div></div>`

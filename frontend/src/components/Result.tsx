@@ -1,28 +1,35 @@
 import './result.css'
-import type { CSSProperties } from 'react'
-import { resultColumns } from '../room/result'
+import { Fragment, type CSSProperties } from 'react'
+import { resultColumns, resultHeadline } from '../room/result'
 import { estimationValues } from './Deck'
 import { Figure } from './Figure'
 
-// The most voted is the first of the summary, today's tie-break (decision 10).
 export function Result({ summary }: { summary: [string, number][] }) {
-  const [first, top] = summary[0] ?? ['', 0]
-  const votes = summary.reduce((n, [, count]) => n + count, 0)
+  const head = resultHeadline(estimationValues, summary)
+  const top = summary[0]?.[1] ?? 0
   return (
     <div className="result" role="region" aria-label="Results">
       <div className="result-most">
-        {summary.length ? (
+        <span className="panel-label">{head.label}</span>
+        {head.figure.length > 0 && (
           <>
-            <span className="panel-label">Most voted</span>
-            <span className="result-figure" data-testid="most-voted">
-              <Figure value={first} />
+            <span
+              className={
+                head.figure.length > 1 ? 'result-figure result-figure-list' : 'result-figure'
+              }
+              data-testid="most-voted"
+              aria-hidden="true"
+            >
+              {head.figure.map((value, i) => (
+                <Fragment key={value}>
+                  {i > 0 && ' · '}
+                  <Figure value={value} />
+                </Fragment>
+              ))}
             </span>
-            <span className="result-sub">
-              {top} of {votes} votes
-            </span>
+            <span className="visually-hidden">{head.spoken}</span>
+            <span className="result-sub">{head.sub}</span>
           </>
-        ) : (
-          <span className="panel-label">Nobody voted</span>
         )}
       </div>
       <div className="result-columns" role={summary.length ? 'list' : undefined}>
@@ -30,7 +37,9 @@ export function Result({ summary }: { summary: [string, number][] }) {
           count ? (
             <div
               key={value}
-              className={value === first ? 'result-column result-column-top' : 'result-column'}
+              className={
+                head.tied.includes(value) ? 'result-column result-column-top' : 'result-column'
+              }
               role="listitem"
               data-testid="tally-entry"
             >

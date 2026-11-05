@@ -68,7 +68,7 @@ export function applySnapshot(s: RoomSnapshot): View {
   })
   return {
     ownRole: ownRoleOf(s),
-    // Sorted after the tally, which reads the snapshot's order, so tied values stay as they were.
+    // Sorted after the tally, so tied values keep key order; only tied values off the deck show it.
     users: [...users].sort(byName),
     votesRevealed: s.votesRevealed,
     currentIssue: s.currentIssue,

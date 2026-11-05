@@ -42,9 +42,9 @@ the decisions log at the end.
   `frontend/src/components/`, with `reset.css` and `page.css` imported into the
   `base` layer. Their own `<style>` keeps only the later steps' parts and the
   parameters' design alternatives.
-- They show what step 4 builds and, behind a "later steps" toggle, the parts
-  later steps add (progress count, Next issue, recent rounds), dashed, so step
-  4 leaves room for them.
+- They show what is built and, behind a "later steps" toggle, the parts later
+  steps add (progress count, Next issue, recent rounds), dashed, so what is
+  built leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
 - `room.html`, the room page at every width (J10, J11, J12). Its parameters,
@@ -292,10 +292,12 @@ stacking, Dismiss and mounting are J12's.
   subsetting and woff2 need no renaming, and the licence text ships beside
   the files.
 - **Shared-screen text** is sized for 4 m on a 40 inch TV at the laptop
-  target: the `--text-3xl` step, 44 px, and the most-voted value at the 4xl
-  step. The result's chart, its values and counts, is the one element at the
-  3 m step, `--text-2xl`, a value shrinking only where its column is narrower
-  (3b1). The issue is at `--text-lg`, a heading's size.
+  target: the `--text-3xl` step, 44 px, and the most-voted figure at the 4xl
+  step, a tied list excepted. The result's chart, its values and counts, and a
+  tied list in the most-voted figure are at the 3 m step, `--text-2xl`; the
+  list sits with the chart that shows the same values, and a chart value
+  shrinks only where its column is narrower (3b1). The issue is at `--text-lg`,
+  a heading's size.
 - A late font swaps in once; the latin file is preloaded, so a normal load
   draws Inter from the first paint.
 
@@ -519,6 +521,10 @@ in its spec
 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
 Contract).
 
+The tied vote's contract changes, for the result's headline and its top
+columns, are listed in its spec
+(`docs/superpowers/specs/2026-11-05-tied-vote-design.md`, Contract).
+
 - Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
   (`facilitatorMark`), and one list holding every participant
   (`participantEntries`). The roster changed both, a contract change of step
@@ -568,7 +574,14 @@ Contract).
 - `tally-entry`, inside the region "Results", marks a value someone voted
   for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
   reading each entry's `tally-value` and `tally-count`, and the nobody-voted
-  case reads none. `most-voted` holds the most voted value (`mostVoted`).
+  case reads none. `most-voted` holds the figure as drawn, `8`, `5 · 8` or
+  `Tie` (`mostVoted`), so `toHaveText` reads what is shown.
+  `result-column-top` on a `tally-entry` marks a column of the tied set, read
+  with `toContainClass`.
+- The Results region's headline, read with `toMatchAriaSnapshot` as one text
+  line: label, spoken figure, sub line (`Most voted 3 and 5 Tied, 1 vote
+  each`). The spoken figure, found by its text inside the region
+  (`getByText(…, { exact: true })`), is read for its clip.
 - The copy hint's text, "Link copied to clipboard" until step 4c1-wide, which
   put 3b1's shortened hint, "Link copied", in place, a contract change of
   step 4. The hint is the header's status region (`copyHint`), always

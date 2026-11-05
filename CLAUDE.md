@@ -16,3 +16,4 @@ issues. Before drafting a new issue, search open and closed issues for it.
 - Keep the app a tool, not a platform: no accounts, gating roles, onboarding tours, avatars, sounds, gamification or settings pages.
 - No confirmation dialog on routine actions; protect a destructive one by position and styling, or by undo.
 - Never show a state by colour or an icon alone: words first, icons beside them.
+- Justify a narrow width or a zoom by the effective-viewport uses in `docs/superpowers/specs/2026-10-30-ui-refresh-4c1-narrow-cases-design.md`, decision 3; 400% zoom is not one of them. 320 px stands for the first iPhone SE and WCAG 1.4.10's reflow width.

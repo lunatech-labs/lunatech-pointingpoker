@@ -16,7 +16,7 @@
 </style>
 </head>
 <body>
-<p style="margin:0 0 8px;max-width:80rem"><b>Pointing Poker, the room page.</b> Every cell is the page at the chosen width. Solid is step 4, dashed is a later step. "Open alone" shows a cell at your window's size, with the probe, and is clickable (cards, Show votes, Re-vote, Clear, Copy link).</p>
+<p style="margin:0 0 8px;max-width:80rem"><b>Pointing Poker, the room page.</b> Every cell is the page at the chosen width. Solid is built, dashed is a later step. "Open alone" shows a cell at your window's size, with the probe, and is clickable (cards, Show votes, Re-vote, Clear, Copy link).</p>
 <div class="bar" id="bar"></div>
 <div class="grid" id="grid"></div>
 <script>
@@ -27,7 +27,7 @@ const options = {
   phase: [['voting', 'Voting'], ['revote', 'After a re-vote'], ['revealed', 'Revealed'], ['revealed-revote', 'Revealed after a re-vote']],
   votes: [['sample', 'One most voted'], ['tie3', 'Three tied'], ['tie4', 'Four tied'], ['0', 'Nobody voted']],
   voters: [['14', '14 voters'], ['12', '12 voters'], ['4', '4 voters']],
-  later: [['0', 'Step 4 only'], ['1', 'With later steps, dashed: progress, round history, Next issue, the tie rule']],
+  later: [['0', 'Shipped steps only'], ['1', 'With later steps, dashed: progress, round history, Next issue']],
   issue: [['https://lunatech.atlassian.net/browse/PP-1234', 'Issue: a link'], ['Rework the login page so that a returning user lands on their last room, and keep the room list in sync', 'free text'], [long, 'long free text']],
   layout: [['deck-bottom', 'f. Deck or result above the bar (default)'], ['deck-top', 'g. Deck or result on top (the open swap)']],
   message: [['', 'No message'], ['lost', 'Connection lost'], ['restarted', 'Reconnected'], ['moved', 'Moved link'], ['lost,moved', 'Lost + moved'],

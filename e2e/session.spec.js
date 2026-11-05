@@ -36,6 +36,17 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await show(alice.page)
   await expect(tallyEntries(carol.page)).toHaveCount(2)
   await expectSummaryMatchesParticipants(carol.page)
+  // Alice's 3 and Bob's 5 tie, so the headline names both and marks both columns.
+  await expect(mostVoted(carol.page)).toHaveText('3 · 5')
+  await expect(results(carol.page)).toMatchAriaSnapshot(`
+    - region "Results":
+      - text: Most voted 3 and 5 Tied, 1 vote each
+  `)
+  const spoken = results(carol.page).getByText('3 and 5', { exact: true })
+  await expect(spoken).toHaveCSS('clip-path', 'inset(50%)')
+  for (const entry of await tallyEntries(carol.page).all()) {
+    await expect(entry).toContainClass('result-column-top')
+  }
 
   // Re-vote, then reveal with nobody having re-confirmed. The estimations stand and the
   // confirmations do not, which is the one state where the list and the summary can disagree.
@@ -71,6 +82,8 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await expect(tallyEntries(bob.page)).toHaveCount(2)
   await expectSummaryMatchesParticipants(bob.page)
   await expect(mostVoted(bob.page)).toHaveText('5')
+  await expect(tallyEntries(bob.page).nth(0)).toContainClass('result-column-top')
+  await expect(tallyEntries(bob.page).nth(1)).not.toContainClass('result-column-top')
 
   // Clear ends the round instead of reopening it. Asserting the cleared list proves nothing,
   // since an unrevealed round renders no values either way: the next round is the real check.
