@@ -145,8 +145,9 @@ The shared setup these reads ride is weighed in decision 8.
    at `--text-2xl` with room and at `--text-3xl` with 3 px to spare (measured
    in both browsers), so no plausible break of this change wraps or overflows
    it, so a case reading it could not be proven red. The existing "no page
-   scrolls sideways" sweep reveals a round at 320. At 1280 the block grows to
-   its figure, so "fits" cannot fail there; the squeeze is measured once.
+   scrolls sideways" sweep reveals a single `13` at 320, so no committed case
+   draws a tied list there. At 1280 the block grows to its figure, so "fits"
+   cannot fail there; the squeeze is measured once.
 8. **The tie checks ride the session journey** (user). Its first reveal is
    already a 3-5 tie and its majority reveal a single winner, and the journey's
    purpose is an honest summary.
