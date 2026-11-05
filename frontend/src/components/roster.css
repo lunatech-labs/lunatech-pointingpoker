@@ -62,6 +62,8 @@
   font-weight: var(--weight-bold);
   color: var(--h);
   background: var(--t);
+  white-space: nowrap;
+  overflow: clip; /* clip, not hidden: hidden makes the disc a scroll container */
 }
 
 .roster-pill {

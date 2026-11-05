@@ -5,6 +5,7 @@ import {
   ISSUE_240,
   LONGEST_ID,
   NAMES,
+  avatar,
   connectionLost,
   copyHint,
   deck,
@@ -463,6 +464,39 @@ const sideways = page =>
     const root = document.documentElement
     return root.scrollWidth - root.clientWidth
   })
+
+test('a roster avatar draws on one line and is clipped at its disc', async ({ join, voters }) => {
+  const { page } = await join('Alice')
+  await voters(['王 小明', 'Ǆemal Ǳonić'])
+  await expect(avatar(page, '王 小明')).toBeVisible()
+  await expect(avatar(page, 'Ǆemal Ǳonić')).toBeVisible()
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+
+  const lines = await avatar(page, '王 小明').evaluate(el => {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    return new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size
+  })
+  expect(lines, '王小 on one line').toBe(1)
+
+  const cut = await avatar(page, 'Ǆemal Ǳonić').evaluate(el => {
+    const d = el.getBoundingClientRect()
+    // Just outside the disc, where overflowing text would be the hit without a clip; a range ignores clipping.
+    const hit = document.elementFromPoint(d.right + 2, d.top + d.height / 2)
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const overflows = range.getBoundingClientRect().right > d.right + 2
+    return { inView: hit !== null, self: hit === el, overflows }
+  })
+  expect(cut, 'ǄǱ overflows and is cut at the circle').toEqual({
+    inView: true,
+    self: false,
+    overflows: true
+  })
+})
 
 test.describe('the narrow layouts', () => {
   test.skip(({ browserName }) => browserName !== 'chromium')

@@ -525,6 +525,10 @@ The tied vote's contract changes, for the result's headline and its top
 columns, are listed in its spec
 (`docs/superpowers/specs/2026-11-05-tied-vote-design.md`, Contract).
 
+The avatar's contract changes, for its test id and the reads on its text, are
+listed in its spec
+(`docs/superpowers/specs/2026-11-05-avatar-emoji-design.md`, Contract).
+
 - Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
   (`facilitatorMark`), and one list holding every participant
   (`participantEntries`). The roster changed both, a contract change of step

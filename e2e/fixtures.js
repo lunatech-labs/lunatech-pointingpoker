@@ -277,6 +277,14 @@ export const facilitatorName = (page, name) =>
     .getByTestId('facilitator')
     .and(page.getByText(name, { exact: true }))
 
+// A person's avatar in the roster, found through the row holding their name.
+export const avatar = (page, name) =>
+  page
+    .getByRole('complementary', { name: 'Participants' })
+    .getByRole('listitem')
+    .filter({ hasText: name })
+    .getByTestId('avatar')
+
 // The legacy-link banner, a status rather than an alert so connectionAlert never sees it.
 export const movedBanner = page => page.getByRole('status').filter({ hasText: 'old link' })
 // Shown after the reload on a refusal; a status for the same reason as movedBanner.
