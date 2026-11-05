@@ -86,7 +86,7 @@ it.each([
 - [ ] **Step 1: Test id and helper.** Add `data-testid="avatar"` to the avatar span; add `avatar` to `fixtures.js`.
 - [ ] **Step 2: Write the case** `'a roster avatar draws on one line and is clipped at its disc'` (ruling 5), after the `sideways` helper and outside the narrow describes (they skip Firefox), with `avatar` added to the imports. Wait for both avatars to be visible, then settle (ruling 6). Two reads, each on its avatar via `evaluate`:
   - `王 小明`: with a `Range` over the span's contents, the set of `Math.round(rect.top)` over `range.getClientRects()` has size 1. Message `'王小 on one line'`.
-  - `Ǆemal Ǳonić`: with `d = el.getBoundingClientRect()`, `hit = document.elementFromPoint(d.right + 2, d.top + d.height / 2)` (changed while building: a point near the text's right edge hit the name in Chromium); return `{ inView: hit !== null, self: hit === el }`. Expect `{ inView: true, self: false }`. Message `'ǄǱ cut at the circle'`.
+  - `Ǆemal Ǳonić`: with `d = el.getBoundingClientRect()`, `hit = document.elementFromPoint(d.right + 2, d.top + d.height / 2)` (changed while building: a point near the text's right edge hit the name in Chromium), and `overflows`: a `Range` over the span's contents ends past `d.right + 2` (final review); return `{ inView: hit !== null, self: hit === el }`. Expect `{ inView: true, self: false }`. Message `'ǄǱ cut at the circle'`.
 - [ ] **Step 3: Run it red.** `npm run e2e -- layout -g "roster avatar"`. Expected: red in both browsers (Firefox stops at the one-line read; Step 6 shows each read red alone).
 - [ ] **Step 4: Add the CSS** to `.roster-avatar`: `white-space: nowrap;` and `overflow: clip;` with ruling 7's comment.
 - [ ] **Step 5: Run it green**, same command. Expected: pass in both.

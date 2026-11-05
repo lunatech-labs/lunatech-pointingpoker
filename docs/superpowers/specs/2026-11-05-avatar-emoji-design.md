@@ -92,9 +92,11 @@ pointer to this section, as it points to the tied vote's Contract.
   - **Clipped**: for `ǄǱ`, `document.elementFromPoint` 2 px right of the
     disc, at its vertical centre, is an element (so the point is in view) and
     not the avatar. Without `overflow: clip` it is the avatar. The point sits
-    in the 8 px gap before the name, which the text overruns: `ǄǱ` is about
-    32 px wide in both browsers against a 22 px disc, drawn in the bundled
-    Inter (latin-ext), so no system font decides it. A point near the text's
+    in the 8 px gap before the name, which the text overruns: `ǄǱ` is 32.1 px
+    wide in Chromium and 32.4 px in Firefox against a 22 px disc, drawn in the
+    bundled Inter (latin-ext), so no system font decides it. The text's range,
+    which ignores the clip, must end past the point, so the read cannot pass on
+    text that no longer overflows. A point near the text's
     right edge lands on the name in Chromium, clip or not (found while
     building).
 - Untested: `clip` rather than `hidden` (decision 4); a check could only
