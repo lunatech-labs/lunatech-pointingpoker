@@ -108,10 +108,6 @@ The shared setup these reads ride is weighed in decision 8.
     `result-column-top`;
   - the majority reveal (5, 5, 8), which reads `mostVoted` `'5'`: the `5` entry
     contains `result-column-top` and the `8` entry does not.
-- Layout, both browsers, 320 by 640, outside the Chromium-only narrow layouts
-  group: three voters on `0.5`, `13` and `89`; the figure's text, read through
-  a Range, lies within the Results region, and every client rect shares one
-  `top`.
 - Measured once while building, not a case: at 1280, the columns with
   `0.5 · 13 · 89` and with `Tie` over `13 values, 1 vote each`, against a
   single `13`. A visible squeeze comes back to the user as a finding, with a
@@ -140,11 +136,12 @@ The shared setup these reads ride is weighed in decision 8.
    outside the app sends such a value, and two must tie to show it. It lasts
    until the server validates votes against a card scale (#535, then #504); a
    natural sort now would add a rule for it.
-7. **Layout case at 320 only, both browsers** (user). At 1280 the block grows to
-   its figure, so "fits" cannot fail there; the squeeze is measured once. The
-   grid stretches the figure's box, so the text is read through a Range; a
-   one-line Range still returns one rect per node, all sharing one `top`
-   (probed in both browsers).
+7. **No layout case** (user, revised while building). At 320 a tied list fits
+   at `--text-2xl` with room and at `--text-3xl` with 3 px to spare (measured
+   in both browsers), so no plausible break of this change wraps or overflows
+   it, so a case reading it could not be proven red. The existing "no page
+   scrolls sideways" sweep reveals a round at 320. At 1280 the block grows to
+   its figure, so "fits" cannot fail there; the squeeze is measured once.
 8. **The tie checks ride the session journey** (user). Its first reveal is
    already a 3-5 tie and its majority reveal a single winner, and the journey's
    purpose is an honest summary.
@@ -163,6 +160,7 @@ The shared setup these reads ride is weighed in decision 8.
 13. **`1 of 1 vote`** (user). Most users would report the plural as a bug; the
     unit case is planned anyway.
 14. **A tied list at the 3 m step** (user). The chart shows the same values at
-    that size; 3xl does not fit `0.5 · 13 · 89` on one line at 320.
+    that size. 3xl would fit `0.5 · 13 · 89` on one line at 320, but with only
+    3 px to spare (measured while building).
 15. **No states x events matrix, no spike** (my call). The result is a pure
     function of the votes with no state, and the logic is a filter on counts.
