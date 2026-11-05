@@ -14,7 +14,7 @@
 
 - Buckets: Open, Fixed, Accepted, Obsolete, Lesson (spec decision 2).
 - Destinations, exactly: `→ #N`, `fixed in #PR`, `fixed`, `dropped`, `lesson` (decision 5).
-- Labels: one type label of `bug`, `enhancement`, `documentation`, `debt`; optional `a11y`, `security`, `ux`, `request`. No priority labels (decision 3).
+- Labels: one type label of `bug`, `enhancement`, `documentation`, `debt`; optional `a11y`, `security`, `ux`, `test`, `request`. No priority labels (decision 3).
 - Issue body: the item's text, then a source line with a permalink on a `main` commit, plus the spec section for a spec candidate (decision 4).
 - Accepted issues are closed as not planned with a one-line why (decision 2).
 - Delivered specs and plans are not edited. Citations name titles, never heading anchors.

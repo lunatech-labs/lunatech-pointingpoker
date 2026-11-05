@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.UUID
 
-// Goes with its route and banner after six months with no redirect logged (docs/roadmap.md).
+// Goes with its route and banner after six months with no redirect logged (issue #526).
 object LegacySlug:
 
   def derive(uuid: UUID): Slug =

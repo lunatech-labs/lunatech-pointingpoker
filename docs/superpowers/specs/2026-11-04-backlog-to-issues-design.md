@@ -82,7 +82,7 @@ Several Open items may become one issue. Known candidates:
 
 The vocabulary: one type label per issue, `bug`, `enhancement`, `documentation`
 (all three exist) or `debt` (refactors, test and CI gaps); optional area labels
-`a11y`, `security`, `ux`; and `request` for something a user asked for, whose
+`a11y`, `security`, `ux`, `test` (missing tests and manual checks); and `request` for something a user asked for, whose
 body names who asked and how, so they can be told when it ships. No priority
 labels.
 

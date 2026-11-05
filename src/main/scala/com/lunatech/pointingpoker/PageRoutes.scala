@@ -62,7 +62,7 @@ class PageRoutes(apiConfig: ApiConfig):
           index
         }
       },
-      // Legacy links, removed once six months pass with none logged (docs/roadmap.md).
+      // Legacy links, removed once six months pass with none logged (issue #526).
       path(JavaUUID) { uuid =>
         get {
           val slug = LegacySlug.derive(uuid)

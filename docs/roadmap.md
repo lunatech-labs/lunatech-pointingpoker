@@ -1,5 +1,9 @@
 # Planning Poker Roadmap
 
+> The modernization this file tracked is delivered, and open work lives in this
+> repository's GitHub issues. The file is frozen: each unticked item carries a
+> marker saying where it went.
+
 This tracks the multi-PR modernization effort this app is going through. It exists
 in the repo (rather than as a private note) so anyone looking at a given PR or spec
 under `docs/superpowers/` can see where it fits in the larger plan, and so the plan
@@ -58,7 +62,7 @@ here was slug stability rather than durable state.
       memory. **Becomes step 7.** The design's "Slug allocation" section settles
       the vocabulary, the refusal of names outside it, and the redirect that
       keeps today's pinned UUID links working.
-- [ ] Remove the legacy UUID redirect step 7 adds, with its derivation and
+- [ ] *(→ #526)* Remove the legacy UUID redirect step 7 adds, with its derivation and
       banner. Trigger: six months with no redirect logged, long enough to cover
       an invitation opened once a quarter.
 
@@ -82,7 +86,7 @@ debugged at the same time.
 
 - [x] Migrate off Vue 2, to React (step 8).
 - [x] Component structure, TypeScript, build tooling, automated tests.
-- [ ] Appearance: brand, layout, responsive/mobile. Step 8c moved to
+- [ ] *(fixed)* Appearance: brand, layout, responsive/mobile. Step 8c moved to
       `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`,
       a design of its own, which drops the light/dark theme for now since
       lunatech.com has one theme.
@@ -99,7 +103,7 @@ directly in the new frontend.
       firing. It builds the non-voting role as that design's "facilitator", who
       keeps the controls, so there is no read-only observer. **Landed as steps
       2a to 2c** of `docs/superpowers/specs/2026-10-04-ui-refresh-2-roles-design.md`.
-- [ ] Show how many participants have voted, so a facilitator reads abstention
+- [ ] *(→ #517)* Show how many participants have voted, so a facilitator reads abstention
       instead of counting the voted entries. Comes out of step 3, which took the
       non-voter out of the tally as a non-value: a count beside the distribution is
       where that signal belongs, rather than a bucket inside it. Step 3a makes it
@@ -117,7 +121,7 @@ directly in the new frontend.
       carries it. It lands as a latch rather than as a standing derivation, which
       takes the auto-reveal half of the item below with it; section 3 of that spec
       says why.
-- [ ] Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
+- [ ] *(→ #527)* Latched reveal, narrowed. **The auto-reveal half moved into step 1 and is no
       longer a product decision.** `round.revealed` is set by `Show` and by the
       vote that completes the round, and cleared only by `clear()` or `reVote()`;
       the accidental un-reveal closes at step 1 with it. Section 3 of that spec
@@ -132,7 +136,7 @@ directly in the new frontend.
       neighbouring question and not this one: a revealed round now refuses every
       vote, so nothing lands between the reveal and a `reVote`. Whether the reveal
       survives that `reVote` is still open.
-- [ ] Show the previous estimate beside the current one once a round has been
+- [ ] *(→ #514)* Show the previous estimate beside the current one once a round has been
       re-voted, so the room can see who moved and which way. Comes out of step 3a:
       with a revealed round refusing votes, changing your mind is a Re-vote, which
       makes the second answer a deliberate act worth reading against the first.
@@ -159,14 +163,14 @@ directly in the new frontend.
       `docs/superpowers/specs/2026-08-24-sse-backpressure-design.md`. Step 1 of
       the protocol re-architecture superseded both mechanisms: the batched replay
       by a single `RoomSnapshot`, and `fail` by `dropHead`.
-- [ ] Re-vote refinement: prior-vote tracking, confirm-vs-change distinction, the
+- [ ] *(→ #514)* Re-vote refinement: prior-vote tracking, confirm-vs-change distinction, the
       pre/post-reveal visibility rules from the spec. The current `ReVote` command
       is a stub.
-- [ ] Results display polish: pin `?`/`Infinity`, highlight lowest/highest
+- [ ] *(→ #536)* Results display polish: pin `?`/`Infinity`, highlight lowest/highest
       estimate, group participants by estimate, tap-to-highlight interaction.
       A step 5+ candidate of
       `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
-- [ ] A facilitator-recorded round outcome: teams often resolve a split by
+- [ ] *(→ #528)* A facilitator-recorded round outcome: teams often resolve a split by
       talking it out rather than re-voting, and the app has no concept of a
       settled estimate at all. A command plus a snapshot field. New here, and
       **step 9** pairs it with the item below. The interaction for selecting the
@@ -175,7 +179,7 @@ directly in the new frontend.
       highest of tied values, the "highest when in doubt" rule some teams use,
       while the display shows the tie (the UI refresh's step 5+ candidate
       "Ties shown rather than broken").
-- [ ] Round history within a session (running list of context to final estimate
+- [ ] *(→ #528)* Round history within a session (running list of context to final estimate
       per round), held in memory on the room and gone when it stops. **Becomes
       step 9** together with the recorded outcome above, since a settled estimate
       you cannot look back at is half a feature. Only a revealed round enters it:
@@ -184,11 +188,11 @@ directly in the new frontend.
       short form, which the current issue may use too: a link without its
       scheme, a Jira link's key (the part after `/browse/`), the end of an
       undetermined text after an ellipsis.
-- [ ] Copy/export round history at end of session. Promoted from the backlog to
+- [ ] *(→ #528)* Copy/export round history at end of session. Promoted from the backlog to
       sit with step 9: with history held only in memory this is the sole way to
       keep a session's rounds, which makes it part of the feature rather than a
       convenience beside it.
-- [ ] Timer-based fallback reveal (auto-reveal after a configurable timeout
+- [ ] *(→ #529)* Timer-based fallback reveal (auto-reveal after a configurable timeout
       regardless of stragglers). **The least settled item in this phase**, and
       unlike its neighbours not just a field plus a predicate: it needs a timer, a
       publish on a transition nobody commanded, and four open product decisions.
@@ -199,11 +203,11 @@ directly in the new frontend.
 
 ## Phase 5: Lower priority / hardening
 
-- [ ] Idle indicator (flag a user inactive after roughly one minute of no input,
+- [ ] *(→ #530)* Idle indicator (flag a user inactive after roughly one minute of no input,
       broadcast to the room). A field on the wire, but not only a field: it needs
       server-side activity tracking, a timer, and a publish on a transition
       nobody commanded.
-- [ ] Room-creation hardening (rate limiting, caps on unauthenticated room
+- [ ] *(→ #503)* Room-creation hardening (rate limiting, caps on unauthenticated room
       creation).
 - [x] Garbage collection for abandoned or never-joined rooms. Not in the original
       list; found during review of the SSE transport PR. A room was only removed
@@ -214,13 +218,13 @@ directly in the new frontend.
       life of the process. **Landed as step 4a's stop-after-idle**, which stops a
       room two hours after the grace period following its last connection ends,
       joined or not. See `docs/known-issues.md`.
-- [ ] Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
+- [ ] *(→ #460)* Restart-warning / maintenance-mode UX and zero-downtime deploy orchestration.
       Explicitly deferred to a follow-up spec, out of scope until then by design,
       not by oversight. More load-bearing than it looks now that nothing is
       persisted: a restart takes presence, the round, the current issue and the
       session's history at once, so scheduling deploys outside meeting hours is
       the actual mitigation.
-- [ ] A deliberate logging policy. There is no `logback.xml` in the repo or the
+- [ ] *(→ #531)* A deliberate logging policy. There is no `logback.xml` in the repo or the
       staged distribution, so logback falls back to root DEBUG on the console:
       every room broadcast (`actors/Room.scala`) and every request path is
       logged in production. Logging was never in scope for the 2026-08 spec
@@ -231,7 +235,7 @@ directly in the new frontend.
       above gets judged. The item is to decide what operations actually needs,
       an activity signal that does not depend on debug-level noise, and set the
       level once that exists.
-- [ ] Usage metrics as structured log lines, so tuning stops being guesswork.
+- [ ] *(→ #532)* Usage metrics as structured log lines, so tuning stops being guesswork.
       Two shapes. Per-event lines on room created, room stopped with its lifetime
       and peak participants, member joined, member pruned, vote cast, and round
       revealed with whether Show or the latch did it. Then a cumulative summary
@@ -302,24 +306,24 @@ directly in the new frontend.
       goes stale. `connection.ts`'s `refused()` now lets a command's own 401
       check the app directly, rather than waiting on a stream that may never
       go quiet.
-- [ ] Per-user command sequencing/idempotency to guard against HTTP POST
+- [ ] *(→ #502)* Per-user command sequencing/idempotency to guard against HTTP POST
       reordering (see `docs/known-issues.md`). Stays here deliberately: under a
       snapshot protocol a reordering is visible rather than silently divergent,
       and one has never been observed. The trigger is someone seeing one.
-- [ ] Presentation/TV-mode read-only view for screen sharing. Addressed by the
+- [ ] *(dropped)* Presentation/TV-mode read-only view for screen sharing. Addressed by the
       facilitator's page in steps 2 and 4 of
       `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`,
       which keeps its controls, so the read-only half is not taken.
-- [ ] Keyboard shortcuts for voting. A step 5+ candidate of
+- [ ] *(→ #533)* Keyboard shortcuts for voting. A step 5+ candidate of
       `docs/superpowers/specs/2026-09-30-ui-refresh-design.md`.
-- [ ] Per-session auto-reveal toggle (some teams may want manual-only reveal).
-- [ ] Undo/re-hide after an accidental reveal. Pairs with what remains of Phase
+- [ ] *(→ #534)* Per-session auto-reveal toggle (some teams may want manual-only reveal).
+- [ ] *(→ #527)* Undo/re-hide after an accidental reveal. Pairs with what remains of Phase
       4's latched reveal. The accidental un-reveal that exists today closes at
       step 1 instead, where reveal becomes a latch.
 
 Deliberately at the end of the backlog, neither being customer-asked:
 
-- [ ] A `scale` concept in the domain model (fibonacci vs. t-shirt, fixed at
+- [ ] *(→ #535)* A `scale` concept in the domain model (fibonacci vs. t-shirt, fixed at
       creation), and custom scales beyond those. Moved down from Phase 2 on the
       product owner's own second thoughts about whether it is wanted. Nothing
       about waiting makes it harder: an additive wire field, an optional
