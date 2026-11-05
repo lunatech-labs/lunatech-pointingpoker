@@ -14,7 +14,12 @@ function Row({ name, me = false, facilitator = false, children }: RowProps) {
   const colours = { '--h': `var(--avatar-ink-${pair})`, '--t': `var(--avatar-ground-${pair})` }
   return (
     <li className={me ? 'roster-row roster-row-me' : 'roster-row'}>
-      <span className="roster-avatar" style={colours as CSSProperties} aria-hidden="true">
+      <span
+        className="roster-avatar"
+        data-testid="avatar"
+        style={colours as CSSProperties}
+        aria-hidden="true"
+      >
         {initials(name)}
       </span>
       <span className="roster-who" title={name}>
