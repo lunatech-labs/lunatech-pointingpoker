@@ -226,7 +226,7 @@ export const connectionAlert = page => page.getByRole('alert')
 export const connectionLost = page =>
   page.getByRole('alert').filter({ hasText: 'Connection to the room was lost' })
 // Two renderings of one set, so a revealed round shows the same estimations in both. Compared as
-// multisets: the order of a tie is undecided, and pinning it here would choose a rule nobody has.
+// multisets, since each rendering keeps its own order.
 export const expectSummaryMatchesParticipants = async page => {
   // Two empty renderings agree trivially, so this gate is what makes the comparison mean
   // anything, and being retrying it also settles the DOM before the reads below, which are not.

@@ -519,6 +519,10 @@ in its spec
 (`docs/superpowers/specs/2026-10-16-ui-refresh-3b3-issue-editor-and-messages-design.md`,
 Contract).
 
+The tied vote's contract changes, for the result's headline and its top
+columns, are listed in its spec
+(`docs/superpowers/specs/2026-11-05-tied-vote-design.md`, Contract).
+
 - Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
   (`facilitatorMark`), and one list holding every participant
   (`participantEntries`). The roster changed both, a contract change of step
@@ -568,7 +572,14 @@ Contract).
 - `tally-entry`, inside the region "Results", marks a value someone voted
   for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
   reading each entry's `tally-value` and `tally-count`, and the nobody-voted
-  case reads none. `most-voted` holds the most voted value (`mostVoted`).
+  case reads none. `most-voted` holds the figure as drawn, `8`, `5 · 8` or
+  `Tie` (`mostVoted`), so `toHaveText` reads what is shown.
+  `result-column-top` on a `tally-entry` marks a column of the tied set, read
+  with `toContainClass`.
+- The Results region's headline, read with `toMatchAriaSnapshot` as one text
+  line: label, spoken figure, sub line (`Most voted 3 and 5 Tied, 1 vote
+  each`). The spoken figure, found by its text inside the region
+  (`getByText(…, { exact: true })`), is read for its clip.
 - The copy hint's text, "Link copied to clipboard" until step 4c1-wide, which
   put 3b1's shortened hint, "Link copied", in place, a contract change of
   step 4. The hint is the header's status region (`copyHint`), always
