@@ -42,9 +42,9 @@ the decisions log at the end.
   `frontend/src/components/`, with `reset.css` and `page.css` imported into the
   `base` layer. Their own `<style>` keeps only the later steps' parts and the
   parameters' design alternatives.
-- They show what step 4 builds and, behind a "later steps" toggle, the parts
-  later steps add (progress count, Next issue, recent rounds), dashed, so step
-  4 leaves room for them.
+- They show what is built and, behind a "later steps" toggle, the parts later
+  steps add (progress count, Next issue, recent rounds), dashed, so what is
+  built leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
 - `room.html`, the room page at every width (J10, J11, J12). Its parameters,
@@ -292,10 +292,12 @@ stacking, Dismiss and mounting are J12's.
   subsetting and woff2 need no renaming, and the licence text ships beside
   the files.
 - **Shared-screen text** is sized for 4 m on a 40 inch TV at the laptop
-  target: the `--text-3xl` step, 44 px, and the most-voted value at the 4xl
-  step. The result's chart, its values and counts, is the one element at the
-  3 m step, `--text-2xl`, a value shrinking only where its column is narrower
-  (3b1). The issue is at `--text-lg`, a heading's size.
+  target: the `--text-3xl` step, 44 px, and the most-voted figure at the 4xl
+  step, a tied list excepted. The result's chart, its values and counts, and a
+  tied list in the most-voted figure are at the 3 m step, `--text-2xl`; the
+  list sits with the chart that shows the same values, and a chart value
+  shrinks only where its column is narrower (3b1). The issue is at `--text-lg`,
+  a heading's size.
 - A late font swaps in once; the latin file is preloaded, so a normal load
   draws Inter from the first paint.
 
