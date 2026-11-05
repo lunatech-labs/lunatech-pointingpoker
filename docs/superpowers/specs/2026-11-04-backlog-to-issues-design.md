@@ -82,9 +82,9 @@ Several Open items may become one issue. Known candidates:
 
 The vocabulary: one type label per issue, `bug`, `enhancement`, `documentation`
 (all three exist) or `debt` (refactors, test and CI gaps); optional area labels
-`a11y`, `security`, `ux`, `test` (missing tests and manual checks); and `request` for something a user asked for, whose
-body names who asked and how, so they can be told when it ships. No priority
-labels.
+`a11y`, `security`, `ux`, `test` (missing tests and manual checks); and
+`request` for something a user asked for, whose body names who asked and how,
+so they can be told when it ships. No priority labels.
 
 A label is created when an issue first uses it; the migration's dry run shows
 which ones that is. The open issues that predate the migration get their labels
@@ -126,6 +126,8 @@ backlog change:
   touches one README line.
 - The comments on `PageRoutes` and `LegacySlug` that cite `docs/roadmap.md`
   name the legacy-link removal's issue instead.
+- `docs/design/ui-reference.md`'s "Open" list gains a line naming the issues
+  that now hold its designer items and its pasted-URL cost.
 
 ### 6. Filing rule from now on
 

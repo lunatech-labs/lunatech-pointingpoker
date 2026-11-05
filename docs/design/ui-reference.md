@@ -592,6 +592,9 @@ Contract).
 
 ## Open
 
+Open work now lives in GitHub issues: the designer's items below in #497,
+accepting a pasted full URL in #524; the parked items wait on their conditions.
+
 The layout questions 3b decides, on mockups of each layout cell, in the four
 steps the UI refresh design's step 3 groups them into.
 
