@@ -54,9 +54,10 @@ Accepted corner: values off the deck stay in the summary's order (count, then
 key order), so two of them tied can list by key order. The summary's sort in
 `applySnapshot` stays.
 
-Accepted corner: at 320 with a classic scrollbar's gutter (a desktop at 400%
-zoom), a `Tie` sub line of 22 characters or more (k of 2 or more, or 10 or more
-values) wraps between words to a second line (measured while building).
+Accepted corner: at 320 with a classic scrollbar's gutter (a desktop browser
+checking 1.4.10), a `Tie` sub line of 22 characters or more (k of 2 or more, or
+10 or more values) wraps between words to a second line (measured while
+building).
 
 ## Contract
 
