@@ -86,8 +86,7 @@ shared directly. A room name in mixed case redirects to its lowercase form,
 and any other name answers `404` with a page that suggests the intended name
 when only one is close. `GET /{uuid}`, the pre-slug link form, answers `302`
 to a room name derived from the UUID with `?moved=1`, which the page turns
-into a banner asking for the link to be updated. `docs/roadmap.md` schedules
-its removal.
+into a banner asking for the link to be updated.
 
 ### Cookies
 
@@ -118,13 +117,12 @@ including after a grace-period removal, but not enough to act as it: every vote,
 show, clear, revote and edit-issue request still checks current membership, so a
 removed member's still-resolving token cannot act until they have rejoined. Actual
 room access control (e.g. limiting who can create or enter a room at all) is a
-separate, unscheduled concern, closest to the room-creation hardening listed under
-Phase 5 in `docs/roadmap.md`. Nothing revokes a token short of the room itself
-ending. Leaving does not, and before sessions were retained it did so only as a
-side effect of the member record going, not by design. A token copied out of a
-browser is therefore a valid rejoin credential for that room's life, though still
-not a licence to act without rejoining; the cookie holding it is cleared when the
-browser closes.
+separate, unscheduled concern, closest to room-creation hardening. Nothing revokes
+a token short of the room itself ending. Leaving does not, and before sessions
+were retained it did so only as a side effect of the member record going, not by
+design. A token copied out of a browser is therefore a valid rejoin credential for
+that room's life, though still not a licence to act without rejoining; the cookie
+holding it is cleared when the browser closes.
 
 ### Tech stack
 
@@ -132,12 +130,9 @@ This project uses:
   * React, TypeScript and Vite, under `frontend/`
   * pekko/pekko-http
 
-### Roadmap and known issues
+### Open work
 
-This app is going through a multi-PR modernization effort. See
-[`docs/roadmap.md`](docs/roadmap.md) for the phased plan and
-[`docs/known-issues.md`](docs/known-issues.md) for open bugs and technical debt
-found along the way that are not yet scheduled or fixed.
+Open work, bugs and technical debt are tracked in the repository's [issues](https://github.com/lunatech-labs/lunatech-pointingpoker/issues).
 
 ### Testing
 
