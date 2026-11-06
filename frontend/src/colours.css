@@ -20,7 +20,6 @@
   --ok-tint: #F1F9F2; /* the Voted pill's ground */
   --kept: #7F3A07; /* a kept vote's words: the tag, the pill, the roster's note */
   --kept-tint: #FAF6EC; /* the kept pill's ground */
-  --track: #EFEBE7; /* the small progress bar's track */
   --pip: rgba(255, 255, 255, 0.85); /* the diamond on a voted mark and on the plain header mark */
   --mark-offset: #F9C3C6; /* the header mark's pale offset card, decorative */
   --shadow-colour: rgba(28, 25, 23, 0.05); /* a panel's soft shadow, decorative */

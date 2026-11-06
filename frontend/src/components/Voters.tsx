@@ -1,5 +1,6 @@
 import './voters.css'
 import { type ParticipantRow, type View, voteState } from '../room/view'
+import { progress } from '../room/progress'
 import { Figure } from './Figure'
 import { useFitEntries } from './useFitEntries'
 
@@ -37,23 +38,26 @@ function Face({ voter, revealed }: { voter: ParticipantRow; revealed: boolean })
 // The table: voters only, as cards, their scale fitted to it (decision 4).
 export function Voters({ view }: { view: View }) {
   const voters = view.users.filter(u => !u.facilitator)
+  const counted = view.ownRole === 'Voter' && !view.votesRevealed ? progress(voters) : null
   const facilitators = view.users.filter(u => u.facilitator).map(u => u.name)
-  const reserve = view.ownRole === 'Facilitator' && !view.votesRevealed
   const { box, list } = useFitEntries({
-    reserve,
     revealed: view.votesRevealed,
     names: voters.map(u => u.name)
   })
   return (
     <section
       ref={box}
-      className={reserve ? 'panel voters voters-reserve' : 'panel voters'}
+      className="panel voters"
       role="region"
       aria-label="Voters"
       tabIndex={0}
     >
       <div className="voters-top">
-        <h2 className="panel-label">Voters · {voters.length}</h2>
+        <h2 className="panel-label">
+          {counted
+            ? `Voters · ${counted.voted} of ${counted.total} voted`
+            : `Voters · ${voters.length}`}
+        </h2>
       </div>
       <ul ref={list} className="voters-entries">
         {voters.map(u => (

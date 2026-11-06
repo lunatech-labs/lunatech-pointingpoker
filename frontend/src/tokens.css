@@ -37,13 +37,13 @@
   --radius-card: 0.5rem; /* cards, rows, the copy button, inputs (J9) */
   --radius-control: 0.625rem; /* buttons and the room chip (J9) */
   --radius-mark: 0.375rem; /* small cards: the header mark and the table's marks */
-  --radius-small: 0.25rem; /* a bar's top corners and the progress track */
+  --radius-small: 0.25rem; /* a chart bar's top corners, the progress bar's segments, the not-a-room page's typed name */
   --radius-pill: 100rem; /* fully rounded ends */
   --target-min: max(44px, 2.75rem); /* a control's least width and height (WCAG 2.5.5) */
 
   --line-hairline: 1px; /* the hairline's width, the one px value (J2) */
   --line-control: max(1px, 0.0625rem); /* buttons, inputs, unchosen card edges */
-  --line-mark: max(2px, 0.125rem); /* J3's outline mark */
+  --line-mark: max(2px, 0.125rem); /* J3's outline mark, the progress bar's dashes */
   --frame-band: max(2px, 0.375rem); /* a card's kept frame (J3) */
   --line-bar: max(3px, 0.1875rem); /* a message's bar */
   --focus-width: max(2px, 0.125rem); /* the focus ring's thickness (J8) */
@@ -65,8 +65,10 @@
   --avatar: 1.375rem; /* a roster avatar */
   --row-height: 1.75rem; /* a roster or history row */
   --action-width: 8.5rem; /* a button's least width */
-  --progress-width: 8rem; /* the voter's small progress bar */
-  --bar-min: 0.375rem; /* the thinnest bar: the progress track, a chart bar's floor */
+  --bar-min: 0.375rem; /* the thinnest bar: a chart bar's floor */
+  --progress-bar: 1rem; /* the progress panel's bar */
+  --progress-bar-narrow: 0.75rem; /* the progress bar on the phone */
+  --progress-band: max(2px, 0.25rem); /* the progress bar's gaps and its kept frame */
   --deck-card: 5.5rem; /* a deck card's greatest height, 5:7 */
   --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
   --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */

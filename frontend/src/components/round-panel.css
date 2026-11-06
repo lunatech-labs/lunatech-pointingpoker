@@ -47,6 +47,11 @@
     --least: var(--result-least-narrow);
     margin-top: 0;
   }
+
+  /* The facilitator's sheet fits the progress while voting, and grows to the result at a reveal (progress decision 6) */
+  .round-panel-slot:has(.progress) {
+    height: auto;
+  }
 }
 
 /* The sheet pins where the viewport is at least 39 rem tall; focus outside it keeps clear of it (3b2 decision 7) */

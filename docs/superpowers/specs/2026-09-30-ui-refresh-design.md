@@ -41,7 +41,9 @@ document as a whole stays in discussion.
   settled in step 2's spec, `2026-10-04-ui-refresh-2-roles-design.md`, "Terms".
 - **Progress**: who has voted and who is still waiting, however step 3 shows
   it, as a summary line or a participant area that fits, kept in view as
-  principle 4 requires.
+  principle 4 requires, but for a voter's heading count, which may leave view
+  where the table scrolls (decision 4 of the progress spec,
+  `docs/superpowers/specs/2026-11-06-progress-design.md`).
 - **Phase line**: the round bar's element saying whether voting is open or
   the round is revealed; from step 4a, it holds the round's live region. Its
   shown text is the **phase word**.
@@ -110,12 +112,15 @@ document as a whole stays in discussion.
    14 stay usable.
 
 5. **Shared-screen legibility** (settled), its numbers not:
-   - The progress and the result are sized to read from the back of a room on
-     a 40 inch TV at the laptop target, and scale with the viewport above it
+   - The result is sized to read from the back of a room on
+     a 40 inch TV at the laptop target, and scales with the viewport above it
      (reopened 2026-10-07 for zoom; the reference's J2). The issue left this
      list in step 3b1 (reopened 2026-10-13): the room hears it, and remote
-     people read it on their own screen.
-   - Their text meets WCAG AAA contrast (7:1), since a lit projector and video
+     people read it on their own screen. The progress left it in the progress
+     step (reopened 2026-11-06, the progress spec's decision 13): the
+     facilitator reads the names aloud, and remote people read them on their
+     own screen.
+   - Its text meets WCAG AAA contrast (7:1), since a lit projector and video
      compression both eat contrast.
    - No state is carried by a pale tint or a thin line alone. Voted, waiting,
      unconfirmed and revealed differ by text, shape or a solid fill.
@@ -325,12 +330,10 @@ facilitator's page keeps it. Since no deck stays after a reveal, the phase word
 sits in the round bar at the column's foot, with the actions (3b1, reopened
 2026-10-13). Its place and its height
 change with neither the phase, the votes nor the room's size, at every width,
-but on the facilitator's phone page until the progress step fills its slot
-while voting (3b2). Its texts are 3b1's, and the revealed one no
+but on the facilitator's phone page, whose sheet grows at a reveal (3b2; the
+progress spec's decision 6). Its texts are 3b1's, and the revealed one no
 longer says "The round is revealed", so `frozenNotice` is a contract change of
-step 4. It may share a line with the
-progress, as a separate element outside the region (step 4a's spec, decision
-1). Step 4a gives it the round's live region.
+step 4. Step 4a gives it the round's live region.
 
 **Step 4. Restyle.** It runs as steps sliced by how each is judged, each
 with its own spec: 4b, the round bar's toggle and guard, built on today's look
@@ -390,8 +393,8 @@ element lists step 3's layouts give:
   nothing: the table keeps its minimum and the slot can be scrolled to.
 - The entries keep their scale through a reveal and never grow past a deck
   card's height; a room of 0 or 1 voters gets a scale too. On the
-  facilitator's page this holds from 65.75 rem; below it, until the progress
-  step, a reveal refits them (3b2's Accepted costs).
+  facilitator's page this holds at every width above the phone, since the
+  progress step fills the slot while voting.
 - A reveal with no votes shows the result, "Nobody voted" in place of the most
   voted value, and the slot keeps its height.
 - The round bar's toggle and guard: 4b's cases.
@@ -473,14 +476,8 @@ changes, not 1c's, if Clear leaves the phase they click it in.
 picked from these candidates and whatever the mockups raise. None is a
 commitment:
 
-- A progress count, "4 of 6 voted, waiting: Bob, Eve", which needs step 2's
-  denominator (Appendix A, improve 3). The first candidate (2026-10-14): it
-  fills the facilitator's slot that step 4 leaves empty while voting, which
-  ends the shift on a reveal there (`docs/known-issues.md`, "A reveal with
-  votes still moves the facilitator's entries"). It also revisits the round bar's
-  case, which 4c1-narrow-keys left without one. It adds the phase line's
-  reserve and its cases outside the desktop layout (4c1-narrow-cases decision
-  4).
+- A progress count, "4 of 6 voted, waiting: Bob, Eve":
+  `docs/superpowers/specs/2026-11-06-progress-design.md`.
 - Results that show the spread and the lowest and highest voters (improve 5).
   The leading idea, from step 3b1: the voters' cards sorted by value on a
   reveal, lowest first in the chart's deck order, no vote last, ties by name.
@@ -1061,8 +1058,8 @@ What step 1a's first design learned about announcing the round, kept for step
 - No state of its own: it renders from `votesRevealed`, and is announced
   exactly when `votesRevealed` changes within the same mounted room, and silent
   when it appears.
-- The phase text alone: a progress on the same line is a separate element
-  outside the region, or every vote, join and leave would read the line aloud.
+- The phase text alone: no progress shares its line (the progress spec's
+  decision 9).
 
 **The matrix.**
 
@@ -1110,11 +1107,12 @@ spec. Provisional, like the plan.
 - The phase line's height is reserved by sizing, such as a `min-height`, not by
   keeping the revealed text rendered and hidden as `Deck.tsx` does today: step
   4a needs text that changes in place. Outside the desktop layout the reserve
-  waits for the progress step (4c1-narrow-cases decision 4).
+  waited for the progress step (4c1-narrow-cases decision 4); that step adds
+  none, as no progress shares the line (the progress spec's decision 9).
 - Its height is compared before a reveal and after it, which covers a reopening
-  too, at the laptop target (the 320 px case waits for the progress step, as
-  the reserve does), and across a vote that changes a progress sharing its
-  line. Today's "the reveal
+  too, at the laptop target. The 320 px case waited for the progress step, as
+  the reserve did; that step adds none (the progress spec's decision 9).
+  Today's "the reveal
   notice claims its space before the reveal" case runs at the default viewport
   only.
 - The banners are the connection messages, moved and restarted. Moved and

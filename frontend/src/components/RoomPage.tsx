@@ -25,15 +25,16 @@ type Props = {
 const log = (reason: unknown) => console.log(reason)
 
 // Firefox leaves a tall focus, the table, behind the pinned sheet, so a keyboard focus not
-// wholly in view above the sheet scrolls to the top (3b2 decision 7).
+// wholly in view above the round panel, the sheet's top, scrolls to the top (3b2 decision 7).
 function keepClearOfSheet(event: FocusEvent<HTMLDivElement>): void {
   const page = event.currentTarget
   const target: EventTarget = event.target
   const bar = page.querySelector('.round-bar')
+  const panel = page.querySelector('.round-panel')
   if (!(target instanceof Element) || !target.matches(':focus-visible')) return
-  if (!bar || getComputedStyle(bar).position !== 'sticky') return
+  if (!bar || !panel || getComputedStyle(bar).position !== 'sticky') return
   if (target.closest('.round-panel, .round-bar')) return
-  const sheetTop = (page.querySelector('.round-panel') ?? bar).getBoundingClientRect().top
+  const sheetTop = panel.getBoundingClientRect().top
   const box = target.getBoundingClientRect()
   if (box.top < 0 || box.bottom > sheetTop) target.scrollIntoView({ block: 'start' })
 }

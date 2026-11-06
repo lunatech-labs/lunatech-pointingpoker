@@ -4,7 +4,7 @@ import { avatarPair, initials } from '../room/avatar'
 import { type ParticipantRow, type View, voteState } from '../room/view'
 import { Figure } from './Figure'
 
-const pill = { none: 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }
+const pill = { none: 'No vote', confirmed: 'Voted', kept: 'Not confirmed' }
 
 type RowProps = { name: string; me?: boolean; facilitator?: boolean; children: ReactNode }
 

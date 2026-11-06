@@ -116,7 +116,7 @@ describe('the colour tokens no pair reaches', () => {
     '--burgundy: #9B1A24; --burgundy-deep: #931822; --burgundy-tint: #FEF3F3; --card-back: #DC2F3C;',
     '--mute-soft: #8A8480; --hairline-strong: #8A8480; --pale: #E7E2DC; --hairline-colour: var(--pale);',
     '--bar-other: #DE656D; --notice-ground: #EEF4FF; --notice-ink: #1E3A8A; --notice-bar: #1D4ED8;',
-    '--ok: #0F5D2C; --ok-tint: #F1F9F2; --kept: #7F3A07; --kept-tint: #FAF6EC; --track: #EFEBE7;',
+    '--ok: #0F5D2C; --ok-tint: #F1F9F2; --kept: #7F3A07; --kept-tint: #FAF6EC;',
     '--pip: rgba(255, 255, 255, 0.85);'
   ].join(' ')
   const more = '--hairline-colour: var(--hairline-strong);'

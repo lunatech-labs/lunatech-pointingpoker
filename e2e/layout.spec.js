@@ -9,6 +9,7 @@ import {
   connectionLost,
   copyHint,
   deck,
+  expectFits,
   expectLiveRegion,
   inRoom,
   issueBox,
@@ -107,11 +108,11 @@ const voteLast = async (page, role, joined) => {
   await expect(tallyEntries(page)).toHaveCount(Math.min(count, 13))
 }
 
-// The page's parts; the facilitator's page has no slot while voting.
-const parts = (page, slotShown) => ({
+// The page's parts; the slot holds the deck or the progress while voting, the result once revealed.
+const parts = page => ({
   header: page.getByRole('banner'),
   issue: issueText(page),
-  ...(slotShown && { slot: roundSlot(page) }),
+  slot: roundSlot(page),
   bar: roundBar(page),
   table: table(page)
 })
@@ -157,11 +158,11 @@ cases('no scroll at the floor', {}, async ({ join, voters, role, viewport }) => 
   const { page, joined } = await fill(join, voters, role, 14)
   await setTwoLines(page)
   await voteAllButOne(page, role, joined)
-  const voting = await readBoxes(page, parts(page, role === 'Voter'))
+  const voting = await readBoxes(page, parts(page))
   expect(voting.scrolls).toBe(0)
   expectInView(voting, viewport, Object.keys(voting.boxes))
   await voteLast(page, role, joined)
-  const revealed = await readBoxes(page, parts(page, true))
+  const revealed = await readBoxes(page, parts(page))
   expect(revealed.scrolls).toBe(0)
   expectInView(revealed, viewport, Object.keys(revealed.boxes))
 })
@@ -185,15 +186,13 @@ cases(
 )
 
 // The table keeps its 5 rem, and the slot and the round bar scroll wholly into view.
-const scrollsAndCutsNothing = async (page, viewport, slotShown) => {
-  const read = await readBoxes(page, parts(page, slotShown))
+const scrollsAndCutsNothing = async (page, viewport) => {
+  const read = await readBoxes(page, parts(page))
   expect(read.boxes.table.height).toBeGreaterThanOrEqual(5 * read.rem - 0.5)
   expect(read.scrolls).toBeGreaterThan(0)
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
-  const scrolled = await readBoxes(page, parts(page, slotShown))
-  expectInView(scrolled, viewport, slotShown ? ['slot', 'bar'] : ['bar'])
-  // In the slot's place, the table's top.
-  if (!slotShown) expect(scrolled.boxes.table.y).toBeGreaterThanOrEqual(0)
+  const scrolled = await readBoxes(page, parts(page))
+  expectInView(scrolled, viewport, ['slot', 'bar'])
 }
 
 cases(
@@ -203,9 +202,9 @@ cases(
     const { page, joined } = await fill(join, voters, role, 14)
     await setIssue(page, LONG)
     await voteAllButOne(page, role, joined)
-    await scrollsAndCutsNothing(page, viewport, role === 'Voter')
+    await scrollsAndCutsNothing(page, viewport)
     await voteLast(page, role, joined)
-    await scrollsAndCutsNothing(page, viewport, true)
+    await scrollsAndCutsNothing(page, viewport)
   }
 )
 
@@ -216,14 +215,14 @@ cases(
     const { page, joined } = await fill(join, voters, role, 14)
     await setTwoLines(page)
     await voteAllButOne(page, role, joined)
-    await scrollsAndCutsNothing(page, viewport, role === 'Voter')
+    await scrollsAndCutsNothing(page, viewport)
     await voteLast(page, role, joined)
-    await scrollsAndCutsNothing(page, viewport, true)
+    await scrollsAndCutsNothing(page, viewport)
   }
 )
 
-// The 4c1-wide plan's R10: a room of 4 fits above 1 and below the cap at the floor, so a dropped
-// reserve shows.
+// The 4c1-wide plan's R10: a room of 4 fits above 1 and below the cap at the floor, so a slot
+// that changes height at a reveal shows.
 cases("the entries' scale holds through a reveal", {}, async ({ join, voters, role }) => {
   const { page, joined } = await fill(join, voters, role, 4)
   await voteAllButOne(page, role, joined)
@@ -295,19 +294,13 @@ cases(
   {},
   async ({ join, voters, role }) => {
     const { page } = await fill(join, voters, role, 14)
-    const voter = role === 'Voter'
-    const watched = voter ? { slot: roundSlot(page) } : { bar: roundBar(page), table: table(page) }
-    const read = () => readBoxes(page, watched)
+    const read = () => readBoxes(page, { slot: roundSlot(page) })
     const before = await read()
     await page.getByRole('button', { name: 'Show votes' }).click()
     await expect(phaseWord(page)).toHaveText('Revealed')
     await expect(roundSlot(page)).toContainText('Nobody voted')
     const after = await read()
-    if (voter) expect(moved(before.boxes, after.boxes, ['height'])).toEqual([])
-    else {
-      expect(moved({ bar: before.boxes.bar }, after.boxes)).toEqual([])
-      expect(moved({ table: before.boxes.table }, after.boxes, ['y'])).toEqual([])
-    }
+    expect(moved(before.boxes, after.boxes, ['height'])).toEqual([])
   }
 )
 
@@ -316,19 +309,16 @@ cases(
   {},
   async ({ join, voters, role }) => {
     const { page } = await fill(join, voters, role, 2)
-    const voter = role === 'Voter'
     const watched = {
       header: page.getByRole('banner'),
       issue: issueText(page),
       bar: roundBar(page),
-      ...(voter ? { slot: roundSlot(page) } : { table: table(page) })
+      slot: roundSlot(page)
     }
-    const { table: top, ...two } = (await readBoxes(page, watched)).boxes
+    const two = (await readBoxes(page, watched)).boxes
     await grow(page, voters, role, 2, 14)
     const fourteen = (await readBoxes(page, watched)).boxes
     expect(moved(two, fourteen)).toEqual([])
-    // In the slot's place, the table's top.
-    if (!voter) expect(moved({ table: top }, fourteen, ['y'])).toEqual([])
   }
 )
 
@@ -367,7 +357,7 @@ cases(
       leave: page.getByRole('link', { name: 'Leave' }),
       phase: phaseLine(page),
       bar: roundBar(page),
-      ...(role === 'Voter' && { slot: roundSlot(page) })
+      slot: roundSlot(page)
     }
     const before = (await readBoxes(page, named)).boxes
     await copy.click()
@@ -404,7 +394,7 @@ cases(
       expectInView(read, viewport, Object.keys(entries(page, 14)), true)
     }
     await inView()
-    // The facilitator's table gives up its reserve to the slot here.
+    // The faces replace the marks, and the table is fitted again.
     await page.getByRole('button', { name: 'Show votes' }).click()
     await expect(phaseWord(page)).toHaveText('Revealed')
     await inView()
@@ -425,17 +415,29 @@ const journeyRoom = async (join, voters, count) => {
   return { alice, bob, joined }
 }
 
-// A reveal where nobody voted, then Re-vote; the facilitator's page has no slot while voting.
-const nobodyVoted = async (alice, bob) => {
-  const slot = async () => (await readBoxes(alice.page, { slot: roundSlot(alice.page) })).boxes
-  const voting = await slot()
+// A reveal where nobody voted, then Re-vote. Alice's slot keeps its height; Bob's grows from the
+// progress to the result where bobsSlotGrows, on the phone, and keeps it elsewhere.
+const nobodyVoted = async (alice, bob, bobsSlotGrows) => {
+  const slots = async () => ({
+    alice: (await readBoxes(alice.page, { slot: roundSlot(alice.page) })).boxes.slot,
+    bob: (await readBoxes(bob.page, { slot: roundSlot(bob.page) })).boxes.slot
+  })
+  const voting = await slots()
   await bob.page.getByRole('button', { name: 'Show votes' }).click()
   for (const { page } of [alice, bob]) {
     await expect(phaseWord(page), 'nobody voted: revealed').toHaveText('Revealed')
     await expect(roundSlot(page), 'nobody voted: shown').toContainText('Nobody voted')
   }
-  const revealed = await slot()
-  expect(moved(voting, revealed, ['height']), "nobody voted: the slot's height").toEqual([])
+  const revealed = await slots()
+  const alices = moved({ alice: voting.alice }, revealed, ['height'])
+  expect(alices, "nobody voted: Alice's slot's height").toEqual([])
+  if (bobsSlotGrows) {
+    const grown = `nobody voted: Bob's slot grows from ${voting.bob.height} px`
+    expect(revealed.bob.height, grown).toBeGreaterThan(voting.bob.height + 0.5)
+  } else {
+    const bobs = moved({ bob: voting.bob }, revealed, ['height'])
+    expect(bobs, "nobody voted: Bob's slot's height").toEqual([])
+  }
   await bob.page.getByRole('button', { name: 'Re-vote' }).click()
   for (const { page } of [alice, bob]) {
     await expect(phaseWord(page), 'nobody voted: voting again').toHaveText('Voting')
@@ -446,7 +448,7 @@ const nobodyVoted = async (alice, bob) => {
 const crossingRead = async page => {
   await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
   await page.evaluate(() => window.scrollTo(0, 0))
-  const { boxes } = await readBoxes(page, parts(page, true))
+  const { boxes } = await readBoxes(page, parts(page))
   const computed = await table(page)
     .getByRole('list')
     .evaluate(list => getComputedStyle(list).getPropertyValue('--s').trim())
@@ -512,12 +514,12 @@ test.describe('the narrow layouts', () => {
       await setTwoLines(alice.page, TWO_LINES_MIDDLE)
       await expect(issueText(bob.page), "Bob's issue").toHaveText(TWO_LINES_MIDDLE)
 
-      // Stop 1; in the slot's place on Bob's page, the table's top.
+      // Stop 1
       const watched = page => ({
         header: page.getByRole('banner'),
         issue: issueText(page),
         bar: roundBar(page),
-        ...(page === alice.page ? { slot: roundSlot(page) } : { table: table(page) })
+        slot: roundSlot(page)
       })
       const two = []
       for (const page of pages) two.push((await readBoxes(page, watched(page))).boxes)
@@ -525,12 +527,10 @@ test.describe('the narrow layouts', () => {
       for (const [i, page] of pages.entries()) {
         await expect(participantEntries(page), 'a room of 14').toHaveCount(14)
         const fourteen = (await readBoxes(page, watched(page))).boxes
-        const { table: top, ...fixed } = two[i]
-        expect(moved(fixed, fourteen), 'nothing moves from 2 to 14').toEqual([])
-        if (top) expect(moved({ table: top }, fourteen, ['y']), "the table's top").toEqual([])
+        expect(moved(two[i], fourteen), 'nothing moves from 2 to 14').toEqual([])
       }
 
-      await nobodyVoted(alice, bob)
+      await nobodyVoted(alice, bob, false)
 
       // Stop 2: 13 distinct values, the last protocol voter's missing so the round stays open.
       await vote(alice.page, ESTIMATIONS[12])
@@ -541,9 +541,9 @@ test.describe('the narrow layouts', () => {
       )
       for (const page of pages) {
         const voter = page === alice.page
-        const read = await readBoxes(page, { ...parts(page, voter), ...(voter && cards) })
+        const read = await readBoxes(page, { ...parts(page), ...(voter && cards) })
         expect(read.scrolls, 'no scroll while voting').toBe(0)
-        expectInView(read, viewport, Object.keys(parts(page, voter)))
+        expectInView(read, viewport, Object.keys(parts(page)))
         if (voter) {
           const out = Object.keys(cards).filter(name => !within(read.boxes[name], read.boxes.slot))
           expect(out, `the deck within the slot, ${JSON.stringify(read.boxes)}`).toEqual([])
@@ -554,7 +554,7 @@ test.describe('the narrow layouts', () => {
       await bob.page.getByRole('button', { name: 'Show votes' }).click()
       for (const page of pages) {
         await expect(tallyEntries(page), 'the tally of 13').toHaveCount(13)
-        const read = await readBoxes(page, parts(page, true))
+        const read = await readBoxes(page, parts(page))
         expect(read.scrolls, 'no scroll once revealed').toBe(0)
         const show = page.getByRole('button', { name: 'Show votes' })
         await expect(show, 'no Show votes once revealed').toHaveCount(0)
@@ -575,7 +575,7 @@ test.describe('the narrow layouts', () => {
       // Stop 6, revealed
       await setIssue(alice.page, LONG)
       await expect(issueText(bob.page), "Bob's issue").toHaveText(LONG)
-      for (const page of pages) await scrollsAndCutsNothing(page, viewport, true)
+      for (const page of pages) await scrollsAndCutsNothing(page, viewport)
     })
   })
 
@@ -604,7 +604,7 @@ test.describe('the narrow layouts', () => {
         expect(line.y, 'the facilitators after the voters').toBeGreaterThanOrEqual(after)
       }
 
-      await nobodyVoted(alice, bob)
+      await nobodyVoted(alice, bob, true)
 
       // Stop 3: each size read, reloaded, which keeps the size, and read again.
       const page = alice.page
@@ -664,6 +664,7 @@ test.describe('the narrow layouts', () => {
           const over = await sideways(page)
           expect(over, `no sideways scroll while voting, ${size}`).toBeLessThanOrEqual(0)
         }
+        await expectFits(bob.page)
         await vote(alice.page, '13')
         await bob.page.getByRole('button', { name: 'Show votes' }).click()
         for (const page of pages) {

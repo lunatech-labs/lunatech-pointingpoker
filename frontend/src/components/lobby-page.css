@@ -57,7 +57,7 @@
   cursor: pointer;
 }
 
-/* 3b4 decision 11: inert after "session ended"; the muted look, on the pale ground since grey on the track is 6.47:1, below J8's 7:1 for text */
+/* 3b4 decision 11: inert after "session ended"; the muted look, on the pale ground, the darkest that keeps grey at J8's 7:1 for text */
 .lobby-page-inert .lobby-form-input:disabled,
 .lobby-page-inert .button:disabled {
   background: var(--paper-pale);

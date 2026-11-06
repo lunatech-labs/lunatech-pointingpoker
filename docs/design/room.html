@@ -12,12 +12,6 @@
   /* Parts later steps add, shown with later=1 */
   .later { outline: var(--line-mark) dashed var(--mute-soft); outline-offset: var(--focus-gap); border-radius: var(--radius-card); }
   .brand-logo-pip::after { content: '◆'; color: var(--pip); font-size: var(--text-xs); }
-  .round-progress { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--grey); padding: 0 var(--space-2); }
-  .round-progress i { display: block; width: var(--progress-width); height: var(--bar-min); border-radius: var(--radius-small); background: var(--track); overflow: hidden; }
-  .round-progress i::after { content: ''; display: block; height: 100%; width: var(--done); background: var(--card-back); }
-  .round-progress-big { flex: 1; display: grid; place-content: center; text-align: center; padding: var(--space-1) var(--space-5); }
-  .round-progress-big b { font-size: var(--text-4xl); line-height: var(--leading-figure); }
-  .round-progress-big span { color: var(--grey); }
   .room-page-sidebar > .later { outline-offset: calc(-1 * var(--line-hairline)); border-style: dashed; }
   /* The round history (step 9), at the sidebar's top */
   .round-history { flex: none; display: flex; flex-direction: column; gap: var(--space-1); }
@@ -28,13 +22,6 @@
   .round-history li:last-child { font-weight: var(--weight-strong); }
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
-    .round-progress i::after { forced-color-adjust: none; background: CanvasText; }
-  }
-  .round-progress-top { display: none; }
-  @container page (width < 65.75rem) {
-    /* The voter's progress leaves the round bar for the top line's left (a later step's) */
-    .round-bar .round-progress { display: none; }
-    .round-progress-top { display: block; position: absolute; left: var(--panel-inline); top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1)); padding: 0; }
   }
   @container page (width < 51.75rem) { .round-history { order: 5; } }
 </style>
@@ -47,6 +34,7 @@
 <link rel="stylesheet" href="../../frontend/src/components/issue-panel.css">
 <link rel="stylesheet" href="../../frontend/src/components/issue-editor.css">
 <link rel="stylesheet" href="../../frontend/src/components/round-panel.css">
+<link rel="stylesheet" href="../../frontend/src/components/progress.css">
 <link rel="stylesheet" href="../../frontend/src/components/deck.css">
 <link rel="stylesheet" href="../../frontend/src/components/result.css">
 <link rel="stylesheet" href="../../frontend/src/components/round-bar.css">
@@ -171,16 +159,13 @@ function draw() {
   const bannerBlock = bannerList && `<section class="banners" aria-label="Messages">${bannerList}</section>`
 
   const phaseLine = `<div class="round-bar-phase" data-testid="phase-line"><h2 class="panel-label">${revealed ? 'Revealed' : 'Voting'}</h2></div>`
-  // G: the voter's small count in the bar (later); the facilitator's big one in the slot
-  const small = later && voter && !revealed ? `<span class="round-progress later" style="--done:${100 * voted / people.length}%"><i></i>${voted} of ${people.length} voted</span>` : ''
   // M: Clear · toggle · Next issue, right-aligned; the toggle is the primary until Next issue exists (step 5)
   const guard = settling ? ' aria-disabled="true"' : ''
   const nextLeads = later && revealed
   const toggle = `<button class="button button-${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? icon('rotate-ccw') : icon('eye')}<span class="button-word">${revealed ? 'Re-vote' : 'Show votes'}</span></button>`
   const next = nextLeads ? `<button class="button button-primary later" type="button"${guard}>${icon('arrow-right')}<span class="button-word">Next issue</span></button>` : ''
-  const actions = `${small}<button class="button-quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
+  const actions = `<button class="button-quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
 
-  const topProgress = later && voter && !revealed ? `<span class="round-progress round-progress-top later">${voted} of ${people.length} voted</span>` : ''
   const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards"><span id="kept-note" hidden>Previous vote, not confirmed</span>${deck.map(v => {
     const mine = own?.value === v && own.state !== 'none'
     const kept = mine && own.state === 'kept' ? ' aria-describedby="kept-note"' : ''
@@ -191,14 +176,16 @@ function draw() {
     <div class="result-columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
       ? `<div class="result-column${red(v) ? ' result-column-top' : ''}" role="listitem" data-testid="tally-entry"><span class="visually-hidden" data-testid="tally-sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="result-count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="result-bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="result-value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
       : `<div class="result-column result-column-empty" aria-hidden="true"><span class="result-value">${fig(v)}</span></div>`).join('')}</div></div>`
-  const bigProgress = `<div class="round-progress-big later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
-  // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
-  let slot = ''
-  if (voter) slot = revealed ? chart : topProgress + deckBlock
-  else if (revealed) slot = chart
-  else if (later) slot = bigProgress
+  // The voter's slot holds the deck, then the result; the facilitator's the progress, then the result
+  const listed = s => people.filter(p => p.state === s).map(p => p.name)
+  const line = (label, list) => list.length ? `<div class="progress-line" data-names="${list.join('|')}" data-label="${label}"></div>` : ''
+  const lines = listed('none').length + listed('kept').length ? line('No vote', listed('none')) + line('Not confirmed', listed('kept')) : '<div class="progress-line">Everybody voted</div>'
+  const stepProgress = !people.length ? '<div class="progress"><div class="progress-line">No voters yet</div></div>'
+    : `<div class="progress"><div class="progress-count">${voted} of ${people.length} voted</div>
+      <div class="progress-bar" aria-hidden="true">${['confirmed', 'kept', 'none'].map(s => listed(s).map(() => `<span class="progress-segment-${s}"></span>`).join('')).join('')}</div><div class="progress-lines">${lines}</div></div>`
+  const slot = revealed ? chart : voter ? deckBlock : stepProgress
   const controls = `<section class="panel round-bar" aria-label="Round">${phaseLine}${actions}</section>`
-  const round = slot ? `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>` : ''
+  const round = `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>`
 
   const entry = p => {
     const face = revealed
@@ -209,12 +196,13 @@ function draw() {
     const self = p.name === me
     return `<li data-testid="participant">${face}<span class="voters-name">${self ? `<b>${p.name}</b> <span class="voters-you">(you)</span>` : p.name}</span></li>`
   }
-  const table = `<section class="panel voters${!voter && !later && phase !== 'revealed' ? ' voters-reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${people.length}</h2></div>
+  const heading = voter && !revealed ? `${voted} of ${people.length} voted` : people.length
+  const table = `<section class="panel voters" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${heading}</h2></div>
     <ul class="voters-entries">${people.map(entry).join('')}</ul><p class="voters-facilitators">Facilitators: ${facNames}</p></section>`
 
   const right = p => revealed
     ? p.value ? `<span class="roster-value">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="roster-value roster-value-none">–</span>'
-    : `<span class="roster-pill roster-pill-${p.state}">${{ none: 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
+    : `<span class="roster-pill roster-pill-${p.state}">${{ none: 'No vote', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
   // A roster row never carries the participant test id: the table's entries are the contract's
   const row = (n, end, self, id = '') => `<li class="roster-row${self ? ' roster-row-me' : ''}">${avatar(n)}<span class="roster-who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
   const historyPanel = `<section class="panel round-history later" aria-label="Rounds"><h2 class="panel-label">Rounds · ${history.length}</h2>
@@ -231,22 +219,32 @@ function draw() {
   if (onMenu) document.querySelector('.room-header-menu-button').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.round-history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.voters'))
+  if (document.querySelector('.progress')) watched.observe(document.querySelector('.progress'))
+}
+
+// Whole names that fit the line, then "and N more"; one left over shows as its name
+function fitProgress() {
+  document.querySelectorAll('.progress-line[data-names]').forEach(el => {
+    const names = el.dataset.names.split('|'), label = `<b>${el.dataset.label}:</b> `
+    const text = k => k >= names.length - 1 ? names.join(', ') : `${names.slice(0, k).join(', ')} and ${names.length - k} more`
+    let k = names.length
+    for (; k > 0; k--) { el.innerHTML = label + text(k); if (el.scrollWidth <= el.clientWidth) break }
+    if (k === 0) el.innerHTML = label + names.length   // no whole name fits: the count alone
+  })
 }
 
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
 function fitEntries() {
   const list = document.querySelector('.voters-entries'), box = document.querySelector('.voters')
   // The phone layout's fixed scale applies only once the wide fit's inline values are gone
-  if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; return }
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  const column = document.querySelector('.room-page-column')
+  if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; column.style.removeProperty('--table-scale'); return }
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
-  // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
-  const reserve = !voter && !later && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout
   const shown = [...box.children].filter(c => c.getClientRects().length)
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
   const used = () => shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad)
-  const room = Math.floor(box.clientHeight - reserve)
+  const room = box.clientHeight
   const items = [...list.children]
   // Balanced before it measures, since the balance can move a wrapping name to another row
   const fits = v => {
@@ -261,9 +259,11 @@ function fitEntries() {
   if (fits(scale(hi))) lo = hi
   else while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (fits(scale(mid))) lo = mid; else hi = mid }
   fits(scale(lo))
+  // A copy for the progress panel, which is not under the list's own --s (progress decision 15)
+  column.style.setProperty('--table-scale', list.style.getPropertyValue('--s'))
 }
-const watched = new ResizeObserver(fitEntries)
-document.fonts.addEventListener('loadingdone', fitEntries)
+const watched = new ResizeObserver(() => { fitEntries(); fitProgress() })
+document.fonts.addEventListener('loadingdone', () => { fitEntries(); fitProgress() })
 
 // Every action in the round bar is aria-disabled for 1 s after the phase changes, so a late click acts on nothing
 function moveTo(next) {
@@ -293,7 +293,7 @@ document.addEventListener('keydown', e => {
 // Firefox leaves a tall focus, the table, behind the sheet, so a keyboard focus not wholly in view above the
 // pinned sheet scrolls to the top (3b2 decision 7)
 document.addEventListener('focusin', e => {
-  const bar = document.querySelector('.round-bar'), sheetTop = (document.querySelector('.round-panel') ?? bar).getBoundingClientRect().top
+  const bar = document.querySelector('.round-bar'), sheetTop = document.querySelector('.round-panel').getBoundingClientRect().top
   const box = e.target.getBoundingClientRect()
   if (e.target.matches(':focus-visible') && getComputedStyle(bar).position === 'sticky' && !e.target.closest('.round-panel, .round-bar') && (box.top < 0 || box.bottom > sheetTop)) e.target.scrollIntoView({ block: 'start' })
 })
