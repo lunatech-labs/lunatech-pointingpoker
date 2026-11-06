@@ -254,8 +254,21 @@ export const phaseLine = page => page.getByTestId('phase-line')
 export const phaseRegion = page => page.getByRole('status').and(page.getByTestId('phase-heard'))
 // The seen word of the phase line: 'Voting' or 'Revealed'.
 export const phaseWord = page => page.getByTestId('phase-word')
-// The round panel's slot, the deck or the result; none on a facilitator's page while voting.
+// The round panel's slot: the deck or the progress while voting, the result once revealed.
 export const roundSlot = page => page.getByTestId('round-slot')
+// The facilitator's slot while voting.
+export const progressRegion = page => page.getByRole('region', { name: 'Progress' })
+// No drawn name line overflows, whatever the fit's measure got wrong; read after the fonts and two frames.
+export const expectFits = async page => {
+  const lines = page.locator('.progress-line')
+  await expect(lines.first(), 'a name line to check').toBeVisible()
+  const over = await lines.evaluateAll(async all => {
+    await document.fonts.ready
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    return all.filter(l => l.scrollWidth > l.clientWidth).map(l => l.textContent)
+  })
+  expect(over, 'the name lines that overflow').toEqual([])
+}
 export const roundBar = page => page.getByRole('region', { name: 'Round' })
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })

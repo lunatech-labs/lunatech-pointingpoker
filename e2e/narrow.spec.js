@@ -2,6 +2,7 @@ import {
   test,
   expect,
   ISSUE_240,
+  NAMES,
   deck,
   issueEdit,
   nameInput,
@@ -30,8 +31,10 @@ const roundPanel = page => roundSlot(page).locator('..')
 const roster = page => page.getByRole('complementary', { name: 'Participants' })
 
 // Alice's page at scroll 0 with the table's foot behind the round panel, checked so a drift fails.
-const tableBehindPanel = async join => {
-  const { page } = await join('Alice', { role: 'Voter' })
+// On the facilitator's page, protocol voters fill the table until its foot is behind the progress.
+const tableBehindPanel = async (join, voters, role = 'Voter') => {
+  const { page } = await join('Alice', { role })
+  if (role === 'Facilitator') await voters(NAMES.slice(1))
   await setIssue(page, ISSUE_240)
   await page.evaluate(() => scrollTo(0, 0))
   const sheet = { table: table(page), panel: roundPanel(page), bar: roundBar(page) }
@@ -133,18 +136,24 @@ test.describe("☰'s row and a keyboard focus on the phone", () => {
     await expect(switchTo(page, 'facilitator')).toBeVisible()
   })
 
-  test('a keyboard focus behind the round panel scrolls clear of it', async ({ join }) => {
-    const page = await tableBehindPanel(join)
-    await issueEdit(page).focus()
-    await page.keyboard.press('Tab')
-    await expect(table(page)).toBeFocused()
-    const { table: box, panel } = (await readBoxes(page, {
-      table: table(page),
-      panel: roundPanel(page)
-    })).boxes
-    expect(box.y).toBeGreaterThanOrEqual(0)
-    expect(box.y + box.height).toBeLessThanOrEqual(panel.y)
-  })
+  for (const role of ['Voter', 'Facilitator']) {
+    const whose = `on the ${role.toLowerCase()}'s page`
+    test(`a keyboard focus behind the round panel scrolls clear of it, ${whose}`, async ({
+      join,
+      voters
+    }) => {
+      const page = await tableBehindPanel(join, voters, role)
+      await issueEdit(page).focus()
+      await page.keyboard.press('Tab')
+      await expect(table(page)).toBeFocused()
+      const { table: box, panel } = (await readBoxes(page, {
+        table: table(page),
+        panel: roundPanel(page)
+      })).boxes
+      expect(box.y).toBeGreaterThanOrEqual(0)
+      expect(box.y + box.height).toBeLessThanOrEqual(panel.y)
+    })
+  }
 
   test('a tap on the table scrolls nothing', async ({ join }) => {
     const page = await tableBehindPanel(join)

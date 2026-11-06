@@ -4,10 +4,10 @@ import { balancedWidth, largestFit } from '../room/fit'
 // The structure switch in rem (3b2 decision 1); container queries have no script API.
 const PHONE_BELOW = 51.75
 
-type Fit = { reserve: boolean; revealed: boolean; names: string[] }
+type Fit = { revealed: boolean; names: string[] }
 
 // room.html's fitEntries: the largest --s that fits the table, at most a deck card, rows even.
-function fitEntries(box: HTMLElement, list: HTMLUListElement, reserve: boolean) {
+function fitEntries(box: HTMLElement, list: HTMLUListElement) {
   const root = getComputedStyle(document.documentElement)
   const rem = parseFloat(root.fontSize)
   const token = (name: string) => parseFloat(root.getPropertyValue(name))
@@ -18,10 +18,6 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement, reserve: boolean) 
     list.style.removeProperty('max-width')
     return
   }
-  // The facilitator's slot appears at a reveal, so its height, gaps and borders are held back.
-  const held = reserve
-    ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline')
-    : 0
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout.
   const shown = [...box.children].filter(c => c.getClientRects().length)
   const style = getComputedStyle(box)
@@ -29,7 +25,7 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement, reserve: boolean) 
     parseFloat(style.paddingTop) +
     parseFloat(style.paddingBottom) +
     parseFloat(style.rowGap) * (shown.length - 1)
-  const room = Math.floor(box.clientHeight - held)
+  const room = box.clientHeight
   const items = [...list.children] as HTMLElement[]
   // Balanced before it measures, since the balance can move a wrapping name to another row.
   const fits = (s: number) => {
@@ -47,7 +43,7 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement, reserve: boolean) 
 
 // Fitted by the observer's first callback, before the first paint, then again on a resize
 // of the table or a font load (decision 4).
-export function useFitEntries({ reserve, revealed, names }: Fit): {
+export function useFitEntries({ revealed, names }: Fit): {
   box: RefObject<HTMLElement | null>
   list: RefObject<HTMLUListElement | null>
 } {
@@ -58,7 +54,7 @@ export function useFitEntries({ reserve, revealed, names }: Fit): {
     const table = box.current
     const entries = list.current
     if (!table || !entries) return
-    const fit = () => fitEntries(table, entries, reserve)
+    const fit = () => fitEntries(table, entries)
     const watched = new ResizeObserver(fit)
     watched.observe(table)
     document.fonts.addEventListener('loadingdone', fit)
@@ -66,6 +62,6 @@ export function useFitEntries({ reserve, revealed, names }: Fit): {
       watched.disconnect()
       document.fonts.removeEventListener('loadingdone', fit)
     }
-  }, [reserve, revealed, voters])
+  }, [revealed, voters])
   return { box, list }
 }

@@ -38,16 +38,14 @@ function Face({ voter, revealed }: { voter: ParticipantRow; revealed: boolean })
 export function Voters({ view }: { view: View }) {
   const voters = view.users.filter(u => !u.facilitator)
   const facilitators = view.users.filter(u => u.facilitator).map(u => u.name)
-  const reserve = view.ownRole === 'Facilitator' && !view.votesRevealed
   const { box, list } = useFitEntries({
-    reserve,
     revealed: view.votesRevealed,
     names: voters.map(u => u.name)
   })
   return (
     <section
       ref={box}
-      className={reserve ? 'panel voters voters-reserve' : 'panel voters'}
+      className="panel voters"
       role="region"
       aria-label="Voters"
       tabIndex={0}

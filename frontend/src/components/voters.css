@@ -9,11 +9,6 @@
   scrollbar-gutter: stable;
 }
 
-/* B: the facilitator's table keeps the slot's room while voting, so a reveal moves nothing below it */
-.voters-reserve {
-  min-height: calc(var(--table-min) + var(--slot-height) + 3 * var(--panel-gap) + 2 * var(--line-hairline));
-}
-
 .voters-top {
   display: flex;
   justify-content: space-between;
@@ -132,11 +127,6 @@
     order: 2;
     flex: none;
     overflow: visible;
-  }
-
-  /* no room held for the facilitator's slot (3b2 decision 11) */
-  .voters-reserve {
-    min-height: var(--table-min);
   }
 
   .voters-facilitators {

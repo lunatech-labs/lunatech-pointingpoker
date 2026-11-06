@@ -1,0 +1,70 @@
+/* The facilitator's slot while voting: the count, the bar and the name lines */
+.progress {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+
+.progress-count {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+}
+
+/* One segment per voter, drawn as the table's mark of its state */
+.progress-bar {
+  display: flex;
+  gap: var(--progress-band);
+  height: var(--progress-bar);
+}
+
+.progress-bar > span {
+  flex: 1;
+  border-radius: var(--radius-small);
+  box-sizing: border-box;
+}
+
+.progress-segment-confirmed {
+  background: var(--card-back);
+}
+
+.progress-segment-kept {
+  border: var(--progress-band) solid var(--card-back);
+}
+
+.progress-segment-none {
+  border: var(--line-mark) dashed var(--mute-soft);
+}
+
+/* Both lines' room is always held, so a list that empties moves neither the count nor the bar */
+.progress-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  min-height: calc(2 * var(--text-lg) * var(--leading-tight) + var(--space-1));
+}
+
+/* The panel's width, never its text's: the fit picks what is drawn */
+.progress-line {
+  min-width: 0;
+  font-size: var(--text-lg);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.progress-line b {
+  font-weight: var(--weight-strong);
+}
+
+@media (forced-colors: active) {
+  .progress-segment-confirmed {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+}
