@@ -22,23 +22,8 @@
   .round-history li:last-child { font-weight: var(--weight-strong); }
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
-    .progress-bar .confirmed { forced-color-adjust: none; background: CanvasText; }
   }
   @container page (width < 51.75rem) { .round-history { order: 5; } }
-  /* The facilitator's slot while voting: the count, the bar and the name lines (the progress spec) */
-  .progress { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); padding: 0 var(--space-2); }
-  .progress-count { font-size: var(--text-xl); font-weight: 700; line-height: var(--leading-tight); }
-  /* Both lines' room is always held, so a list that empties moves neither the count nor the bar */
-  .progress-lines { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); min-height: calc(2 * var(--text-lg) * var(--leading-tight) + var(--space-1)); }
-  .progress-bar { display: flex; gap: var(--progress-band); height: var(--progress-bar); }
-  .progress-bar span { flex: 1; border-radius: var(--radius-small); box-sizing: border-box; }
-  .progress-bar .confirmed { background: var(--card-back); }
-  .progress-bar .kept { border: var(--progress-band) solid var(--card-back); }
-  .progress-bar .none { border: var(--line-mark) dashed var(--mute-soft); }
-  .progress-line { font-size: var(--text-lg); line-height: var(--leading-tight); white-space: nowrap; overflow: hidden; }
-  .progress-line b { font-weight: var(--weight-strong); }
-  /* On a phone the facilitator's sheet fits the progress while voting, and grows to the result at a reveal */
-  @container page (width < 51.75rem) { .round-panel-slot:has(.progress) { height: auto; } }
 </style>
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
@@ -49,6 +34,7 @@
 <link rel="stylesheet" href="../../frontend/src/components/issue-panel.css">
 <link rel="stylesheet" href="../../frontend/src/components/issue-editor.css">
 <link rel="stylesheet" href="../../frontend/src/components/round-panel.css">
+<link rel="stylesheet" href="../../frontend/src/components/progress.css">
 <link rel="stylesheet" href="../../frontend/src/components/deck.css">
 <link rel="stylesheet" href="../../frontend/src/components/result.css">
 <link rel="stylesheet" href="../../frontend/src/components/round-bar.css">
@@ -196,7 +182,7 @@ function draw() {
   const lines = listed('none').length + listed('kept').length ? line('No vote', listed('none')) + line('Not confirmed', listed('kept')) : '<div class="progress-line">Everybody voted</div>'
   const stepProgress = !people.length ? '<div class="progress"><div class="progress-line">No voters yet</div></div>'
     : `<div class="progress"><div class="progress-count">${voted} of ${people.length} voted</div>
-      <div class="progress-bar" aria-hidden="true">${['confirmed', 'kept', 'none'].map(s => listed(s).map(() => `<span class="${s}"></span>`).join('')).join('')}</div><div class="progress-lines">${lines}</div></div>`
+      <div class="progress-bar" aria-hidden="true">${['confirmed', 'kept', 'none'].map(s => listed(s).map(() => `<span class="progress-segment-${s}"></span>`).join('')).join('')}</div><div class="progress-lines">${lines}</div></div>`
   const slot = revealed ? chart : voter ? deckBlock : stepProgress
   const controls = `<section class="panel round-bar" aria-label="Round">${phaseLine}${actions}</section>`
   const round = `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>`
@@ -304,7 +290,7 @@ document.addEventListener('keydown', e => {
 // Firefox leaves a tall focus, the table, behind the sheet, so a keyboard focus not wholly in view above the
 // pinned sheet scrolls to the top (3b2 decision 7)
 document.addEventListener('focusin', e => {
-  const bar = document.querySelector('.round-bar'), sheetTop = (document.querySelector('.round-panel') ?? bar).getBoundingClientRect().top
+  const bar = document.querySelector('.round-bar'), sheetTop = document.querySelector('.round-panel').getBoundingClientRect().top
   const box = e.target.getBoundingClientRect()
   if (e.target.matches(':focus-visible') && getComputedStyle(bar).position === 'sticky' && !e.target.closest('.round-panel, .round-bar') && (box.top < 0 || box.bottom > sheetTop)) e.target.scrollIntoView({ block: 'start' })
 })
