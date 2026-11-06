@@ -4,12 +4,37 @@ import { test, expect, expectFits, progressRegion, roundSlot } from './fixtures.
 const nameLine = (page, label) =>
   progressRegion(page).getByRole('paragraph').filter({ hasText: `${label}:` })
 
-// The share of the line's content width its text leaves free; a range reads the text past the clip.
-// Read after the fonts and two frames, so an observer's refit lands first.
-const spare = line =>
-  line.evaluate(async el => {
+// Waits for the fonts and two frames, so an observer's refit lands before a read.
+const settle = page =>
+  page.evaluate(async () => {
     await document.fonts.ready
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+
+// The Progress region's slot and content heights, and its drawn bar against the token `bar` names.
+const slotFit = async (page, bar) => {
+  await settle(page)
+  return progressRegion(page).evaluate((region, bar) => {
+    const style = getComputedStyle(region)
+    const top = region.firstElementChild.getBoundingClientRect().top
+    const bottom = region.lastElementChild.getBoundingClientRect().bottom
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+    const root = getComputedStyle(document.documentElement)
+    const rem = parseFloat(root.fontSize)
+    return {
+      height: region.closest('[data-testid="round-slot"]').getBoundingClientRect().height,
+      content: bottom - top + padding,
+      rem,
+      bar: parseFloat(root.getPropertyValue(bar)) * rem,
+      drawn: region.querySelector('.progress-bar').getBoundingClientRect().height
+    }
+  }, bar)
+}
+
+// The share of the line's content width its text leaves free; a range reads the text past the clip.
+const spare = async line => {
+  await settle(line.page())
+  return line.evaluate(el => {
     const range = document.createRange()
     range.selectNodeContents(el)
     const style = getComputedStyle(el)
@@ -17,6 +42,7 @@ const spare = line =>
       el.getBoundingClientRect().width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
     return 1 - range.getBoundingClientRect().width / room
   })
+}
 
 // The table's order is by name. Two names that fit side by side at 1280 but neither alone at 320.
 const PAIR = ['Alexandra Vasquez', 'Bartholomew Kingsley']
@@ -36,18 +62,10 @@ test.describe(() => {
     await page.setViewportSize({ width: 320, height: 640 })
     await expect(line, 'the count at 320').toHaveText('No vote: 2')
     await expectFits(page)
-    const slot = await progressRegion(page).evaluate(async region => {
-      await document.fonts.ready
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-      const style = getComputedStyle(region)
-      const top = region.firstElementChild.getBoundingClientRect().top
-      const bottom = region.lastElementChild.getBoundingClientRect().bottom
-      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-      const height = region.closest('[data-testid="round-slot"]').getBoundingClientRect().height
-      return { height, content: bottom - top + padding }
-    })
+    const slot = await slotFit(page, '--progress-bar-narrow')
     const off = Math.abs(slot.height - slot.content)
     expect(off, `the slot as tall as the panel, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(slot.drawn - slot.bar), `the narrow bar, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(0.5)
 
     // Review Focus 4: a window that changes only in height refits the line through its font.
     await page.setViewportSize({ width: 1280, height: 600 })
@@ -99,11 +117,10 @@ test.describe(() => {
   })
 })
 
-// The panel's sizes against the clamps of the table's scale, read after the fonts and two frames.
-const panelSizes = page =>
-  progressRegion(page).evaluate(async region => {
-    await document.fonts.ready
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+// The panel's sizes against the clamps of the table's scale.
+const panelSizes = async page => {
+  await settle(page)
+  return progressRegion(page).evaluate(region => {
     const root = getComputedStyle(document.documentElement)
     const rem = parseFloat(root.fontSize)
     const token = name => parseFloat(root.getPropertyValue(name)) * rem
@@ -124,6 +141,7 @@ const panelSizes = page =>
       }
     }
   })
+}
 
 // At 900 by 760 the table's scale is about 1.18 in both browsers: the middle layout, below the cap.
 const SIX = ['Ann', 'Ben', 'Cat', 'Dan', 'Eve', 'Fay']
@@ -172,17 +190,7 @@ test.describe(() => {
     })
     const { scale } = await panelSizes(page)
     expect(Math.abs(scale - cap), `premise: the scale ${scale} at its cap ${cap}`).toBeLessThan(0.02)
-    const slot = await progressRegion(page).evaluate(region => {
-      const style = getComputedStyle(region)
-      const top = region.firstElementChild.getBoundingClientRect().top
-      const bottom = region.lastElementChild.getBoundingClientRect().bottom
-      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
-      const height = region.closest('[data-testid="round-slot"]').getBoundingClientRect().height
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
-      const bar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--progress-bar')) * rem
-      const drawn = region.querySelector('.progress-bar').getBoundingClientRect().height
-      return { height, content: bottom - top + padding, bar, drawn }
-    })
+    const slot = await slotFit(page, '--progress-bar')
     expect(slot.content, `the panel within the slot, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(slot.height)
     // The column would squash the empty bar rather than overflow.
     expect(Math.abs(slot.drawn - slot.bar), `the bar at its full height, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(0.5)
@@ -269,6 +277,7 @@ test.describe(() => {
           span => {
             const style = getComputedStyle(span)
             return {
+              segment: span.className,
               offset: parseFloat(style.outlineOffset),
               width: parseFloat(style.outlineWidth),
               border: style.borderTopWidth
@@ -278,21 +287,25 @@ test.describe(() => {
         const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
         return { widths, marks, rem, height: el.getBoundingClientRect().height }
       })
-    const at800 = await bar()
     const spread = ({ widths }) => Math.max(...widths) - Math.min(...widths)
-    expect(spread(at800), `the widths at 800, ${at800.widths}`).toBeLessThanOrEqual(0.5)
-    for (const mark of at800.marks) {
-      expect(mark.width, 'a mark is drawn').toBeGreaterThan(0)
-      // Firefox snaps the outline's width to the pixel, not its offset.
-      expect(Math.abs(mark.offset + mark.width), 'the mark inside its segment').toBeLessThanOrEqual(0.5)
-      expect(mark.border, 'no border').toBe('0px')
+    const marksInside = ({ marks }, at) => {
+      for (const mark of marks) {
+        expect(mark.width, `a mark is drawn at ${at}`).toBeGreaterThan(0)
+        // Firefox floors the outline's width to the pixel, not its offset: 4.62 px is 4 at 1000.
+        expect(Math.abs(mark.offset + mark.width), `the mark inside its segment at ${at}, ${JSON.stringify(mark)}`).toBeLessThan(1)
+        expect(mark.border, `no border at ${at}`).toBe('0px')
+      }
     }
+    const at800 = await bar()
+    expect(spread(at800), `the widths at 800, ${at800.widths}`).toBeLessThanOrEqual(0.5)
+    marksInside(at800, 800)
     expect(at800.height, 'the bar 1 rem tall').toBeCloseTo(at800.rem, 1)
 
     await bob.page.setViewportSize({ width: 1280, height: 1000 })
     await expect.poll(async () => (await bar()).rem, 'the root at 1000').toBeGreaterThan(18)
     const at1000 = await bar()
     expect(spread(at1000), `the widths at 1000, ${at1000.widths}`).toBeLessThanOrEqual(0.5)
+    marksInside(at1000, 1000)
   })
 
   test("the voter's heading counts confirmed votes", async ({ join, voters }) => {
