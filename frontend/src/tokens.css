@@ -37,7 +37,7 @@
   --radius-card: 0.5rem; /* cards, rows, the copy button, inputs (J9) */
   --radius-control: 0.625rem; /* buttons and the room chip (J9) */
   --radius-mark: 0.375rem; /* small cards: the header mark and the table's marks */
-  --radius-small: 0.25rem; /* a chart bar's top corners, the progress bar's segments, the lobby's typed name */
+  --radius-small: 0.25rem; /* a chart bar's top corners, the progress bar's segments, the not-a-room page's typed name */
   --radius-pill: 100rem; /* fully rounded ends */
   --target-min: max(44px, 2.75rem); /* a control's least width and height (WCAG 2.5.5) */
 

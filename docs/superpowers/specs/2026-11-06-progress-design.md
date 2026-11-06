@@ -1,7 +1,7 @@
 # Progress
 
 Date: 2026-11-06
-Status: In discussion
+Status: Approved
 Parent: issue #517
 
 ## Purpose
@@ -154,7 +154,10 @@ gains a pointer to this spec's changes:
 - Tokens: `--progress-width` and `--track` go, with `--track`'s gate pair in
   `gate.ts` and its value in `gate.test.ts`'s fixture, and `lobby-page.css`'s
   comment stops citing the track by name; the comments of
-  `--radius-small` and `--bar-min` name their remaining uses.
+  `--radius-small` and `--bar-min` name their remaining uses. `--progress-bar`
+  (the bar's height) and `--progress-band` (the segments' gap and the kept
+  frame) come, as the mockup's literals become tokens; `--frame-band` would
+  fill a kept segment and change the accepted 23-voter figure.
 - The parent spec (`2026-09-30-ui-refresh-design.md`):
   - "Steps after 5", the progress bullet, keeps its lead words and points here.
   - Principle 5: the progress leaves the list as the issue did (decision 13).
@@ -208,8 +211,9 @@ gains a pointer to this spec's changes:
   different rows keep every entry in view', and the middle and phone journeys,
   whose `nobodyVoted` reads Bob's slot too: it holds in the middle layout and
   grows on the phone. "The entries' scale holds through a reveal" also runs at
-  860 by 600 if its 4 entries sit below the scale's cap there, as at 1280 by
-  600; if not, it does not, and `nobodyVoted`'s read of Bob's slot covers it.
+  860 by 600 only if its 4 entries sit above the scale's floor and below its
+  cap there, as at 1280 by 600. At 860 by 600 `--s` sits at the floor (1), where
+  the case cannot go red, so `nobodyVoted`'s read of Bob's slot covers it.
 - 'a keyboard focus behind the round panel scrolls clear of it'
   (`narrow.spec.js`) also runs on a facilitator's phone page while voting,
   with voters, so the panel is full height with the table behind it.
