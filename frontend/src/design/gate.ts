@@ -108,7 +108,6 @@ export const pairs = (run: Run): Pair[] => [
   ...on('--ok', only('--ok-tint'), TEXT),
   ...on('--kept', [...only('--kept-tint'), ...surfaces.slice(1)], TEXT),
   ...on('--pip', only('--card-back'), INDICATOR),
-  ...on('--card-back', only('--track'), INDICATOR),
   ...(run === 'more' ? on('--hairline-colour', surfaces, INDICATOR) : [])
 ]
 

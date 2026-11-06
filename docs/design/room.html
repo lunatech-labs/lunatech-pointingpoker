@@ -12,12 +12,6 @@
   /* Parts later steps add, shown with later=1 */
   .later { outline: var(--line-mark) dashed var(--mute-soft); outline-offset: var(--focus-gap); border-radius: var(--radius-card); }
   .brand-logo-pip::after { content: '◆'; color: var(--pip); font-size: var(--text-xs); }
-  .round-progress { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--grey); padding: 0 var(--space-2); }
-  .round-progress i { display: block; width: var(--progress-width); height: var(--bar-min); border-radius: var(--radius-small); background: var(--track); overflow: hidden; }
-  .round-progress i::after { content: ''; display: block; height: 100%; width: var(--done); background: var(--card-back); }
-  .round-progress-big { flex: 1; display: grid; place-content: center; text-align: center; padding: var(--space-1) var(--space-5); }
-  .round-progress-big b { font-size: var(--text-4xl); line-height: var(--leading-figure); }
-  .round-progress-big span { color: var(--grey); }
   .room-page-sidebar > .later { outline-offset: calc(-1 * var(--line-hairline)); border-style: dashed; }
   /* The round history (step 9), at the sidebar's top */
   .round-history { flex: none; display: flex; flex-direction: column; gap: var(--space-1); }
@@ -28,29 +22,21 @@
   .round-history li:last-child { font-weight: var(--weight-strong); }
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
-    .round-progress i::after { forced-color-adjust: none; background: CanvasText; }
-  }
-  .round-progress-top { display: none; }
-  @container page (width < 65.75rem) {
-    /* The voter's progress leaves the round bar for the top line's left (a later step's) */
-    .round-bar .round-progress { display: none; }
-    .round-progress-top { display: block; position: absolute; left: var(--panel-inline); top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1)); padding: 0; }
+    .progress-bar .confirmed { forced-color-adjust: none; background: CanvasText; }
   }
   @container page (width < 51.75rem) { .round-history { order: 5; } }
-  /* progress=v2|v3: the progress step's candidates, the facilitator's slot while voting */
+  /* The facilitator's slot while voting: the count, the bar and the name lines (the progress spec) */
   .progress { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); padding: 0 var(--space-2); }
-  .progress-count { font-size: var(--text-2xl); font-weight: 700; line-height: var(--leading-tight); }
-  .progress-v3 .progress-count { font-size: var(--text-xl); }
+  .progress-count { font-size: var(--text-xl); font-weight: 700; line-height: var(--leading-tight); }
   /* Both lines' room is always held, so a list that empties moves neither the count nor the bar */
   .progress-lines { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); min-height: calc(2 * var(--text-lg) * var(--leading-tight) + var(--space-1)); }
-  .progress-bar { display: flex; gap: 3px; height: 0.5rem; }
+  .progress-bar { display: flex; gap: var(--progress-band); height: var(--progress-bar); }
   .progress-bar span { flex: 1; border-radius: var(--radius-small); box-sizing: border-box; }
   .progress-bar .confirmed { background: var(--card-back); }
-  .progress-bar .kept { border: 3px solid var(--card-back); }
+  .progress-bar .kept { border: var(--progress-band) solid var(--card-back); }
   .progress-bar .none { border: var(--line-mark) dashed var(--mute-soft); }
   .progress-line { font-size: var(--text-lg); line-height: var(--leading-tight); white-space: nowrap; overflow: hidden; }
   .progress-line b { font-weight: var(--weight-strong); }
-  .progress-line.over, .progress.over { outline: 2px solid red; }
   /* On a phone the facilitator's sheet fits the progress while voting, and grows to the result at a reveal */
   @container page (width < 51.75rem) { .round-panel-slot:has(.progress) { height: auto; } }
 </style>
@@ -83,7 +69,6 @@ const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container q
 const isPhone = () => document.querySelector('.room-page').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
 let menuShown = q.get('menu') === '1'
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
-const progress = ['v2', 'v3'].includes(q.get('progress')) ? q.get('progress') : null   // the progress step's candidates
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
 const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
 const nobody = sample === '0'
@@ -188,16 +173,13 @@ function draw() {
   const bannerBlock = bannerList && `<section class="banners" aria-label="Messages">${bannerList}</section>`
 
   const phaseLine = `<div class="round-bar-phase" data-testid="phase-line"><h2 class="panel-label">${revealed ? 'Revealed' : 'Voting'}</h2></div>`
-  // G: the voter's small count in the bar (later); the facilitator's big one in the slot
-  const small = later && voter && !revealed ? `<span class="round-progress later" style="--done:${100 * voted / people.length}%"><i></i>${voted} of ${people.length} voted</span>` : ''
   // M: Clear · toggle · Next issue, right-aligned; the toggle is the primary until Next issue exists (step 5)
   const guard = settling ? ' aria-disabled="true"' : ''
   const nextLeads = later && revealed
   const toggle = `<button class="button button-${nextLeads ? 'secondary' : 'primary'}" data-do="${revealed ? 'revote' : 'show'}" data-toggle type="button"${guard}>${revealed ? icon('rotate-ccw') : icon('eye')}<span class="button-word">${revealed ? 'Re-vote' : 'Show votes'}</span></button>`
   const next = nextLeads ? `<button class="button button-primary later" type="button"${guard}>${icon('arrow-right')}<span class="button-word">Next issue</span></button>` : ''
-  const actions = `${small}<button class="button-quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
+  const actions = `<button class="button-quiet" data-do="clear" type="button"${guard}>${trash}Clear votes</button>${toggle}${next}`
 
-  const topProgress = later && voter && !revealed ? `<span class="round-progress round-progress-top later">${voted} of ${people.length} voted</span>` : ''
   const deckBlock = `<div class="deck" role="group" aria-label="Estimation cards"><span id="kept-note" hidden>Previous vote, not confirmed</span>${deck.map(v => {
     const mine = own?.value === v && own.state !== 'none'
     const kept = mine && own.state === 'kept' ? ' aria-describedby="kept-note"' : ''
@@ -208,21 +190,16 @@ function draw() {
     <div class="result-columns"${tally.length ? ' role="list"' : ''}>${deck.map(v => counts[v]
       ? `<div class="result-column${red(v) ? ' result-column-top' : ''}" role="listitem" data-testid="tally-entry"><span class="visually-hidden" data-testid="tally-sr">${v}: ${counts[v]} ${counts[v] > 1 ? 'votes' : 'vote'}</span><span class="result-count" aria-hidden="true" data-testid="tally-count">${counts[v]}</span><span class="result-bar" style="--share:${counts[v] / top}" aria-hidden="true"></span><span class="result-value" aria-hidden="true" data-testid="tally-value">${fig(v)}</span></div>`
       : `<div class="result-column result-column-empty" aria-hidden="true"><span class="result-value">${fig(v)}</span></div>`).join('')}</div></div>`
-  const bigProgress = `<div class="round-progress-big later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
-  // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
-  let slot = ''
+  // The voter's slot holds the deck, then the result; the facilitator's the progress, then the result
   const listed = s => people.filter(p => p.state === s).map(p => p.name)
   const line = (label, list) => list.length ? `<div class="progress-line" data-names="${list.join('|')}" data-label="${label}"></div>` : ''
   const lines = listed('none').length + listed('kept').length ? line('No vote', listed('none')) + line('Not confirmed', listed('kept')) : '<div class="progress-line">Everybody voted</div>'
   const stepProgress = !people.length ? '<div class="progress"><div class="progress-line">No voters yet</div></div>'
-    : `<div class="progress progress-${progress}"><div class="progress-count">${voted} of ${people.length} voted</div>
+    : `<div class="progress"><div class="progress-count">${voted} of ${people.length} voted</div>
       <div class="progress-bar" aria-hidden="true">${['confirmed', 'kept', 'none'].map(s => listed(s).map(() => `<span class="${s}"></span>`).join('')).join('')}</div><div class="progress-lines">${lines}</div></div>`
-  if (voter) slot = revealed ? chart : (progress ? '' : topProgress) + deckBlock
-  else if (revealed) slot = chart
-  else if (progress) slot = stepProgress
-  else if (later) slot = bigProgress
+  const slot = revealed ? chart : voter ? deckBlock : stepProgress
   const controls = `<section class="panel round-bar" aria-label="Round">${phaseLine}${actions}</section>`
-  const round = slot ? `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>` : ''
+  const round = `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>`
 
   const entry = p => {
     const face = revealed
@@ -233,13 +210,13 @@ function draw() {
     const self = p.name === me
     return `<li data-testid="participant">${face}<span class="voters-name">${self ? `<b>${p.name}</b> <span class="voters-you">(you)</span>` : p.name}</span></li>`
   }
-  const heading = progress && voter && !revealed ? `${voted} of ${people.length} voted` : people.length
-  const table = `<section class="panel voters${!voter && !later && !progress && phase !== 'revealed' ? ' voters-reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${heading}</h2></div>
+  const heading = voter && !revealed ? `${voted} of ${people.length} voted` : people.length
+  const table = `<section class="panel voters" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${heading}</h2></div>
     <ul class="voters-entries">${people.map(entry).join('')}</ul><p class="voters-facilitators">Facilitators: ${facNames}</p></section>`
 
   const right = p => revealed
     ? p.value ? `<span class="roster-value">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="roster-value roster-value-none">–</span>'
-    : `<span class="roster-pill roster-pill-${p.state}">${{ none: progress ? 'No vote' : 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
+    : `<span class="roster-pill roster-pill-${p.state}">${{ none: 'No vote', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
   // A roster row never carries the participant test id: the table's entries are the contract's
   const row = (n, end, self, id = '') => `<li class="roster-row${self ? ' roster-row-me' : ''}">${avatar(n)}<span class="roster-who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
   const historyPanel = `<section class="panel round-history later" aria-label="Rounds"><h2 class="panel-label">Rounds · ${history.length}</h2>
@@ -267,10 +244,7 @@ function fitProgress() {
     let k = names.length
     for (; k > 0; k--) { el.innerHTML = label + text(k); if (el.scrollWidth <= el.clientWidth) break }
     if (k === 0) el.innerHTML = label + names.length   // no whole name fits: the count alone
-    el.classList.toggle('over', el.scrollWidth > el.clientWidth)
   })
-  const box = document.querySelector('.progress')
-  if (box) box.classList.toggle('over', box.scrollHeight > box.clientHeight + 1)
 }
 
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
@@ -278,15 +252,12 @@ function fitEntries() {
   const list = document.querySelector('.voters-entries'), box = document.querySelector('.voters')
   // The phone layout's fixed scale applies only once the wide fit's inline values are gone
   if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; return }
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
-  // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
-  const reserve = !voter && !later && !progress && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout
   const shown = [...box.children].filter(c => c.getClientRects().length)
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
   const used = () => shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad)
-  const room = Math.floor(box.clientHeight - reserve)
+  const room = box.clientHeight
   const items = [...list.children]
   // Balanced before it measures, since the balance can move a wrapping name to another row
   const fits = v => {

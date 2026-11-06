@@ -21,8 +21,9 @@ the decisions log at the end.
 - **Phase**: voting or revealed. A Re-vote returns the round to voting.
 - **Layout cell**: one page (voter, facilitator or lobby) in one phase at one
   target screen; the lobby has no phase.
-- **Shared-screen elements**: the progress and the result (principle 5; the
-  issue left the list in 3b1).
+- **Shared-screen elements**: the result (principle 5; the issue left the
+  list in 3b1, the progress in decision 13 of the progress step's spec,
+  `docs/superpowers/specs/2026-11-06-progress-design.md`).
 - **Card**: one of the deck's 13 buttons, which a voter clicks to vote.
 - **Participant entry**: one voter in the participant area, today a table row;
   its form is L3's. Facilitators have none; they are the roster's last rows
@@ -43,7 +44,7 @@ the decisions log at the end.
   `base` layer. Their own `<style>` keeps only the later steps' parts and the
   parameters' design alternatives.
 - They show what is built and, behind a "later steps" toggle, the parts later
-  steps add (progress count, Next issue, recent rounds), dashed, so what is
+  steps add (Next issue, recent rounds), dashed, so what is
   built leaves room for them.
 - They include a re-vote, where the kept look shows (J3), and a reveal with a
   kept vote.
@@ -384,8 +385,7 @@ and `room.html` draws them.
   balanced rows (5, 5 and 3, then 7 and 6 from a 22.25 rem deck), each card
   between `--target-min` and `--deck-card`, keeps the
   slot at one height through a reveal with the result stacked in it, puts the
-  kept tag and the voter's progress on the line above the deck, and keeps the
-  round bar on one row.
+  kept tag on the line above the deck, and keeps the round bar on one row.
 - **The phone layout** is one column, the issue, the table at its own scale,
   then the slot and the round bar as one sheet, pinned to the viewport's
   bottom where the viewport is at least 39 rem tall, its header one row with
@@ -487,14 +487,14 @@ read a token.
 
 | Kind | Tokens |
 | --- | --- |
-| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the progress track, the pip, the header mark's offset and the shadows' colours; from 4c1-wide-prep, the avatars' pairs |
+| Colour | the papers, pale and ink (Brand source), the supporting grey (J8), the app's burgundy and its tint, burgundy-deep, the hairline colour and its `more` value (J8), the card back (J4); from 3b1, the chart's other bars, the notice's three, the voted and kept pills, the pip, the header mark's offset and the shadows' colours; from 4c1-wide-prep, the avatars' pairs |
 | Root | the clamp (J2) |
 | Shell | its height (J2) |
 | Type | the families (J7); the scale's steps, the weights, the leadings, the label tracking and the tight point |
 | Spacing | one scale |
 | Shape | the radii (J9); the least target size; the shadows' lengths (J9) |
 | Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
-| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11); from 3b4, the lobby's column (J13) |
+| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11); from 3b4, the lobby's column (J13); from the progress step, its bar's height and band |
 | Motion | the one duration (J9) |
 
 - Nothing imports the value source before step 4; 3b's mockups link both
@@ -528,6 +528,10 @@ columns, are listed in its spec
 The avatar's contract changes, for its test id and the reads on its text, are
 listed in its spec
 (`docs/superpowers/specs/2026-11-05-avatar-emoji-design.md`, Contract).
+
+The progress panel's contract changes, for the facilitator's slot while
+voting, the Progress region and the voter's heading, are listed in its spec
+(`docs/superpowers/specs/2026-11-06-progress-design.md`, Contract).
 
 - Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
   (`facilitatorMark`), and one list holding every participant
@@ -573,8 +577,11 @@ listed in its spec
 - The issue editor's notices, the status region with the test id
   `issue-status` (`issueStatus`), rendered once, outside both views.
 - The round panel's slot, the test id `round-slot` (`roundSlot`), holding the
-  deck while voting and the result once revealed; a facilitator's page has
-  none while voting.
+  deck while voting and the result once revealed; on a facilitator's page it
+  holds the progress panel while voting.
+- The Progress region's text, read with `toMatchAriaSnapshot`: the count and
+  the name lines, as drawn.
+- The Voters heading on a voter's page while voting, `Voters · k of n voted`.
 - `tally-entry`, inside the region "Results", marks a value someone voted
   for; `expectSummaryMatchesParticipants` holds each summary it reads to it,
   reading each entry's `tally-value` and `tally-count`, and the nobody-voted
@@ -845,7 +852,10 @@ The reasons behind each rule, and what was set aside.
     "share your reasoning" callout, the round counter and the coffee card are
     step 5+ candidates, credited to his mockup.
   - **G. The progress count** lives only in the round's place, small for a
-    voter, big in the slot for a facilitator.
+    voter, big in the slot for a facilitator. Its voter half was reversed by
+    the progress step (`docs/superpowers/specs/2026-11-06-progress-design.md`,
+    decision 3): a voter's count is the table's heading, the round bar being
+    too cramped in the middle and phone layouts.
   - **H. The issue at a heading's size**, leaving principle 5's list: the room
     hears it, remote people read it, and at 44 px it dominated the page.
   - **I. Soft avatars**: initials in a hue hashed from the name, decoration
