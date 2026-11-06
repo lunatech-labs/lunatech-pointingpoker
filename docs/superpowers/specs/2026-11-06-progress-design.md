@@ -73,10 +73,15 @@ order; the first that fits the line's width is drawn:
    least 2.
 3. The count alone: `Not confirmed: 5`.
 
-React renders the chosen text; the fit only measures (decision 14). A pure
-selector takes the candidates and a measure callback and returns the first
-that fits. A layout effect runs it, and again when the line resizes, a font
-loads or the names change, as `useFitEntries` does.
+React renders the chosen text; the fit never writes into the line (decision
+14). A pure selector takes the candidates and a measure callback and returns
+the first that fits. The measure writes each candidate into a scratch node
+the hook creates and removes: `aria-hidden`, outside the Progress region, in
+the line's font with the label at weight 600. It compares the width with the
+line's `clientWidth`. The layout effect runs the selector synchronously, and
+again, inside `flushSync`, when the line resizes or a font loads (the
+triggers `useFitEntries` watches); a change of names re-runs the effect. So
+the fitted text is drawn before paint every time.
 
 **The slot's height.** The panel takes the slot's height on each layout, so a
 reveal swaps it for the result in place: 7.5 rem at 65.75 rem and up, the
@@ -112,7 +117,6 @@ result's height at a reveal (decision 6).
   today, and between no voters and one; below 39 rem tall it is not pinned,
   and the panel scrolls with the page as a voter's deck does.
 - In a first round the second line's room stays empty.
-- A resize can draw a line's overflow for one frame before the fit runs.
 
 ## Contract
 
@@ -132,8 +136,9 @@ gains a pointer to this spec's changes:
   which holds the bar's and spacing's values, becomes the default view. The
   draft's scaffolding goes (the `progress` parameter, the v2 candidate, the
   `progress-${progress}` class, the red `.over` outline), as does decision G's
-  progress (`round-progress`, `round-progress-top`, `bigProgress`). The bar
-  gains the marks' forced-colours rule, which the draft lacks.
+  progress (`round-progress`, `round-progress-top`, `bigProgress`) and the
+  mockup's copy of the reserve (`voters-reserve` and the fit's `reserve`). The
+  bar gains the marks' forced-colours rule, which the draft lacks.
 - `docs/design/room-cells.html`: the `later` option's label drops "progress".
 - `docs/design/ui-reference.md`:
   - Terms, "Shared-screen elements": the result alone (decision 13).
@@ -143,8 +148,10 @@ gains a pointer to this spec's changes:
     deck".
   - The Tokens table's "progress track" mentions, as the tokens below.
   - The Contract lines above.
-- Tokens: `--progress-width` goes; the comments of `--track`, `--radius-small`
-  and `--bar-min` name their remaining uses.
+- Tokens: `--progress-width` and `--track` go, with `--track`'s gate pair in
+  `gate.ts` and its value in `gate.test.ts`'s fixture, and `lobby-page.css`'s
+  comment stops citing the track by name; the comments of
+  `--radius-small` and `--bar-min` name their remaining uses.
 - The parent spec (`2026-09-30-ui-refresh-design.md`):
   - "Steps after 5", the progress bullet, keeps its lead words and points here.
   - Principle 5: the progress leaves the list as the issue did (decision 13).
@@ -154,10 +161,14 @@ gains a pointer to this spec's changes:
     (decision 6); "It may share a line with the progress" goes (decision 9).
   - Step 4's cases: "below it, until the progress step, a reveal refits them"
     becomes a hold at every width above the phone.
+  - Appendix B, "The phase text alone", and Appendix C's "across a vote that
+    changes a progress sharing its line": no progress shares the line
+    (decision 9).
   - Appendix C, where the phase line's reserve and its 320 px case "wait for
     the progress step": the wait ends with nothing to add (decision 9).
 - Stale comments: `.voters-reserve`'s, `useFitEntries`' on the reserve,
-  `keepClearOfSheet`'s; in `layout.spec.js`, those on `parts`, `nobodyVoted`,
+  `keepClearOfSheet`'s, `RoundPanel`'s on the slot, `roundSlot`'s in
+  `fixtures.js`; in `layout.spec.js`, those on `parts`, `nobodyVoted`,
   "the entries' scale holds through a reveal" ("a dropped reserve shows") and
   'two wrapping names in different rows keep every entry in view'; and any
   "until the progress step".
@@ -178,9 +189,11 @@ gains a pointer to this spec's changes:
     (`Everybody voted`);
   - the voter's heading while voting, during a Re-vote with kept cards (they
     are not counted), and once revealed;
-  - the phone: the facilitator's page opens at 1280 wide and shrinks to 320,
-    and the name line shows the count; the sheet is as tall as the panel
-    while voting.
+  - the phone: the facilitator's page opens at 1280 wide showing every name,
+    shrinks to 320, and the name line shows the count, in a room where no
+    name fits there; the sheet is as tall as the panel while voting;
+  - a change of names, no resize: on a narrow page a line showing every name
+    falls back once another voter joins.
 - Layout cases restated for the facilitator's slot while voting, in
   `layout.spec.js`: 'nobody voted: the slot keeps its height through a
   reveal', 'nothing moves between a room of 2 and a room of 14', 'no scroll at
@@ -189,12 +202,13 @@ gains a pointer to this spec's changes:
   different rows keep every entry in view', and the middle and phone journeys,
   whose `nobodyVoted` reads Bob's slot too: it holds in the middle layout and
   grows on the phone. "The entries' scale holds through a reveal" also runs at
-  860 by 600.
+  860 by 600 if its 4 entries sit below the scale's cap there, as at 1280 by
+  600; if not, it does not, and `nobodyVoted`'s read of Bob's slot covers it.
 - 'a keyboard focus behind the round panel scrolls clear of it'
   (`narrow.spec.js`) also runs on a facilitator's phone page while voting,
   with voters, so the panel is full height with the table behind it.
-- Not tested: a font load during the fit (the font is preloaded, J7), and the
-  roster's pill, as today.
+- Not tested: a font load during the fit (the font is preloaded, J7), the
+  roster's pill, as today, and the panel having no tab stop.
 - Each new or changed case is shown red by breaking the mechanism it names.
 
 ## Decisions
@@ -237,6 +251,9 @@ gains a pointer to this spec's changes:
     principle 5's list as the issue did in 3b1: the facilitator reads the
     names aloud, and remote people read them on their own screen. The result
     is the one shared-screen element; J7 is unchanged.
-14. **React renders the fitted text** (review). Writing candidates into a node
-    React owns can break its next update; measuring and setting the choice in
-    a layout effect draws it before paint, a resize excepted.
+14. **React renders the fitted text; a scratch node measures it** (user,
+    review). Writing candidates into a node React owns can break its next
+    update. The scratch node measures what the browser draws, as the mockup
+    did; canvas `measureText` was set aside for its hand-built font strings and
+    subpixel drift. A state set from an observer renders after paint, hence
+    the synchronous run and `flushSync`.
