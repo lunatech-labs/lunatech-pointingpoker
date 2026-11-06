@@ -82,6 +82,27 @@
   - Restore each fit case's old names: that case's premise.
 - [ ] **Step 12: Commit.** `feat: size the progress panel's text by the table's scale`
 
+### Task 3: Tighten the sizing cases
+
+The final review's minors, folded into this branch. Test-only: no app or docs change.
+
+**Files:**
+- Modify: `e2e/progress.spec.js`
+
+**Interfaces:**
+- Consumes: Task 1's width case, Task 2's cap case and `panelSizes`, the phone case's slot read.
+
+- [ ] **Step 1: Shared helpers, no behaviour change.** In `progress.spec.js`, `settle(page)` awaits the fonts and two frames; `spare`, the phone case's slot read and `panelSizes` call it instead of waiting inside their own `evaluate`. `slotFit(page)` returns the Progress region's slot height, content height (as the phone case measures them) and the drawn bar's height, with the root's font size; the phone case and the cap case both use it. `npm run e2e -- progress` — all pass.
+- [ ] **Step 2: The phone's bar.** In the phone case's 320 step, assert the bar is `--progress-bar-narrow` tall (within 0.5 px, read through `slotFit`). The phone case, not the follow case, since it already reads the slot at 320.
+- [ ] **Step 3: Marks at the larger root.** The width case checks the marks at 1000 as at 800 (a drawn outline, its offset within 0.5 px of minus its width, no border), through one local check used at both heights.
+- [ ] **Step 4: Run them to see them pass.** `npm run e2e -- progress` — all pass.
+- [ ] **Step 5: Prove they can fail.** Each goes red, then is reverted:
+  - Delete the `@container page (width < 51.75rem)` rule in `progress.css`: the phone case's bar read.
+  - Drop `outline-offset` from the no-vote segment, with the 800 marks check cut for the run: the 1000 marks check.
+  - `--progress-bar: 1.5rem`: the cap case's full-height read, through `slotFit`.
+- [ ] **Step 6: Run everything.** `npm run typecheck && npm run lint && npm run test:unit && npm run e2e` — all pass.
+- [ ] **Step 7: Commit.** `test: tighten the progress panel's sizing cases`; then a re-review of this commit only (one `reviewer` subagent), and the push waits for the user's OK.
+
 ## Self-review
 
-- Spec coverage: decision 15 (hook, clamps, held height, fit cases, follow and cap cases, mockup) → Task 2; decisions 16 and 17 (outlines, tokens, narrow bar, equal widths, tokens row) → Task 1. The spec's accepted 19-voter figure needs no code. The spec's remaining Docs and Contract lines were built with the earlier plan.
+- Spec coverage: decision 15 (hook, clamps, held height, fit cases, follow and cap cases, mockup) → Task 2; decisions 16 and 17 (outlines, tokens, narrow bar, equal widths, tokens row) → Task 1. The spec's accepted 19-voter figure needs no code. Task 3 closes the final review's minors (Review Focus 3's frame at 1000, the phone's bar, duplicated test code). The spec's remaining Docs and Contract lines were built with the earlier plan.
