@@ -18,3 +18,17 @@ export function balancedWidth(count: number, rows: number, entryWidth: number): 
   if (rows <= 1) return null
   return Math.ceil(count / rows) * entryWidth + 1
 }
+
+// A name line's texts after its label, longest first: all names, the first k and "and N more" (N >= 2), then the count.
+export function nameCandidates(names: string[]): string[] {
+  const n = names.length
+  const some = Array.from({ length: Math.max(n - 2, 0) }, (_, i) => n - 2 - i).map(
+    k => `${names.slice(0, k).join(', ')} and ${n - k} more`
+  )
+  return [names.join(', '), ...some, String(n)]
+}
+
+// The first candidate that fits; the last, the count, is taken without being measured.
+export function firstFit(candidates: string[], fits: (text: string) => boolean): string {
+  return candidates.slice(0, -1).find(fits) ?? candidates[candidates.length - 1]
+}

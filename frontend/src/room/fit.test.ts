@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { balancedWidth, largestFit } from './fit'
+import { balancedWidth, firstFit, largestFit, nameCandidates } from './fit'
 
 const cap = 5.5 / 3.85 // --deck-card over --entry-mark
 
@@ -35,4 +35,36 @@ describe('balancedWidth', () => {
   it('splits 14 over two rows as 7 and 7', () => expect(balancedWidth(14, 2, 78)).toBe(547))
   it('splits 14 over three rows as 5, 5 and 4', () => expect(balancedWidth(14, 3, 78)).toBe(391))
   it('splits 13 over two rows as 7 and 6', () => expect(balancedWidth(13, 2, 78)).toBe(547))
+})
+
+describe('nameCandidates', () => {
+  it('offers the name and the count for one name', () =>
+    expect(nameCandidates(['A'])).toEqual(['A', '1']))
+  it('offers the names and the count for two, never "and 1 more"', () =>
+    expect(nameCandidates(['A', 'B'])).toEqual(['A, B', '2']))
+  it('steps k down from n - 2 to 1', () =>
+    expect(nameCandidates(['A', 'B', 'C', 'D'])).toEqual([
+      'A, B, C, D',
+      'A, B and 2 more',
+      'A and 3 more',
+      '4'
+    ]))
+})
+
+describe('firstFit', () => {
+  const fits = (t: string) => t.length <= 10
+  const names = ['Ann', 'Bob', 'Cid', 'Dan']
+  it('takes every name when they fit', () =>
+    expect(firstFit(nameCandidates(['Ann', 'Bob']), fits)).toBe('Ann, Bob'))
+  it('takes the largest k when every name does not fit', () =>
+    expect(firstFit(nameCandidates(['A', 'B', 'C', 'D', 'E', 'F']), t => t.length <= 15)).toBe(
+      'A, B and 4 more'
+    ))
+  it('takes the count when none fits', () =>
+    expect(firstFit(nameCandidates(names), () => false)).toBe('4'))
+  it('never measures the last candidate', () => {
+    const seen: string[] = []
+    firstFit(nameCandidates(names), t => (seen.push(t), false))
+    expect(seen).not.toContain('4')
+  })
 })
