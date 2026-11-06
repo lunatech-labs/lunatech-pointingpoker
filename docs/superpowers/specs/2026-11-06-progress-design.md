@@ -20,14 +20,15 @@ Next issue (#548), round history (#528).
 ## Terms
 
 - **Voted**: a voter whose estimate is confirmed (`voteState` `confirmed`).
-  "k of n voted" counts these, so n of n is exactly when auto-reveal fires
-  (`complete` in `Room.scala`).
+  "k of n voted" counts these, so n of n is exactly when `complete` holds
+  (`Room.scala`). Auto-reveal checks it only on a vote or a role switch
+  (`latched`).
 - **Not confirmed**: a voter holding the previous round's card after a Re-vote
   (`kept`). Only a Re-vote round has them.
 - **No vote**: a voter with no card (`none`).
 - **Voters**: the table's voters, members in their grace period included, as
   the table and `complete` count them.
-- **Progress panel**: the facilitator's slot while voting.
+- **Progress panel**: what the facilitator's slot holds while voting.
 - **Name line**: one of the progress panel's two lists, "No vote: …" and
   "Not confirmed: …".
 
@@ -40,7 +41,8 @@ Next issue (#548), round history (#528).
 | Voter | `Voters · 4 of 6 voted` | `Voters · 6` |
 | Facilitator | `Voters · 6` | `Voters · 6` |
 
-Nothing else in the table changes. No line is added under it.
+The voter's count is the one the progress panel shows. Nothing else in the
+table changes, and no line is added under it.
 
 **The progress panel.** A pure function in `frontend/src/room/progress.ts`
 takes the view's voters and returns the count, the bar's segments and each
@@ -57,23 +59,24 @@ name line's names; the component only lays it out. From top to bottom:
 | some with no vote, none kept | `No vote: …` | empty |
 | none with no vote, some kept | `Not confirmed: …` | empty |
 | both | `No vote: …` | `Not confirmed: …` |
-| all voted (a departure, never a vote, left it so) | `Everybody voted` | empty |
+| all voted, left so by a departure or a rejoin under another role | `Everybody voted` | empty |
 | no voters | the panel reads `No voters yet` alone: no count, no bar | |
 
 The name lines' block always holds two lines' height, and the whole is
 centred on that, so a list that empties moves neither the count nor the bar.
 
-**Fitting a name line.** One line each, never wrapping. In this order, the
-first that fits the line's width:
+**Fitting a name line.** One line each, never wrapping. The candidates, in
+order; the first that fits the line's width is drawn:
 
 1. Every name.
-2. The first k names and `and N more`, for the largest k of at least 1 that
-   fits, with N at least 2: one name left over shows as its name.
+2. The first k names and `and N more`, k from n − 2 down to 1, so N is at
+   least 2.
 3. The count alone: `Not confirmed: 5`.
 
-It is measured in the browser and re-runs when the line resizes, a font loads
-or the names change, as `useFitEntries` does. A pure function builds each
-candidate's text.
+React renders the chosen text; the fit only measures (decision 14). A pure
+selector takes the candidates and a measure callback and returns the first
+that fits. A layout effect runs it, and again when the line resizes, a font
+loads or the names change, as `useFitEntries` does.
 
 **The slot's height.** The panel takes the slot's height on each layout, so a
 reveal swaps it for the result in place: 7.5 rem at 65.75 rem and up, the
@@ -81,8 +84,8 @@ deck's rows (at least the result's least height) in the middle layout. On the
 phone, while voting, the slot is as tall as the panel, and grows to the
 result's height at a reveal (decision 6).
 
-**Silent.** No live region: the panel is a region named "Progress", read on
-demand. The phase line keeps the round's announcements.
+**Silent.** No live region and no tab stop: the panel is a region named
+"Progress", read on demand. The phase line keeps the round's announcements.
 
 **What goes.**
 
@@ -106,9 +109,10 @@ demand. The phase line keeps the round's announcements.
   a wide screen. The words stay right; leading a room that size from a phone
   is unlikely.
 - On a phone the facilitator's sheet grows at a reveal (decision 6), as it does
-  today; below 39 rem tall it is not pinned, and the panel scrolls with the
-  page as a voter's deck does.
+  today, and between no voters and one; below 39 rem tall it is not pinned,
+  and the panel scrolls with the page as a voter's deck does.
 - In a first round the second line's room stays empty.
+- A resize can draw a line's overflow for one frame before the fit runs.
 
 ## Contract
 
@@ -124,68 +128,90 @@ gains a pointer to this spec's changes:
 
 ## Docs
 
-- `docs/design/room.html`: the default view draws this design (the
-  `progress=v3` draft committed with this spec, which holds the bar's and
-  spacing's values and becomes unconditional), and the decision G
-  progress (`round-progress`, `round-progress-top`, `bigProgress`) goes.
+- `docs/design/room.html`: the `progress=v3` draft committed with this spec,
+  which holds the bar's and spacing's values, becomes the default view. The
+  draft's scaffolding goes (the `progress` parameter, the v2 candidate, the
+  `progress-${progress}` class, the red `.over` outline), as does decision G's
+  progress (`round-progress`, `round-progress-top`, `bigProgress`). The bar
+  gains the marks' forced-colours rule, which the draft lacks.
+- `docs/design/room-cells.html`: the `later` option's label drops "progress".
 - `docs/design/ui-reference.md`:
-  - Terms, "Shared-screen elements": the facilitator's progress and the result.
+  - Terms, "Shared-screen elements": the result alone (decision 13).
+  - "Mockups": the later steps' list drops the progress count.
   - Decision G's voter half reversed, in the decisions log, pointing here.
-  - J11's middle layout drops "the voter's progress on the line above the
+  - J11, "The compact foot": drops "the voter's progress on the line above the
     deck".
+  - The Tokens table's "progress track" mentions, as the tokens below.
   - The Contract lines above.
+- Tokens: `--progress-width` goes; the comments of `--track`, `--radius-small`
+  and `--bar-min` name their remaining uses.
 - The parent spec (`2026-09-30-ui-refresh-design.md`):
   - "Steps after 5", the progress bullet, keeps its lead words and points here.
-  - Principle 5's "the progress" and the Terms' "Progress" point to decisions
-    3 and 4.
-  - Step 4a's phase line paragraphs, where the reserve and the 320 px case
-    "wait for the progress step": the wait ends with nothing to add (decision
-    9).
+  - Principle 5: the progress leaves the list as the issue did (decision 13).
+  - Terms, "Progress": "kept in view" points to decision 4.
+  - Step 3, the phase line: "until the progress step fills its slot while
+    voting" becomes the facilitator's phone sheet growing at a reveal
+    (decision 6); "It may share a line with the progress" goes (decision 9).
+  - Step 4's cases: "below it, until the progress step, a reveal refits them"
+    becomes a hold at every width above the phone.
+  - Appendix C, where the phase line's reserve and its 320 px case "wait for
+    the progress step": the wait ends with nothing to add (decision 9).
 - Stale comments: `.voters-reserve`'s, `useFitEntries`' on the reserve,
-  `keepClearOfSheet`'s, and any "until the progress step".
+  `keepClearOfSheet`'s; in `layout.spec.js`, those on `parts`, `nobodyVoted`,
+  "the entries' scale holds through a reveal" ("a dropped reserve shows") and
+  'two wrapping names in different rows keep every entry in view'; and any
+  "until the progress step".
 - A note on #497 for the designer: the count with name lines and a grouped bar
   replaces the mockup's bare "4 of 6 have voted", and why. Shown in chat
   before it is posted.
 
 ## Verification
 
-- Unit, `progress.test.ts`: a first round; a Re-vote with all three states,
-  the bar's grouping included; all voted; no voters.
-- Unit, the candidate texts: every name; k names and `and N more`; one left
-  over shown as its name; the count alone.
+- Unit, `progress.test.ts`: a first round; a Re-vote with kept cards and no
+  "no vote" (line 1 is `Not confirmed`); a Re-vote with all three states, the
+  bar's grouping included; all voted; no voters.
+- Unit, the fit: each candidate's text (N is never 1); the selector, given a
+  fake measure, picks every name, the largest k, or the count.
 - Browser, both browsers, a facilitator and voters:
   - the Progress region's aria snapshot through a first round's votes, a
     Re-vote with kept cards, and a Leave that leaves everyone voted
     (`Everybody voted`);
-  - the voter's heading while voting and once revealed;
-  - the phone: the name line falls back to the count, and the facilitator's
-    sheet is as tall as the panel while voting.
+  - the voter's heading while voting, during a Re-vote with kept cards (they
+    are not counted), and once revealed;
+  - the phone: the facilitator's page opens at 1280 wide and shrinks to 320,
+    and the name line shows the count; the sheet is as tall as the panel
+    while voting.
 - Layout cases restated for the facilitator's slot while voting, in
   `layout.spec.js`: 'nobody voted: the slot keeps its height through a
-  reveal', 'no scroll at the floor' (`parts`), the two `scrollsAndCutsNothing`
-  cases, 'a copy moves and covers nothing in the header or the round', 'two
-  wrapping names in different rows keep every entry in view' (its comment),
-  and 'the middle layout, 860 by 600, on both pages' (Bob's page).
-  "The entries' scale holds through a reveal" stays and now holds at every
-  width above the phone.
-- The focus-clear-of-the-sheet case also runs on a facilitator's phone page
-  while voting.
+  reveal', 'nothing moves between a room of 2 and a room of 14', 'no scroll at
+  the floor' (`parts`), the two `scrollsAndCutsNothing` cases, 'a copy moves
+  and covers nothing in the header or the round', 'two wrapping names in
+  different rows keep every entry in view', and the middle and phone journeys,
+  whose `nobodyVoted` reads Bob's slot too: it holds in the middle layout and
+  grows on the phone. "The entries' scale holds through a reveal" also runs at
+  860 by 600.
+- 'a keyboard focus behind the round panel scrolls clear of it'
+  (`narrow.spec.js`) also runs on a facilitator's phone page while voting,
+  with voters, so the panel is full height with the table behind it.
+- Not tested: a font load during the fit (the font is preloaded, J7), and the
+  roster's pill, as today.
 - Each new or changed case is shown red by breaking the mechanism it names.
 
 ## Decisions
 
 1. **Names lead, the count follows** (user). The facilitator calls people out.
-2. **Minimum for everyone, extras for the facilitator** (user). Every page
-   gets the count in an existing line; the names and bar go in the
-   facilitator's slot. A line under the table would de-centre it or move it.
+2. **The minimum on a voter's page, the rest in the facilitator's panel**
+   (user). A voter's page gets the count in an existing line; a line under the
+   table would de-centre it or move it. The facilitator's heading keeps
+   `Voters · n`: the panel is the home of all its progress, at the cost of a
+   heading that differs by role.
 3. **The voter's count stays small** (user). It reverses decision G's voter
-   half and narrows principle 5's shared-screen progress to the facilitator's
-   panel. The round bar (option B) was too cramped in the middle and phone
+   half. The round bar (option B) was too cramped in the middle and phone
    layouts.
 4. **The heading may leave view** (user). Pinning it costs every phone voter
    a strip of screen for a rare case.
 5. **"Voted" means confirmed everywhere** (user), so the count meets
-   auto-reveal. Counting kept cards as voted would show n of n with nothing
+   `complete`. Counting kept cards as voted would show n of n with nothing
    revealing.
 6. **The phone's sheet fits the panel while voting** (user). Holding the deck's
    13 rem hid half the table for the whole round, to spare one grow at a
@@ -207,3 +233,10 @@ gains a pointer to this spec's changes:
     full list: a screen reader user hears what is on screen.
 12. **No states x events matrix, no spike** (my call). The panel is a pure
     function of the snapshot; the fit has the table's triggers.
+13. **The progress is not a shared-screen element** (user, review). It leaves
+    principle 5's list as the issue did in 3b1: the facilitator reads the
+    names aloud, and remote people read them on their own screen. The result
+    is the one shared-screen element; J7 is unchanged.
+14. **React renders the fitted text** (review). Writing candidates into a node
+    React owns can break its next update; measuring and setting the choice in
+    a layout effect draws it before paint, a resize excepted.
