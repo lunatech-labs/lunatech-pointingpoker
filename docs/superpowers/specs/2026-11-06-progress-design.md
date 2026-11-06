@@ -73,15 +73,18 @@ order; the first that fits the line's width is drawn:
    least 2.
 3. The count alone: `Not confirmed: 5`.
 
-React renders the chosen text; the fit never writes into the line (decision
-14). A pure selector takes the candidates and a measure callback and returns
-the first that fits. The measure writes each candidate into a scratch node
-the hook creates and removes: `aria-hidden`, outside the Progress region, in
-the line's font with the label at weight 600. It compares the width with the
-line's `clientWidth`. The layout effect runs the selector synchronously, and
-again, inside `flushSync`, when the line resizes or a font loads (the
-triggers `useFitEntries` watches); a change of names re-runs the effect. So
-the fitted text is drawn before paint every time.
+The line stretches to the panel's width (`min-width: 0`, `overflow: hidden`);
+its text never sizes it. React renders the chosen text; the fit never writes
+into the line (decision 14). A pure selector takes the candidates and a
+measure callback and returns the first that fits. The measure writes each
+candidate into a scratch node that measures as the line draws: the line's
+computed font, the label at weight 600, `nowrap`, an unconstrained width,
+`aria-hidden`, outside the Progress region. It is created and removed within
+one run of the layout effect, and compared with the line's content width.
+The layout effect runs the selector synchronously, keyed on the line's label
+and names as one joined string; the observers re-run it inside `flushSync`
+when the line resizes or a font loads (the triggers `useFitEntries` watches),
+never the effect itself. So the fitted text is drawn before paint every time.
 
 **The slot's height.** The panel takes the slot's height on each layout, so a
 reveal swaps it for the result in place: 7.5 rem at 65.75 rem and up, the
@@ -193,7 +196,10 @@ gains a pointer to this spec's changes:
     shrinks to 320, and the name line shows the count, in a room where no
     name fits there; the sheet is as tall as the panel while voting;
   - a change of names, no resize: on a narrow page a line showing every name
-    falls back once another voter joins.
+    falls back once another voter joins, the line's width the same before and
+    after;
+  - in every fit case, the drawn line does not overflow (`scrollWidth` at
+    most `clientWidth`), whatever the measure got wrong.
 - Layout cases restated for the facilitator's slot while voting, in
   `layout.spec.js`: 'nobody voted: the slot keeps its height through a
   reveal', 'nothing moves between a room of 2 and a room of 14', 'no scroll at
@@ -208,7 +214,8 @@ gains a pointer to this spec's changes:
   (`narrow.spec.js`) also runs on a facilitator's phone page while voting,
   with voters, so the panel is full height with the table behind it.
 - Not tested: a font load during the fit (the font is preloaded, J7), the
-  roster's pill, as today, and the panel having no tab stop.
+  roster's pill, as today, the panel having no tab stop, and the fit landing
+  before paint.
 - Each new or changed case is shown red by breaking the mechanism it names.
 
 ## Decisions
