@@ -37,6 +37,22 @@
     .round-progress-top { display: block; position: absolute; left: var(--panel-inline); top: calc(var(--panel-gap) + var(--space-2) - var(--text-tag) * var(--leading-body) - var(--space-1)); padding: 0; }
   }
   @container page (width < 51.75rem) { .round-history { order: 5; } }
+  /* progress=v2|v3: the progress step's candidates, the facilitator's slot while voting */
+  .progress { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: var(--space-2); padding: 0 var(--space-2); }
+  .progress-count { font-size: var(--text-2xl); font-weight: 700; line-height: var(--leading-tight); }
+  .progress-v3 .progress-count { font-size: var(--text-xl); }
+  /* Both lines' room is always held, so a list that empties moves neither the count nor the bar */
+  .progress-lines { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); min-height: calc(2 * var(--text-lg) * var(--leading-tight) + var(--space-1)); }
+  .progress-bar { display: flex; gap: 3px; height: 0.5rem; }
+  .progress-bar span { flex: 1; border-radius: var(--radius-small); box-sizing: border-box; }
+  .progress-bar .confirmed { background: var(--card-back); }
+  .progress-bar .kept { border: 3px solid var(--card-back); }
+  .progress-bar .none { border: var(--line-mark) dashed var(--mute-soft); }
+  .progress-line { font-size: var(--text-lg); line-height: var(--leading-tight); white-space: nowrap; overflow: hidden; }
+  .progress-line b { font-weight: var(--weight-strong); }
+  .progress-line.over, .progress.over { outline: 2px solid red; }
+  /* On a phone the facilitator's sheet fits the progress while voting, and grows to the result at a reveal */
+  @container page (width < 51.75rem) { .round-panel-slot:has(.progress) { height: auto; } }
 </style>
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
@@ -67,6 +83,7 @@ const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container q
 const isPhone = () => document.querySelector('.room-page').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
 let menuShown = q.get('menu') === '1'
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
+const progress = ['v2', 'v3'].includes(q.get('progress')) ? q.get('progress') : null   // the progress step's candidates
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
 const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
 const nobody = sample === '0'
@@ -194,8 +211,15 @@ function draw() {
   const bigProgress = `<div class="round-progress-big later"><b>${voted} of ${people.length}</b><span>have voted</span></div>`
   // The voter's slot holds the deck, then the result; the facilitator's appears on a reveal, or holds the progress (later)
   let slot = ''
-  if (voter) slot = revealed ? chart : topProgress + deckBlock
+  const listed = s => people.filter(p => p.state === s).map(p => p.name)
+  const line = (label, list) => list.length ? `<div class="progress-line" data-names="${list.join('|')}" data-label="${label}"></div>` : ''
+  const lines = listed('none').length + listed('kept').length ? line('No vote', listed('none')) + line('Not confirmed', listed('kept')) : '<div class="progress-line">Everybody voted</div>'
+  const stepProgress = !people.length ? '<div class="progress"><div class="progress-line">No voters yet</div></div>'
+    : `<div class="progress progress-${progress}"><div class="progress-count">${voted} of ${people.length} voted</div>
+      <div class="progress-bar" aria-hidden="true">${['confirmed', 'kept', 'none'].map(s => listed(s).map(() => `<span class="${s}"></span>`).join('')).join('')}</div><div class="progress-lines">${lines}</div></div>`
+  if (voter) slot = revealed ? chart : (progress ? '' : topProgress) + deckBlock
   else if (revealed) slot = chart
+  else if (progress) slot = stepProgress
   else if (later) slot = bigProgress
   const controls = `<section class="panel round-bar" aria-label="Round">${phaseLine}${actions}</section>`
   const round = slot ? `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>` : ''
@@ -209,12 +233,13 @@ function draw() {
     const self = p.name === me
     return `<li data-testid="participant">${face}<span class="voters-name">${self ? `<b>${p.name}</b> <span class="voters-you">(you)</span>` : p.name}</span></li>`
   }
-  const table = `<section class="panel voters${!voter && !later && phase !== 'revealed' ? ' voters-reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${people.length}</h2></div>
+  const heading = progress && voter && !revealed ? `${voted} of ${people.length} voted` : people.length
+  const table = `<section class="panel voters${!voter && !later && !progress && phase !== 'revealed' ? ' voters-reserve' : ''}" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${heading}</h2></div>
     <ul class="voters-entries">${people.map(entry).join('')}</ul><p class="voters-facilitators">Facilitators: ${facNames}</p></section>`
 
   const right = p => revealed
     ? p.value ? `<span class="roster-value">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="roster-value roster-value-none">–</span>'
-    : `<span class="roster-pill roster-pill-${p.state}">${{ none: 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
+    : `<span class="roster-pill roster-pill-${p.state}">${{ none: progress ? 'No vote' : 'Choosing…', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
   // A roster row never carries the participant test id: the table's entries are the contract's
   const row = (n, end, self, id = '') => `<li class="roster-row${self ? ' roster-row-me' : ''}">${avatar(n)}<span class="roster-who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
   const historyPanel = `<section class="panel round-history later" aria-label="Rounds"><h2 class="panel-label">Rounds · ${history.length}</h2>
@@ -231,6 +256,21 @@ function draw() {
   if (onMenu) document.querySelector('.room-header-menu-button').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.round-history ol')?.scrollTo(0, 1e6)   // the latest round in view
   watched.disconnect(); watched.observe(document.querySelector('.voters'))
+  if (document.querySelector('.progress')) watched.observe(document.querySelector('.progress'))
+}
+
+// Whole names that fit the line, then "and N more"; one left over shows as its name
+function fitProgress() {
+  document.querySelectorAll('.progress-line[data-names]').forEach(el => {
+    const names = el.dataset.names.split('|'), label = `<b>${el.dataset.label}:</b> `
+    const text = k => k >= names.length - 1 ? names.join(', ') : `${names.slice(0, k).join(', ')} and ${names.length - k} more`
+    let k = names.length
+    for (; k > 0; k--) { el.innerHTML = label + text(k); if (el.scrollWidth <= el.clientWidth) break }
+    if (k === 0) el.innerHTML = label + names.length   // no whole name fits: the count alone
+    el.classList.toggle('over', el.scrollWidth > el.clientWidth)
+  })
+  const box = document.querySelector('.progress')
+  if (box) box.classList.toggle('over', box.scrollHeight > box.clientHeight + 1)
 }
 
 // v1's entry scale: the largest that fits the table, at most a deck card, fitted to the revealed box.
@@ -241,7 +281,7 @@ function fitEntries() {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
   // The facilitator's slot appears at a reveal, so its height, padding, gap and borders are reserved
-  const reserve = !voter && !later && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
+  const reserve = !voter && !later && !progress && phase !== 'revealed' ? (token('--slot-height') + 3 * token('--panel-gap')) * rem + 2 * token('--line-hairline') : 0
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout
   const shown = [...box.children].filter(c => c.getClientRects().length)
   const cs = getComputedStyle(box), pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.rowGap) * (shown.length - 1)
@@ -262,8 +302,8 @@ function fitEntries() {
   else while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (fits(scale(mid))) lo = mid; else hi = mid }
   fits(scale(lo))
 }
-const watched = new ResizeObserver(fitEntries)
-document.fonts.addEventListener('loadingdone', fitEntries)
+const watched = new ResizeObserver(() => { fitEntries(); fitProgress() })
+document.fonts.addEventListener('loadingdone', () => { fitEntries(); fitProgress() })
 
 // Every action in the round bar is aria-disabled for 1 s after the phase changes, so a late click acts on nothing
 function moveTo(next) {
