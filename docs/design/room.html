@@ -237,7 +237,8 @@ function fitProgress() {
 function fitEntries() {
   const list = document.querySelector('.voters-entries'), box = document.querySelector('.voters')
   // The phone layout's fixed scale applies only once the wide fit's inline values are gone
-  if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; return }
+  const column = document.querySelector('.room-page-column')
+  if (isPhone()) { list.style.removeProperty('--s'); list.style.maxWidth = ''; column.style.removeProperty('--table-scale'); return }
   const token = n => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout
   const shown = [...box.children].filter(c => c.getClientRects().length)
@@ -258,6 +259,8 @@ function fitEntries() {
   if (fits(scale(hi))) lo = hi
   else while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (fits(scale(mid))) lo = mid; else hi = mid }
   fits(scale(lo))
+  // A copy for the progress panel, which is not under the list's own --s (progress decision 15)
+  column.style.setProperty('--table-scale', list.style.getPropertyValue('--s'))
 }
 const watched = new ResizeObserver(() => { fitEntries(); fitProgress() })
 document.fonts.addEventListener('loadingdone', () => { fitEntries(); fitProgress() })

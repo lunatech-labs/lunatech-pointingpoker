@@ -7,10 +7,12 @@
   justify-content: center;
   gap: var(--space-2);
   padding: 0 var(--space-2);
+  /* The names' size, of the table's scale where the table writes one (progress decision 15) */
+  --progress-name: clamp(var(--text-md), calc(var(--text-md) * var(--table-scale, 1)), var(--text-lg));
 }
 
 .progress-count {
-  font-size: var(--text-xl);
+  font-size: clamp(var(--text-lg), calc(var(--text-lg) * var(--table-scale, 1)), var(--text-xl));
   font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
 }
@@ -47,13 +49,13 @@
   flex-direction: column;
   gap: var(--space-1);
   margin-top: var(--space-1);
-  min-height: calc(2 * var(--text-lg) * var(--leading-tight) + var(--space-1));
+  min-height: calc(2 * var(--progress-name) * var(--leading-tight) + var(--space-1));
 }
 
 /* The panel's width, never its text's: the fit picks what is drawn */
 .progress-line {
   min-width: 0;
-  font-size: var(--text-lg);
+  font-size: var(--progress-name);
   line-height: var(--leading-tight);
   white-space: nowrap;
   overflow: hidden;

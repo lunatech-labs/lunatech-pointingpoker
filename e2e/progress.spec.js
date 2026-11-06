@@ -70,10 +70,10 @@ test.describe(() => {
 })
 
 // Three fit the phone's line and four do not; Bo's fox falls back to another font (Review Focus 2).
-const THREE = ['Al', 'Bo 🦊', 'Camille']
+const THREE = ['Al', 'Bo 🦊', 'Camille Roux']
 const FOURTH = 'Dominique'
 // Literally too wide for the line; without its tags, even in bold, it would fit (Review Focus 1).
-const MARKUP = `<b>${'W'.repeat(9)}</b>`
+const MARKUP = `<b>${'W'.repeat(12)}</b>`
 
 test.describe(() => {
   test.use({ viewport: { width: 392, height: 800 } })
@@ -99,8 +99,94 @@ test.describe(() => {
   })
 })
 
+// The panel's sizes against the clamps of the table's scale, read after the fonts and two frames.
+const panelSizes = page =>
+  progressRegion(page).evaluate(async region => {
+    await document.fonts.ready
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const root = getComputedStyle(document.documentElement)
+    const rem = parseFloat(root.fontSize)
+    const token = name => parseFloat(root.getPropertyValue(name)) * rem
+    const written = region.closest('.room-page-column').style.getPropertyValue('--table-scale')
+    const scale = written === '' ? null : parseFloat(written)
+    const clamp = (least, most) => Math.min(most, Math.max(least, least * (scale ?? 1)))
+    const name = clamp(token('--text-md'), token('--text-lg'))
+    const size = selector => parseFloat(getComputedStyle(region.querySelector(selector)).fontSize)
+    return {
+      scale,
+      name: size('.progress-line'),
+      count: size('.progress-count'),
+      held: region.querySelector('.progress-lines').getBoundingClientRect().height,
+      expected: {
+        name,
+        count: clamp(token('--text-lg'), token('--text-xl')),
+        held: 2 * name * parseFloat(root.getPropertyValue('--leading-tight')) + token('--space-1')
+      }
+    }
+  })
+
+// At 900 by 760 the table's scale is about 1.18 in both browsers: the middle layout, below the cap.
+const SIX = ['Ann', 'Ben', 'Cat', 'Dan', 'Eve', 'Fay']
+
+test.describe(() => {
+  test.use({ viewport: { width: 900, height: 760 } })
+
+  test("the panel's text follows the table's scale", async ({ join, voters }) => {
+    const { page } = await join('Bob', { role: 'Facilitator' })
+    await voters(SIX)
+    await expect(nameLine(page, 'No vote'), 'premise: one line').toBeVisible()
+    const follows = async when => {
+      const sizes = await panelSizes(page)
+      const at = `${when}, ${JSON.stringify(sizes)}`
+      expect(Math.abs(sizes.name - sizes.expected.name), `the names ${at}`).toBeLessThanOrEqual(0.5)
+      expect(Math.abs(sizes.count - sizes.expected.count), `the count ${at}`).toBeLessThanOrEqual(0.5)
+      expect(Math.abs(sizes.held - sizes.expected.held), `the held lines ${at}`).toBeLessThanOrEqual(0.5)
+      return sizes
+    }
+    const middle = await panelSizes(page)
+    expect(middle.scale, 'premise: a scale written on the column').not.toBeNull()
+    expect(middle.scale, 'premise: a scale above 1').toBeGreaterThan(1)
+    expect(middle.scale, 'premise: a scale below 1.25').toBeLessThan(1.25)
+    await follows('the middle layout')
+
+    await page.setViewportSize({ width: 320, height: 760 })
+    const phone = await follows('the phone')
+    expect(phone.scale, 'no scale on the phone').toBeNull()
+
+    await page.setViewportSize({ width: 900, height: 760 })
+    const back = await follows('widened back')
+    expect(back.scale, 'the scale again').toBeGreaterThan(1)
+  })
+})
+
 test.describe(() => {
   test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('the panel fits the slot where the scale is at its cap', async ({ join, voters }) => {
+    const { page } = await join('Bob', { role: 'Facilitator' })
+    await voters(['Ann', 'Ben'])
+    await expect(nameLine(page, 'No vote'), 'premise: one line').toBeVisible()
+    const cap = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement)
+      return parseFloat(root.getPropertyValue('--deck-card')) / parseFloat(root.getPropertyValue('--entry-mark'))
+    })
+    const { scale } = await panelSizes(page)
+    expect(Math.abs(scale - cap), `premise: the scale ${scale} at its cap ${cap}`).toBeLessThan(0.02)
+    const slot = await progressRegion(page).evaluate(region => {
+      const style = getComputedStyle(region)
+      const top = region.firstElementChild.getBoundingClientRect().top
+      const bottom = region.lastElementChild.getBoundingClientRect().bottom
+      const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+      const height = region.closest('[data-testid="round-slot"]').getBoundingClientRect().height
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+      const bar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--progress-bar')) * rem
+      const drawn = region.querySelector('.progress-bar').getBoundingClientRect().height
+      return { height, content: bottom - top + padding, bar, drawn }
+    })
+    expect(slot.content, `the panel within the slot, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(slot.height)
+    // The column would squash the empty bar rather than overflow.
+    expect(Math.abs(slot.drawn - slot.bar), `the bar at its full height, ${JSON.stringify(slot)}`).toBeLessThanOrEqual(0.5)
+  })
 
   test('the Progress region through a first round, a Re-vote and a Leave', async ({
     join,

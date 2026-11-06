@@ -13,9 +13,11 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement) {
   const token = (name: string) => parseFloat(root.getPropertyValue(name))
   // The phone layout's fixed scale applies only once the wide fit's inline values are gone.
   const page = box.closest('.room-page') ?? box
+  const column = box.closest<HTMLElement>('.room-page-column')
   if (page.getBoundingClientRect().width / rem < PHONE_BELOW) {
     list.style.removeProperty('--s')
     list.style.removeProperty('max-width')
+    column?.style.removeProperty('--table-scale')
     return
   }
   // Only the drawn children count: the facilitators' line is hidden outside the phone layout.
@@ -39,6 +41,8 @@ function fitEntries(box: HTMLElement, list: HTMLUListElement) {
     return shown.reduce((h, c) => h + c.getBoundingClientRect().height, pad) <= room
   }
   fits(largestFit(fits, token('--deck-card') / token('--entry-mark')))
+  // A copy for the progress panel, which is not under the list's own --s (progress decision 15).
+  column?.style.setProperty('--table-scale', list.style.getPropertyValue('--s'))
 }
 
 // Fitted by the observer's first callback, before the first paint, then again on a resize
