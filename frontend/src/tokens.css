@@ -43,7 +43,7 @@
 
   --line-hairline: 1px; /* the hairline's width, the one px value (J2) */
   --line-control: max(1px, 0.0625rem); /* buttons, inputs, unchosen card edges */
-  --line-mark: max(2px, 0.125rem); /* J3's outline mark */
+  --line-mark: max(2px, 0.125rem); /* J3's outline mark, the progress bar's dashes */
   --frame-band: max(2px, 0.375rem); /* a card's kept frame (J3) */
   --line-bar: max(3px, 0.1875rem); /* a message's bar */
   --focus-width: max(2px, 0.125rem); /* the focus ring's thickness (J8) */
@@ -66,8 +66,9 @@
   --row-height: 1.75rem; /* a roster or history row */
   --action-width: 8.5rem; /* a button's least width */
   --bar-min: 0.375rem; /* the thinnest bar: a chart bar's floor */
-  --progress-bar: 0.5rem; /* the progress panel's bar */
-  --progress-band: max(2px, 0.1875rem); /* the progress bar's gaps and its kept frame */
+  --progress-bar: 1rem; /* the progress panel's bar */
+  --progress-bar-narrow: 0.75rem; /* the progress bar on the phone */
+  --progress-band: max(2px, 0.25rem); /* the progress bar's gaps and its kept frame */
   --deck-card: 5.5rem; /* a deck card's greatest height, 5:7 */
   --entry-mark: 3.85rem; /* an entry's card at scale 1, 5:7 */
   --entry-width: 4.875rem; /* an entry, its name included, at scale 1 */

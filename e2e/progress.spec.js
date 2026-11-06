@@ -158,6 +158,57 @@ test.describe(() => {
     expect(left, "scratch nodes left in the body").toBe(0)
   })
 
+  test('every segment of the bar has the same width', async ({ join, voters }) => {
+    const bob = await join('Bob', { role: 'Facilitator' })
+    const alice = await join('Alice')
+    const [carol, dave] = await voters(['Carol', 'Dave'])
+    await alice.page.getByRole('button', { name: '5', exact: true }).click()
+    await carol.vote('3')
+    await dave.vote('8')
+    await expect(roundSlot(bob.page), 'revealed').toContainText('Most voted')
+    await bob.page.getByRole('button', { name: 'Re-vote' }).click()
+    const region = progressRegion(bob.page)
+    await expect(region, 'a Re-vote').toContainText('0 of 3 voted')
+    await carol.vote('3')
+    await voters(['Erin'])
+    await expect(region, 'premise: voted, kept and no-vote').toContainText('1 of 4 voted')
+    await expect(region.locator('.progress-segment-confirmed')).toHaveCount(1)
+    await expect(region.locator('.progress-segment-kept')).toHaveCount(2)
+    await expect(region.locator('.progress-segment-none')).toHaveCount(1)
+
+    const bar = () =>
+      region.locator('.progress-bar').evaluate(el => {
+        const widths = [...el.children].map(span => span.getBoundingClientRect().width)
+        const marks = [...el.querySelectorAll('.progress-segment-kept, .progress-segment-none')].map(
+          span => {
+            const style = getComputedStyle(span)
+            return {
+              offset: parseFloat(style.outlineOffset),
+              width: parseFloat(style.outlineWidth),
+              border: style.borderTopWidth
+            }
+          }
+        )
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+        return { widths, marks, rem, height: el.getBoundingClientRect().height }
+      })
+    const at800 = await bar()
+    const spread = ({ widths }) => Math.max(...widths) - Math.min(...widths)
+    expect(spread(at800), `the widths at 800, ${at800.widths}`).toBeLessThanOrEqual(0.5)
+    for (const mark of at800.marks) {
+      expect(mark.width, 'a mark is drawn').toBeGreaterThan(0)
+      // Firefox snaps the outline's width to the pixel, not its offset.
+      expect(Math.abs(mark.offset + mark.width), 'the mark inside its segment').toBeLessThanOrEqual(0.5)
+      expect(mark.border, 'no border').toBe('0px')
+    }
+    expect(at800.height, 'the bar 1 rem tall').toBeCloseTo(at800.rem, 1)
+
+    await bob.page.setViewportSize({ width: 1280, height: 1000 })
+    await expect.poll(async () => (await bar()).rem, 'the root at 1000').toBeGreaterThan(18)
+    const at1000 = await bar()
+    expect(spread(at1000), `the widths at 1000, ${at1000.widths}`).toBeLessThanOrEqual(0.5)
+  })
+
   test("the voter's heading counts confirmed votes", async ({ join, voters }) => {
     const bob = await join('Bob', { role: 'Facilitator' })
     const alice = await join('Alice')

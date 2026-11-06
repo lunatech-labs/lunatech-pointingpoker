@@ -494,7 +494,7 @@ read a token.
 | Spacing | one scale |
 | Shape | the radii (J9); the least target size; the shadows' lengths (J9) |
 | Lines | the hairline in `px`; the control line, the mark line, the kept frame's band, the message bar, the focus ring and its gap (J2, J8) |
-| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11); from 3b4, the lobby's column (J13); from the progress step, its bar's height and band |
+| Layout | the room page's sizes, such as the sidebar, the header, the panels' gaps and the deck card (J10); from 3b2, the width cap, the sheet's clearance, the phone's entry scale, the deck's width and the result's least heights (J11); from 3b4, the lobby's column (J13); from the progress step, its bar's height and band, and the phone's narrower bar |
 | Motion | the one duration (J9) |
 
 - Nothing imports the value source before step 4; 3b's mockups link both

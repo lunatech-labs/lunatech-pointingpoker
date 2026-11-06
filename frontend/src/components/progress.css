@@ -25,7 +25,6 @@
 .progress-bar > span {
   flex: 1;
   border-radius: var(--radius-small);
-  box-sizing: border-box;
 }
 
 .progress-segment-confirmed {
@@ -33,11 +32,13 @@
 }
 
 .progress-segment-kept {
-  border: var(--progress-band) solid var(--card-back);
+  outline: var(--progress-band) solid var(--card-back);
+  outline-offset: calc(-1 * var(--progress-band));
 }
 
 .progress-segment-none {
-  border: var(--line-mark) dashed var(--mute-soft);
+  outline: var(--line-mark) dashed var(--mute-soft);
+  outline-offset: calc(-1 * var(--line-mark));
 }
 
 /* Both lines' room is always held, so a list that empties moves neither the count nor the bar */
@@ -60,6 +61,12 @@
 
 .progress-line b {
   font-weight: var(--weight-strong);
+}
+
+@container page (width < 51.75rem) {
+  .progress-bar {
+    height: var(--progress-bar-narrow);
+  }
 }
 
 @media (forced-colors: active) {
