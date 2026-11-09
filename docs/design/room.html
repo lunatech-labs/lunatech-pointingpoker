@@ -20,6 +20,19 @@
   .round-history li .round-history-issue { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .round-history li b { flex: none; min-width: var(--space-6); text-align: right; }
   .round-history li:last-child { font-weight: var(--weight-strong); }
+  /* Next issue's form (next=): mockup-only chips, inline or in a modal */
+  .next-form { display: flex; flex-direction: column; gap: var(--space-4); }
+  .next-form-part { display: flex; flex-direction: column; gap: var(--space-2); }
+  .next-form .issue-editor > .issue-editor-field, .next-form .issue-editor-actions { margin-block: 0; }
+  .next-form-issue { text-transform: none; letter-spacing: normal; color: var(--ink); }
+  .next-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .next-chip { min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); }
+  .next-chip[aria-checked="true"] { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); }
+  .next-chip-word { font-weight: var(--weight-medium); padding-inline: var(--space-3); }
+  .next-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: var(--space-4); background: rgb(28 25 23 / 0.45); }
+  .next-dialog { width: min(36rem, 100%); max-height: 100%; overflow: auto; }
+  .next-dialog h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
+  @media (width < 65.75rem) { .next-dialog .issue-editor { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); } }   /* the modal sits outside the page container */
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
   }
@@ -119,6 +132,10 @@ function draw() {
   const counts = {}
   if (revealed) people.forEach(p => p.value && (counts[p.value] = (counts[p.value] || 0) + 1))
   const tally = deck.filter(v => counts[v]).map(v => [v, counts[v]]).sort((x, y) => y[1] - x[1])
+  // The lowest and highest voted values, in deck order, once two differ; ? never ranks
+  const ranked = deck.filter(v => v !== '?' && counts[v])
+  const ends = ranked.length > 1 ? { low: ranked[0], high: ranked[ranked.length - 1] } : null
+  const end = v => ends && (v === ends.low ? 'low' : v === ends.high ? 'high' : '')
   const votes = tally.reduce((n, [, c]) => n + c, 0), top = tally.length ? tally[0][1] : 1
   // Every tied value shows, in chart order, and every tied column is red; four or more read "Tie"
   const tied = deck.filter(v => counts[v] === top)
@@ -151,7 +168,17 @@ function draw() {
   const conflict = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="button-quiet" type="button">Use theirs</button>', false, false) : ''
   const status = `<div class="issue-panel-status" role="status">${failure}${conflict}</div>`
   const aria = saving ? ' aria-disabled="true"' : ''
-  const issueBlock = editing
+  // Next issue's form (next=inline|modal): the closing round's estimate, then the next issue
+  const nextMode = q.get('next')
+  const shortIssue = issue.includes('/browse/') ? issue.split('/browse/')[1] : issue.replace(/^https?:\/\//, '')
+  const prefill = revealed && tied.length === 1 ? tied[0] : null   // only a single most-voted value prefills
+  const chips = [...deck, 'Unsettled', 'Skip'].map(v => `<button class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}" type="button" role="radio" aria-checked="${v === prefill}">${deck.includes(v) ? fig(v) : v}</button>`).join('')
+  const nextForm = `<div class="next-form"><div class="next-form-part"><span class="panel-label" id="next-est">Estimate for <span class="next-form-issue">${shortIssue || 'this round'}</span></span>
+      <div class="next-chips" role="radiogroup" aria-labelledby="next-est">${chips}</div></div>
+    <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>
+      <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
+  const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${nextForm}</section></div>` : ''
+  const issueBlock = nextMode === 'inline' ? `<section class="panel issue-panel" aria-label="Next issue">${nextForm}</section>` : editing
     ? `<section class="panel issue-panel" aria-label="Issue"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>${status}</section>`
     : `<section class="panel issue-panel" aria-label="Issue"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
@@ -188,20 +215,21 @@ function draw() {
   const round = `<section class="panel round-panel"><div class="round-panel-slot">${slot}</div></section>`
 
   const entry = p => {
+    const at = revealed && p.value ? end(p.value) : ''
     const face = revealed
       ? p.value
-        ? `<span class="voters-face voters-face-${p.state}"><span data-testid="participant-estimation">${fig(p.value)}</span>${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
+        ? `<span class="voters-face voters-face-${p.state}"><span data-testid="participant-estimation">${fig(p.value)}</span>${at ? `<span class="visually-hidden">, ${at === 'low' ? 'lowest' : 'highest'}</span>` : ''}${p.state === 'kept' ? '<span role="img" aria-label="Previous vote, not confirmed"></span>' : ''}</span>`
         : `<span class="voters-face voters-face-none"><span data-testid="participant-estimation"></span><span role="img" aria-label="No vote">–</span></span>`
       : `<span class="voters-mark voters-mark-${p.state}" role="img" aria-label="${stateName[p.state]}"></span>`
     const self = p.name === me
-    return `<li data-testid="participant">${face}<span class="voters-name">${self ? `<b>${p.name}</b> <span class="voters-you">(you)</span>` : p.name}</span></li>`
+    return `<li data-testid="participant"${at ? ` class="voters-${at}"` : ''}>${face}<span class="voters-name">${self ? `<b>${p.name}</b> <span class="voters-you">(you)</span>` : p.name}</span></li>`
   }
   const heading = voter && !revealed ? `${voted} of ${people.length} voted` : people.length
   const table = `<section class="panel voters" role="region" aria-label="Voters" tabindex="0"><div class="voters-top"><h2 class="panel-label">Voters · ${heading}</h2></div>
     <ul class="voters-entries">${people.map(entry).join('')}</ul><p class="voters-facilitators">Facilitators: ${facNames}</p></section>`
 
   const right = p => revealed
-    ? p.value ? `<span class="roster-value">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}${fig(p.value)}</span>` : '<span class="roster-value roster-value-none">–</span>'
+    ? p.value ? `<span class="roster-value">${p.state === 'kept' ? '<small>not confirmed</small>' : ''}<span class="roster-value-figure${end(p.value) ? ` roster-value-${end(p.value)}` : ''}">${fig(p.value)}</span>${end(p.value) ? `<span class="visually-hidden">, ${end(p.value) === 'low' ? 'lowest' : 'highest'}</span>` : ''}</span>` : '<span class="roster-value roster-value-none">–</span>'
     : `<span class="roster-pill roster-pill-${p.state}">${{ none: 'No vote', confirmed: 'Voted', kept: 'Not confirmed' }[p.state]}</span>`
   // A roster row never carries the participant test id: the table's entries are the contract's
   const row = (n, end, self, id = '') => `<li class="roster-row${self ? ' roster-row-me' : ''}">${avatar(n)}<span class="roster-who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
@@ -214,7 +242,7 @@ function draw() {
   const keep = [...document.querySelectorAll('.round-bar button')].indexOf(document.activeElement)
   const onMenu = document.activeElement?.classList.contains('room-header-menu-button')
   document.getElementById('root').innerHTML = `<div class="room-page"><div class="room-page-stack">${header}${bannerBlock}<main class="room-page-main"><div class="room-page-column">${issueBlock}${
-    layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="room-page-sidebar">${later ? historyPanel : ''}${roster}</div></main></div></div>`
+    layout === 'deck-bottom' ? table + round : round + table}${controls}</div><div class="room-page-sidebar">${later ? historyPanel : ''}${roster}</div></main></div></div>${modal}`
   if (keep >= 0) document.querySelectorAll('.round-bar button')[keep]?.focus()   // focus stays on its place
   if (onMenu) document.querySelector('.room-header-menu-button').focus()   // a tap or Enter on ☰ leaves focus on it
   document.querySelector('.round-history ol')?.scrollTo(0, 1e6)   // the latest round in view

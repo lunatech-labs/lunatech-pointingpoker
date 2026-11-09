@@ -67,8 +67,14 @@
 /* Hidden text is exposed as written, so it must not inherit a text-transform */
 .visually-hidden {
   position: absolute;
+  width: 0.0625rem;
+  height: 0.0625rem;
+  padding: 0;
+  margin: -0.0625rem;
   overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   clip-path: inset(50%);
   white-space: nowrap;
+  border-width: 0;
   text-transform: none;
 }

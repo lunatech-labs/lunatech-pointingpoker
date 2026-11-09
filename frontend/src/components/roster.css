@@ -1,4 +1,5 @@
 .roster {
+  position: relative; /* the hidden words scroll with the panel, not the page */
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -101,6 +102,24 @@
 .roster-value-none {
   color: var(--grey);
   font-weight: var(--weight-medium);
+}
+
+/* A value's slot: the values form a column, a spread's lowest and highest tinted */
+.roster-value-figure,
+.roster-value-none {
+  min-width: 2.75em;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-mark);
+  text-align: center;
+  justify-content: center;
+}
+
+.roster-value-low {
+  background: var(--tint-low);
+}
+
+.roster-value-high {
+  background: var(--tint-high);
 }
 
 .roster-value small {

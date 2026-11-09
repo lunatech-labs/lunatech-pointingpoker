@@ -54,3 +54,13 @@ export function resultHeadline(deck: readonly string[], summary: [string, number
     spoken: `${tied.slice(0, -1).join(', ')} and ${tied[tied.length - 1]}`
   }
 }
+
+// The lowest and highest voted values by deck order, '?' excluded; null when fewer than two differ.
+export function resultExtremes(
+  deck: readonly string[],
+  summary: [string, number][]
+): { low: string; high: string } | null {
+  const voted = new Set(summary.map(([value]) => value))
+  const ranked = deck.filter((value) => value !== '?' && voted.has(value))
+  return ranked.length < 2 ? null : { low: ranked[0], high: ranked[ranked.length - 1] }
+}

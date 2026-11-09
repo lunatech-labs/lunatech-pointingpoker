@@ -208,6 +208,10 @@ shape or fill from afar, and words explain the rest up close.
   "Contract reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
+- Once revealed, with at least two different deck values other than `?`, the
+  lowest and the highest values are tinted on the table's faces and the
+  roster's slots. The values say which is which, so the tint highlights a
+  relation, not a state (`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`).
 - **Forced colours** (Windows' contrast themes) repaint backgrounds, which
   would erase the fills:
   - a kept frame is a border, which the browser repaints in the user's
@@ -318,6 +322,10 @@ stacking, Dismiss and mounting are J12's.
   them carries the information. The set lists their tokens by name,
   `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
   `--avatar-ground-14`, so a later avatar token is not exempt by its prefix.
+- The lowest and highest tints, `--tint-low` and `--tint-high`, are grounds
+  for ink at 7:1 in the gate. They need no 3:1 against the paper: they
+  highlight what the values already say
+  (`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`, decision 1).
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13
@@ -533,6 +541,10 @@ The progress panel's contract changes, for the facilitator's slot while
 voting, the Progress region and the voter's heading, are listed in its spec
 (`docs/superpowers/specs/2026-11-06-progress-design.md`, Contract).
 
+The lowest and highest tint's contract changes, for the table's entries and
+the roster's slots, are listed in its spec
+(`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`, Contract).
+
 - Until step 4c1-wide, the text "Facilitator" inside a facilitator's entry
   (`facilitatorMark`), and one list holding every participant
   (`participantEntries`). The roster changed both, a contract change of step
@@ -566,6 +578,16 @@ voting, the Progress region and the voter's heading, are listed in its spec
   the summary honest across them', Alice and Bob kept, Carol confirmed and
   Dave with no estimate, only Alice's and Bob's entries carry the kept mark,
   and only Dave's the no-vote mark, each read by J3's name.
+- `voters-low` and `voters-high` on a `participant` entry, read with
+  `toContainClass`.
+- The spoken word, found by its text inside the entry
+  (`getByText(', lowest', { exact: true })`), read for its clip.
+- `roster-value-low` and `roster-value-high` on the slot, found by its value
+  inside the Participants landmark (`complementary`, as the fixtures find it;
+  `getByText('3', { exact: true })`), read with
+  `toContainClass`, the untinted reads included. It finds a value held by one
+  voter only, and not `0.5`, whose figure nests spans; "not confirmed" is a
+  `<small>` outside the slot, so a kept value still finds the slot alone.
 - The room id as a heading, any level (`lobby.spec.js`).
 - The room's marker, the test id `room` on the room view's root (`inRoom`),
   the sign a join reached the room: it sits on what renders from a snapshot,
