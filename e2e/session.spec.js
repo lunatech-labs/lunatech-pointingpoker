@@ -28,6 +28,10 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
 
   const show = page => page.getByRole('button', { name: 'Show votes' }).click()
   const reVote = page => page.getByRole('button', { name: 'Re-vote' }).click()
+  const ends = ['voters-low', 'voters-high']
+  const roster = page => page.getByRole('complementary', { name: 'Participants' })
+  const face = (page, name) =>
+    participantEntry(page, name).getByTestId('participant-estimation').locator('..')
 
   // Half the room votes and the facilitator reveals anyway.
   await vote(alice.page, '3')
@@ -47,6 +51,16 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   for (const entry of await tallyEntries(carol.page).all()) {
     await expect(entry).toContainClass('result-column-top')
   }
+  // The spread's ends are tinted and named aloud; the no votes are neither.
+  await expect(participantEntry(carol.page, 'Alice')).toContainClass('voters-low')
+  await expect(participantEntry(carol.page, 'Bob')).toContainClass('voters-high')
+  for (const name of ['Carol', 'Dave']) {
+    for (const end of ends) await expect(participantEntry(carol.page, name)).not.toContainClass(end)
+  }
+  const lowest = participantEntry(carol.page, 'Alice').getByText(', lowest', { exact: true })
+  await expect(lowest).toHaveCSS('clip-path', 'inset(50%)')
+  await expect(face(carol.page, 'Alice')).toHaveCSS('background-color', 'rgb(214, 230, 245)')
+  await expect(face(carol.page, 'Bob')).toHaveCSS('background-color', 'rgb(247, 221, 184)')
 
   // Re-vote, then reveal with nobody having re-confirmed. The estimations stand and the
   // confirmations do not, which is the one state where the list and the summary can disagree.
@@ -71,6 +85,19 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
     await expect(keptMark(participantEntry(alice.page, name))).toHaveCount(kept)
     await expect(noVoteMark(participantEntry(alice.page, name))).toHaveCount(none)
   }
+  // A kept value is an end like any other, in the table and in the roster's slots.
+  await expect(participantEntry(alice.page, 'Alice')).toContainClass('voters-low')
+  await expect(participantEntry(alice.page, 'Carol')).toContainClass('voters-high')
+  for (const end of ends) await expect(participantEntry(alice.page, 'Bob')).not.toContainClass(end)
+  const slot = value => roster(alice.page).getByText(value, { exact: true })
+  await expect(slot('3')).toContainClass('roster-value-low')
+  await expect(slot('3')).toHaveCSS('background-color', 'rgb(214, 230, 245)')
+  await expect(slot('8')).toContainClass('roster-value-high')
+  for (const end of ['roster-value-low', 'roster-value-high']) {
+    await expect(slot('5')).not.toContainClass(end)
+  }
+  const rosterLowest = roster(alice.page).getByText(', lowest', { exact: true })
+  await expect(rosterLowest).toHaveCSS('clip-path', 'inset(50%)')
 
   // Somebody changes their mind, which converges two participants on one estimate and gives
   // the headline a majority to report.
@@ -84,6 +111,10 @@ test('a session of rounds keeps the summary honest across them', async ({ join }
   await expect(mostVoted(bob.page)).toHaveText('5')
   await expect(tallyEntries(bob.page).nth(0)).toContainClass('result-column-top')
   await expect(tallyEntries(bob.page).nth(1)).not.toContainClass('result-column-top')
+  for (const name of ['Alice', 'Bob']) {
+    await expect(participantEntry(bob.page, name)).toContainClass('voters-low')
+  }
+  await expect(participantEntry(bob.page, 'Carol')).toContainClass('voters-high')
 
   // Clear ends the round instead of reopening it. Asserting the cleared list proves nothing,
   // since an unrevealed round renders no values either way: the next round is the real check.

@@ -1,5 +1,6 @@
 /* The table: voters as cards, face down while voting, face up once revealed */
 .voters {
+  position: relative; /* the hidden words scroll with the panel, not the page */
   flex: 1;
   min-height: var(--table-min);
   display: flex;
@@ -81,6 +82,15 @@
 .voters-face-kept {
   outline: calc(var(--space-1) * var(--s)) solid var(--card-back);
   outline-offset: var(--focus-gap);
+}
+
+/* A spread's lowest and highest estimates: the tint fills the face, a kept band stays outside it */
+.voters-low .voters-face {
+  background: var(--tint-low);
+}
+
+.voters-high .voters-face {
+  background: var(--tint-high);
 }
 
 .voters-face-none {
