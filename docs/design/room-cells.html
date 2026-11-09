@@ -27,6 +27,8 @@ const options = {
   phase: [['voting', 'Voting'], ['revote', 'After a re-vote'], ['revealed', 'Revealed'], ['revealed-revote', 'Revealed after a re-vote']],
   votes: [['sample', 'One most voted'], ['tie3', 'Three tied'], ['tie4', 'Four tied'], ['0', 'Nobody voted']],
   voters: [['14', '14 voters'], ['12', '12 voters'], ['4', '4 voters']],
+  extremes: [['none', 'No lowest/highest'], ['tint', 'Tinted table cards'], ['tint-roster', 'Tinted cards and roster values'], ['table-sort', 'Table sorted'], ['roster-sort', 'Roster sorted'], ['result-line', 'Names in the result']],
+  next: [['', 'No Next issue form'], ['inline', 'Next issue form inline'], ['modal', 'Next issue form as a modal']],
   later: [['0', 'Shipped steps only'], ['1', 'With later steps, dashed: round history, Next issue']],
   issue: [['https://lunatech.atlassian.net/browse/PP-1234', 'Issue: a link'], ['Rework the login page so that a returning user lands on their last room, and keep the room list in sync', 'free text'], [long, 'long free text']],
   layout: [['deck-bottom', 'f. Deck or result above the bar (default)'], ['deck-top', 'g. Deck or result on top (the open swap)']],
@@ -37,8 +39,8 @@ const options = {
   height: [['680', '680 (comfort)'], ['600', '600 (floor)'], ['900', '900'], ['743', '743 (a phone)']],
   scale: [['0.5', '50%'], ['0.75', '75%'], ['1', 'Actual size']]
 }
-const multi = ['role', 'phase']
-const state = { role: ['voter', 'facilitator'], phase: ['voting', 'revote', 'revealed'], votes: 'sample', voters: '14', later: '0', message: '', edit: '', layout: 'deck-bottom', issue: options.issue[0][0], width: '1280', height: '680', scale: '0.5' }
+const multi = ['role', 'phase', 'extremes']
+const state = { role: ['voter', 'facilitator'], phase: ['voting', 'revote', 'revealed'], extremes: ['none'], next: '', votes: 'sample', voters: '14', later: '0', message: '', edit: '', layout: 'deck-bottom', issue: options.issue[0][0], width: '1280', height: '680', scale: '0.5' }
 const bar = document.getElementById('bar')
 for (const [key, list] of Object.entries(options)) {
   const fs = document.createElement('fieldset')
@@ -52,11 +54,11 @@ for (const [key, list] of Object.entries(options)) {
 function render() {
   document.getElementById('grid').style.setProperty('--s', state.scale)
   document.getElementById('grid').style.setProperty('--w', `${state.width}px`)
-  document.getElementById('grid').innerHTML = state.role.flatMap(role => state.phase.map(phase => {
-    const src = `room.html?role=${role}&phase=${phase}&votes=${state.votes}&voters=${state.voters}&later=${state.later}&message=${state.message}&edit=${state.edit}&layout=${state.layout}&issue=${encodeURIComponent(state.issue)}`
-    return `<figure><figcaption>${role}, ${phase} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
-      <div class="frame" style="--s:${state.scale};--w:${state.width}px;--h:${state.height}px"><iframe src="${src}" title="${role} ${phase}"></iframe></div></figure>`
-  })).join('')
+  document.getElementById('grid').innerHTML = state.role.flatMap(role => state.phase.flatMap(phase => state.extremes.map(extremes => {
+    const src = `room.html?role=${role}&phase=${phase}&extremes=${extremes}&next=${state.next}&votes=${state.votes}&voters=${state.voters}&later=${state.later}&message=${state.message}&edit=${state.edit}&layout=${state.layout}&issue=${encodeURIComponent(state.issue)}`
+    return `<figure><figcaption>${role}, ${phase}${extremes === 'none' ? '' : `, ${extremes}`} — <a href="${src}&probe=1" target="_blank">open alone</a></figcaption>
+      <div class="frame" style="--s:${state.scale};--w:${state.width}px;--h:${state.height}px"><iframe src="${src}" title="${role} ${phase} ${extremes}"></iframe></div></figure>`
+  }))).join('')
 }
 render()
 </script>
