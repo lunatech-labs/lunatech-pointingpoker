@@ -1,4 +1,4 @@
-# Poiting Poker
+# Pointing Poker
 
 ### Description
 This project provides an HTTP + Server-Sent-Events (SSE) based pointing poker session.
@@ -133,6 +133,12 @@ This project uses:
 ### Open work
 
 Open work, bugs and technical debt are tracked in the repository's [issues](https://github.com/lunatech-labs/lunatech-pointingpoker/issues).
+
+### Working method
+
+Changes are designed before they are built. `CLAUDE.md` describes the two lanes: a short change note for a small change, a spec and a plan for anything larger. Specs, notes and plans are Markdown files in `docs/superpowers/`.
+
+They are written with Claude Code and its superpowers plugin (`superpowers@claude-plugins-official`): `brainstorming` produces a spec, `writing-plans` a plan, `subagent-driven-development` builds it, and `test-driven-development` runs throughout. The plugin is optional; any editor can write the same files.
 
 ### Testing
 
