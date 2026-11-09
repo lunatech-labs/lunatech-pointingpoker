@@ -13,6 +13,7 @@ issues. Before drafting a new issue, search open and closed issues for it.
 - Re-check citations in every file a branch changed as its last act and after every rebase, verifying the claim, not just the line.
 - Raise tsconfig's target and lib (ES2024 at most on TypeScript 5.9) and Vite's build.target together, with the first change that wants a newer API.
 - Never put information only on hover; phones have none.
+- Design a feature's phone form together with its desktop one: the information is on both layouts; the form may differ.
 - Keep the app a tool, not a platform: no accounts, gating roles, onboarding tours, avatars, sounds, gamification or settings pages.
 - No confirmation dialog on routine actions; protect a destructive one by position and styling, or by undo.
 - Never show a state by colour or an icon alone: words first, icons beside them.
