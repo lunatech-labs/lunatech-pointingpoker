@@ -208,6 +208,10 @@ shape or fill from afar, and words explain the rest up close.
   "Contract reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
+- Once revealed, with at least two different values other than `?`, the
+  lowest and the highest values are tinted on the table's faces and the
+  roster's slots. The values say which is which, so the tint highlights a
+  relation, not a state (`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`).
 - **Forced colours** (Windows' contrast themes) repaint backgrounds, which
   would erase the fills:
   - a kept frame is a border, which the browser repaints in the user's
@@ -318,6 +322,10 @@ stacking, Dismiss and mounting are J12's.
   them carries the information. The set lists their tokens by name,
   `--avatar-ink-1` to `--avatar-ink-14` and `--avatar-ground-1` to
   `--avatar-ground-14`, so a later avatar token is not exempt by its prefix.
+- The lowest and highest tints, `--tint-low` and `--tint-high`, are grounds
+  for ink at 7:1 in the gate. They need no 3:1 against the paper: they
+  highlight what the values already say
+  (`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`, decision 1).
 - **Focus** is an ink `outline`, at least 2 px thick and offset by a gap of at
   least 2 px, `--focus-width` and `--focus-gap` (J2); never a `box-shadow`,
   which forced colours remove. On every ground it meets both WCAG tests: 2.4.13

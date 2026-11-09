@@ -478,12 +478,8 @@ commitment:
 
 - A progress count, "4 of 6 voted, waiting: Bob, Eve":
   `docs/superpowers/specs/2026-11-06-progress-design.md`.
-- Results that show the spread and the lowest and highest voters (improve 5).
-  The leading idea, from step 3b1: the voters' cards sorted by value on a
-  reveal, lowest first in the chart's deck order, no vote last, ties by name.
-  The position carries the spread, so it needs no colour and no hover. Every
-  card moves at the reveal (animated, not under reduced motion), and a re-vote
-  returns them to name order.
+- Results that show the spread and the lowest and highest voters (improve 5):
+  `docs/superpowers/specs/2026-11-09-lowest-highest-design.md`.
 - Ties shown rather than broken:
   `docs/superpowers/specs/2026-11-05-tied-vote-design.md`.
 - From the designer's mockup (2026-10), each a step of its own: statistics, the
