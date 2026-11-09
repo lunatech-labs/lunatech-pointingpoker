@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resultColumns, resultHeadline } from './result'
+import { resultColumns, resultExtremes, resultHeadline } from './result'
 
 describe('resultColumns', () => {
   it("keeps the deck's order, a value nobody voted for at 0", () => {
@@ -91,6 +91,46 @@ describe('resultHeadline', () => {
     for (const order of orders) {
       const summary = order.map((i): [string, number] => [values[i], 1])
       expect(resultHeadline(DECK, summary).tied).toEqual(values)
+    }
+  })
+})
+
+describe('resultExtremes', () => {
+  const DECK = ['0', '0.5', '1', '2', '3', '5', '8', '13', '21', '34', '55', '89', '?']
+
+  const cases: [string, [string, number][], { low: string; high: string } | null][] = [
+    ['marks 3 and 5, past ? and no vote', [['3', 1], ['5', 1], ['?', 1]], { low: '3', high: '5' }],
+    ['marks a tied lowest once', [['5', 2], ['8', 1]], { low: '5', high: '8' }],
+    [
+      'counts a not-confirmed vote like any other',
+      [['3', 1], ['5', 1], ['8', 1]],
+      { low: '3', high: '8' }
+    ],
+    ['marks 0.5 and 89', [['0.5', 1], ['89', 1]], { low: '0.5', high: '89' }],
+    ['marks nothing when everyone agrees', [['5', 2]], null],
+    ['marks nothing beside ?', [['5', 1], ['?', 1]], null],
+    ['ignores a value off the deck', [['3', 1], ['7', 1]], null],
+    ['marks nothing for ? only', [['?', 2]], null],
+    ['marks nothing when nobody voted', [], null]
+  ]
+
+  it.each(cases)('%s', (_name, summary, expected) => {
+    expect(resultExtremes(DECK, summary)).toEqual(expected)
+  })
+
+  const orders = (items: string[]): string[][] =>
+    items.length <= 1
+      ? [items]
+      : items.flatMap((item, i) =>
+          orders([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [item, ...rest])
+        )
+
+  it('ranks by the deck whatever the summary order', () => {
+    const all = orders(['0.5', '1', '89', '?'])
+    expect(all).toHaveLength(24)
+    for (const order of all) {
+      const summary = order.map((value): [string, number] => [value, 1])
+      expect(resultExtremes(DECK, summary)).toEqual({ low: '0.5', high: '89' })
     }
   })
 })
