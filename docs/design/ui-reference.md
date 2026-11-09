@@ -208,7 +208,7 @@ shape or fill from afar, and words explain the rest up close.
   "Contract reads").
 - Marking a revealed kept value on entries is new; the voter's own card already
   marks it. It shows data the view already has, and adds no behaviour.
-- Once revealed, with at least two different values other than `?`, the
+- Once revealed, with at least two different deck values other than `?`, the
   lowest and the highest values are tinted on the table's faces and the
   roster's slots. The values say which is which, so the tint highlights a
   relation, not a state (`docs/superpowers/specs/2026-11-09-lowest-highest-design.md`).
