@@ -152,18 +152,21 @@ its answer carries that number, and only Sending awaits one.
 
 | Event | Closed | Open | Sending |
 |---|---|---|---|
-| Next issue pressed | Open: the field per decision 7, the opening round from the page, no message | ignored | ignored |
+| Next issue pressed | Open: the field per decision 7, the opening round from the page, no message | Open afresh, as from Closed: a press reaches the page only while the dialog is closed (the modal makes the rest inert), so its `close` event is still due | Open afresh, as from Closed: a press reaches the page only while the dialog is closed (the modal makes the rest inert), so its `close` event is still due |
 | typed | cannot happen | Open | ignored |
 | submit (Enter, button) | cannot happen | Sending, awaiting the next number, message cleared; cannot happen once moved on: the notice has no form | ignored |
 | Cancel, or OK | cannot happen | the page closes the dialog | ignored (Cancel; Sending shows no OK) |
 | Escape, or a back gesture | cannot happen | the browser closes the dialog | ignored |
-| the dialog's `close` event | cannot happen | Closed | Closed: after a `204`, or the browser letting a repeated Escape through |
+| the dialog's `close` event | cannot happen | Closed; ignored when the dialog is open again: a late event from before a reopen | Closed: after a `204`, or the browser letting a repeated Escape through; ignored when the dialog is open again: a late event from before a reopen |
 | backdrop press | cannot happen | nothing | nothing |
 | a snapshot | nothing | nothing: the view follows it | nothing |
 | `204` to the awaited request | cannot happen: only Sending awaits | cannot happen | the page closes the dialog |
 | any other answer to it, network error, timeout | cannot happen | cannot happen | Open with the message |
 | an answer no state awaits | ignored | ignored | ignored |
 | connection lost, back | nothing | nothing | nothing |
+
+The `close` event is queued after the close itself, so a press can land between
+them; the two cells above keep that order harmless.
 
 Sending waits for the answer when the room moves on, because the move may be
 its own request, arriving by the stream before its `204`. A request ends within

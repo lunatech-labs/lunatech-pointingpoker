@@ -35,9 +35,15 @@ describe('step', () => {
     })
   })
 
-  it('ignores a press while open or sending', () => {
-    expect(step(open, pressed)).toBe(open)
-    expect(step(sending, pressed)).toBe(sending)
+  it('opens afresh on a press while open or sending, as from closed', () => {
+    const later = { type: 'pressed', issue: 'PP-9\nx', round: 4 } as const
+    const fresh = { mode: 'open', opening: 4, draft: 'PP-9 x', failed: false }
+    for (const s of [{ ...open, draft: 'mine', failed: true }, sending]) expect(step(s, later)).toEqual(fresh)
+  })
+
+  it('ignores the awaited answer once a press opened afresh from sending', () => {
+    const s = step(sending, pressed)
+    expect(step(s, { type: 'answered', request: 7, ok: true })).toBe(s)
   })
 
   it('one-lines typed text in open and ignores it elsewhere', () => {

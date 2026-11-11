@@ -22,15 +22,9 @@ export const closed: NextState = { mode: 'closed' }
 
 export function step(s: NextState, e: NextEvent): NextState {
   switch (e.type) {
+    // A press reaches the page only while the element is closed, so its close event is still due.
     case 'pressed':
-      return s.mode === 'closed'
-        ? {
-            mode: 'open',
-            opening: e.round,
-            draft: oneLine(e.issue),
-            failed: false
-          }
-        : s
+      return { mode: 'open', opening: e.round, draft: oneLine(e.issue), failed: false }
     case 'typed':
       return s.mode === 'open' ? { ...s, draft: oneLine(e.text) } : s
     case 'submit':

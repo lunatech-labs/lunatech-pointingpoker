@@ -19,11 +19,7 @@ export function useNextIssue(
 
   // All in the press's handler: iOS opens the keyboard only for a focus set during the tap.
   const open = () => {
-    // The element is closed, so a close whose event has not landed yet is settled first.
-    flushSync(() => {
-      dispatch({ type: 'closed' })
-      dispatch({ type: 'pressed', issue, round })
-    })
+    flushSync(() => dispatch({ type: 'pressed', issue, round }))
     dialogRef.current?.showModal()
     fieldRef.current?.focus()
     fieldRef.current?.select()
