@@ -158,6 +158,8 @@ test('Cancel and Escape change nothing', async ({ join, room }) => {
     await route.abort()
   })
   await nextButton(alice.page).click()
+  // Escape's close reached Closed, so the reopen starts from the shown issue.
+  await expect(nextField(alice.page)).toHaveValue('PP-1')
   await alice.page.keyboard.type('held')
   await alice.page.keyboard.press('Enter')
   await expect(nextField(alice.page)).toHaveJSProperty('readOnly', true)

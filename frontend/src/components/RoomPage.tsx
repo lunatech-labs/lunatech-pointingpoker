@@ -47,19 +47,17 @@ export function RoomPage(props: Props) {
 
   const report = (reason: unknown) => (api.isSessionRefusal(reason) ? onRefused() : log(reason))
   const run = (promise: Promise<void>) => promise.catch(report)
-  // The editor shows its own failure, so the rejection goes back to it once reported.
-  const saveIssue = (issue: string) =>
-    api.editIssue(roomId, issue).catch((reason: unknown) => {
+  // A form shows its own failure, so the rejection goes back to it once reported.
+  const reported = (promise: Promise<void>) =>
+    promise.catch((reason: unknown) => {
       report(reason)
       throw reason
     })
+  const saveIssue = (issue: string) => reported(api.editIssue(roomId, issue))
 
   const vote = (estimation: string) => run(api.vote(roomId, estimation))
   const next = useNextIssue(view.currentIssue, view.round, (round, issue) =>
-    api.nextIssue(roomId, round, issue).catch((reason: unknown) => {
-      report(reason)
-      throw reason
-    })
+    reported(api.nextIssue(roomId, round, issue))
   )
   const nextRef = useRef<HTMLButtonElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
