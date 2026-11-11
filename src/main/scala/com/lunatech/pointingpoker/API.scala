@@ -52,6 +52,13 @@ class API(
       case Room.Applied                               => Right(())
       case refusal: (Room.Refusal | Room.VoteRefusal) => Left(refusal)
 
+  private def answerNextIssue(
+      result: Room.NextIssueResult
+  ): Either[Room.Refusal | Room.NextIssueRefusal, Unit] =
+    result match
+      case Room.Applied                                    => Right(())
+      case refusal: (Room.Refusal | Room.NextIssueRefusal) => Left(refusal)
+
   private def resolveToken(raw: Option[String]): Option[Room.SessionToken] =
     raw.flatMap(Room.SessionToken.parse)
 
@@ -146,6 +153,13 @@ class API(
           RoomManager.EditIssue(roomId, resolveToken(rawCookie), request.issue, _)
         )
         .map(answer)
+    },
+    Endpoints.nextIssue.serverLogic[Future] { (roomId, rawCookie, request) =>
+      roomManager
+        .ask[Room.NextIssueResult](
+          RoomManager.NextIssue(roomId, resolveToken(rawCookie), request.round, request.issue, _)
+        )
+        .map(answerNextIssue)
     },
     Endpoints.role.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager

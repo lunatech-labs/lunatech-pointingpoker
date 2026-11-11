@@ -11,6 +11,7 @@ final case class RoomSnapshot(
     you: UUID,
     currentIssue: String,
     votesRevealed: Boolean,
+    round: Int,
     users: List[RoomSnapshot.Participant]
 )
 
@@ -88,6 +89,7 @@ object RoomSnapshot:
       you = forUser,
       currentIssue = data.state.currentIssue,
       votesRevealed = round.revealed,
+      round = data.state.roundNumber,
       // The join: a participant appears because they are one, their seat is theirs, and an
       // estimate belonging to nobody present reaches nobody.
       users = data.members.toList

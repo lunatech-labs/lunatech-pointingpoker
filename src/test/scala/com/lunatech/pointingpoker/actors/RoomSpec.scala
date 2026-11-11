@@ -87,6 +87,75 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       )
     }
 
+    "move on to the next issue in one snapshot" in {
+      val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
+      val dataProbe           = testKit.createTestProbe[Room.DataStatus]()
+      val inbox               = testKit.createTestProbe[Room.NextIssueResult]()
+      val (_, roomRef)        = createRoom(aSlug(), withUsers(user, user2).withRevealed())
+
+      roomRef ! Room.NextIssue(user.token, 1, "PP-2", inbox.ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      for probe <- List(userProbe, user2Probe) do
+        val snapshot = expectSnapshot(probe)
+        snapshot.currentIssue mustBe "PP-2"
+        snapshot.votesRevealed mustBe false
+        snapshot.round mustBe 2
+        snapshot.users.map(_.hasEstimation) mustBe List(false, false)
+      inbox.expectMessage(Room.Applied)
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      data.state.roundNumber mustBe 2
+      data.state.seats mustBe withUsers(
+        user.copy(voted = false, estimation = ""),
+        user2.copy(voted = false, estimation = "")
+      ).state.seats
+    }
+
+    "refuse a next issue behind or ahead of the room's round" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(aSlug(), withUsers(user).withRoundNumber(2))
+      roomRef ! Room.GetData(dataProbe.ref)
+      val before = dataProbe.expectMessageType[Room.DataStatus].data
+
+      for round <- List(1, 3) do
+        val inbox = testKit.createTestProbe[Room.NextIssueResult]()
+        roomRef ! Room.NextIssue(user.token, round, "PP-2", inbox.ref)
+        roomRef ! Room.GetData(dataProbe.ref)
+        inbox.expectMessage(Room.RoundClosed)
+        dataProbe.expectMessage(Room.DataStatus(data = before))
+    }
+
+    "move on from a voting round, and re-arm the auto-reveal" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val inbox        = testKit.createTestProbe[Room.NextIssueResult]()
+      val (_, roomRef) = createRoom(aSlug(), withUsers(user, user2))
+
+      roomRef ! Room.NextIssue(user.token, 1, "PP-2", inbox.ref)
+      inbox.expectMessage(Room.Applied)
+      roomRef ! Room.Vote(user.token, "3", TestInbox[Room.VoteResult]().ref)
+      roomRef ! Room.Vote(user2.token, "5", TestInbox[Room.VoteResult]().ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      val data = dataProbe.expectMessageType[Room.DataStatus].data
+      data.state.round.revealed mustBe true
+      data.state.roundNumber mustBe 2
+    }
+
+    "keep the round number through a clear" in {
+      val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
+      val dataProbe    = testKit.createTestProbe[Room.DataStatus]()
+      val (_, roomRef) = createRoom(aSlug(), withUsers(user).withRoundNumber(2))
+
+      roomRef ! Room.ClearVotes(user.token, TestInbox[Room.CommandResult]().ref)
+      roomRef ! Room.GetData(dataProbe.ref)
+
+      dataProbe.expectMessageType[Room.DataStatus].data.state.roundNumber mustBe 2
+    }
+
     "revote and publish a room that keeps the estimations but clears the votes" in {
       val (user, userProbe)   = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, user2Probe) = createUser(UUID.randomUUID(), "user2", true, "5")
@@ -675,7 +744,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       expectSnapshot(user2Probe).users.map(_.id).toSet mustBe Set(user2.id, user3.id)
 
       // Both members voted with the round unrevealed, the state a room is in after an unvoted
-      // member's grace expiry, so any of the five honoured wrongly would visibly change it.
+      // member's grace expiry, so any honoured wrongly would visibly change it.
       roomRef ! Room.GetData(dataProbe.ref)
       val before = dataProbe.expectMessageType[Room.DataStatus].data
 
@@ -691,6 +760,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       assertUnaffected(
         Room.EditIssue(minted.token, "a different issue", TestInbox[Room.CommandResult]().ref)
       )
+      // A round not the room's, so a round check made before the session check answers otherwise.
+      val nextInbox = testKit.createTestProbe[Room.NextIssueResult]()
+      assertUnaffected(Room.NextIssue(minted.token, 2, "a different issue", nextInbox.ref))
+      nextInbox.expectMessage(Room.NotAMember)
     }
 
     "reveal the round when the last outstanding vote lands" in {

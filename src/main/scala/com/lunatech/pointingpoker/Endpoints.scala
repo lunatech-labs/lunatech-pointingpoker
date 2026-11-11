@@ -65,20 +65,27 @@ object Endpoints:
     .errorOut(statusCode(StatusCode.Unauthorized))
 
   // Exhaustive, and the build makes a missed case fatal: every refusal has exactly one status.
-  private def status(refusal: Room.Refusal | Room.VoteRefusal): StatusCode = refusal match
+  private def status(
+      refusal: Room.Refusal | Room.VoteRefusal | Room.NextIssueRefusal
+  ): StatusCode = refusal match
     case Room.NoSession       => StatusCode.Unauthorized
     case Room.NotAMember      => StatusCode.Forbidden
     case Room.RoundRevealed   => StatusCode.Conflict
     case Room.NotAVoter       => StatusCode.Conflict
     case Room.BlankEstimation => StatusCode.BadRequest
+    case Room.RoundClosed     => StatusCode.Conflict
 
   // Built from the enums' values, so a new refusal cannot be left without a variant.
-  private def errors[R <: Room.Refusal | Room.VoteRefusal](refusals: Seq[R]) =
+  private def errors[R <: Room.Refusal | Room.VoteRefusal | Room.NextIssueRefusal](
+      refusals: Seq[R]
+  ) =
     val variants = refusals.map(r => oneOfVariantSingletonMatcher(status(r))(r))
     oneOf[R](variants.head, variants.tail*)
 
-  private val commandErrors = errors(Room.Refusal.values.toSeq)
-  private val voteErrors    = errors(Room.Refusal.values.toSeq ++ Room.VoteRefusal.values)
+  private val commandErrors   = errors(Room.Refusal.values.toSeq)
+  private val voteErrors      = errors(Room.Refusal.values.toSeq ++ Room.VoteRefusal.values)
+  private val nextIssueErrors =
+    errors(Room.Refusal.values.toSeq ++ Room.NextIssueRefusal.values)
 
   private def command(segment: String) = endpoint.post
     .in(roomPath / segment)
@@ -92,6 +99,13 @@ object Endpoints:
     .in(jsonBody[VoteRequest])
     .out(statusCode(StatusCode.NoContent))
     .errorOut(voteErrors)
+
+  val nextIssue = endpoint.post
+    .in(roomPath / "next-issue")
+    .in(sessionIn)
+    .in(jsonBody[NextIssueRequest])
+    .out(statusCode(StatusCode.NoContent))
+    .errorOut(nextIssueErrors)
 
   val show      = command("show")
   val clear     = command("clear")
@@ -107,5 +121,5 @@ object Endpoints:
     .errorOut(commandErrors)
 
   val all: List[AnyEndpoint] =
-    List(createRoom, join, events, vote, show, clear, revote, editIssue, role, leave)
+    List(createRoom, join, events, vote, show, clear, revote, editIssue, nextIssue, role, leave)
 end Endpoints

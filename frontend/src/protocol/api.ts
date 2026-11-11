@@ -98,3 +98,14 @@ export async function editIssue(roomId: string, issue: string): Promise<void> {
   )
   if (!response.ok) throw refused('edit-issue', response)
 }
+
+export async function nextIssue(roomId: string, round: number, issue: string): Promise<void> {
+  const { response } = await timed(signal =>
+    client.POST('/rooms/{roomId}/next-issue', {
+      params: { path: { roomId } },
+      body: { round, issue },
+      signal
+    })
+  )
+  if (!response.ok) throw refused('next-issue', response)
+}

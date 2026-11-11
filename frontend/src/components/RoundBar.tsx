@@ -1,11 +1,30 @@
 import './round-bar.css'
-import { Eye, RotateCcw, Trash } from 'lucide-react'
+import { type RefObject, useLayoutEffect, useState } from 'react'
+import { ArrowRight, Eye, RotateCcw, Trash } from 'lucide-react'
 import { useRoundGuard } from './useRoundGuard'
 
-type Props = { revealed: boolean; onShow: () => void; onRevote: () => void; onClear: () => void }
+type Props = {
+  revealed: boolean
+  onShow: () => void
+  onRevote: () => void
+  onClear: () => void
+  onNext: () => void
+  nextRef: RefObject<HTMLButtonElement | null>
+  toggleRef: RefObject<HTMLButtonElement | null>
+}
 
-export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
+export function RoundBar({ revealed, onShow, onRevote, onClear, onNext, nextRef, toggleRef }: Props) {
   const guarded = useRoundGuard(revealed)
+  const [nextHeld, setNextHeld] = useState(false)
+  const [refocus, setRefocus] = useState(0)
+  // Next issue leaving while it holds focus hands focus to the toggle (Next issue spec, decision 5).
+  if (!revealed && nextHeld) {
+    setNextHeld(false)
+    setRefocus(r => r + 1)
+  }
+  useLayoutEffect(() => {
+    if (refocus > 0) toggleRef.current?.focus()
+  }, [refocus, toggleRef])
   const heard = revealed ? 'Votes revealed' : 'Voting open'
   return (
     <section
@@ -45,14 +64,34 @@ export function RoundBar({ revealed, onShow, onRevote, onClear }: Props) {
       </button>
       {/* One element across the flip, so focus stays on it. */}
       <button
+        ref={toggleRef}
         type="button"
-        className="button button-primary"
+        className={`button ${revealed ? 'button-secondary' : 'button-primary'}`}
+        aria-label={revealed ? 'Re-vote' : 'Show votes'}
         aria-disabled={guarded || undefined}
         onClick={revealed ? onRevote : onShow}
       >
         {revealed ? <RotateCcw /> : <Eye />}
         <span className="button-word">{revealed ? 'Re-vote' : 'Show votes'}</span>
       </button>
+      {revealed && (
+        <button
+          ref={nextRef}
+          type="button"
+          className="button button-primary"
+          aria-label="Next issue"
+          data-do="next"
+          aria-disabled={guarded || undefined}
+          onClick={onNext}
+          onFocus={() => setNextHeld(true)}
+          onBlur={() => setNextHeld(false)}
+        >
+          <ArrowRight />
+          <span className="button-word">
+            Next<span className="round-bar-tail"> issue</span>
+          </span>
+        </button>
+      )}
     </section>
   )
 }
