@@ -288,3 +288,42 @@ test('focus on Next issue moves to the toggle when the room moves on', async ({ 
   // The notice takes focus only from what it replaces, and Next issue was not in the editor.
   await expect(panel.getByText('The room moved on to: "PP-2"')).not.toBeFocused()
 })
+
+// Holds the dialog's trusted close events, as a busy browser delays them, until released.
+const holdCloseEvents = page =>
+  page.evaluate(() => {
+    window.heldCloses = []
+    window.addEventListener(
+      'close',
+      e => {
+        if (!e.isTrusted) return
+        e.stopImmediatePropagation()
+        window.heldCloses.push(e.target)
+      },
+      true
+    )
+  })
+const releaseCloseEvents = page =>
+  page.evaluate(() => window.heldCloses.splice(0).forEach(t => t.dispatchEvent(new Event('close'))))
+
+test('a close event that lands after a reopen closes nothing', async ({ join }) => {
+  const { alice } = await revealedRound(join)
+  await holdCloseEvents(alice.page)
+
+  for (const close of ['Cancel', 'Escape']) {
+    await nextButton(alice.page).click()
+    await alice.page.keyboard.type('nope')
+    if (close === 'Cancel') await nextCancel(alice.page).click()
+    else await alice.page.keyboard.press('Escape')
+    await expect(nextDialog(alice.page)).toBeHidden()
+    await nextButton(alice.page).click()
+    await releaseCloseEvents(alice.page)
+    await expect(nextDialog(alice.page), close).toBeVisible()
+    await expect(nextField(alice.page), close).toBeFocused()
+    // The reopen starts from the shown issue, not the closed one's text.
+    await expect(nextField(alice.page), close).toHaveValue('PP-1')
+    await alice.page.keyboard.press('Escape')
+    await releaseCloseEvents(alice.page)
+    await expect(nextDialog(alice.page)).toBeHidden()
+  }
+})

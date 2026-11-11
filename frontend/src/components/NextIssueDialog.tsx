@@ -29,7 +29,9 @@ export function NextIssueDialog({ next, issue, onClosed }: Props) {
       // A press on the backdrop or the dialog's padding leaves focus where it is.
       onMouseDown={e => e.target === e.currentTarget && e.preventDefault()}
       onCancel={onCancelEvent}
-      onClose={() => {
+      onClose={e => {
+        // A close event that finds the dialog open again is a late one, from before the reopen.
+        if (e.currentTarget.open) return
         onClose()
         onClosed()
       }}
