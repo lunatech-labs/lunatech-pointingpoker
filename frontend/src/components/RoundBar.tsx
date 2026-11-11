@@ -17,7 +17,7 @@ export function RoundBar({ revealed, onShow, onRevote, onClear, onNext, nextRef,
   const guarded = useRoundGuard(revealed)
   const [nextHeld, setNextHeld] = useState(false)
   const [refocus, setRefocus] = useState(0)
-  // Next issue leaving while it holds focus hands focus to the toggle (spec decision 5).
+  // Next issue leaving while it holds focus hands focus to the toggle (Next issue spec, decision 5).
   if (!revealed && nextHeld) {
     setNextHeld(false)
     setRefocus(r => r + 1)

@@ -9,7 +9,7 @@ export const pressRules = {
   onMouseDownCapture: (e: MouseEvent) => {
     if (e.detail > 1 && onButton(e)) e.preventDefault()
   },
-  // Drops a double-click's second click, which lands on Cancel in Edit's place.
+  // Drops a double-click's second click: on Cancel in Edit's place, or on a dialog's button again.
   onClickCapture: (e: MouseEvent) => {
     if (e.detail > 1 && onButton(e)) {
       e.stopPropagation()

@@ -127,7 +127,7 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
         dataProbe.expectMessage(Room.DataStatus(data = before))
     }
 
-    "move on while voting too, and re-arm the auto-reveal" in {
+    "move on from a voting round, and re-arm the auto-reveal" in {
       val (user, _)    = createUser(UUID.randomUUID(), "user1", true, "3")
       val (user2, _)   = createUser(UUID.randomUUID(), "user2", false, "")
       val dataProbe    = testKit.createTestProbe[Room.DataStatus]()

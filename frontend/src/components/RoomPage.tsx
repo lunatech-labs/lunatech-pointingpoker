@@ -94,7 +94,7 @@ export function RoomPage(props: Props) {
           </div>
         </main>
       </div>
-      {/* Outside the round bar, so it survives the phase change (spec decision 7). */}
+      {/* Outside the round bar, so it survives the phase change (Next issue spec, decision 7). */}
       <NextIssueDialog
         next={next}
         issue={view.currentIssue}

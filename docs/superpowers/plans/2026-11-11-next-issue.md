@@ -69,7 +69,7 @@ The choices the spec left open, each with the simpler alternative.
 - [ ] **Step 1: Write the failing server tests**
   - `RoomSpec`, "move on to the next issue in one snapshot": two voted users, `withRevealed()`; send `NextIssue(user.token, 1, "PP-2", inbox)`. Each probe's next snapshot has `currentIssue == "PP-2"`, `votesRevealed == false`, `round == 2`, every `hasEstimation == false`; the inbox got `Applied`; `GetData` shows `roundNumber == 2` and the seats cleared.
   - `RoomSpec`, "refuse a next issue behind or ahead of the room's round": `withRoundNumber(2)`; rounds 1 and 3 each answer `RoundClosed`, and `GetData` equals the data before.
-  - `RoomSpec`, "move on while voting too, and re-arm the auto-reveal": one user voted, round open; `NextIssue` round 1 answers `Applied`; then both users vote and the round reveals.
+  - `RoomSpec`, "move on from a voting round, and re-arm the auto-reveal": one user voted, round open; `NextIssue` round 1 answers `Applied`; then both users vote and the round reveals.
   - `RoomSpec`, "keep the round number through a clear": `withRoundNumber(2)`, `ClearVotes`, `GetData` shows `roundNumber == 2`.
   - `RoomSpec`, the memberless-session case's `assertUnaffected` list gains `Room.NextIssue(minted.token, 1, "a different issue", TestInbox[Room.NextIssueResult]().ref)`, and the case's comment "any of the five honoured wrongly" loses its count.
   - `RoomSnapshotSpec`, "carry the room's round number": `withRoundNumber(3)` gives `round == 3`.

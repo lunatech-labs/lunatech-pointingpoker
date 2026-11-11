@@ -11,7 +11,7 @@ import { useFocusWithin } from './useFocusWithin'
 
 type Props = { next: ReturnType<typeof useNextIssue>; issue: string; onClosed: () => void }
 
-// The Next issue dialog (spec decision 7); RoomPage holds its state through useNextIssue.
+// The Next issue dialog (Next issue spec, decision 7); RoomPage holds its state through useNextIssue.
 export function NextIssueDialog({ next, issue, onClosed }: Props) {
   const [within, focusRules] = useFocusWithin()
   const title = useId()

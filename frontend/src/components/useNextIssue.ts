@@ -12,7 +12,7 @@ export function useNextIssue(
   const dialogRef = useRef<HTMLDialogElement>(null)
   const fieldRef = useRef<HTMLTextAreaElement>(null)
   const counter = useRef(0)
-  // Closes go through state (plan ruling 5); after Escape the element is closed already.
+  // Closes go through state (Next issue plan, ruling 5); after Escape the element is closed already.
   useLayoutEffect(() => {
     if (state.mode === 'closed' && dialogRef.current?.open) dialogRef.current.close()
   }, [state.mode])

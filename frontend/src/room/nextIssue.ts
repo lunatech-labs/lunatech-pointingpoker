@@ -1,10 +1,10 @@
 import { oneLine } from './issueEditor'
 
-// The notice that replaces a form once the room moves on (spec's Terms).
+// The notice that replaces a form once the room moves on (Next issue spec, Terms).
 export const movedOnText = (issue: string) =>
   issue ? `The room moved on to: "${issue}"` : 'The room moved on, with no issue yet'
 
-// The Next issue dialog's states and events, the spec's matrix; every other event leaves the state as is.
+// The Next issue dialog's states and events, the Next issue spec's matrix; every other event leaves the state as is.
 export type NextState =
   | { mode: 'closed' }
   | { mode: 'open'; opening: number; draft: string; failed: boolean }

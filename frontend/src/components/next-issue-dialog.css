@@ -1,4 +1,4 @@
-/* #548 decision 7: the Next issue dialog, as room.html?next=modal without its estimate row */
+/* Next issue spec, decision 7: the Next issue dialog, as room.html?next=modal without its estimate row */
 .next-dialog {
   width: min(36rem, 100% - 2 * var(--space-4));
 }
@@ -32,7 +32,7 @@
   box-shadow: none;
 }
 
-/* The field and buttons drop the editor's negative margins; below 65.75 rem its own rule does (plan ruling 12) */
+/* The field and buttons drop the editor's negative margins; below 65.75 rem its own rule does (Next issue plan, ruling 12) */
 @container page (width >= 65.75rem) {
   .next-dialog .issue-editor > .issue-editor-field,
   .next-dialog .issue-editor-actions {

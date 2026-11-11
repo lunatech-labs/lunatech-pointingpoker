@@ -81,7 +81,7 @@
     border-top-right-radius: 0;
   }
 
-  /* Next issue reads "Next", its name kept (#548 decision 4) */
+  /* Next issue reads "Next", its name kept (Next issue spec, decision 4) */
   .round-bar-tail {
     display: none;
   }
