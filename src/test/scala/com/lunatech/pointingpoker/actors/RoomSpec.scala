@@ -760,9 +760,10 @@ class RoomSpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       assertUnaffected(
         Room.EditIssue(minted.token, "a different issue", TestInbox[Room.CommandResult]().ref)
       )
-      assertUnaffected(
-        Room.NextIssue(minted.token, 1, "a different issue", TestInbox[Room.NextIssueResult]().ref)
-      )
+      // A round not the room's, so a round check made before the session check answers otherwise.
+      val nextInbox = testKit.createTestProbe[Room.NextIssueResult]()
+      assertUnaffected(Room.NextIssue(minted.token, 2, "a different issue", nextInbox.ref))
+      nextInbox.expectMessage(Room.NotAMember)
     }
 
     "reveal the round when the last outstanding vote lands" in {
