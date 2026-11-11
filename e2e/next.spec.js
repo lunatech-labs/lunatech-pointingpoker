@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  card,
   issueBox,
   issueEdit,
   issuePanel,
@@ -326,4 +327,22 @@ test('a close event that lands after a reopen closes nothing', async ({ join }) 
     await releaseCloseEvents(alice.page)
     await expect(nextDialog(alice.page)).toBeHidden()
   }
+})
+
+test('the notice takes no focus from a control outside the form it replaces', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const panel = issuePanel(alice.page)
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  // While voting Next issue is absent, so the round bar moves no focus.
+  await card(alice.page, '5').focus()
+
+  const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
+    data: { round: 1, issue: 'PP-2' }
+  })
+  expect(posted.status()).toBe(204)
+  await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')
+  await expect(card(alice.page, '5')).toBeFocused()
+  await expect(panel.getByText('The room moved on to: "PP-2"')).not.toBeFocused()
 })
