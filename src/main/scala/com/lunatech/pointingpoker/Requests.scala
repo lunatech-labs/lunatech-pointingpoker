@@ -53,3 +53,9 @@ object EditIssueRequest:
   given Decoder[EditIssueRequest] = deriveDecoder[EditIssueRequest]
   given Encoder[EditIssueRequest] = deriveEncoder[EditIssueRequest]
   given Schema[EditIssueRequest]  = Schema.derived[EditIssueRequest]
+
+case class NextIssueRequest(round: Int, issue: String)
+object NextIssueRequest:
+  given Decoder[NextIssueRequest] = deriveDecoder[NextIssueRequest]
+  given Encoder[NextIssueRequest] = deriveEncoder[NextIssueRequest]
+  given Schema[NextIssueRequest]  = Schema.derived[NextIssueRequest]

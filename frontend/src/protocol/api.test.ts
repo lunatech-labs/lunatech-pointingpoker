@@ -6,6 +6,7 @@ import {
   editIssue,
   isSessionRefusal,
   join,
+  nextIssue,
   REQUEST_TIMEOUT_MS,
   switchRole,
   vote
@@ -75,7 +76,8 @@ const requests = {
   command: () => command('brave-golden-otter', 'show'),
   vote: () => vote('brave-golden-otter', '3'),
   switchRole: () => switchRole('brave-golden-otter', 'Facilitator'),
-  editIssue: () => editIssue('brave-golden-otter', 'PP-1')
+  editIssue: () => editIssue('brave-golden-otter', 'PP-1'),
+  nextIssue: () => nextIssue('brave-golden-otter', 4, 'PP-2')
 }
 
 describe('a role', () => {
@@ -86,6 +88,23 @@ describe('a role', () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
     await call()
     expect(await fetchMock.mock.calls[0][0].json()).toEqual(body)
+  })
+})
+
+describe('next-issue', () => {
+  it('posts the round and the issue', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
+    await nextIssue('brave-golden-otter', 4, 'PP-2')
+    const request = fetchMock.mock.calls[0][0]
+    expect(new URL(request.url).pathname).toBe('/rooms/brave-golden-otter/next-issue')
+    expect(await request.json()).toEqual({ round: 4, issue: 'PP-2' })
+  })
+
+  it('rejects with the status it was refused with', async () => {
+    fetchMock.mockImplementation(async () => new Response(null, { status: 409 }))
+    await expect(nextIssue('brave-golden-otter', 4, 'PP-2')).rejects.toEqual(
+      new ApiError('next-issue', 409)
+    )
   })
 })
 

@@ -51,6 +51,14 @@ object RoomDataFixtures:
         data.connections
       )
 
+    def withRoundNumber(n: Int): RoomData =
+      RoomData.of(
+        data.state.copy(roundNumber = n),
+        data.members,
+        data.sessions,
+        data.connections
+      )
+
     def withRevealed(): RoomData =
       RoomData.of(
         withRound(data, _.copy(revealed = true)),
@@ -138,7 +146,7 @@ object RoomDataFixtures:
 
   // A seat per user and a fresh round, for withUsers and the cases that build a RoomData by hand.
   def stateFor(users: Attendee*): Room.RoomState =
-    Room.RoomState("", Room.Round.fresh, seatsFor(users*))
+    Room.RoomState("", Room.Round.fresh, seatsFor(users*), 1)
 
   private def withRound(data: RoomData, f: Room.Round => Room.Round): Room.RoomState =
     data.state.copy(round = f(data.state.round))

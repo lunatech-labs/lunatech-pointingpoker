@@ -47,6 +47,7 @@ export type View = {
   ownRole: Seat['type'] | null
   users: ParticipantRow[]
   votesRevealed: boolean
+  round: number
   currentIssue: string
   userEstimation: string
   ownVoteConfirmed: boolean
@@ -71,6 +72,7 @@ export function applySnapshot(s: RoomSnapshot): View {
     // Sorted after the tally, so tied values keep key order; only tied values off the deck show it.
     users: [...users].sort(byName),
     votesRevealed: s.votesRevealed,
+    round: s.round,
     currentIssue: s.currentIssue,
     userEstimation: me ? me.estimation : '',
     ownVoteConfirmed: !me || me.voted || !me.estimation,

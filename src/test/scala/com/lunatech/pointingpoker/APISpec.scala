@@ -26,7 +26,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.must
 import org.scalatest.wordspec.AnyWordSpec
 import com.lunatech.pointingpoker.JoinRequest
-import com.lunatech.pointingpoker.{EditIssueRequest, RoleRequest, VoteRequest}
+import com.lunatech.pointingpoker.{EditIssueRequest, NextIssueRequest, RoleRequest, VoteRequest}
 import io.circe.syntax.*
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import org.apache.pekko.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
@@ -68,6 +68,8 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
   val voteReply: java.util.concurrent.atomic.AtomicReference[Room.VoteResult] =
     new java.util.concurrent.atomic.AtomicReference(Room.Applied)
+  val nextIssueReply: java.util.concurrent.atomic.AtomicReference[Room.NextIssueResult] =
+    new java.util.concurrent.atomic.AtomicReference(Room.Applied)
   val createReply: java.util.concurrent.atomic.AtomicReference[RoomManager.Response] =
     new java.util.concurrent.atomic.AtomicReference(RoomManager.RoomId(roomId))
   // The role the last join carried, kept off commandProbe so joins cannot leak into its cases.
@@ -90,14 +92,16 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case other =>
         commandProbe.ref ! other
         other match
-          case RoomManager.Vote(_, _, _, replyTo)       => replyTo ! voteReply.get()
-          case RoomManager.Show(_, _, replyTo)          => replyTo ! commandReply.get()
-          case RoomManager.Clear(_, _, replyTo)         => replyTo ! commandReply.get()
-          case RoomManager.Revote(_, _, replyTo)        => replyTo ! commandReply.get()
-          case RoomManager.EditIssue(_, _, _, replyTo)  => replyTo ! commandReply.get()
-          case RoomManager.Depart(_, _, _, replyTo)     => replyTo ! commandReply.get()
-          case RoomManager.SwitchRole(_, _, _, replyTo) => replyTo ! commandReply.get()
-          case _                                        => ()
+          case RoomManager.Vote(_, _, _, replyTo)         => replyTo ! voteReply.get()
+          case RoomManager.Show(_, _, replyTo)            => replyTo ! commandReply.get()
+          case RoomManager.Clear(_, _, replyTo)           => replyTo ! commandReply.get()
+          case RoomManager.Revote(_, _, replyTo)          => replyTo ! commandReply.get()
+          case RoomManager.EditIssue(_, _, _, replyTo)    => replyTo ! commandReply.get()
+          case RoomManager.NextIssue(_, _, _, _, replyTo) => replyTo ! nextIssueReply.get()
+          case RoomManager.Depart(_, _, _, replyTo)       => replyTo ! commandReply.get()
+          case RoomManager.SwitchRole(_, _, _, replyTo)   => replyTo ! commandReply.get()
+          case _                                          => ()
+        end match
         Behaviors.same
     })
   given typedSystem: ActorSystem[SpawnProtocol.Command] =
@@ -342,6 +346,47 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       commandProbe.expectMessageType[RoomManager.Vote] match
         case RoomManager.Vote(id, tok, estimation, _) =>
           (id, tok, estimation) mustBe (roomId, Some(token), "5")
+    }
+
+    "dispatch a next-issue command" in {
+      val token = Room.SessionToken.mint()
+      Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
+        Cookie("session", token.raw)
+      ) ~> apiRoute ~> check {
+        status mustBe StatusCodes.NoContent
+      }
+      commandProbe.expectMessageType[RoomManager.NextIssue] match
+        case RoomManager.NextIssue(id, tok, round, issue, _) =>
+          (id, tok, round, issue) mustBe (roomId, Some(token), 4, "PP-2")
+    }
+
+    "answer 409 for a next issue on a closed round" in {
+      nextIssueReply.set(Room.RoundClosed)
+      try
+        Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
+          Cookie("session", Room.SessionToken.mint().raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.Conflict
+        }
+      finally nextIssueReply.set(Room.Applied)
+      commandProbe.expectMessageType[RoomManager.NextIssue]
+    }
+
+    "answer 401 and 403 for a next issue" in {
+      for (refusal, expected) <- List(
+          Room.NoSession  -> StatusCodes.Unauthorized,
+          Room.NotAMember -> StatusCodes.Forbidden
+        )
+      do
+        nextIssueReply.set(refusal)
+        try
+          Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
+            Cookie("session", Room.SessionToken.mint().raw)
+          ) ~> apiRoute ~> check {
+            status mustBe expected
+          }
+        finally nextIssueReply.set(Room.Applied)
+        commandProbe.expectMessageType[RoomManager.NextIssue]
     }
 
     "dispatch a show command" in {
