@@ -68,7 +68,7 @@ export function RoomPage(props: Props) {
         {banners}
         <main className="room-page-main">
           <div className="room-page-column">
-            <IssuePanel issue={view.currentIssue} onSave={saveIssue} />
+            <IssuePanel issue={view.currentIssue} round={view.round} onSave={saveIssue} />
             <Voters view={view} />
             <RoundPanel view={view} onVote={vote} />
             <RoundBar
