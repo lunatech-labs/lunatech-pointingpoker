@@ -81,6 +81,11 @@
     border-top-right-radius: 0;
   }
 
+  /* Next issue reads "Next", its name kept (#548 decision 4) */
+  .round-bar-tail {
+    display: none;
+  }
+
   /* Clear and Edit as their icons, their names kept (3b2 decision 10) */
   .round-bar [data-do="clear"] {
     font-size: 0;

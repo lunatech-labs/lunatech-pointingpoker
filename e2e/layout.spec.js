@@ -331,7 +331,8 @@ cases(
     await voteAllButOne(page, role, joined)
     const before = await read()
     await voteLast(page, role, joined)
-    expect(moved(before, await read()), 'revealed').toEqual([])
+    // Next issue joins the bar once revealed and narrows the phase line, so its width may change.
+    expect(moved(before, await read(), ['x', 'y', 'height']), 'revealed').toEqual([])
     await page.getByRole('button', { name: 'Re-vote' }).click()
     await expect(phaseWord(page)).toHaveText('Voting')
     expect(moved(before, await read()), 'after Re-vote').toEqual([])

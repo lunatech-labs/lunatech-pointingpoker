@@ -270,6 +270,14 @@ export const expectFits = async page => {
   expect(over, 'the name lines that overflow').toEqual([])
 }
 export const roundBar = page => page.getByRole('region', { name: 'Round' })
+// The round bar's Next issue, shown once revealed.
+export const nextButton = page => roundBar(page).getByRole('button', { name: 'Next issue' })
+// The Next issue dialog, then its field, its buttons and its status region.
+export const nextDialog = page => page.getByRole('dialog', { name: 'Next issue' })
+export const nextField = page => nextDialog(page).getByRole('textbox', { name: 'Next issue' })
+export const nextSubmit = page => nextDialog(page).getByRole('button', { name: 'Next issue' })
+export const nextCancel = page => nextDialog(page).getByRole('button', { name: 'Cancel' })
+export const nextStatus = page => nextDialog(page).getByRole('status')
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
 // After a Re-vote the cast card is not pressed but keeps this description.

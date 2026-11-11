@@ -1,0 +1,41 @@
+/* #548 decision 7: the Next issue dialog, as room.html?next=modal without its estimate row */
+.next-dialog {
+  width: min(36rem, 100% - 2 * var(--space-4));
+}
+
+.next-dialog::backdrop {
+  background: var(--scrim-colour);
+}
+
+.next-dialog h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.next-dialog-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.next-dialog-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.next-dialog-status:not(:empty) {
+  margin-top: var(--space-3);
+}
+
+.next-dialog-status .message {
+  box-shadow: none;
+}
+
+/* The field and buttons drop the editor's negative margins; below 65.75 rem its own rule does (plan ruling 12) */
+@container page (width >= 65.75rem) {
+  .next-dialog .issue-editor > .issue-editor-field,
+  .next-dialog .issue-editor-actions {
+    margin-block: 0;
+  }
+}

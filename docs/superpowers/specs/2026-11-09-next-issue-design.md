@@ -224,7 +224,8 @@ request does.
     focus on its text, and OK puts focus on Edit.
   - A failed request (`page.route` abort) shows the message with the text
     kept. A `401` reaches the restart notice when it arrives after the dialog
-    closed: the route held, Escape pressed twice, then a `401` fulfilled.
+    closed: the route held, Escape repeated until the browser closes it, then a
+    `401` fulfilled.
   - Next issue is absent while voting and present once revealed. With an issue
     editor open and focus on Next issue instead, another page moving on puts
     focus on the toggle, not on the editor's notice.
