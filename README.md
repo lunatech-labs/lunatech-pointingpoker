@@ -39,10 +39,11 @@ recipient. `seat` is the participant's role: a `Voter` carries an `estimation`, 
 a `Facilitator` holds no estimate and cannot vote. The round is complete when every
 present voter has confirmed an estimate, with at least one voter present; facilitators
 do not count. `votesRevealed` is stored on the server, set by `Show` and by the vote or
-the `/role` switch that completes the round, and cleared by `Clear` and `Re-vote`.
-`round` is the room's round number: it starts at 1, only `/next-issue` increments it,
-and `Clear` and `Re-vote` leave it. While it is set the round is closed and the server discards any vote it receives, so
-a changed mind needs a `Clear` or a `Re-vote` rather than another vote.
+the `/role` switch that completes the round, and cleared by `Clear`, `Re-vote` and
+`/next-issue`. While it is set the round is closed and the server discards any vote
+it receives, so a changed mind needs a `Clear` or a `Re-vote` rather than another
+vote. `round` is the room's round number: it starts at 1, only `/next-issue`
+increments it, and `Clear` and `Re-vote` leave it.
 
 **Each snapshot is redacted for its recipient.** A voter's `estimation` is one of five
 tags: `NoEstimation`, `ConfirmedHidden`, `UnconfirmedHidden`, `Confirmed` and
