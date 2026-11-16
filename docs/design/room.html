@@ -30,7 +30,7 @@
   .next-estimate { min-width: 0; margin: 0; padding: 0; border: 0; }
   .next-estimate legend { padding: 0; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
   .next-form-issue { text-transform: none; letter-spacing: normal; color: var(--ink); }
-  .next-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .next-chips { display: flex; flex-wrap: wrap; column-gap: var(--space-2); row-gap: calc(2 * var(--space-2)); padding-top: var(--space-2); }   /* room for the checked chip's lift */
   .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; transition: transform var(--duration); }
   .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow) var(--lift-colour); }   /* lifted as the voted card */
   .next-chip:has(:focus-visible) { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
