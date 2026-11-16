@@ -31,16 +31,19 @@
   .next-estimate legend { padding: 0; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
   .next-form-issue { text-transform: none; letter-spacing: normal; color: var(--ink); }
   .next-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-  .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; }
-  .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); }
+  .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; transition: transform var(--duration); }
+  .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow) var(--lift-colour); }   /* lifted as the voted card */
   .next-chip:has(:focus-visible) { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
   .next-chip-word { font-weight: var(--weight-medium); padding-inline: var(--space-3); }
   .next-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: var(--space-4); background: rgb(28 25 23 / 0.45); }
   .next-dialog { width: min(36rem, 100%); max-height: 100%; overflow: auto; }
   .next-dialog h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
   @media (width < 65.75rem) { .next-dialog .issue-editor { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); } }   /* the modal sits outside the page container */
+  @media (prefers-reduced-motion: reduce) { .next-chip { transition: none; } }
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
+    .next-chip:has(:checked) { forced-color-adjust: none; background: CanvasText; color: Canvas; border-color: CanvasText; box-shadow: none; }
+    .next-chip:has(:checked):has(:focus-visible) { outline-color: CanvasText; }
   }
   /* The phone's panel under the issue: closed, the latest row; opened, up to 3 rows */
   @container page (width < 51.75rem) {

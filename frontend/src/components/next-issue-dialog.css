@@ -59,12 +59,22 @@
   font: var(--weight-bold) var(--text-md) var(--font-sans);
   color: var(--ink);
   cursor: pointer;
+  transition: transform var(--duration);
 }
 
+/* Lifted as the voted deck card is, so the fill is not the only cue */
 .next-chip:has(:checked) {
   background: var(--burgundy);
   border-color: var(--burgundy);
   color: var(--paper);
+  transform: translateY(calc(-1 * var(--space-2)));
+  box-shadow: var(--lift-shadow) var(--lift-colour);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .next-chip {
+    transition: none;
+  }
 }
 
 .next-chip:has(:focus-visible) {
@@ -77,13 +87,14 @@
   padding-inline: var(--space-3);
 }
 
-/* The checked chip keeps its fill in system colours, as the voted deck card does */
+/* The checked chip keeps its fill and lift in system colours, as the voted deck card does */
 @media (forced-colors: active) {
   .next-chip:has(:checked) {
     forced-color-adjust: none;
     background: CanvasText;
     color: Canvas;
     border-color: CanvasText;
+    box-shadow: none;
   }
 
   .next-chip:has(:checked):has(:focus-visible) {

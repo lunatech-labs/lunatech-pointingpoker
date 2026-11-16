@@ -303,6 +303,9 @@ test('a tie opens with nothing checked, and submitting asks for a choice', async
   await alice.page.keyboard.press('Enter')
   await expect(nextStatus(alice.page)).toHaveText('Choose an estimate, Unsettled or Skip')
   await expect(estimateRadio(alice.page, '0')).toBeFocused()
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
+  // The request leaves in the handler that moved focus, so a send would show by now.
+  expect(sent).toEqual([])
   await checkEstimate(alice.page, '5')
   await expect(nextStatus(alice.page)).toBeEmpty()
   await expect(nextDialog(alice.page)).toBeVisible()
