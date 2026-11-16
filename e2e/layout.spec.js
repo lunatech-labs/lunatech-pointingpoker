@@ -23,6 +23,8 @@ import {
   nameInput,
   nextButton,
   nextDialog,
+  nextIssueUrl,
+  nextStatus,
   nextSubmit,
   participantEntries,
   participantEntry,
@@ -802,29 +804,41 @@ test.describe(() => {
   })
 })
 
-test.describe(() => {
-  test.use({ viewport: { width: 320, height: 640 } })
+// 640 by 300 is the laptop at 200%; only the failure message takes the dialog past it.
+for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }]) {
+  test.describe(() => {
+    test.use({ viewport })
 
-  test('a long issue pre-filled, the dialog stays in view and reaches Next issue, 320 by 640', async ({
-    join
-  }) => {
-    const { page } = await join('Alice')
-    await setIssue(page, ISSUE_240)
-    await page.getByRole('button', { name: 'Show votes' }).click()
-    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
-    await nextButton(page).click()
-    await expect(nextDialog(page)).toBeVisible()
-    const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
-    const { x, y, width, height } = boxes.dialog
-    const view = page.viewportSize()
-    expect(x, 'the dialog within the viewport').toBeGreaterThanOrEqual(0)
-    expect(y).toBeGreaterThanOrEqual(0)
-    expect(x + width).toBeLessThanOrEqual(view.width + 0.5)
-    expect(y + height).toBeLessThanOrEqual(view.height + 0.5)
-    await nextSubmit(page).scrollIntoViewIfNeeded()
-    await expect(nextSubmit(page)).toBeInViewport()
+    test(`a long issue and a failed move, the dialog stays in view and a wheel reaches Next issue, ${viewport.width} by ${viewport.height}`, async ({
+      join,
+      room
+    }) => {
+      const { page } = await join('Alice')
+      await setIssue(page, ISSUE_240)
+      await page.getByRole('button', { name: 'Show votes' }).click()
+      await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+      await page.route(nextIssueUrl(room), route => route.abort())
+      await nextButton(page).click()
+      await page.keyboard.press('Enter')
+      await expect(nextStatus(page)).toHaveText('Could not move on to the next issue')
+      const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
+      const { x, y, width, height } = boxes.dialog
+      expect(x, 'the dialog within the viewport').toBeGreaterThanOrEqual(0)
+      expect(y).toBeGreaterThanOrEqual(0)
+      expect(x + width).toBeLessThanOrEqual(viewport.width + 0.5)
+      expect(y + height).toBeLessThanOrEqual(viewport.height + 0.5)
+      // A wheel, not scrollIntoViewIfNeeded, which also scrolls an overflow: hidden box.
+      await nextDialog(page).evaluate(dialog => (dialog.scrollTop = 0))
+      await nextDialog(page).hover()
+      await page.mouse.wheel(0, 400)
+      const reached = async () => {
+        const [dialog, button] = await Promise.all([nextDialog(page).boundingBox(), nextSubmit(page).boundingBox()])
+        return button.y >= dialog.y - 0.5 && button.y + button.height <= dialog.y + dialog.height + 0.5
+      }
+      await expect.poll(reached, "Next issue within the dialog's box").toBe(true)
+    })
   })
-})
+}
 
 test.describe("the lobby's banners", () => {
   test.use({ viewport: { width: 320, height: 640 } })

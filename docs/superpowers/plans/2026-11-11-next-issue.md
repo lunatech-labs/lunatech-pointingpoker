@@ -227,7 +227,7 @@ Run: `npm run typecheck && npm run lint && npm run test:unit` — Expected: pass
 
 - [ ] **Step 1: Commit the move** of "a long issue pre-filled, the dialog stays in view and reaches Next issue, 320 by 640" out of "the narrow layouts", unchanged, after `npm run e2e -- e2e/layout.spec.js -g "the dialog stays in view"` passes in both browsers: `test: run the Next issue dialog's layout case in both browsers`.
 - [ ] **Step 2: Share `nextIssueUrl`** (ruling 19): move it to `e2e/fixtures.js`, imported by `e2e/next.spec.js`; `npm run e2e -- e2e/next.spec.js` passes unchanged. Commit `refactor: share nextIssueUrl between the e2e files`.
-- [ ] **Step 3: Rewrite the case** per the spec's Tests, "Layout, both browsers", and rulings 18 to 20. Run `npm run e2e -- e2e/layout.spec.js e2e/next.spec.js` — Expected: PASS in both browsers.
+- [ ] **Step 3: Rewrite the case** per the spec's Tests, "Layout, both browsers", and rulings 18 to 20, renamed "a long issue and a failed move, the dialog stays in view and a wheel reaches Next issue" with its size. Run `npm run e2e -- e2e/layout.spec.js e2e/next.spec.js` — Expected: PASS in both browsers.
 - [ ] **Step 4: Prove it can fail**, each mutation appended to `next-issue-dialog.css` and reverted: `.next-dialog { max-height: none }` and `.next-dialog { overflow: hidden }` turn the case at the 640 by 300 viewport red; `.next-dialog { width: 36rem; max-width: none }` turns the case at the 320 by 640 viewport red; both browsers each time. Then `npm run build`.
 - [ ] **Step 5: Commit** `test: check the Next issue dialog scrolls to its button at 640 by 300`
 - [ ] **Step 6:** Re-check citations in the files this task changed, then push (a plain push; force needs the user's OK).
