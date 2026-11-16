@@ -1,4 +1,4 @@
-/* The round history (decision 6): the sidebar's top, up to 5 rows tall, growing with its entries */
+/* The panel (round history decision 6): the sidebar's top, up to 5 rows tall, growing with its entries */
 .round-history {
   flex: none;
   display: flex;
@@ -21,7 +21,7 @@
   overflow: auto;
 }
 
-/* Centred as the roster's rows; the last row's slack sits in the panel's padding (ruling 15) */
+/* Centred as the roster's rows; the last row's slack sits in the panel's padding (round history plan, ruling 15) */
 .round-history li {
   display: flex;
   align-items: center;
@@ -42,7 +42,7 @@
   text-overflow: ellipsis;
 }
 
-/* A link is cut at its front, keeping its id; one that fits starts at the left (decision 5) */
+/* A link is cut at its front, keeping its id; one that fits starts at the left (round history decision 5) */
 .round-history-link {
   direction: rtl;
   text-align: left;

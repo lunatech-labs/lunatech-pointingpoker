@@ -124,6 +124,7 @@ test('the list grows with its entries', async ({ join, room }) => {
   await expect(historyRows(page)).toHaveCount(2)
   const desktop = await heights(historyList(page))
   expect(Math.abs(desktop.list - 2 * desktop.row), 'two rows on desktop').toBeLessThanOrEqual(0.5)
+  await expect(historyToggle(page)).toHaveCount(0)
 
   await page.setViewportSize(PHONE)
   await historyToggle(page).click()
@@ -164,8 +165,21 @@ test.describe(() => {
     await expect(historyToggle(page)).toHaveAttribute('aria-expanded', 'true')
     await expectLastInView(page)
 
+    // A fourth entry overflows the opened list, which stays 3 rows tall with its end in view.
+    await recordRounds(page, room, 4, ['PP-5'])
+    await expect(historyRows(page)).toHaveCount(4)
+    const opened = await heights(historyList(page))
+    expect(Math.abs(opened.list - 3 * opened.row), 'three rows opened').toBeLessThanOrEqual(0.5)
+    await expectLastInView(page)
+
     await historyToggle(page).click()
-    await expect(historyRows(page)).toHaveText(['PP-3 3'])
+    await expect(historyRows(page)).toHaveText(['PP-4 3'])
+    await historyToggle(page).click()
+    await expect(historyRows(page)).toHaveCount(4)
+    await expectLastInView(page)
+
+    await historyToggle(page).click()
+    await expect(historyRows(page)).toHaveText(['PP-4 3'])
     await expect(historyToggle(page)).toHaveText('Show more')
   })
 
@@ -202,7 +216,7 @@ test('the list stays where it was read, and moves to the end for a new entry', a
 test('a link row keeps its end, a text row its start', async ({ join, room }) => {
   const { page } = await join('Alice')
   const jira = 'https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77'
-  // The sidebar's cell holds about 235 px at 1280 wide, too narrow for the GitHub link to fit.
+  // The sidebar's cell is too narrow at 1280 wide for the GitHub link to fit.
   const short = 'https://example.com/ticket'
   const words = `https://github.com/acme/web/issues/412 and the words that follow it, ${ISSUE_240}`
   const text = words.slice(0, ISSUE_240.length)
