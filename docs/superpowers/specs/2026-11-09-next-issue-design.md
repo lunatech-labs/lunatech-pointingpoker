@@ -236,7 +236,7 @@ request does.
   a Re-vote and a vote" changes: Next issue appearing at the reveal narrows the
   phase line, so the case keeps its x, y and height, and its width only while
   the bar's buttons stay the same.
-- **Layout, Chromium only**, in `e2e/layout.spec.js`'s narrow layouts, at
+- **Layout, both browsers**, in `e2e/layout.spec.js`, at
   heights below 762 px so the root stays 16 px, each width checked by the
   `.room-page` container's own width: once revealed, each round bar button's
   text holds one line at 320 px, at 51.75 rem and at 65.75 rem, and the phone
