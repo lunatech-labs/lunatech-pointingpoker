@@ -1,7 +1,7 @@
 # Round History
 
 Date: 2026-11-16
-Status: Draft
+Status: Approved
 Parent: issue #528
 
 ## Purpose
