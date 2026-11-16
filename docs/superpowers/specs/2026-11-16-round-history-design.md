@@ -63,8 +63,9 @@ history past the room's life.
    `docs/design/room.html?next=modal&phase=revealed&later=1`: a `fieldset`
    whose legend reads "Estimate for ‹short form of the shown issue›", an empty
    issue taking the position it would get (entries + 1); the legend wraps
-   instead of cutting, a link in a `<bdi>` breaking anywhere
-   (`overflow-wrap: anywhere`), text with `dir="auto"`; then one native radio
+   instead of cutting, one rule whatever the kind: `overflow-wrap: anywhere`
+   on the legend, the short form in a `<bdi>`, as `.issue-panel-view h2`
+   shows the full issue; then one native radio
    per deck value, then Unsettled and Skip, styled as the mockup's chips (my
    call: native radios give arrow keys and one tab stop with no script). The
    row is the dialog's first part; focus still opens on the field (Next issue
@@ -194,8 +195,9 @@ same.
 - **Layout, both browsers** (the UI refresh spec's principle 11), outside
   `layout.spec.js`'s describes skipped outside Chromium (#499): the phone
   panel's label line keeps the label's height with the button, closed and
-  opened, at 320 px and 51.75 rem; at 320 px, a legend holding a long link
-  wraps within the dialog, which does not scroll sideways.
+  opened, at 320 px and 51.75 rem; at 320 px, a legend holding a link with
+  one segment wider than the dialog wraps within it, and the dialog does not
+  scroll sideways.
 
 ## Short form scenarios
 
