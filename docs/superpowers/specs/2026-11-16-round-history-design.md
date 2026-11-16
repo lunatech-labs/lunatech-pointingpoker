@@ -106,14 +106,14 @@ history past the room's life.
    No `title`: the short form is all a row shows, on both layouts (the
    hover-only lesson). Rows are centred as the roster's (`align-items:
    center`), and the list's last-row slack sits in the panel's padding.
-   - **Desktop**: at the sidebar's top, above the roster, 5 rows tall, the
-     rest by scrolling, the list a focusable region as the roster.
+   - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
+     growing with the entries, the rest by scrolling, the list a focusable region as the roster.
    - **Phone**: between the issue and the table (`order: 1`, after the issue
      in source order). Closed, it shows the label and the latest row only
      (by CSS, not by scrolling, so its scroll position does not matter);
-     opened, 3 rows tall, scrolling. A quiet
-     button at the label's end reads **Show 3** or **Hide**
-     (`aria-expanded`), its 44 px target reaching into the panel's padding as
+     opened, up to 3 rows tall, growing with the entries, scrolling. A quiet
+     button at the label's end reads **Show more** or **Show less**
+     (`aria-expanded`), hidden while the history holds one entry, its 44 px target reaching into the panel's padding as
      the issue panel's Edit does, so the label line keeps the label's height.
      Open or closed is the page's own state: kept across snapshots and
      rounds, closed again on a reload. The button is hidden on desktop.
@@ -144,8 +144,8 @@ same.
 
 | Event | Closed | Opened |
 |---|---|---|
-| Show 3 / Hide | Opened, scrolled to the end | Closed |
-| entries grow | Closed, the new latest row shown | Opened, scrolled to the end |
+| Show more / Show less | Opened, scrolled to the end | Closed |
+| entries grow | Closed, the new latest row shown; the button appears at the second entry | Opened, scrolled to the end |
 | a snapshot without new entries, a reconnect included | nothing | nothing, the scroll kept |
 | the history empties (cannot happen within a room's life) | cannot happen | cannot happen |
 | the page crosses 51.75 rem | the desktop form, state kept, scrolled to the end | the same |
@@ -176,8 +176,9 @@ same.
   the history, or none, on two pages; a tie opens with nothing checked, and
   submitting then shows the missing-choice message and sends nothing; the
   choice survives a failed request; no panel before the first entry; on the
-  phone layout, the closed panel shows the latest row only, Show 3 opens and
-  Hide closes it, kept across a round. The scroll cases start with more
+  phone layout, no button at one entry; at two, the closed panel shows the
+  latest row only, Show more opens and Show less closes it, kept across a
+  round. The scroll cases start with more
   entries than the list shows (6 on desktop) and the list scrolled up: a vote
   on another page leaves the scroll where it was; a new entry takes it to the
   end; switching from the phone layout to desktop shows the latest row.
@@ -208,4 +209,5 @@ The README's snapshot example and its text gain `history`; the `/next-issue`
 row's body gains `outcome`, with its recording, and the `400` list a blank
 value or unknown type. The
 mockup `docs/design/room.html` follows decisions 3 and 6: its `?` chip kept, the
-history oldest first, the phone panel's two states, centred rows, no `title`.
+history oldest first, the panel growing up to its rows, the phone panel's two states and labels,
+centred rows, no `title`.
