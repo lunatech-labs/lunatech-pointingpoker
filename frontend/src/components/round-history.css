@@ -1,0 +1,80 @@
+/* The round history (decision 6): the sidebar's top, up to 5 rows tall, growing with its entries */
+.round-history {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.round-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.round-history ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: calc(5 * var(--row-height));
+  overflow: auto;
+}
+
+/* Centred as the roster's rows; the last row's slack sits in the panel's padding (ruling 15) */
+.round-history li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--row-height);
+  font-size: var(--text-sm);
+}
+
+.round-history li:last-child {
+  font-weight: var(--weight-strong);
+}
+
+.round-history-issue {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A link is cut at its front, keeping its id; one that fits starts at the left (decision 5) */
+.round-history-link {
+  direction: rtl;
+  text-align: left;
+}
+
+.round-history-outcome {
+  flex: none;
+}
+
+/* Its target reaches into the panel's padding, so the label line keeps the label's height */
+.round-history-toggle {
+  position: relative; /* above the list, which the target's foot overlaps */
+  margin-block: calc(-1 * var(--space-4));
+}
+
+/* The phone layout below 51.75 rem: under the issue, closed to the latest row, opened up to 3 rows */
+@container page (width < 51.75rem) {
+  .round-history {
+    order: 1;
+  }
+
+  .round-history:not(.round-history-open) li:not(:last-child) {
+    display: none;
+  }
+
+  .round-history-open ol {
+    max-height: calc(3 * var(--row-height));
+  }
+}
+
+@container page (width >= 51.75rem) {
+  .round-history-toggle {
+    display: none;
+  }
+}

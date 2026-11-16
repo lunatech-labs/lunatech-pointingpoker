@@ -13,6 +13,7 @@ import { NextIssueDialog } from './NextIssueDialog'
 import { useNextIssue } from './useNextIssue'
 import { Voters } from './Voters'
 import { Roster } from './Roster'
+import { RoundHistory } from './RoundHistory'
 
 type Props = {
   roomId: string
@@ -92,6 +93,7 @@ export function RoomPage(props: Props) {
             />
           </div>
           <div className="room-page-sidebar">
+            <RoundHistory history={view.history} />
             <Roster view={view} />
           </div>
         </main>

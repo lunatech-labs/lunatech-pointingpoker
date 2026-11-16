@@ -283,6 +283,19 @@ export const estimateRow = page => nextDialog(page).getByRole('group', { name: /
 export const estimateRadio = (page, name) => nextDialog(page).getByRole('radio', { name, exact: true })
 // Forced, as the chip's label takes the click; check still fails unless the radio ends up checked.
 export const checkEstimate = (page, name) => estimateRadio(page, name).check({ force: true })
+// The round history's panel, named by its label, then its shown rows and the phone's Show more / Show less.
+export const historyPanel = page => page.getByRole('region', { name: /^Rounds · / })
+export const historyRows = page => historyPanel(page).getByRole('listitem')
+export const historyToggle = page => historyPanel(page).getByRole('button', { name: /^Show (more|less)$/ })
+// Moves the room on once per issue from round `from`, each recording a 3: an entry holds the issue left.
+export const recordRounds = async (page, room, from, issues) => {
+  for (const [i, issue] of issues.entries()) {
+    const posted = await page.request.post(`/rooms/${room}/next-issue`, {
+      data: { round: from + i, issue, outcome: { type: 'Estimate', value: '3' } }
+    })
+    expect(posted.status(), `the move to ${issue}`).toBe(204)
+  }
+}
 // Matches the room's next-issue endpoint, for page.route.
 export const nextIssueUrl = room => new RegExp(`/rooms/${room}/next-issue$`)
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
