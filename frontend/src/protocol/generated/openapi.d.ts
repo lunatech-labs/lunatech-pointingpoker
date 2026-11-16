@@ -184,9 +184,20 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Choice */
+        Choice: components["schemas"]["Estimate"] | components["schemas"]["Skip"] | components["schemas"]["Unsettled"];
         /** EditIssueRequest */
         EditIssueRequest: {
             issue: string;
+        };
+        /** Estimate */
+        Estimate: {
+            value: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "Estimate";
         };
         /** JoinRequest */
         JoinRequest: {
@@ -198,6 +209,7 @@ export interface components {
             /** Format: int32 */
             round: number;
             issue: string;
+            outcome: components["schemas"]["Choice"];
         };
         /**
          * Role
@@ -207,6 +219,22 @@ export interface components {
         /** RoleRequest */
         RoleRequest: {
             role: components["schemas"]["Role"];
+        };
+        /** Skip */
+        Skip: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "Skip";
+        };
+        /** Unsettled */
+        Unsettled: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "Unsettled";
         };
         /** VoteRequest */
         VoteRequest: {

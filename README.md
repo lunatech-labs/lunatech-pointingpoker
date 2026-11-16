@@ -18,6 +18,10 @@ reconstructs state from a sequence. Json example:
     "currentIssue": "PP-42",
     "votesRevealed": false,
     "round": 3,
+    "history": [
+        {"issue": "PP-40", "outcome": {"type": "Estimate", "value": "8"}},
+        {"issue": "PP-41", "outcome": {"type": "Unsettled"}}
+    ],
     "users": [
         {
             "id": "9f3820e1-37aa-4602-8994-2ce1da8e1e54",
@@ -43,7 +47,10 @@ the `/role` switch that completes the round, and cleared by `Clear`, `Re-vote` a
 `/next-issue`. While it is set the round is closed and the server discards any vote
 it receives, so a changed mind needs a `Clear` or a `Re-vote` rather than another
 vote. `round` is the room's round number: it starts at 1, only `/next-issue`
-increments it, and `Clear` and `Re-vote` leave it.
+increments it, and `Clear` and `Re-vote` leave it. `history` is the room's recorded
+rounds, oldest first: each entry's `issue` is the one the room left, and its `outcome`
+an `Estimate` with its `value` or `Unsettled`. Only `/next-issue` appends to it, and the
+room keeps it for its own life.
 
 **Each snapshot is redacted for its recipient.** A voter's `estimation` is one of five
 tags: `NoEstimation`, `ConfirmedHidden`, `UnconfirmedHidden`, `Confirmed` and
@@ -72,7 +79,7 @@ Available endpoints:
 |`/rooms/{roomId}/clear`          | POST   | none                  | Clears all votes in the room. Requires the session cookie            |
 |`/rooms/{roomId}/revote`         | POST   | none                  | Starts a new voting round. Requires the session cookie               |
 |`/rooms/{roomId}/edit-issue`     | POST   | `{"issue": "..."}`    | Updates the room's current issue. Requires the session cookie        |
-|`/rooms/{roomId}/next-issue`     | POST   | `{"round": 3, "issue": "..."}` | Moves the room on: clears every estimate, closes the reveal, replaces the issue and increments the round number, in one snapshot. `round` is the round the page saw open; applied only if it is the room's current one. Requires the session cookie |
+|`/rooms/{roomId}/next-issue`     | POST   | `{"round": 3, "issue": "...", "outcome": {"type": "Estimate", "value": "8"}}` | Moves the room on: records the outcome, clears every estimate, closes the reveal, replaces the issue and increments the round number, in one snapshot. `round` is the round the page saw open; applied only if it is the room's current one. `outcome` is an `Estimate` with its `value`, `Unsettled` or `Skip`; the first two append an entry holding the issue being left to `history`, `Skip` records nothing. The server does not check the value against a deck. Requires the session cookie |
 |`/rooms/{roomId}/role`           | POST   | `{"role": "Facilitator"}` | Switches the user's role, dropping any estimate they held; the same role changes nothing. Requires the session cookie |
 |`/rooms/{roomId}/leave?connectionId={uuid}` | POST | none       | Ends the named connection's membership at once instead of after the grace period. Sent by `navigator.sendBeacon` on `pagehide` and by the Leave link |
 
@@ -80,7 +87,7 @@ Command endpoints answer what the room decided, with no body: `204` when applied
 `401` without a session (including a valid name with no live room), and `403` when the session
 is no longer a member. `/vote` adds `409` for a revealed round or a facilitator's
 vote, and `400` for a blank estimation. `/next-issue` adds `409` for a `round` that is not
-the room's current one. `/leave` answers `204` on every branch it
+the room's current one, and `400` for a blank `value` or an unknown `outcome` type. `/leave` answers `204` on every branch it
 reaches past those two, and `400` without a connection id. `/join` and `/role` answer
 `400` for a missing `role` or any value but `Voter` or `Facilitator`. A `{roomId}`
 that is not three vocabulary words in order answers `404` on every endpoint, before

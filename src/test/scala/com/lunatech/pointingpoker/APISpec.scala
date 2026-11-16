@@ -92,15 +92,15 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       case other =>
         commandProbe.ref ! other
         other match
-          case RoomManager.Vote(_, _, _, replyTo)         => replyTo ! voteReply.get()
-          case RoomManager.Show(_, _, replyTo)            => replyTo ! commandReply.get()
-          case RoomManager.Clear(_, _, replyTo)           => replyTo ! commandReply.get()
-          case RoomManager.Revote(_, _, replyTo)          => replyTo ! commandReply.get()
-          case RoomManager.EditIssue(_, _, _, replyTo)    => replyTo ! commandReply.get()
-          case RoomManager.NextIssue(_, _, _, _, replyTo) => replyTo ! nextIssueReply.get()
-          case RoomManager.Depart(_, _, _, replyTo)       => replyTo ! commandReply.get()
-          case RoomManager.SwitchRole(_, _, _, replyTo)   => replyTo ! commandReply.get()
-          case _                                          => ()
+          case RoomManager.Vote(_, _, _, replyTo)            => replyTo ! voteReply.get()
+          case RoomManager.Show(_, _, replyTo)               => replyTo ! commandReply.get()
+          case RoomManager.Clear(_, _, replyTo)              => replyTo ! commandReply.get()
+          case RoomManager.Revote(_, _, replyTo)             => replyTo ! commandReply.get()
+          case RoomManager.EditIssue(_, _, _, replyTo)       => replyTo ! commandReply.get()
+          case RoomManager.NextIssue(_, _, _, _, _, replyTo) => replyTo ! nextIssueReply.get()
+          case RoomManager.Depart(_, _, _, replyTo)          => replyTo ! commandReply.get()
+          case RoomManager.SwitchRole(_, _, _, replyTo)      => replyTo ! commandReply.get()
+          case _                                             => ()
         end match
         Behaviors.same
     })
@@ -349,26 +349,50 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "dispatch a next-issue command" in {
-      val token = Room.SessionToken.mint()
-      Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
-        Cookie("session", token.raw)
-      ) ~> apiRoute ~> check {
-        status mustBe StatusCodes.NoContent
-      }
-      commandProbe.expectMessageType[RoomManager.NextIssue] match
-        case RoomManager.NextIssue(id, tok, round, issue, _) =>
-          (id, tok, round, issue) mustBe (roomId, Some(token), 4, "PP-2")
+      for (choice, recorded) <- List(
+          Choice.Estimate("8") -> Some(Room.Outcome.Estimate("8")),
+          Choice.Skip          -> None
+        )
+      do
+        val token = Room.SessionToken.mint()
+        Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2", choice))) ~> addHeader(
+          Cookie("session", token.raw)
+        ) ~> apiRoute ~> check {
+          status mustBe StatusCodes.NoContent
+        }
+        commandProbe.expectMessageType[RoomManager.NextIssue] match
+          case RoomManager.NextIssue(id, tok, round, issue, outcome, _) =>
+            (id, tok, round, issue, outcome) mustBe (roomId, Some(token), 4, "PP-2", recorded)
+    }
+
+    "answer 400 for a blank estimate or an unknown outcome" in {
+      for outcome <- List("""{"type":"Estimate","value":" "}""", """{"type":"Maybe"}""") do
+        Post(
+          s"/rooms/$roomId/next-issue",
+          HttpEntity(
+            ContentTypes.`application/json`,
+            s"""{"round":4,"issue":"PP-2","outcome":$outcome}"""
+          )
+        ) ~> addHeader(Cookie("session", Room.SessionToken.mint().raw)) ~> apiRoute ~> check {
+          status mustBe StatusCodes.BadRequest
+        }
+      end for
+      commandProbe.expectNoMessage(300.millis)
     }
 
     "answer 409 for a next issue on a closed round" in {
       nextIssueReply.set(Room.RoundClosed)
       try
-        Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
+        Post(
+          s"/rooms/$roomId/next-issue",
+          json(NextIssueRequest(4, "PP-2", Choice.Skip))
+        ) ~> addHeader(
           Cookie("session", Room.SessionToken.mint().raw)
         ) ~> apiRoute ~> check {
           status mustBe StatusCodes.Conflict
         }
       finally nextIssueReply.set(Room.Applied)
+      end try
       commandProbe.expectMessageType[RoomManager.NextIssue]
     }
 
@@ -380,12 +404,16 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
       do
         nextIssueReply.set(refusal)
         try
-          Post(s"/rooms/$roomId/next-issue", json(NextIssueRequest(4, "PP-2"))) ~> addHeader(
+          Post(
+            s"/rooms/$roomId/next-issue",
+            json(NextIssueRequest(4, "PP-2", Choice.Skip))
+          ) ~> addHeader(
             Cookie("session", Room.SessionToken.mint().raw)
           ) ~> apiRoute ~> check {
             status mustBe expected
           }
         finally nextIssueReply.set(Room.Applied)
+        end try
         commandProbe.expectMessageType[RoomManager.NextIssue]
     }
 

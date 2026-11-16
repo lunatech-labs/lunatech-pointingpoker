@@ -157,7 +157,14 @@ class API(
     Endpoints.nextIssue.serverLogic[Future] { (roomId, rawCookie, request) =>
       roomManager
         .ask[Room.NextIssueResult](
-          RoomManager.NextIssue(roomId, resolveToken(rawCookie), request.round, request.issue, _)
+          RoomManager.NextIssue(
+            roomId,
+            resolveToken(rawCookie),
+            request.round,
+            request.issue,
+            request.outcome.recorded,
+            _
+          )
         )
         .map(answerNextIssue)
     },

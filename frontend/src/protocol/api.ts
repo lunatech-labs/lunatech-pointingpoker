@@ -1,5 +1,6 @@
 import createClient from 'openapi-fetch'
 import type { paths } from './generated/openapi'
+import type { Choice } from '../room/nextIssue'
 import type { Role } from './snapshot'
 
 const client = createClient<paths>()
@@ -99,11 +100,16 @@ export async function editIssue(roomId: string, issue: string): Promise<void> {
   if (!response.ok) throw refused('edit-issue', response)
 }
 
-export async function nextIssue(roomId: string, round: number, issue: string): Promise<void> {
+export async function nextIssue(
+  roomId: string,
+  round: number,
+  issue: string,
+  outcome: Choice
+): Promise<void> {
   const { response } = await timed(signal =>
     client.POST('/rooms/{roomId}/next-issue', {
       params: { path: { roomId } },
-      body: { round, issue },
+      body: { round, issue, outcome },
       signal
     })
   )

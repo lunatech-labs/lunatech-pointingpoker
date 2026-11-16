@@ -49,6 +49,17 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       RoomSnapshot.of(data, alice.id).round mustBe 3
     }
 
+    "carry the room's history, oldest first" in {
+      val alice   = user(UUID.randomUUID(), "Alice", false, "")
+      val entries = List(
+        Room.Entry("PP-1", Room.Outcome.Estimate("3")),
+        Room.Entry("PP-2", Room.Outcome.Unsettled)
+      )
+      val data = withUsers(alice).withHistory(entries*)
+
+      RoomSnapshot.of(data, alice.id).history mustBe entries
+    }
+
     "carry the stored reveal flag rather than deriving one" in {
       val alice = user(UUID.randomUUID(), "Alice", false, "")
       val bob   = user(UUID.randomUUID(), "Bob", true, "5")
@@ -88,9 +99,9 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
 
       val json = RoomSnapshot.of(data, alice.id).asJson
       json.asObject.map(_.keys.toList) mustBe Some(
-        List("you", "currentIssue", "votesRevealed", "round", "users")
+        List("you", "currentIssue", "votesRevealed", "round", "history", "users")
       )
-      // history is step 9; a field with no consumer must not travel.
+      // A field with no consumer must not travel.
       json.hcursor.downField("users").downArray.keys.map(_.toList) mustBe Some(
         List("id", "name", "seat")
       )

@@ -356,6 +356,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
         Some(token),
         4,
         "issue name",
+        Some(Room.Outcome.Estimate("8")),
         nextReplyProbe.ref
       )
       managerRef ! RoomManager.Depart(roomId, Some(token), connectionId, replyProbe.ref)
@@ -371,7 +372,9 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       roomProbe.expectMessage(Room.ClearVotes(token, replyProbe.ref))
       roomProbe.expectMessage(Room.ReVote(token, replyProbe.ref))
       roomProbe.expectMessage(Room.EditIssue(token, "issue name", replyProbe.ref))
-      roomProbe.expectMessage(Room.NextIssue(token, 4, "issue name", nextReplyProbe.ref))
+      roomProbe.expectMessage(
+        Room.NextIssue(token, 4, "issue name", Some(Room.Outcome.Estimate("8")), nextReplyProbe.ref)
+      )
       roomProbe.expectMessage(Room.Depart(token, connectionId, replyProbe.ref))
       roomProbe.expectMessage(Room.SwitchRole(token, Room.Role.Facilitator, replyProbe.ref))
     }

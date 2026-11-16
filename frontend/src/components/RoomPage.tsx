@@ -56,8 +56,8 @@ export function RoomPage(props: Props) {
   const saveIssue = (issue: string) => reported(api.editIssue(roomId, issue))
 
   const vote = (estimation: string) => run(api.vote(roomId, estimation))
-  const next = useNextIssue(view.currentIssue, view.round, (round, issue) =>
-    reported(api.nextIssue(roomId, round, issue))
+  const next = useNextIssue(view.currentIssue, view.round, (round, issue, outcome) =>
+    reported(api.nextIssue(roomId, round, issue, outcome))
   )
   const nextRef = useRef<HTMLButtonElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)

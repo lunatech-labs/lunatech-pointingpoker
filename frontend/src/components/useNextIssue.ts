@@ -1,12 +1,12 @@
 import { type SyntheticEvent, useLayoutEffect, useReducer, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { closed, shows, step } from '../room/nextIssue'
+import { type Choice, closed, shows, step } from '../room/nextIssue'
 
 // The Next issue dialog's matrix held in React; the send's promise answers the request it awaits.
 export function useNextIssue(
   issue: string,
   round: number,
-  send: (round: number, issue: string) => Promise<void>
+  send: (round: number, issue: string, outcome: Choice) => Promise<void>
 ) {
   const [state, dispatch] = useReducer(step, closed)
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -29,7 +29,8 @@ export function useNextIssue(
     if (state.mode !== 'open') return
     const request = ++counter.current
     dispatch({ type: 'submit', request })
-    send(state.opening, state.draft).then(
+    // Skip until the dialog offers a choice (round history plan, ruling 6).
+    send(state.opening, state.draft, { type: 'Skip' }).then(
       () => dispatch({ type: 'answered', request, ok: true }),
       () => dispatch({ type: 'answered', request, ok: false })
     )

@@ -36,7 +36,7 @@ test('an open issue editor shows the notice once the room moves on, and OK puts 
   await issueBox(alice.page).fill('mine')
   await bob.page.getByRole('button', { name: 'Show votes' }).click()
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
 
@@ -131,7 +131,7 @@ test('Next issue moves the room on', async ({ join, room }) => {
   release()
   await expect(nextDialog(alice.page)).toBeHidden()
   await expect(showVotes(alice.page)).toBeFocused()
-  expect(requests).toEqual([{ round: 2, issue: 'PP-3' }])
+  expect(requests).toEqual([{ round: 2, issue: 'PP-3', outcome: { type: 'Skip' } }])
 })
 
 test('Cancel and Escape change nothing', async ({ join, room }) => {
@@ -178,7 +178,7 @@ test('Cancel and Escape change nothing', async ({ join, room }) => {
     await expect(revealedEstimation(participantEntry(page, 'Bob'))).toHaveText('5')
   }
   // Only the held request: Cancel and Escape sent none.
-  expect(sent).toEqual([{ round: 1, issue: 'held' }])
+  expect(sent).toEqual([{ round: 1, issue: 'held', outcome: { type: 'Skip' } }])
 })
 
 test('a held Enter or a double-click on Next issue submits nothing', async ({ join, room }) => {
@@ -223,7 +223,7 @@ test('a page that finds the room moved on shows the notice', async ({ join, room
   await expect(nextStatus(alice.page)).toBeEmpty()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-1b' }
+    data: { round: 1, issue: 'PP-1b', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(nextStatus(alice.page)).toHaveText('The room moved on to: "PP-1b" OK')
@@ -281,7 +281,7 @@ test('focus on Next issue moves to the toggle when the room moves on', async ({ 
   await nextButton(alice.page).focus()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')
@@ -339,7 +339,7 @@ test('the notice takes no focus from a control outside the form it replaces', as
   await card(alice.page, '5').focus()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')

@@ -20,6 +20,9 @@ export type NextEvent =
 
 export const closed: NextState = { mode: 'closed' }
 
+// The dialog's choice of outcome; Skip moves on and records nothing.
+export type Choice = { type: 'Estimate'; value: string } | { type: 'Unsettled' } | { type: 'Skip' }
+
 export function step(s: NextState, e: NextEvent): NextState {
   switch (e.type) {
     // A press reaches the page only while the element is closed, so its close event is still due.
