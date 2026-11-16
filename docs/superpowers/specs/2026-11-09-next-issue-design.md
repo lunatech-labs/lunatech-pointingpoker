@@ -1,7 +1,7 @@
 # Next Issue
 
 Date: 2026-11-09
-Status: Approved
+Status: Approved; amended 2026-11-16 (decision 7's Height, the Tests' Layout)
 Parent: issue #548
 
 ## Purpose
@@ -140,6 +140,9 @@ form. Out of scope: the estimate row and the history (#528), the round counter
      field and buttons drop the issue editor's negative `margin-block`, as the
      mockup does, without overriding the container rule's `margin-top` that
      puts the buttons under the field below 65.75 rem (`issue-editor.css`).
+   - **Height**: the browser's own modal rule, untouched: `max-height` 100%
+     minus 2 em and 6 px, `overflow: auto`, so a dialog taller than the
+     viewport scrolls inside it rather than running past both ends.
 
 ## States and events
 
@@ -236,11 +239,21 @@ request does.
   a Re-vote and a vote" changes: Next issue appearing at the reveal narrows the
   phase line, so the case keeps its x, y and height, and its width only while
   the bar's buttons stay the same.
-- **Layout, both browsers**, in `e2e/layout.spec.js`, at
-  heights below 762 px so the root stays 16 px, each width checked by the
-  `.room-page` container's own width: once revealed, each round bar button's
-  text holds one line at 320 px, at 51.75 rem and at 65.75 rem, and the phone
-  layout shows "Next".
+- **Layout, both browsers** (the UI refresh spec's principle 11; the plan's
+  Task 5 had put both cases in the narrow layouts, skipped outside Chromium),
+  in `e2e/layout.spec.js`:
+  - The round bar, at heights below 762 px so the root stays 16 px, each width
+    checked by the `.room-page` container's own width: once revealed, each
+    round bar button's text holds one line at 320 px, at 51.75 rem and at
+    65.75 rem, and the phone layout shows "Next".
+  - The dialog, holding `ISSUE_240` after a failed move, at 320 by 640 and at
+    640 by 300 (the laptop at 200%, the narrow-cases spec's decision 3): its
+    box lies within the viewport, and a mouse wheel over it brings its Next
+    issue button's box within the dialog's box. Only the failure message takes its box past
+    the 300 px viewport once the Height rule is overridden (measured: 338 px
+    of content, 284 without), so the case fails at 640 by 300 under
+    `max-height: none` or `overflow: hidden`, and at 320 by 640 when the
+    dialog is set wider than the viewport.
 - **Browser checks for the plan**, before the cases that rely on them: one
   Escape while sending stays open in both browsers, and a repeated one closes
   the dialog; a press on the backdrop leaves focus in the field; whether Escape

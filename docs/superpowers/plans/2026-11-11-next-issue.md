@@ -44,9 +44,15 @@ The choices the spec left open, each with the simpler alternative.
 16. **README** follows the endpoint in Task 1: the table row, `/next-issue`'s `409` beside `/vote`'s, `round` in the JSON example and its sentence, and "next-issue" in the membership-check list.
 17. **Delivery.** One PR from `20261109.next-issue` holding the spec, this plan, the code and README, linking #548.
 
+Added with the spec's 2026-11-16 amendment (Task 7), which moves Task 5's cases out of the Chromium-only narrow layouts and replaces Review Focus 1's test:
+
+18. **One body, two viewports.** The dialog case loops over 320 by 640 and 640 by 300, one top-level `test.describe` each, beside the round bar case. Two hand-written copies are simpler to read, but drift.
+19. **The failed move** is made as `e2e/next.spec.js`'s "a failed move keeps the text and says so" makes it: `nextIssueUrl` moves to `e2e/fixtures.js`, imported by both files, and the case waits for `nextStatus` to read "Could not move on to the next issue". A second copy of the one-line regex is simpler, but two copies of the endpoint's path can drift.
+20. **The wheel.** The dialog's `scrollTop` set to 0 (so an earlier programmatic scroll cannot stand in for the wheel), `hover()` on the dialog, `page.mouse.wheel(0, 400)`, then `expect.poll` until the Next issue button's box lies inside the dialog's box. The poll, not a fixed wait, absorbs smooth scrolling.
+
 ## Review Focus
 
-1. **A long shown issue at 320 px.** `ISSUE_240` pre-filled grows the field (`field-sizing: content`); the buttons must stay reachable, the dialog scrolling rather than clipping. Test: Task 5, the 320 px case.
+1. **A long shown issue at 320 px.** `ISSUE_240` pre-filled grows the field (`field-sizing: content`); the buttons must stay reachable, the dialog scrolling rather than clipping. Test: Task 5, the 320 px case, superseded by Task 7.
 2. **A multi-line issue pre-filled** (one set through the API). The field is one line. Test: Task 3, `pressed` with `"a\nb"` gives the draft `"a b"`.
 3. **A facilitator moves on.** Anyone in the room may. Test: Task 4, the other page in the notice case is a facilitator.
 4. **Reopening after a failure** starts fresh: the shown issue again, no message. Test: Task 3, `pressed` after a failed submit and a close.
@@ -202,7 +208,7 @@ Run: `npm run typecheck && npm run lint && npm run test:unit` — Expected: pass
 **Files:**
 - Modify: `e2e/layout.spec.js`
 
-- [ ] **Step 1: Add, in "the narrow layouts"** (Chromium only, ruling 14): "once revealed, each round bar button holds one line" at 320 by 600, at a container of 51.75 rem and of 65.75 rem, each button's text one line by the range-rects count the avatar case uses; at 320 and at 51.75 rem minus one pixel Next issue reads `Next` (`toHaveText('Next', { useInnerText: true })`, since `textContent` keeps " issue"). At 320 by 640 with `ISSUE_240`, open the dialog: the dialog's box lies within the viewport and `scrollIntoViewIfNeeded` makes the Next issue button visible.
+- [ ] **Step 1: Add, in "the narrow layouts"** (Chromium only, ruling 14; superseded by Task 7): "once revealed, each round bar button holds one line" at 320 by 600, at a container of 51.75 rem and of 65.75 rem, each button's text one line by the range-rects count the avatar case uses; at 320 and at 51.75 rem minus one pixel Next issue reads `Next` (`toHaveText('Next', { useInnerText: true })`, since `textContent` keeps " issue"). At 320 by 640 with `ISSUE_240`, open the dialog: the dialog's box lies within the viewport and `scrollIntoViewIfNeeded` makes the Next issue button visible.
 - [ ] **Step 2: Run** `npm run e2e -- e2e/layout.spec.js` — Expected: PASS. A width that does not fit goes back to the spec (decision 4), not into CSS here.
 - [ ] **Step 3: Prove it can fail.** Remove the `.round-bar-tail` rule: the phone-word check goes red. Revert, `npm run build`.
 - [ ] **Step 4: Commit** `test: check the round bar's fit with Next issue`
@@ -213,3 +219,15 @@ Run: `npm run typecheck && npm run lint && npm run test:unit` — Expected: pass
 - [ ] **Step 2:** Draft the iPhone hand check (the keyboard opens with the field selected) as a phone-risk issue or an append to one; show the text to the user before filing.
 - [ ] **Step 3:** Run the whole suite: `sbt test styleCheck && npm run typecheck && npm run lint && npm run test:unit && npm run e2e` — Expected: PASS.
 - [ ] **Step 4:** Open the PR, linking #548, after the final review.
+
+### Task 7: Layout cases in both browsers (spec amended 2026-11-16)
+
+**Files:**
+- Modify: `e2e/layout.spec.js`, `e2e/fixtures.js`, `e2e/next.spec.js`
+
+- [ ] **Step 1: Commit the move** of "a long issue pre-filled, the dialog stays in view and reaches Next issue, 320 by 640" out of "the narrow layouts", unchanged, after `npm run e2e -- e2e/layout.spec.js -g "the dialog stays in view"` passes in both browsers: `test: run the Next issue dialog's layout case in both browsers`.
+- [ ] **Step 2: Share `nextIssueUrl`** (ruling 19): move it to `e2e/fixtures.js`, imported by `e2e/next.spec.js`; `npm run e2e -- e2e/next.spec.js` passes unchanged. Commit `refactor: share nextIssueUrl between the e2e files`.
+- [ ] **Step 3: Rewrite the case** per the spec's Tests, "Layout, both browsers", and rulings 18 to 20. Run `npm run e2e -- e2e/layout.spec.js e2e/next.spec.js` — Expected: PASS in both browsers.
+- [ ] **Step 4: Prove it can fail**, each mutation appended to `next-issue-dialog.css` and reverted: `.next-dialog { max-height: none }` and `.next-dialog { overflow: hidden }` turn the case at the 640 by 300 viewport red; `.next-dialog { width: 36rem; max-width: none }` turns the case at the 320 by 640 viewport red; both browsers each time. Then `npm run build`.
+- [ ] **Step 5: Commit** `test: check the Next issue dialog scrolls to its button at 640 by 300`
+- [ ] **Step 6:** Re-check citations in the files this task changed, then push (a plain push; force needs the user's OK).
