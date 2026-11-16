@@ -129,9 +129,9 @@ history past the room's life.
    `--text-md`) in the row's weight. The outcomes form one column, never
    narrower than the word Parked in the latest row's weight, taken from the
    text, not a measured number, and hidden from assistive technology; a
-   wider off-deck value widens it up to about 40% of the row, cut at its end
-   beyond. The list has `scrollbar-gutter: stable`, as the page does. The
-   list reaches into the panel's padding by `--space-2` and its rows are
+   wider off-deck value widens it up to 40% of the row's content box, cut at
+   its end beyond. The list has `scrollbar-gutter: stable`, as the page does. The
+   list reaches into the panel's padding by `--space-2` at both inline ends and its rows are
    padded by `--space-2` at both ends; the list never scrolls sideways.
    - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
      growing with the entries, the rest by scrolling, the list a focusable,
@@ -220,8 +220,9 @@ same.
   digits end their issue cells at the same x; a first Parked entry, then the
   entry that makes the list scroll, leave every row ending there; Parked lies
   within its slot; a row's accessible text is its issue and its outcome only;
-  an off-deck value wider than Parked, recorded through the API, widens the
-  column no further than its cap.
+  off-deck values recorded through the API: one between Parked and the cap
+  shows whole in a column wider than Parked; one past the cap stays on one
+  line, cut at its end, in a column no wider than the cap.
 - **Front cut, both browsers**: a row holding a link longer than its cell
   shows the link's end, the `<bdi>`'s right edge within the cell's; a short
   link starts at the cell's left edge; a long "link and words" row, of kind
@@ -258,9 +259,12 @@ width (decision 5), which the front-cut tests check.
 
 The README's snapshot example, its history paragraph and the `/next-issue`
 row show `history` and `outcome` as decisions 1 and 2 name them, and its
-`400` list a blank value or unknown type. The mockup `docs/design/room.html`
+`400` list a blank value or unknown type. The rename of Unsettled to Parked
+(decision 1, Terms) reaches the server, the generated OpenAPI, the page, the
+tests, the README and the mockup; decoding then refuses `Unsettled` as an
+unknown type. The mockup `docs/design/room.html`
 follows decisions 3 and 6, its `?` chip kept and its history mostly links;
 its round history and estimate row are settled. Decisions 3 and 6's look
-changes are built from their own plan,
+changes and the rename are built from their own plan,
 `docs/superpowers/plans/2026-11-16-round-history-amendment.md`; the first
 plan stays the record of Tasks 1 to 6.
