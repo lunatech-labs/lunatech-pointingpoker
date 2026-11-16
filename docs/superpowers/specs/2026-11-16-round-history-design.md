@@ -169,9 +169,9 @@ same.
   with the room's issue, not the request's; Skip appends none; a refused
   request appends none; decoding refuses a blank value and an unknown type;
   the contract test carries `history` and the request's `outcome`.
-- **Pure logic.** The short form's scenarios; the pre-selection (single top
-  value, a tie, `?` alone on top checks `?`, nobody voted); every changed
-  cell of the dialog's `step`.
+- **Pure logic.** The short form's scenarios; the pre-selection (each deck
+  value alone on top is checked; a tie, a top value off the deck and nobody
+  voted check nothing); every changed cell of the dialog's `step`.
 - **End to end, both browsers.** Recording a value, Unsettled and Skip shows
   the history, or none, on two pages; a tie opens with nothing checked, and
   submitting then shows the missing-choice message and sends nothing; the
