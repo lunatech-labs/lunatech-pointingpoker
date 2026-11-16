@@ -10,6 +10,7 @@ import {
   nextCancel,
   nextDialog,
   nextField,
+  nextIssueUrl,
   nextStatus,
   nextSubmit,
   noVoteMark,
@@ -51,7 +52,6 @@ test('an open issue editor shows the notice once the room moves on, and OK puts 
 })
 
 const showVotes = page => roundBar(page).getByRole('button', { name: 'Show votes' })
-const nextIssueUrl = room => new RegExp(`/rooms/${room}/next-issue$`)
 
 // The bodies of the next-issue requests a page sends; read only once a later frame has landed.
 const nextSent = (page, room) => {

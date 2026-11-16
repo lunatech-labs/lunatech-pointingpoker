@@ -278,6 +278,8 @@ export const nextField = page => nextDialog(page).getByRole('textbox', { name: '
 export const nextSubmit = page => nextDialog(page).getByRole('button', { name: 'Next issue' })
 export const nextCancel = page => nextDialog(page).getByRole('button', { name: 'Cancel' })
 export const nextStatus = page => nextDialog(page).getByRole('status')
+// Matches the room's next-issue endpoint, for page.route.
+export const nextIssueUrl = room => new RegExp(`/rooms/${room}/next-issue$`)
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.
 export const ownEstimation = page => deck(page).getByRole('button', { pressed: true })
 // After a Re-vote the cast card is not pressed but keeps this description.
