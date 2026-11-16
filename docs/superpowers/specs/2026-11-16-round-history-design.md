@@ -192,7 +192,10 @@ same.
 
 ## Short form scenarios
 
-| Case | Issue | Shown |
+What the short form's function returns; the cell's CSS then cuts it to the
+width (decision 5), which the front-cut tests check.
+
+| Case | Issue | Short form, before the cut |
 |---|---|---|
 | Jira | `https://lunatech.atlassian.net/browse/PP-1234` | the link |
 | Jira with a query | `https://acme.atlassian.net/browse/PP-1234?atlOrigin=eyJpIjoi` | `https://acme.atlassian.net/browse/PP-1234` |
