@@ -86,6 +86,10 @@ history past the room's life.
    | a link: `http://` or `https://`, any case, and no space | the link without its query and fragment | at the front: `…/acme/web/issues/412` |
    | anything else | the text, whitespace collapsed | at the end: `Fix the double-click b…` |
 
+   The function returns the kind with the text, `{ kind: 'link' | 'text',
+   text }`, and the row picks its markup by the kind, never by the text;
+   "Round ‹position›" is text, too short to be cut.
+
    A link keeps its end because the host repeats and the id sits last; text
    keeps its start because it leads with what matters. The scheme stays: a
    front cut drops it first, and a link that fits has room for it. The front
@@ -195,18 +199,18 @@ same.
 What the short form's function returns; the cell's CSS then cuts it to the
 width (decision 5), which the front-cut tests check.
 
-| Case | Issue | Short form, before the cut |
-|---|---|---|
-| Jira | `https://lunatech.atlassian.net/browse/PP-1234` | the link |
-| Jira with a query | `https://acme.atlassian.net/browse/PP-1234?atlOrigin=eyJpIjoi` | `https://acme.atlassian.net/browse/PP-1234` |
-| Jira board | `https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77` | `https://acme.atlassian.net/jira/software/projects/PP/boards/3` |
-| fragment | `https://github.com/acme/web/issues/412#issuecomment-1` | `https://github.com/acme/web/issues/412` |
-| trailing space | `https://github.com/acme/web/issues/412 ` | `https://github.com/acme/web/issues/412` |
-| upper-case scheme | `HTTPS://example.com/ticket` | the link |
-| link and words | `https://github.com/acme/web/issues/412 and PP-9` | the text |
-| key and title | `PP-1234 Fix the login form` | the text |
-| sentence over lines | `Rework the login page\n  so that…` | `Rework the login page so that…` |
-| empty, blank | `""`, `"   "` (third entry) | `Round 3` |
+| Case | Issue | Kind | Short form, before the cut |
+|---|---|---|---|
+| Jira | `https://lunatech.atlassian.net/browse/PP-1234` | link | the link |
+| Jira with a query | `https://acme.atlassian.net/browse/PP-1234?atlOrigin=eyJpIjoi` | link | `https://acme.atlassian.net/browse/PP-1234` |
+| Jira board | `https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77` | link | `https://acme.atlassian.net/jira/software/projects/PP/boards/3` |
+| fragment | `https://github.com/acme/web/issues/412#issuecomment-1` | link | `https://github.com/acme/web/issues/412` |
+| trailing space | `https://github.com/acme/web/issues/412 ` | link | `https://github.com/acme/web/issues/412` |
+| upper-case scheme | `HTTPS://example.com/ticket` | link | the link |
+| link and words | `https://github.com/acme/web/issues/412 and PP-9` | text | the text |
+| key and title | `PP-1234 Fix the login form` | text | the text |
+| sentence over lines | `Rework the login page\n  so that…` | text | `Rework the login page so that…` |
+| empty, blank | `""`, `"   "` (third entry) | text | `Round 3` |
 
 ## Documents
 
