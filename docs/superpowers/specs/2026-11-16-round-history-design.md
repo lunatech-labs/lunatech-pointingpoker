@@ -169,6 +169,8 @@ same.
   holds the edited issue, the room's own, which is what the round ended on.
 - **Reading an old row as someone moves on**: the list jumps to the end
   (decision 7).
+- **A very long issue**: the legend wraps it whole, pushing the radios and the
+  field down, as the issue panel shows it whole; #504 bounds the issue's length.
 
 ## Tests
 
