@@ -194,7 +194,8 @@ same.
 - **Layout, both browsers** (the UI refresh spec's principle 11), outside
   `layout.spec.js`'s describes skipped outside Chromium (#499): the phone
   panel's label line keeps the label's height with the button, closed and
-  opened, at 320 px and 51.75 rem.
+  opened, at 320 px and 51.75 rem; at 320 px, a legend holding a long link
+  wraps within the dialog, which does not scroll sideways.
 
 ## Short form scenarios
 
