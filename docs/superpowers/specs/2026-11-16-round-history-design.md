@@ -30,7 +30,8 @@ history past the room's life.
   **Skip** is a choice in the dialog, not an outcome: it records nothing.
 - **History**: the room's entries, oldest first.
 - **Position**: an entry's place in the history, from 1.
-- **Short form**: what a row shows of an entry's issue (decision 5).
+- **Short form**: what a row shows of an entry's issue, and the legend of the
+  shown issue (decision 5).
 - **Estimate row**: the dialog's choice of outcome or Skip (decision 3).
 - **Single top value**: once revealed, the result's headline names one value
   (`resultHeadline`'s `tied` has one element), on the deck.
@@ -91,7 +92,7 @@ history past the room's life.
 
    The function returns the kind with the text, `{ kind: 'link' | 'text',
    text }`, and the row picks its markup by the kind, never by the text;
-   "Round ‹position›" is text, too short to be cut.
+   "Round ‹position›" is of kind text.
 
    A link keeps its end because the host repeats and the id sits last; text
    keeps its start because it leads with what matters. The scheme stays: a
@@ -114,7 +115,8 @@ history past the room's life.
    hover-only lesson). Rows are centred as the roster's (`align-items:
    center`), and the list's last-row slack sits in the panel's padding.
    - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
-     growing with the entries, the rest by scrolling, the list a focusable region as the roster.
+     growing with the entries, the rest by scrolling, the list a focusable,
+     named region, as the roster's panel.
    - **Phone**: between the issue and the table (`order: 1`, after the issue
      in source order). Closed, it shows the label and the latest row only
      (by CSS, not by scrolling, so its scroll position does not matter);
@@ -151,7 +153,7 @@ same.
 
 | Event | Closed | Opened |
 |---|---|---|
-| Show more / Show less | Opened, scrolled to the end | Closed |
+| Show more / Show less (shown from two entries) | Opened, scrolled to the end | Closed |
 | entries grow | Closed, the new latest row shown; the button appears at the second entry | Opened, scrolled to the end |
 | a snapshot without new entries, a reconnect included | nothing | nothing, the scroll kept |
 | the history empties (cannot happen within a room's life) | cannot happen | cannot happen |
@@ -200,9 +202,9 @@ same.
   `layout.spec.js`'s describes skipped outside Chromium (#499): the phone
   panel's label line keeps the label's height with the button, closed and
   opened, at 320 px and at 51.75 rem minus 1 px, the phone layout's ends,
-  below 762 px tall so the root stays 16 px; at 320 px, a legend holding a link with
-  one segment wider than the dialog wraps within it, and the dialog does not
-  scroll sideways.
+  below 762 px tall so the root stays 16 px; at 320 px, a legend holding a
+  link with one segment wider than the dialog wraps within it, and the dialog
+  does not scroll sideways.
 
 ## Short form scenarios
 
