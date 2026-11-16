@@ -187,7 +187,8 @@ same.
   choice survives a failed request; no panel before the first entry; on the
   phone layout, no button at one entry; at two, the closed panel shows the
   latest row only, Show more opens and Show less closes it, kept across a
-  round. The scroll cases start with more
+  round; with two entries the list is two rows tall, on desktop and in the
+  opened phone panel. The scroll cases start with more
   entries than the list shows (6 on desktop) and the list scrolled up: a vote
   on another page leaves the scroll where it was; a new entry takes it to the
   end; switching from the phone layout to desktop shows the latest row.
