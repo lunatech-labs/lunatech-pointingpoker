@@ -27,7 +27,7 @@ history past the room's life.
   full, and its outcome.
 - **Outcome**: an estimate (any deck value, `?` included: the team could not
   estimate) or **Parked** (the team set the round aside, recorded, to revisit;
-  the team's own rule says when, a split vote or too little agreement, say).
+  when is the team's call: a split vote or too little agreement, say).
   **Skip** is a choice in the dialog, not an outcome: it records nothing.
 - **History**: the room's entries, oldest first.
 - **Position**: an entry's place in the history, from 1.
@@ -68,15 +68,18 @@ history past the room's life.
    instead of cutting, one rule whatever the kind: `overflow-wrap: anywhere`
    on the legend, the short form in a `<bdi>`, as `.issue-panel-view h2`
    shows the full issue; then one native radio
-   per deck value, then Parked and Skip, styled as the mockup's chips (my
-   call: native radios give arrow keys and one tab stop with no script). The
-   chips take the deck card's colours, border and corners, keeping their own
-   size and shape: recording an outcome is not casting a vote. The checked
-   chip is lifted as the voted card is, with room above the row for the lift,
-   so its state is not colour alone. While sending, the legend keeps the issue
-   and position it had at submit, so a move that lands before the answer does
-   not rename it. The row is the dialog's first part; focus still opens on the
-   field (Next issue decision 7).
+   per deck value, then Parked and Skip, as chips (my call: native radios give
+   arrow keys and one tab stop with no script). The chips take the deck card's
+   colours, border and corners, keeping their own size and proportions:
+   recording an outcome is not casting a vote. Every chip is bold, the words
+   as the figures; a word chip is wider, which sets it apart. The checked chip
+   is lifted as the voted card is, with room above the row and between its
+   lines for the lift, so its state is not colour alone. The legend keeps the
+   label style, its issue in ink and its own case. A wider gap (`--space-5`)
+   than inside either part separates the row from the field below. While
+   sending, the legend keeps its text from the submit, so a move that lands
+   before the answer does not rename it. The row is the dialog's first part;
+   focus still opens on the field (Next issue decision 7).
 4. **Pre-selection and the required choice.** When the dialog opens on a
    single top value, that value is checked; otherwise nothing is. The choice is
    worked out once, on the press, and a snapshot never changes it. Submitting
@@ -116,16 +119,23 @@ history past the room's life.
 6. **The panel.** Labelled "Rounds · ‹number of entries›", as "Voters · 14",
    a `section` named by its label, the list an `<ol>`, a row's issue at the
    start and its outcome (the value, or the word Parked) at the end. The
-   latest row is bold. No panel while the history is empty, in both layouts.
-   No `title`: the short form is all a row shows, on both layouts (the
-   hover-only lesson). Rows are centred as the roster's (`align-items:
-   center`), and the list's last-row slack sits in the panel's padding.
-   The outcome sits in the roster's value slot (`.roster-value-figure`'s
-   width, centred, `--text-md`, the row's weight), and the outcomes form one
-   column of fixed width, as wide as the widest outcome there can be (Parked,
-   bold): every issue is cut at the same place, and a new entry never moves
-   the cut. Rows are padded at both ends as the roster's, so a scrollbar
-   drawn over the list covers padding, not an outcome.
+   latest row is `--weight-bold`, as the roster's values; the others
+   `--weight-regular`; nothing else marks it. No panel while the history is
+   empty, in both layouts. No `title`: the short form is all a row shows, on
+   both layouts (the hover-only lesson). Rows are centred as the roster's
+   (`align-items: center`), and the list's last-row slack sits in the panel's
+   padding.
+   The outcome is styled as the roster's value slot (centred, its padding,
+   `--text-md`) in the row's weight, and the outcomes form one column, never
+   narrower than the word Parked in the latest row's weight, taken from the
+   text itself, not from a measured number. So no deck value and no Parked
+   entry moves the cut, whatever the font; only an outcome wider than Parked,
+   which the page cannot record (decision 1), widens the column, and then it
+   shows whole. The list reserves its scrollbar's room from the first entry
+   (`scrollbar-gutter: stable`, as the page does), so a list that starts to
+   scroll does not move the cut either. The rows reach into the panel's
+   padding, so the outcomes end where the roster's values do and a scrollbar
+   drawn over the list covers that padding; the list never scrolls sideways.
    - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
      growing with the entries, the rest by scrolling, the list a focusable,
      named region, as the roster's panel.
@@ -148,17 +158,17 @@ history past the room's life.
 
 **The dialog** keeps Next issue's three states. Open gains the choice (a value,
 Parked, Skip, or none) and a second message, the missing choice; Sending
-carries the choice and the shown issue and position at submit (decision 3).
-New and changed cells; the rest stand as in Next issue's matrix.
+carries the choice and the legend's text at submit (decision 3). New and
+changed cells; the rest stand as in Next issue's matrix.
 
 | Event | Closed | Open | Sending |
 |---|---|---|---|
 | Next issue pressed | Open, choice per decision 4 | Open afresh, choice per decision 4 | Open afresh, choice per decision 4 |
 | a radio checked | cannot happen | Open, that choice, the missing-choice message cleared | ignored: the row is read-only while sending |
-| submit with a choice | cannot happen | Sending, both messages cleared | ignored |
+| submit with a choice | cannot happen | Sending with the legend's text, both messages cleared | ignored |
 | submit with none | cannot happen | Open with the missing-choice message, focus on the first radio, nothing sent | ignored |
 | any other answer, network error, timeout | cannot happen | cannot happen | Open with the message, the choice kept |
-| a snapshot | nothing | nothing: the choice stays; the legend follows the shown issue | nothing: the legend keeps the issue and position of the submit |
+| a snapshot | nothing | nothing: the choice stays; the legend follows the shown issue | nothing: the legend keeps its text from the submit |
 
 **The phone panel** has two states, the page's own; on desktop both look the
 same.
@@ -194,12 +204,16 @@ same.
   the contract test carries `history` and the request's `outcome`.
 - **Pure logic.** The short form's scenarios; the pre-selection (each deck
   value alone on top is checked; a tie, a top value off the deck, nobody
-  voted and a single value while voting check nothing); every changed cell of the dialog's `step`.
+  voted and a single value while voting check nothing); every changed cell of
+  the dialog's `step`, and `shows` giving the legend's text from the submit
+  while sending.
 - **End to end, both browsers.** Recording a value, Parked and Skip shows
   the history, or none, on two pages; a tie opens with nothing checked, and
   submitting then shows the missing-choice message and sends nothing; the
   choice survives a failed request; while sending, a move that lands before
-  the answer leaves the legend as it was; no panel before the first entry; on the
+  the answer leaves the legend as it was (in "Next issue moves the room on",
+  whose held answer already lets the move land first); no panel before the
+  first entry; on the
   phone layout, no button at one entry; at two, the closed panel shows the
   latest row only, Show more opens and Show less closes it, kept across a
   round; with two entries the list is two rows tall, on desktop and in the
@@ -207,9 +221,11 @@ same.
   entries than the list shows (6 on desktop) and the list scrolled up: a vote
   on another page leaves the scroll where it was; so does a width change
   within the phone layout; a new entry takes it to the end; switching from
-  the phone layout to desktop shows the latest row. Rows whose outcomes
-  differ in width (a digit, two digits, Parked) end their issue cells at the
-  same x, and a first Parked entry does not move them.
+  the phone layout to desktop shows the latest row. Rows with a digit and two
+  digits end their issue cells at the same x; a first Parked entry, then the
+  entry that makes the list scroll, leave every row ending there; Parked lies
+  within its slot; the list does not scroll sideways, on desktop and in the
+  opened phone panel at 320 px.
 - **Front cut, both browsers**: a row holding a link longer than its cell
   shows the link's end, the `<bdi>`'s right edge within the cell's; a short
   link starts at the cell's left edge; a long "link and words" row, of kind
@@ -244,8 +260,14 @@ width (decision 5), which the front-cut tests check.
 
 The README's snapshot example and its text gain `history`; the `/next-issue`
 row's body gains `outcome`, with its recording, and the `400` list a blank
-value or unknown type. The
+value or unknown type. The rename of Unsettled to Parked reaches the README
+text already on this branch: the snapshot example, the history paragraph and
+the `/next-issue` row. The
 mockup `docs/design/room.html` follows decisions 3 and 6: its `?` chip kept, the
 chips in the deck card's colours with the checked one lifted, the history
 oldest first and mostly links, the panel growing up to its rows, the phone
 panel's two states and labels, centred rows, the outcome column, no `title`.
+Its round history and estimate row are settled by this spec, each look
+choice confirmed with the user after the build. The amendment is built from
+its own plan, `docs/superpowers/plans/2026-11-16-round-history-amendment.md`;
+the first plan stays the record of Tasks 1 to 6.
