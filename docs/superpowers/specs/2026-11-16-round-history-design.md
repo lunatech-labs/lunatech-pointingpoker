@@ -185,8 +185,10 @@ same.
 - **Front cut, both browsers**: a row holding a link longer than its cell
   shows the link's end, the `<bdi>`'s right edge within the cell's; a short
   link starts at the cell's left edge.
-- **Layout, Chromium only**: the phone panel's label line keeps the label's
-  height with the button, closed and opened, at 320 px and 51.75 rem.
+- **Layout, both browsers** (the UI refresh spec's principle 11), outside
+  `layout.spec.js`'s describes skipped outside Chromium (#499): the phone
+  panel's label line keeps the label's height with the button, closed and
+  opened, at 320 px and 51.75 rem.
 
 ## Short form scenarios
 
