@@ -729,30 +729,6 @@ test.describe('the narrow layouts', () => {
   test.describe(() => {
     test.use({ viewport: { width: 320, height: 640 } })
 
-    test('a long issue pre-filled, the dialog stays in view and reaches Next issue, 320 by 640', async ({
-      join
-    }) => {
-      const { page } = await join('Alice')
-      await setIssue(page, ISSUE_240)
-      await page.getByRole('button', { name: 'Show votes' }).click()
-      await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
-      await nextButton(page).click()
-      await expect(nextDialog(page)).toBeVisible()
-      const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
-      const { x, y, width, height } = boxes.dialog
-      const view = page.viewportSize()
-      expect(x, 'the dialog within the viewport').toBeGreaterThanOrEqual(0)
-      expect(y).toBeGreaterThanOrEqual(0)
-      expect(x + width).toBeLessThanOrEqual(view.width + 0.5)
-      expect(y + height).toBeLessThanOrEqual(view.height + 0.5)
-      await nextSubmit(page).scrollIntoViewIfNeeded()
-      await expect(nextSubmit(page)).toBeInViewport()
-    })
-  })
-
-  test.describe(() => {
-    test.use({ viewport: { width: 320, height: 640 } })
-
     test('the lobby scrolls no page sideways, 320 by 640', async ({ visitor }) => {
       const page = await visitor({ roomId: LONGEST_ID, name: 'Alice' })
       await page.goto('/')
@@ -823,6 +799,30 @@ test.describe(() => {
     await check('51.75 rem', 'Next issue')
     await containerAt(page, 65.75 * rem)
     await check('65.75 rem', 'Next issue')
+  })
+})
+
+test.describe(() => {
+  test.use({ viewport: { width: 320, height: 640 } })
+
+  test('a long issue pre-filled, the dialog stays in view and reaches Next issue, 320 by 640', async ({
+    join
+  }) => {
+    const { page } = await join('Alice')
+    await setIssue(page, ISSUE_240)
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+    await nextButton(page).click()
+    await expect(nextDialog(page)).toBeVisible()
+    const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
+    const { x, y, width, height } = boxes.dialog
+    const view = page.viewportSize()
+    expect(x, 'the dialog within the viewport').toBeGreaterThanOrEqual(0)
+    expect(y).toBeGreaterThanOrEqual(0)
+    expect(x + width).toBeLessThanOrEqual(view.width + 0.5)
+    expect(y + height).toBeLessThanOrEqual(view.height + 0.5)
+    await nextSubmit(page).scrollIntoViewIfNeeded()
+    await expect(nextSubmit(page)).toBeInViewport()
   })
 })
 
