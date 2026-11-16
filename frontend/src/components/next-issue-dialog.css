@@ -1,4 +1,4 @@
-/* Next issue spec, decision 7: the Next issue dialog, as room.html?next=modal without its estimate row */
+/* Next issue spec, decision 7: the Next issue dialog, as room.html?next=modal; its estimate row per round history decision 3 */
 .next-dialog {
   width: min(36rem, 100% - 2 * var(--space-4));
 }
@@ -10,6 +10,85 @@
 .next-dialog h2 {
   margin: 0 0 var(--space-3);
   font-size: var(--text-lg);
+}
+
+.next-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.next-estimate {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The legend wraps rather than cuts, as .issue-panel-view h2 shows the full issue */
+.next-estimate legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.next-form-issue {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+
+.next-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* A label around a hidden native radio, drawn as the mockup's chip */
+.next-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding-inline: var(--space-2);
+  border: var(--line-control) solid var(--ink);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  font: var(--weight-bold) var(--text-md) var(--font-sans);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.next-chip:has(:checked) {
+  background: var(--burgundy);
+  border-color: var(--burgundy);
+  color: var(--paper);
+}
+
+.next-chip:has(:focus-visible) {
+  outline: var(--focus-width) solid var(--ink);
+  outline-offset: var(--focus-gap);
+}
+
+.next-chip-word {
+  font-weight: var(--weight-medium);
+  padding-inline: var(--space-3);
+}
+
+/* The checked chip keeps its fill in system colours, as the voted deck card does */
+@media (forced-colors: active) {
+  .next-chip:has(:checked) {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+    border-color: CanvasText;
+  }
+
+  .next-chip:has(:checked):has(:focus-visible) {
+    outline-color: CanvasText;
+  }
 }
 
 .next-dialog-part {

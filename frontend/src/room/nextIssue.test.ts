@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closed, movedOnText, preselected, shows, step, type NextState } from './nextIssue'
+import { closed, movedOnText, preselected, sameChoice, shows, step, type Choice, type NextState } from './nextIssue'
 
 describe('movedOnText', () => {
   it('names the issue the room moved on to', () => {
@@ -11,34 +11,66 @@ describe('movedOnText', () => {
   })
 })
 
+const five: Choice = { type: 'Estimate', value: '5' }
+const unsettled: Choice = { type: 'Unsettled' }
 const open: NextState = {
   mode: 'open',
   opening: 3,
   draft: 'PP-1',
-  failed: false
+  choice: five,
+  failed: false,
+  missing: false
 }
 const sending: NextState = {
   mode: 'sending',
   opening: 3,
   draft: 'PP-1',
+  choice: five,
   awaiting: 7
 }
-const pressed = { type: 'pressed', issue: 'PP-1', round: 3 } as const
+const pressed = { type: 'pressed', issue: 'PP-1', round: 3, checked: five } as const
 
 describe('step', () => {
-  it('opens from closed with the one-lined issue, the round and no message', () => {
-    expect(step(closed, { type: 'pressed', issue: 'a\nb', round: 3 })).toEqual({
+  it('opens from closed with the one-lined issue, the round, the checked choice and no message', () => {
+    expect(step(closed, { type: 'pressed', issue: 'a\nb', round: 3, checked: five })).toEqual({
       mode: 'open',
       opening: 3,
       draft: 'a b',
-      failed: false
+      choice: five,
+      failed: false,
+      missing: false
     })
   })
 
   it('opens afresh on a press while open or sending, as from closed', () => {
-    const later = { type: 'pressed', issue: 'PP-9\nx', round: 4 } as const
-    const fresh = { mode: 'open', opening: 4, draft: 'PP-9 x', failed: false }
-    for (const s of [{ ...open, draft: 'mine', failed: true }, sending]) expect(step(s, later)).toEqual(fresh)
+    const later = { type: 'pressed', issue: 'PP-9\nx', round: 4, checked: null } as const
+    const fresh = { mode: 'open', opening: 4, draft: 'PP-9 x', choice: null, failed: false, missing: false }
+    for (const s of [{ ...open, draft: 'mine', failed: true, missing: true }, sending])
+      expect(step(s, later)).toEqual(fresh)
+  })
+
+  it('opens from every state with the checked choice', () => {
+    for (const s of [closed, open, sending])
+      for (const checked of [five, unsettled, null])
+        expect(step(s, { ...pressed, checked })).toMatchObject({ mode: 'open', choice: checked, missing: false })
+  })
+
+  it('sets the chosen choice in open, clearing the missing-choice message, and ignores it elsewhere', () => {
+    expect(step({ ...open, choice: null, missing: true }, { type: 'chose', choice: unsettled })).toEqual({
+      ...open,
+      choice: unsettled,
+      missing: false
+    })
+    expect(step(sending, { type: 'chose', choice: unsettled })).toBe(sending)
+    expect(step(closed, { type: 'chose', choice: unsettled })).toBe(closed)
+  })
+
+  it('asks for a choice on submit with none, sending nothing', () => {
+    expect(step({ ...open, choice: null }, { type: 'submit', request: 8 })).toEqual({
+      ...open,
+      choice: null,
+      missing: true
+    })
   })
 
   it('ignores the awaited answer once a press opened afresh from sending', () => {
@@ -55,11 +87,12 @@ describe('step', () => {
     expect(step(closed, { type: 'typed', text: 'x' })).toBe(closed)
   })
 
-  it('sends from open, awaiting the request and clearing the message', () => {
-    expect(step({ ...open, failed: true }, { type: 'submit', request: 8 })).toEqual({
+  it('sends from open with the choice, awaiting the request and clearing both messages', () => {
+    expect(step({ ...open, choice: unsettled, failed: true, missing: true }, { type: 'submit', request: 8 })).toEqual({
       mode: 'sending',
       opening: 3,
       draft: 'PP-1',
+      choice: unsettled,
       awaiting: 8
     })
     expect(step(sending, { type: 'submit', request: 8 })).toBe(sending)
@@ -82,12 +115,14 @@ describe('step', () => {
     expect(step(sending, { type: 'answered', request: 7, ok: true })).toBe(closed)
   })
 
-  it('reopens with the message and the draft kept on a failed awaited answer', () => {
-    expect(step(sending, { type: 'answered', request: 7, ok: false })).toEqual({
+  it('reopens with the message, the draft and the choice kept on a failed awaited answer', () => {
+    expect(step({ ...sending, choice: unsettled }, { type: 'answered', request: 7, ok: false })).toEqual({
       mode: 'open',
       opening: 3,
       draft: 'PP-1',
-      failed: true
+      choice: unsettled,
+      failed: true,
+      missing: false
     })
   })
 
@@ -109,11 +144,13 @@ describe('step', () => {
   it('reopens without the message and with the new issue after a failure and a close', () => {
     let s = step(sending, { type: 'answered', request: 7, ok: false })
     s = step(s, { type: 'closed' })
-    expect(step(s, { type: 'pressed', issue: 'PP-9', round: 4 })).toEqual({
+    expect(step(s, { type: 'pressed', issue: 'PP-9', round: 4, checked: null })).toEqual({
       mode: 'open',
       opening: 4,
       draft: 'PP-9',
-      failed: false
+      choice: null,
+      failed: false,
+      missing: false
     })
   })
 })
@@ -123,9 +160,19 @@ describe('shows', () => {
     expect(shows({ ...open, failed: true }, 4)).toEqual({
       mode: 'open',
       draft: 'PP-1',
+      choice: five,
       failed: false,
+      missing: false,
       movedOn: true
     })
+  })
+
+  it('shows the notice, not the missing-choice message, once the room moved on while open', () => {
+    expect(shows({ ...open, choice: null, missing: true }, 4)).toMatchObject({ missing: false, movedOn: true })
+  })
+
+  it('shows the missing-choice message while open in the opening round', () => {
+    expect(shows({ ...open, choice: null, missing: true }, 3)).toMatchObject({ missing: true, movedOn: false })
   })
 
   it('shows the message while open in the opening round', () => {
@@ -138,6 +185,8 @@ describe('shows', () => {
   it('never shows moved on while sending', () => {
     expect(shows(sending, 4)).toMatchObject({
       mode: 'sending',
+      choice: five,
+      missing: false,
       movedOn: false
     })
   })
@@ -146,9 +195,21 @@ describe('shows', () => {
     expect(shows(closed, 9)).toEqual({
       mode: 'closed',
       draft: '',
+      choice: null,
       failed: false,
+      missing: false,
       movedOn: false
     })
+  })
+})
+
+describe('sameChoice', () => {
+  it('matches a choice by its type, and an estimate by its value too', () => {
+    expect(sameChoice(five, { type: 'Estimate', value: '5' })).toBe(true)
+    expect(sameChoice(five, { type: 'Estimate', value: '8' })).toBe(false)
+    expect(sameChoice(unsettled, { type: 'Unsettled' })).toBe(true)
+    expect(sameChoice(unsettled, { type: 'Skip' })).toBe(false)
+    expect(sameChoice(null, five)).toBe(false)
   })
 })
 

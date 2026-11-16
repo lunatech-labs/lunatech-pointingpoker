@@ -278,6 +278,11 @@ export const nextField = page => nextDialog(page).getByRole('textbox', { name: '
 export const nextSubmit = page => nextDialog(page).getByRole('button', { name: 'Next issue' })
 export const nextCancel = page => nextDialog(page).getByRole('button', { name: 'Cancel' })
 export const nextStatus = page => nextDialog(page).getByRole('status')
+// The dialog's estimate row, and one of its radios by name: a deck value, Unsettled or Skip.
+export const estimateRow = page => nextDialog(page).getByRole('group', { name: /^Estimate for / })
+export const estimateRadio = (page, name) => nextDialog(page).getByRole('radio', { name, exact: true })
+// Forced, as the chip's label takes the click; check still fails unless the radio ends up checked.
+export const checkEstimate = (page, name) => estimateRadio(page, name).check({ force: true })
 // Matches the room's next-issue endpoint, for page.route.
 export const nextIssueUrl = room => new RegExp(`/rooms/${room}/next-issue$`)
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.

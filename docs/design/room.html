@@ -20,14 +20,17 @@
   .round-history li .round-history-issue { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .round-history li b { flex: none; min-width: var(--space-6); text-align: right; }
   .round-history li:last-child { font-weight: var(--weight-strong); }
-  /* Next issue's form (next=): mockup-only chips, inline or in a modal */
+  /* Next issue's form (next=), inline or in a modal: the estimate row's native radios, drawn as chips */
   .next-form { display: flex; flex-direction: column; gap: var(--space-4); }
   .next-form-part { display: flex; flex-direction: column; gap: var(--space-2); }
   .next-form .issue-editor > .issue-editor-field, .next-form .issue-editor-actions { margin-block: 0; }
+  .next-estimate { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .next-estimate legend { padding: 0; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
   .next-form-issue { text-transform: none; letter-spacing: normal; color: var(--ink); }
   .next-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-  .next-chip { min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); }
-  .next-chip[aria-checked="true"] { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); }
+  .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; }
+  .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); }
+  .next-chip:has(:focus-visible) { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
   .next-chip-word { font-weight: var(--weight-medium); padding-inline: var(--space-3); }
   .next-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: var(--space-4); background: rgb(28 25 23 / 0.45); }
   .next-dialog { width: min(36rem, 100%); max-height: 100%; overflow: auto; }
@@ -170,11 +173,13 @@ function draw() {
   const aria = saving ? ' aria-disabled="true"' : ''
   // Next issue's form (next=inline|modal): the closing round's estimate, then the next issue
   const nextMode = q.get('next')
-  const shortIssue = issue.includes('/browse/') ? issue.split('/browse/')[1] : issue.replace(/^https?:\/\//, '')
+  // The short form (round history decision 5): Round ‹entries + 1› when empty, a link without query and fragment
+  const trimmed = issue.trim()
+  const shortIssue = !trimmed ? `Round ${history.length + 1}` : /^https?:\/\/\S+$/i.test(trimmed) ? trimmed.split(/[?#]/)[0] : trimmed.replace(/\s+/g, ' ')
   const prefill = revealed && tied.length === 1 ? tied[0] : null   // only a single most-voted value prefills
-  const chips = [...deck, 'Unsettled', 'Skip'].map(v => `<button class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}" type="button" role="radio" aria-checked="${v === prefill}">${deck.includes(v) ? fig(v) : v}</button>`).join('')
-  const nextForm = `<div class="next-form"><div class="next-form-part"><span class="panel-label" id="next-est">Estimate for <span class="next-form-issue">${shortIssue || 'this round'}</span></span>
-      <div class="next-chips" role="radiogroup" aria-labelledby="next-est">${chips}</div></div>
+  const chips = [...deck, 'Unsettled', 'Skip'].map(v => `<label class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}"><input class="visually-hidden" type="radio" name="next-estimate"${v === prefill ? ' checked' : ''}>${deck.includes(v) ? fig(v) : v}</label>`).join('')
+  const nextForm = `<div class="next-form"><fieldset class="next-estimate"><legend class="panel-label">Estimate for <bdi class="next-form-issue">${shortIssue}</bdi></legend>
+      <div class="next-chips">${chips}</div></fieldset>
     <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
   const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${nextForm}</section></div>` : ''

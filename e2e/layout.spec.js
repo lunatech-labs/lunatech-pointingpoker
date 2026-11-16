@@ -8,6 +8,7 @@ import {
   avatar,
   connectionLost,
   copyHint,
+  checkEstimate,
   deck,
   expectFits,
   expectLiveRegion,
@@ -804,7 +805,7 @@ test.describe(() => {
   })
 })
 
-// 640 by 300 is the laptop at 200%; only the failure message takes the dialog past it.
+// 640 by 300 is the laptop at 200%.
 for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }]) {
   test.describe(() => {
     test.use({ viewport })
@@ -819,7 +820,9 @@ for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }
       await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
       await page.route(nextIssueUrl(room), route => route.abort())
       await nextButton(page).click()
-      await page.keyboard.press('Enter')
+      // Nobody voted, so nothing is checked and Enter would only ask for a choice.
+      await checkEstimate(page, 'Skip')
+      await nextSubmit(page).click()
       await expect(nextStatus(page)).toHaveText('Could not move on to the next issue')
       const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
       const { x, y, width, height } = boxes.dialog

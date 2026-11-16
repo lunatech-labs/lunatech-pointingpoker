@@ -3,10 +3,12 @@ import { type FocusEvent, type ReactNode, useRef } from 'react'
 import * as api from '../protocol/api'
 import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
+import { preselected } from '../room/nextIssue'
 import { RoomHeader } from './RoomHeader'
 import { IssuePanel } from './IssuePanel'
 import { RoundPanel } from './RoundPanel'
 import { RoundBar } from './RoundBar'
+import { estimationValues } from './Deck'
 import { NextIssueDialog } from './NextIssueDialog'
 import { useNextIssue } from './useNextIssue'
 import { Voters } from './Voters'
@@ -84,7 +86,7 @@ export function RoomPage(props: Props) {
               onShow={() => run(api.command(roomId, 'show'))}
               onRevote={() => run(api.command(roomId, 'revote'))}
               onClear={() => run(api.command(roomId, 'clear'))}
-              onNext={next.open}
+              onNext={() => next.open(preselected(estimationValues, view.votesRevealed, view.votesSummary))}
               nextRef={nextRef}
               toggleRef={toggleRef}
             />
@@ -98,6 +100,7 @@ export function RoomPage(props: Props) {
       <NextIssueDialog
         next={next}
         issue={view.currentIssue}
+        position={view.history.length + 1}
         onClosed={() => (nextRef.current ?? toggleRef.current)?.focus()}
       />
     </div>
