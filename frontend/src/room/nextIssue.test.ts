@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closed, movedOnText, shows, step, type NextState } from './nextIssue'
+import { closed, movedOnText, preselected, shows, step, type NextState } from './nextIssue'
 
 describe('movedOnText', () => {
   it('names the issue the room moved on to', () => {
@@ -149,5 +149,42 @@ describe('shows', () => {
       failed: false,
       movedOn: false
     })
+  })
+})
+
+describe('preselected', () => {
+  const deck = ['1', '2', '?']
+
+  it.each(deck)('chooses %s when it alone is on top, revealed', (v) => {
+    const other = deck.find((d) => d !== v)!
+    expect(
+      preselected(deck, true, [
+        [v, 2],
+        [other, 1]
+      ])
+    ).toEqual({ type: 'Estimate', value: v })
+  })
+
+  it.each([
+    [
+      'a tie',
+      true,
+      [
+        ['2', 1],
+        ['3', 1]
+      ]
+    ],
+    [
+      'a top value off the deck',
+      true,
+      [
+        ['7', 2],
+        ['1', 1]
+      ]
+    ],
+    ['nobody voted', true, []],
+    ['a single value while voting', false, [['1', 2]]]
+  ] as [string, boolean, [string, number][]][])('is null for %s', (_c, revealed, summary) => {
+    expect(preselected(deck, revealed, summary)).toBeNull()
   })
 })

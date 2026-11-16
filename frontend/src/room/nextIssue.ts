@@ -1,4 +1,5 @@
 import { oneLine } from './issueEditor'
+import { resultHeadline } from './result'
 
 // The notice that replaces a form once the room moves on (Next issue spec, Terms).
 export const movedOnText = (issue: string) =>
@@ -22,6 +23,17 @@ export const closed: NextState = { mode: 'closed' }
 
 // The dialog's choice of outcome; Skip moves on and records nothing.
 export type Choice = { type: 'Estimate'; value: string } | { type: 'Unsettled' } | { type: 'Skip' }
+
+// The estimate the dialog starts on: the one value alone on top once revealed, if it is on the deck.
+export function preselected(
+  deck: readonly string[],
+  revealed: boolean,
+  summary: [string, number][]
+): Choice | null {
+  if (!revealed) return null
+  const { tied } = resultHeadline(deck, summary)
+  return tied.length === 1 && deck.includes(tied[0]) ? { type: 'Estimate', value: tied[0] } : null
+}
 
 export function step(s: NextState, e: NextEvent): NextState {
   switch (e.type) {
