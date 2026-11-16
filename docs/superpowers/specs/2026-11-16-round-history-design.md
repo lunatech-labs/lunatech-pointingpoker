@@ -32,7 +32,7 @@ history past the room's life.
 - **Position**: an entry's place in the history, from 1.
 - **Short form**: what a row shows of an entry's issue (decision 5).
 - **Estimate row**: the dialog's choice of outcome or Skip (decision 3).
-- **Single top value**: the result's headline names one value
+- **Single top value**: once revealed, the result's headline names one value
   (`resultHeadline`'s `tied` has one element), on the deck.
 
 ## Decisions
@@ -179,8 +179,8 @@ same.
   request appends none; decoding refuses a blank value and an unknown type;
   the contract test carries `history` and the request's `outcome`.
 - **Pure logic.** The short form's scenarios; the pre-selection (each deck
-  value alone on top is checked; a tie, a top value off the deck and nobody
-  voted check nothing); every changed cell of the dialog's `step`.
+  value alone on top is checked; a tie, a top value off the deck, nobody
+  voted and a single value while voting check nothing); every changed cell of the dialog's `step`.
 - **End to end, both browsers.** Recording a value, Unsettled and Skip shows
   the history, or none, on two pages; a tie opens with nothing checked, and
   submitting then shows the missing-choice message and sends nothing; the
