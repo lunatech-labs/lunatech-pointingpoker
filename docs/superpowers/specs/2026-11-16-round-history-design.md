@@ -62,7 +62,9 @@ history past the room's life.
 3. **The estimate row.** Above the dialog's field, as
    `docs/design/room.html?next=modal&phase=revealed&later=1`: a `fieldset`
    whose legend reads "Estimate for ‹short form of the shown issue›", an empty
-   issue taking the position it would get (entries + 1), then one native radio
+   issue taking the position it would get (entries + 1); the legend wraps
+   instead of cutting, a link in a `<bdi>` breaking anywhere
+   (`overflow-wrap: anywhere`), text with `dir="auto"`; then one native radio
    per deck value, then Unsettled and Skip, styled as the mockup's chips (my
    call: native radios give arrow keys and one tab stop with no script). The
    row is the dialog's first part; focus still opens on the field (Next issue
