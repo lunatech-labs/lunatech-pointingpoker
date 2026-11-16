@@ -10,8 +10,12 @@ import {
   copyHint,
   checkEstimate,
   deck,
+  estimateRow,
   expectFits,
   expectLiveRegion,
+  historyPanel,
+  historyRows,
+  historyToggle,
   inRoom,
   issueBox,
   issueEdit,
@@ -32,6 +36,7 @@ import {
   phaseLine,
   phaseWord,
   readBoxes,
+  recordRounds,
   restartNotice,
   roomIdInput,
   roundBar,
@@ -802,6 +807,75 @@ test.describe(() => {
     await check('51.75 rem', 'Next issue')
     await containerAt(page, 65.75 * rem)
     await check('65.75 rem', 'Next issue')
+  })
+
+  // The round history plan's ruling 14: the toggle's target reaches into the panel's padding, not the line.
+  test("the phone panel's label line keeps the label's height with the toggle", async ({ join, room }) => {
+    const { page } = await join('Alice')
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3'])
+    await expect(historyToggle(page)).toHaveText('Show more')
+    const heading = historyPanel(page).getByRole('heading')
+    const check = async at => {
+      for (const expanded of ['false', 'true']) {
+        await expect(historyToggle(page)).toHaveAttribute('aria-expanded', expanded)
+        const state = `${at}, ${expanded === 'true' ? 'opened' : 'closed'}`
+        const read = await readBoxes(page, { line: heading.locator('..'), label: heading, toggle: historyToggle(page) })
+        const { line, label, toggle } = read.boxes
+        expect(read.rem, `${state}: the root's size`).toBe(16)
+        expect(Math.abs(line.height - label.height), `${state}: the line's height`).toBeLessThanOrEqual(0.5)
+        expect(toggle.width, `${state}: the toggle's width`).toBeGreaterThanOrEqual(44)
+        expect(toggle.height, `${state}: the toggle's height`).toBeGreaterThanOrEqual(44)
+        await historyToggle(page).click()
+      }
+      await expect(historyToggle(page)).toHaveAttribute('aria-expanded', 'false')
+    }
+    await check('320')
+    await containerAt(page, 51.75 * 16 - 1)
+    await check('51.75 rem minus 1 px')
+  })
+})
+
+test.describe(() => {
+  test.use({ viewport: { width: 320, height: 640 } })
+
+  test('a legend with a one-segment link wider than the dialog wraps within it, 320 by 640', async ({ join }) => {
+    const { page } = await join('Alice')
+    const link = `https://example.com/${'a'.repeat(120)}`
+    await setIssue(page, link)
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+    await nextButton(page).click()
+    await expect(estimateRow(page)).toHaveAccessibleName(`Estimate for ${link}`)
+    // Chromium scrolls the dialog to its focused part, which can take the legend above its top.
+    await nextDialog(page).evaluate(dialog => (dialog.scrollTop = 0))
+    const legend = estimateRow(page).locator('legend')
+    const read = await readBoxes(page, { dialog: nextDialog(page), legend })
+    expect(within(read.boxes.legend, read.boxes.dialog), JSON.stringify(read.boxes)).toBe(true)
+    const sideways = await nextDialog(page).evaluate(el => el.scrollWidth - el.clientWidth)
+    expect(sideways, 'the dialog scrolls sideways').toBeLessThanOrEqual(0)
+  })
+})
+
+test.describe(() => {
+  test.use({ viewport: floor })
+
+  // Review Focus 4 of the round history plan: the roster scrolls inside the sidebar, nothing past the page.
+  test('a full history and a full roster share the sidebar at the floor', async ({ join, voters, room }) => {
+    const { page } = await fill(join, voters, 'Voter', 14)
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3', 'PP-4', 'PP-5', 'PP-6', 'PP-7'])
+    await expect(historyRows(page)).toHaveCount(6)
+    const roster = page.getByRole('complementary', { name: 'Participants' })
+    const list = historyPanel(page).getByRole('list')
+    const read = await readBoxes(page, { roster, sidebar: roster.locator('..'), list })
+    const { boxes } = read
+    expect(read.scrolls, 'the page scrolls').toBe(0)
+    const overflows = await roster.evaluate(el => el.scrollHeight > el.clientHeight)
+    expect(overflows, 'the roster scrolls').toBe(true)
+    const foot = boxes.sidebar.y + boxes.sidebar.height + 0.5
+    expect(boxes.roster.y + boxes.roster.height, "the roster's foot within the sidebar").toBeLessThanOrEqual(foot)
+    const row = 1.75 * read.rem
+    const tall = Math.abs(boxes.list.height - 5 * row)
+    expect(tall, `the list ${boxes.list.height} px, 5 rows`).toBeLessThanOrEqual(0.5)
   })
 })
 
