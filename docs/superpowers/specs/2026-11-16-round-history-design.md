@@ -25,15 +25,15 @@ history past the room's life.
 
 - **Entry**: one recorded round: the room's issue when it was recorded, in
   full, and its outcome.
-- **Outcome**: an estimate (a deck value) or **Unsettled** (recorded, to
-  revisit). **Skip** is a choice in the dialog, not an outcome: it records
-  nothing.
+- **Outcome**: an estimate (any deck value, `?` included: the team could not
+  estimate) or **Unsettled** (the team could not agree; recorded, to revisit).
+  **Skip** is a choice in the dialog, not an outcome: it records nothing.
 - **History**: the room's entries, oldest first.
 - **Position**: an entry's place in the history, from 1.
 - **Short form**: what a row shows of an entry's issue (decision 5).
 - **Estimate row**: the dialog's choice of outcome or Skip (decision 3).
 - **Single top value**: the result's headline names one value
-  (`resultHeadline`'s `tied` has one element), on the deck and not `?`.
+  (`resultHeadline`'s `tied` has one element), on the deck.
 
 ## Decisions
 
@@ -63,10 +63,9 @@ history past the room's life.
    `docs/design/room.html?next=modal&phase=revealed&later=1`: a `fieldset`
    whose legend reads "Estimate for ‹short form of the shown issue›", an empty
    issue taking the position it would get (entries + 1), then one native radio
-   per deck value except `?`, then Unsettled and Skip, styled as the mockup's
-   chips (my call: native radios give arrow keys and one tab stop with no
-   script; the mockup's `?` chip goes, since Unsettled says it). The row is
-   the dialog's first part; focus still opens on the field (Next issue
+   per deck value, then Unsettled and Skip, styled as the mockup's chips (my
+   call: native radios give arrow keys and one tab stop with no script). The
+   row is the dialog's first part; focus still opens on the field (Next issue
    decision 7).
 4. **Pre-selection and the required choice.** When the dialog opens on a
    single top value, that value is checked; otherwise nothing is. The choice is
@@ -171,8 +170,8 @@ same.
   request appends none; decoding refuses a blank value and an unknown type;
   the contract test carries `history` and the request's `outcome`.
 - **Pure logic.** The short form's scenarios; the pre-selection (single top
-  value, a tie, `?` alone on top, nobody voted); every changed cell of the
-  dialog's `step`.
+  value, a tie, `?` alone on top checks `?`, nobody voted); every changed
+  cell of the dialog's `step`.
 - **End to end, both browsers.** Recording a value, Unsettled and Skip shows
   the history, or none, on two pages; a tie opens with nothing checked, and
   submitting then shows the missing-choice message and sends nothing; the
@@ -208,5 +207,5 @@ same.
 The README's snapshot example and its text gain `history`; the `/next-issue`
 row's body gains `outcome`, with its recording, and the `400` list a blank
 value or unknown type. The
-mockup `docs/design/room.html` follows decisions 3 and 6: no `?` chip, the
+mockup `docs/design/room.html` follows decisions 3 and 6: its `?` chip kept, the
 history oldest first, the phone panel's two states, centred rows, no `title`.
