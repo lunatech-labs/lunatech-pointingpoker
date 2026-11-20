@@ -30,6 +30,7 @@ const frame = JSON.stringify({
   you: 'a',
   currentIssue: 'PP-1',
   votesRevealed: false,
+  round: 1,
   users: [{ id: 'a', name: 'Alice', seat: { type: 'Voter', estimation: { type: 'NoEstimation' } } }]
 })
 

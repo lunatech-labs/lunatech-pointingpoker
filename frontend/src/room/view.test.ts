@@ -20,10 +20,15 @@ const snap = (users: RoomSnapshot['users'], extra: Partial<RoomSnapshot> = {}): 
   you: 'a',
   currentIssue: 'PP-1',
   votesRevealed: false,
+  round: 1,
   users,
   ...extra
 })
 describe('applySnapshot', () => {
+  it('carries the room\'s round number', () => {
+    expect(applySnapshot(snap([row('a', none)], { round: 3 })).round).toBe(3)
+  })
+
   it('reads each estimation tag into the row the table renders', () => {
     const s = snap([
       row('a', none),

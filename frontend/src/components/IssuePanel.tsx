@@ -1,19 +1,21 @@
 import './issue-panel.css'
-import { type SyntheticEvent, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { Pencil } from 'lucide-react'
 import { useIssueEditor } from './useIssueEditor'
 import { IssueEditor } from './IssueEditor'
 import { Message } from './Message'
+import { MovedOn } from './MovedOn'
+import { pressRules } from './pressRules'
+import { useFocusWithin } from './useFocusWithin'
 
 type Props = {
   issue: string
+  round: number
   onSave: (issue: string) => Promise<void>
 }
 
 const focusFell = () => document.activeElement === null || document.activeElement === document.body
-// The press rules spare the field, so a double-click there still selects a word.
-const onButton = (e: SyntheticEvent) => e.target instanceof Element && !!e.target.closest('button')
 
 // A URL issue as room.html's segments, plain text and not a link yet (decision 11).
 function segments(issue: string) {
@@ -34,8 +36,9 @@ function segments(issue: string) {
   ]
 }
 
-export function IssuePanel({ issue, onSave }: Props) {
-  const editor = useIssueEditor(issue, onSave)
+export function IssuePanel({ issue, round, onSave }: Props) {
+  const editor = useIssueEditor(issue, round, onSave)
+  const [within, focusRules] = useFocusWithin()
   const box = useRef<HTMLTextAreaElement>(null)
   const group = useRef<HTMLElement>(null)
   const edit = useRef<HTMLButtonElement>(null)
@@ -69,17 +72,8 @@ export function IssuePanel({ issue, onSave }: Props) {
       ref={group}
       className="panel issue-panel"
       aria-label="Issue"
-      // A double-click's second press moves no focus, so it stays in the field it opened.
-      onMouseDownCapture={e => e.detail > 1 && onButton(e) && e.preventDefault()}
-      // Drops a double-click's second click, which lands on Cancel in Edit's place.
-      onClickCapture={e => {
-        if (e.detail > 1 && onButton(e)) {
-          e.stopPropagation()
-          e.preventDefault()
-        }
-      }}
-      // A held Enter's repeats are dropped, as on the round bar.
-      onKeyDownCapture={e => e.repeat && e.key === 'Enter' && e.preventDefault()}
+      {...pressRules}
+      {...focusRules}
     >
       {editor.mode === 'viewing' ? (
         <div className="issue-panel-view">
@@ -97,7 +91,7 @@ export function IssuePanel({ issue, onSave }: Props) {
             Edit
           </button>
         </div>
-      ) : (
+      ) : editor.movedOn ? null : (
         <IssueEditor
           text={editor.text}
           editing={editor.mode === 'editing'}
@@ -109,6 +103,7 @@ export function IssuePanel({ issue, onSave }: Props) {
       )}
       {/* Always rendered: a screen reader announces changes to a region, not one appearing. */}
       <div className="issue-panel-status" role="status" data-testid="issue-status">
+        {editor.movedOn && <MovedOn issue={issue} focus={within} onOk={editor.cancel} />}
         {editor.failed && (
           <Message tone="problem">Could not save the issue</Message>
         )}

@@ -8,18 +8,27 @@ const theirs: EditorEvent = { type: 'theirs' }
 const succeeded: EditorEvent = { type: 'succeeded' }
 const failed: EditorEvent = { type: 'failed' }
 const typed = (text: string): EditorEvent => ({ type: 'typed', text })
-const frame = (issue: string): EditorEvent => ({ type: 'snapshot', issue })
+const frame = (issue: string, round = 1): EditorEvent => ({ type: 'snapshot', issue, round })
 
-// Each case starts in a room whose issue is PP-1.
-const after = (...events: EditorEvent[]) => shows(events.reduce(step, initial('PP-1')))
-const viewing = (text: string) => ({ mode: 'viewing', text, notice: null, failed: false })
+// Each case starts in round 1 of a room whose issue is PP-1.
+const state = (...events: EditorEvent[]) => events.reduce(step, initial('PP-1', 1))
+const after = (...events: EditorEvent[]) => shows(state(...events))
+const viewing = (text: string) => ({
+  mode: 'viewing',
+  text,
+  notice: null,
+  failed: false,
+  movedOn: false
+})
 const editing = (text: string, notice: string | null = null, isFailed = false) => ({
   mode: 'editing',
   text,
   notice,
-  failed: isFailed
+  failed: isFailed,
+  movedOn: false
 })
-const saving = (text: string) => ({ mode: 'saving', text, notice: null, failed: false })
+const saving = (text: string) => ({ mode: 'saving', text, notice: null, failed: false, movedOn: false })
+const movedOn = (text: string) => ({ mode: 'editing', text, notice: null, failed: false, movedOn: true })
 const editingMine = [pencil, typed('mine')]
 const savingMine = [...editingMine, save]
 
@@ -158,6 +167,35 @@ describe('the accepted races', () => {
     // Its own frame and a restore of PP-1 that both beat the response leave the store as it was.
     expect(after(...savingMine, frame('mine'), frame('PP-1'), succeeded)).toEqual(viewing('mine'))
     expect(after(...savingMine, succeeded, frame('PP-3'))).toEqual(viewing('PP-3'))
+  })
+})
+
+describe('once the room moves on', () => {
+  it('an open editor shows the notice in place of the conflict line', () => {
+    expect(after(...editingMine, frame('PP-2', 2))).toEqual(movedOn('mine'))
+  })
+
+  it('an open editor shows it with the issue unchanged too', () => {
+    expect(after(...editingMine, frame('PP-1', 2))).toEqual(movedOn('mine'))
+  })
+
+  it('an open editor shows it in place of a failed save', () => {
+    expect(after(...savingMine, failed, frame('PP-2', 2))).toEqual(movedOn('mine'))
+  })
+
+  it('a save in flight waits for its answer, and a failure shows the notice', () => {
+    expect(after(...savingMine, frame('PP-2', 2))).toEqual(saving('mine'))
+    expect(after(...savingMine, frame('PP-2', 2), failed)).toEqual(movedOn('mine'))
+  })
+
+  it('clears saved text that was waiting', () => {
+    expect(state(...savingMine, succeeded, frame('PP-1', 2)).saved).toBeNull()
+  })
+
+  it('a success sets no saved text', () => {
+    const s = state(...savingMine, frame('PP-1', 2), succeeded)
+    expect(s.mode).toBe('viewing')
+    expect(s.saved).toBeNull()
   })
 })
 

@@ -58,6 +58,13 @@ object RoomManager:
       issue: String,
       replyTo: ActorRef[Room.CommandResult]
   ) extends Command
+  case class NextIssue(
+      roomId: Slug,
+      token: Option[Room.SessionToken],
+      round: Int,
+      issue: String,
+      replyTo: ActorRef[Room.NextIssueResult]
+  ) extends Command
   case class SwitchRole(
       roomId: Slug,
       token: Option[Room.SessionToken],
@@ -160,6 +167,8 @@ object RoomManager:
             relay(roomId, token, replyTo)(t => Room.ReVote(t, replyTo))
           case EditIssue(roomId, token, issue, replyTo) =>
             relay(roomId, token, replyTo)(t => Room.EditIssue(t, issue, replyTo))
+          case NextIssue(roomId, token, round, issue, replyTo) =>
+            relay(roomId, token, replyTo)(t => Room.NextIssue(t, round, issue, replyTo))
           case SwitchRole(roomId, token, role, replyTo) =>
             relay(roomId, token, replyTo)(t => Room.SwitchRole(t, role, replyTo))
           case Depart(roomId, token, connectionId, replyTo) =>

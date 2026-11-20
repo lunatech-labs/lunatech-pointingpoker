@@ -5,6 +5,7 @@ const withSeat = (seat: object) => ({
   you: 'a',
   currentIssue: '',
   votesRevealed: false,
+  round: 1,
   users: [{ id: 'a', name: 'A', seat }]
 })
 const withEstimation = (estimation: object) => withSeat({ type: 'Voter', estimation })

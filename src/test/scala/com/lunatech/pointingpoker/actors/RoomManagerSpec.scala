@@ -340,8 +340,9 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
             testStopAfterIdle
           )
         )
-      val token      = Room.SessionToken.mint()
-      val replyProbe = testKit.createTestProbe[Room.VoteResult]()
+      val token          = Room.SessionToken.mint()
+      val replyProbe     = testKit.createTestProbe[Room.VoteResult]()
+      val nextReplyProbe = testKit.createTestProbe[Room.NextIssueResult]()
 
       val connectionId = newConnectionId()
 
@@ -350,6 +351,13 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       managerRef ! RoomManager.Clear(roomId, Some(token), replyProbe.ref)
       managerRef ! RoomManager.Revote(roomId, Some(token), replyProbe.ref)
       managerRef ! RoomManager.EditIssue(roomId, Some(token), "issue name", replyProbe.ref)
+      managerRef ! RoomManager.NextIssue(
+        roomId,
+        Some(token),
+        4,
+        "issue name",
+        nextReplyProbe.ref
+      )
       managerRef ! RoomManager.Depart(roomId, Some(token), connectionId, replyProbe.ref)
       managerRef ! RoomManager.SwitchRole(
         roomId,
@@ -363,6 +371,7 @@ class RoomManagerSpec extends AnyWordSpec with must.Matchers with BeforeAndAfter
       roomProbe.expectMessage(Room.ClearVotes(token, replyProbe.ref))
       roomProbe.expectMessage(Room.ReVote(token, replyProbe.ref))
       roomProbe.expectMessage(Room.EditIssue(token, "issue name", replyProbe.ref))
+      roomProbe.expectMessage(Room.NextIssue(token, 4, "issue name", nextReplyProbe.ref))
       roomProbe.expectMessage(Room.Depart(token, connectionId, replyProbe.ref))
       roomProbe.expectMessage(Room.SwitchRole(token, Room.Role.Facilitator, replyProbe.ref))
     }

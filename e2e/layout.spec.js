@@ -21,6 +21,11 @@ import {
   messages,
   movedBanner,
   nameInput,
+  nextButton,
+  nextDialog,
+  nextIssueUrl,
+  nextStatus,
+  nextSubmit,
   participantEntries,
   participantEntry,
   phaseLine,
@@ -331,7 +336,8 @@ cases(
     await voteAllButOne(page, role, joined)
     const before = await read()
     await voteLast(page, role, joined)
-    expect(moved(before, await read()), 'revealed').toEqual([])
+    // Next issue joins the bar once revealed and narrows the phase line, so its width may change.
+    expect(moved(before, await read(), ['x', 'y', 'height']), 'revealed').toEqual([])
     await page.getByRole('button', { name: 'Re-vote' }).click()
     await expect(phaseWord(page)).toHaveText('Voting')
     expect(moved(before, await read()), 'after Re-vote').toEqual([])
@@ -742,6 +748,97 @@ test.describe('the narrow layouts', () => {
     })
   })
 })
+
+test.describe(() => {
+  test.use({ viewport: { width: 320, height: 600 } })
+
+  const lineCount = el => {
+    // Text nodes only: a range over the button would also count its icon's box.
+    const range = document.createRange()
+    const tops = new Set()
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent.trim()) continue
+      range.selectNodeContents(node)
+      for (const rect of range.getClientRects()) tops.add(Math.round(rect.top))
+    }
+    return tops.size
+  }
+
+  // Sets the viewport so the .room-page container is `target` px wide, the gutter read once.
+  const containerAt = async (page, target) => {
+    const width = () => inRoom(page).evaluate(el => el.getBoundingClientRect().width)
+    const gutter = page.viewportSize().width - (await width())
+    await page.setViewportSize({ width: target + gutter, height: 600 })
+    expect(await width(), `the container at ${target}`).toBe(target)
+  }
+
+  test('once revealed, each round bar button holds one line, 320 by 600', async ({ join }) => {
+    const { page } = await join('Alice')
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+    const buttons = roundBar(page).getByRole('button')
+    const check = async (label, word) => {
+      await page.evaluate(() => document.fonts.ready)
+      const counts = await buttons.evaluateAll(
+        (els, source) => els.map(el => new Function(`return (${source})`)()(el)),
+        lineCount.toString()
+      )
+      expect(counts.length, `${label}: the buttons`).toBeGreaterThan(1)
+      // An icon-only button (Clear on the phone) has no text, so no line.
+      expect(Math.max(...counts), `${label}: at most one line each, ${counts}`).toBe(1)
+      if (word) await expect(nextButton(page), label).toHaveText(word, { useInnerText: true })
+    }
+    // The scrollbar takes its share of the 320 px viewport.
+    const first = await inRoom(page).evaluate(el => el.getBoundingClientRect().width)
+    expect(first, 'the container at a 320 px viewport').toBeGreaterThan(300)
+    expect(first).toBeLessThanOrEqual(320)
+    await check('320', 'Next')
+    const rem = 16
+    await containerAt(page, 51.75 * rem - 1)
+    await check('51.75 rem minus 1 px', 'Next')
+    await containerAt(page, 51.75 * rem)
+    await check('51.75 rem', 'Next issue')
+    await containerAt(page, 65.75 * rem)
+    await check('65.75 rem', 'Next issue')
+  })
+})
+
+// 640 by 300 is the laptop at 200%; only the failure message takes the dialog past it.
+for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }]) {
+  test.describe(() => {
+    test.use({ viewport })
+
+    test(`a long issue and a failed move, the dialog stays in view and a wheel reaches Next issue, ${viewport.width} by ${viewport.height}`, async ({
+      join,
+      room
+    }) => {
+      const { page } = await join('Alice')
+      await setIssue(page, ISSUE_240)
+      await page.getByRole('button', { name: 'Show votes' }).click()
+      await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+      await page.route(nextIssueUrl(room), route => route.abort())
+      await nextButton(page).click()
+      await page.keyboard.press('Enter')
+      await expect(nextStatus(page)).toHaveText('Could not move on to the next issue')
+      const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
+      const { x, y, width, height } = boxes.dialog
+      expect(x, 'the dialog within the viewport').toBeGreaterThanOrEqual(0)
+      expect(y).toBeGreaterThanOrEqual(0)
+      expect(x + width).toBeLessThanOrEqual(viewport.width + 0.5)
+      expect(y + height).toBeLessThanOrEqual(viewport.height + 0.5)
+      // A wheel, not scrollIntoViewIfNeeded, which also scrolls an overflow: hidden box.
+      await nextDialog(page).evaluate(dialog => (dialog.scrollTop = 0))
+      await nextDialog(page).hover()
+      await page.mouse.wheel(0, 400)
+      const reached = async () => {
+        const [dialog, button] = await Promise.all([nextDialog(page).boundingBox(), nextSubmit(page).boundingBox()])
+        return button.y >= dialog.y - 0.5 && button.y + button.height <= dialog.y + dialog.height + 0.5
+      }
+      await expect.poll(reached, "Next issue within the dialog's box").toBe(true)
+    })
+  })
+}
 
 test.describe("the lobby's banners", () => {
   test.use({ viewport: { width: 320, height: 640 } })

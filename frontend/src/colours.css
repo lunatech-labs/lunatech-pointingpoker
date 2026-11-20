@@ -26,6 +26,7 @@
   --mark-offset: #F9C3C6; /* the header mark's pale offset card, decorative */
   --shadow-colour: rgba(28, 25, 23, 0.05); /* a panel's soft shadow, decorative */
   --lift-colour: rgba(220, 47, 60, 0.25); /* the chosen card's glow, decorative */
+  --scrim-colour: rgba(28, 25, 23, 0.45); /* the modal's backdrop, decorative */
   /* the roster's avatars, initials on their ground, picked by a hash of the name; decorative */
   --avatar-ink-1: #6D28D9;
   --avatar-ground-1: #EDE9FE;

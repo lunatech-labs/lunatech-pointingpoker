@@ -26,6 +26,7 @@ function build(object: ObjectOf) {
     you: z.string(),
     currentIssue: z.string(),
     votesRevealed: z.boolean(),
+    round: z.number().int(),
     users: z.array(participant)
   })
 }

@@ -47,6 +47,12 @@ object Room:
   final case class ShowVotes(token: SessionToken, replyTo: ActorRef[CommandResult])  extends Command
   final case class EditIssue(token: SessionToken, issue: String, replyTo: ActorRef[CommandResult])
       extends Command
+  final case class NextIssue(
+      token: SessionToken,
+      round: Int,
+      issue: String,
+      replyTo: ActorRef[NextIssueResult]
+  ) extends Command
   final case class SwitchRole(token: SessionToken, role: Role, replyTo: ActorRef[CommandResult])
       extends Command
   final case class RequestSession(
@@ -71,11 +77,15 @@ object Room:
     case NoSession, NotAMember
   enum VoteRefusal:
     case RoundRevealed, BlankEstimation, NotAVoter
+  enum NextIssueRefusal:
+    case RoundClosed
   export Refusal.{NoSession, NotAMember}
+  export NextIssueRefusal.RoundClosed
   export VoteRefusal.{BlankEstimation, NotAVoter, RoundRevealed}
   // Per endpoint, so the compiler refuses a result the endpoint's status table does not list.
-  type CommandResult = Applied.type | Refusal
-  type VoteResult    = CommandResult | VoteRefusal
+  type CommandResult   = Applied.type | Refusal
+  type VoteResult      = CommandResult | VoteRefusal
+  type NextIssueResult = CommandResult | NextIssueRefusal
 
   // Not a Command: it travels outward to untyped connection refs, so publish's send fits it.
   case object StreamCompleted
@@ -125,10 +135,16 @@ object Room:
   object Round:
     val fresh: Round = Round(revealed = false)
 
-  final case class RoomState(currentIssue: String, round: Round, seats: Map[UUID, Seat])
+  // roundNumber is outside Round: clear replaces Round whole and must not reset it.
+  final case class RoomState(
+      currentIssue: String,
+      round: Round,
+      seats: Map[UUID, Seat],
+      roundNumber: Int
+  )
 
   object RoomState:
-    val empty: RoomState = RoomState("", Round.fresh, Map.empty)
+    val empty: RoomState = RoomState("", Round.fresh, Map.empty, 1)
 
   final case class Session(userId: UUID, name: String)
 
@@ -235,6 +251,13 @@ object Room:
 
     def editIssue(issue: String): RoomData =
       this.copy(state = this.state.copy(currentIssue = issue))
+
+    def nextIssue(round: Int, issue: String): (RoomData, Applied.type | NextIssueRefusal) =
+      if round != this.state.roundNumber then (this, RoundClosed)
+      else
+        val cleared = this.clear()
+        val next    = cleared.state.copy(currentIssue = issue, roundNumber = round + 1)
+        (cleared.copy(state = next), Applied)
 
     private def withState(round: Round, seats: Map[UUID, Seat]): RoomData =
       this.copy(state = this.state.copy(round = round, seats = seats))
@@ -386,6 +409,15 @@ object Room:
             data.acting(token) match
               case Right(userId) =>
                 val (next, outcome) = data.vote(userId, estimation)
+                replyTo ! outcome
+                receiveBehaviour(roomId, publish(next, context), gracePeriod, stopAfterIdle, timers)
+              case Left(refusal) =>
+                replyTo ! refusal
+                Behaviors.same
+          case NextIssue(token, round, issue, replyTo) =>
+            data.acting(token) match
+              case Right(_) =>
+                val (next, outcome) = data.nextIssue(round, issue)
                 replyTo ! outcome
                 receiveBehaviour(roomId, publish(next, context), gracePeriod, stopAfterIdle, timers)
               case Left(refusal) =>

@@ -368,6 +368,63 @@
         }
       }
     },
+    "/rooms/{roomId}/next-issue" : {
+      "post" : {
+        "operationId" : "postRoomsRoomidNext-issue",
+        "parameters" : [
+          {
+            "name" : "roomId",
+            "in" : "path",
+            "required" : true,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "session",
+            "in" : "cookie",
+            "required" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NextIssueRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : ""
+          },
+          "400" : {
+            "description" : "Invalid value for: body",
+            "content" : {
+              "text/plain" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "401" : {
+            "description" : ""
+          },
+          "403" : {
+            "description" : ""
+          },
+          "409" : {
+            "description" : ""
+          }
+        }
+      }
+    },
     "/rooms/{roomId}/role" : {
       "post" : {
         "operationId" : "postRoomsRoomidRole",
@@ -502,6 +559,23 @@
           },
           "role" : {
             "$ref" : "#/components/schemas/Role"
+          }
+        }
+      },
+      "NextIssueRequest" : {
+        "title" : "NextIssueRequest",
+        "type" : "object",
+        "required" : [
+          "round",
+          "issue"
+        ],
+        "properties" : {
+          "round" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "issue" : {
+            "type" : "string"
           }
         }
       },

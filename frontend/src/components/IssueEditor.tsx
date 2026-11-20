@@ -1,6 +1,7 @@
 import './issue-editor.css'
 import type { RefObject } from 'react'
 import { Check, X } from 'lucide-react'
+import { fieldKey } from './fieldKey'
 
 type Props = {
   text: string
@@ -25,13 +26,10 @@ export function IssueEditor({ text, editing, boxRef, onType, onSubmit, onCancel 
         readOnly={!editing}
         onChange={e => onType(e.target.value)}
         onKeyDown={e => {
-          // A capture preventDefault does not stop this handler, so it drops repeats itself.
-          if (e.repeat) return
-          // Enter also confirms an input method's composition, which is not a save.
-          // Safari ends it first, so that Enter has isComposing false and keyCode 229.
-          if (e.nativeEvent.isComposing || e.keyCode === 229) return
-          if (e.key === 'Enter') onSubmit()
-          else if (e.key === 'Escape') onCancel()
+          // A capture preventDefault does not stop this handler, so fieldKey drops repeats itself.
+          const key = fieldKey(e)
+          if (key === 'Enter') onSubmit()
+          else if (key === 'Escape') onCancel()
         }}
       />
       <div className="issue-editor-actions">

@@ -2,10 +2,16 @@ import { useReducer } from 'react'
 import { initial, shows, step } from '../room/issueEditor'
 
 // The editor's state machine held in React; the save's promise answers it with success or failure.
-export function useIssueEditor(issue: string, save: (issue: string) => Promise<void>) {
-  const [state, dispatch] = useReducer(step, issue, initial)
-  // Folded in during render rather than in an effect, so no frame shows the old issue.
-  if (issue !== state.store) dispatch({ type: 'snapshot', issue })
+export function useIssueEditor(
+  issue: string,
+  round: number,
+  save: (issue: string) => Promise<void>
+) {
+  const [state, dispatch] = useReducer(step, { issue, round }, ({ issue, round }) =>
+    initial(issue, round)
+  )
+  // Folded in during render rather than in an effect, so no frame shows the old issue or round.
+  if (issue !== state.store || round !== state.round) dispatch({ type: 'snapshot', issue, round })
 
   const submit = () => {
     if (state.mode !== 'editing') return
