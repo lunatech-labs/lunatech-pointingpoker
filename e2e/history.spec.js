@@ -193,6 +193,23 @@ test.describe(() => {
     await expect(historyRows(page)).toHaveCount(6)
     await expectLastInView(page)
   })
+
+  test('a width change within the phone layout leaves the scroll', async ({ join, room }) => {
+    const { page } = await join('Alice')
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3', 'PP-4', 'PP-5', 'PP-6', 'PP-7'])
+    await historyToggle(page).click()
+    await expect(historyRows(page)).toHaveCount(6)
+    const list = historyList(page)
+    expect(await list.evaluate(el => el.scrollHeight > el.clientHeight), 'more rows than shown').toBe(true)
+    await list.evaluate(el => (el.scrollTop = 0))
+
+    await page.setViewportSize({ width: 360, height: 800 })
+    const top = await list.evaluate(async el => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      return el.scrollTop
+    })
+    expect(top, 'the scroll after a width change').toBe(0)
+  })
 })
 
 test('the list stays where it was read, and moves to the end for a new entry', async ({ join, room }) => {
@@ -216,8 +233,8 @@ test('the list stays where it was read, and moves to the end for a new entry', a
 test('a link row keeps its end, a text row its start', async ({ join, room }) => {
   const { page } = await join('Alice')
   const jira = 'https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77'
-  // The sidebar's cell is too narrow at 1280 wide for the GitHub link to fit.
-  const short = 'https://example.com/ticket'
+  // The sidebar's cell is too narrow at 1280 wide for the GitHub link to fit, beside the outcome column.
+  const short = 'https://example.com/1'
   const words = `https://github.com/acme/web/issues/412 and the words that follow it, ${ISSUE_240}`
   const text = words.slice(0, ISSUE_240.length)
   await recordRounds(page, room, 1, [jira, short, text, 'PP-9'])

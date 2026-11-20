@@ -287,11 +287,12 @@ export const checkEstimate = (page, name) => estimateRadio(page, name).check({ f
 export const historyPanel = page => page.getByRole('region', { name: /^Rounds · / })
 export const historyRows = page => historyPanel(page).getByRole('listitem')
 export const historyToggle = page => historyPanel(page).getByRole('button', { name: /^Show (more|less)$/ })
-// Moves the room on once per issue from round `from`, each recording a 3: an entry holds the issue left.
-export const recordRounds = async (page, room, from, issues) => {
+// Moves the room on once per issue from round `from`, move i recording outcomes[i] or a 3: an entry holds the issue left.
+export const recordRounds = async (page, room, from, issues, outcomes = []) => {
   for (const [i, issue] of issues.entries()) {
+    const outcome = outcomes[i] ?? { type: 'Estimate', value: '3' }
     const posted = await page.request.post(`/rooms/${room}/next-issue`, {
-      data: { round: from + i, issue, outcome: { type: 'Estimate', value: '3' } }
+      data: { round: from + i, issue, outcome }
     })
     expect(posted.status(), `the move to ${issue}`).toBe(204)
   }

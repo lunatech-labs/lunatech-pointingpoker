@@ -19,23 +19,31 @@
   padding: 0;
   max-height: calc(5 * var(--row-height));
   overflow: auto;
+  /* One outcome column (round history decision 6); the inset is the list's, so 40% is of the rows' content box */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: var(--space-2);
+  align-content: start;
+  padding-inline: var(--space-2);
+  margin-inline: calc(-1 * var(--space-2));
+  scrollbar-gutter: stable;
 }
 
 /* Centred as the roster's rows; the last row's slack sits in the panel's padding (round history plan, ruling 15) */
 .round-history li {
-  display: flex;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--space-2);
   height: var(--row-height);
   font-size: var(--text-sm);
 }
 
 .round-history li:last-child {
-  font-weight: var(--weight-strong);
+  font-weight: var(--weight-bold);
 }
 
 .round-history-issue {
-  flex: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -49,7 +57,20 @@
 }
 
 .round-history-outcome {
-  flex: none;
+  padding: 0 var(--space-2);
+  font-size: var(--text-md);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden; /* drops its minimum to 0, which holds the cap */
+}
+
+/* The column's floor: an unseen bold Parked, generated so no row's text or name holds it */
+.round-history-outcome::after {
+  content: 'Parked';
+  display: block;
+  height: 0;
+  visibility: hidden;
+  font-weight: var(--weight-bold);
 }
 
 /* Its target reaches into the panel's padding, so the label line keeps the label's height */

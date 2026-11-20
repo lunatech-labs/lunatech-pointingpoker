@@ -833,6 +833,40 @@ test.describe(() => {
     await containerAt(page, 51.75 * 16 - 1)
     await check('51.75 rem minus 1 px')
   })
+
+  // Review focus 3 of the round history amendment plan: the outcome capped, the issue keeping half the row.
+  test('the history list does not scroll sideways', async ({ join, room }) => {
+    const { page } = await join('Alice')
+    await page.setViewportSize(floor)
+    await setIssue(page, 'https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77')
+    const wide = { type: 'Estimate', value: 'W'.repeat(30) }
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3'], [{ type: 'Estimate', value: '3' }, wide])
+    await expect(historyRows(page)).toHaveCount(2)
+    const list = historyPanel(page).getByRole('list')
+    const sideways = async label => {
+      const read = await list.evaluate(async el => {
+        await document.fonts.ready
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return { scroll: el.scrollWidth, client: el.clientWidth }
+      })
+      expect(read.scroll, `${label}: the list scrolls sideways`).toBeLessThanOrEqual(read.client)
+    }
+    await sideways('1280 by 600')
+
+    await page.setViewportSize({ width: 320, height: 600 })
+    await expect(historyRows(page)).toHaveText([`PP-2 ${wide.value}`])
+    await sideways('320, closed')
+    const share = await historyRows(page).evaluate(li => {
+      const style = getComputedStyle(li)
+      const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      return li.firstElementChild.getBoundingClientRect().width / (li.getBoundingClientRect().width - pad)
+    })
+    expect(share, "the issue's share of the row").toBeGreaterThanOrEqual(0.5)
+
+    await historyToggle(page).click()
+    await expect(historyRows(page)).toHaveCount(2)
+    await sideways('320, opened')
+  })
 })
 
 test.describe(() => {
