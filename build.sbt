@@ -39,7 +39,9 @@ lazy val root = project
     libraryDependencies += "org.apache.pekko" %% "pekko-http-testkit"        % V.pekkoHttp % Test,
     libraryDependencies += "com.softwaremill.sttp.tapir" %% "tapir-openapi-docs" % V.tapir % Test,
     libraryDependencies += "com.softwaremill.sttp.apispec" %% "openapi-circe" % V.apispec % Test,
-    scalacOptions += "-Werror"
+    scalacOptions += "-Werror",
+    // Coverage skips a value over 3000 tree nodes; reported as info from Scala 3.10.1, drop this then (coverage skip note)
+    scalacOptions += "-Wconf:msg=Skipping coverage instrumentation:i"
   )
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(UniversalPlugin)
