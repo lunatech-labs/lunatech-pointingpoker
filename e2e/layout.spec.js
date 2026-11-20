@@ -909,6 +909,31 @@ test.describe(() => {
   })
 })
 
+for (const viewport of [{ width: 392, height: 800 }, { width: 320, height: 800 }]) {
+  test.describe(() => {
+    test.use({ viewport })
+
+    // Next issue spec decision 7's width; a fixed probe on the body resolves 100% against the viewport, as the modal.
+    test(`the dialog takes the spec's width, ${viewport.width} by ${viewport.height}`, async ({ join }) => {
+      const { page } = await join('Alice')
+      await page.getByRole('button', { name: 'Show votes' }).click()
+      await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+      await nextButton(page).click()
+      await expect(nextDialog(page)).toBeVisible()
+      const formula = await page.evaluate(() => {
+        const probe = document.createElement('div')
+        probe.style.cssText = 'position: fixed; width: min(36rem, 100% - 2 * var(--space-4))'
+        document.body.append(probe)
+        const { width } = probe.getBoundingClientRect()
+        probe.remove()
+        return width
+      })
+      const { width } = await nextDialog(page).boundingBox()
+      expect(Math.abs(width - formula), `the dialog ${width} px, the formula ${formula} px`).toBeLessThanOrEqual(0.5)
+    })
+  })
+}
+
 test.describe(() => {
   test.use({ viewport: floor })
 

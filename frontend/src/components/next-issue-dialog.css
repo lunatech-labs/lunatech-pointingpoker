@@ -1,6 +1,7 @@
 /* Next issue spec, decision 7: the Next issue dialog, as room.html?next=modal; its estimate row per round history decision 3 */
 .next-dialog {
   width: min(36rem, 100% - 2 * var(--space-4));
+  max-width: none; /* the browser's modal cap would take 6 px off it (dialog width note) */
 }
 
 .next-dialog::backdrop {
