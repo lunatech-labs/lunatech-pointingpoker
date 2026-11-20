@@ -25,7 +25,7 @@
   .round-history-outcome { padding: 0 var(--space-2); font-size: var(--text-md); text-align: center; white-space: nowrap; overflow: hidden; }   /* the overflow holds the cap */
   .round-history-outcome::after { content: 'Parked'; display: block; height: 0; visibility: hidden; font-weight: var(--weight-bold); }   /* the column's floor, an unseen bold Parked */
   .round-history-toggle { position: relative; margin-block: calc(-1 * var(--space-4)); }   /* the target reaches into the padding */
-  /* Next issue's form (next=), inline or in a modal: the estimate row's native radios, drawn as chips */
+  /* Next issue's form (next=modal): the estimate row's native radios, drawn as chips */
   .next-form { display: flex; flex-direction: column; gap: var(--space-5); }
   .next-form-part { display: flex; flex-direction: column; gap: var(--space-2); }
   .next-form .issue-editor > .issue-editor-field, .next-form .issue-editor-actions { margin-block: 0; }
@@ -38,9 +38,9 @@
   .next-chip:has(:focus-visible) { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
   .next-chip-word { padding-inline: var(--space-3); }
   .next-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: var(--space-4); background: rgb(28 25 23 / 0.45); }
-  .next-dialog { width: min(36rem, 100%); max-height: 100%; overflow: auto; }
+  .next-dialog { width: min(44rem, 100%); max-height: 100%; overflow: auto; }
   .next-dialog h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
-  @media (width < 65.75rem) { .next-dialog .issue-editor { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); } }   /* the modal sits outside the page container */
+  .next-dialog .issue-editor { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); }   /* one column at every width */
   @media (prefers-reduced-motion: reduce) { .next-chip { transition: none; } }
   @media (forced-colors: active) {
     .brand-logo-pip::after { color: Canvas; }
@@ -193,7 +193,7 @@ function draw() {
   const conflict = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="button-quiet" type="button">Use theirs</button>', false, false) : ''
   const status = `<div class="issue-panel-status" role="status">${failure}${conflict}</div>`
   const aria = saving ? ' aria-disabled="true"' : ''
-  // Next issue's form (next=inline|modal): the closing round's estimate, then the next issue
+  // Next issue's form (next=modal): the closing round's estimate, then the next issue
   const nextMode = q.get('next')
   const shortIssue = shortForm(issue, history.length + 1).text
   const prefill = revealed && tied.length === 1 ? tied[0] : null   // only a single most-voted value prefills
@@ -203,7 +203,7 @@ function draw() {
     <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
   const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${nextForm}</section></div>` : ''
-  const issueBlock = nextMode === 'inline' ? `<section class="panel issue-panel" aria-label="Next issue">${nextForm}</section>` : editing
+  const issueBlock = editing
     ? `<section class="panel issue-panel" aria-label="Issue"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>${status}</section>`
     : `<section class="panel issue-panel" aria-label="Issue"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
