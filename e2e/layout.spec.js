@@ -921,11 +921,11 @@ test.describe(() => {
   })
 })
 
-for (const viewport of [{ width: 392, height: 800 }, { width: 320, height: 800 }]) {
+for (const viewport of [{ width: 1280, height: 800 }, { width: 392, height: 800 }, { width: 320, height: 800 }]) {
   test.describe(() => {
     test.use({ viewport })
 
-    // Next issue spec decision 7's width; a fixed probe on the body resolves 100% against the viewport, as the modal.
+    // The dialog one-column note's width; a fixed probe on the body resolves 100% against the viewport, as the modal.
     test(`the dialog takes the spec's width, ${viewport.width} by ${viewport.height}`, async ({ join }) => {
       const { page } = await join('Alice')
       await page.getByRole('button', { name: 'Show votes' }).click()
@@ -934,7 +934,7 @@ for (const viewport of [{ width: 392, height: 800 }, { width: 320, height: 800 }
       await expect(nextDialog(page)).toBeVisible()
       const formula = await page.evaluate(() => {
         const probe = document.createElement('div')
-        probe.style.cssText = 'position: fixed; width: min(36rem, 100% - 2 * var(--space-4))'
+        probe.style.cssText = 'position: fixed; width: min(44rem, 100% - 2 * var(--space-4))'
         document.body.append(probe)
         const { width } = probe.getBoundingClientRect()
         probe.remove()
@@ -945,6 +945,33 @@ for (const viewport of [{ width: 392, height: 800 }, { width: 320, height: 800 }
     })
   })
 }
+
+test.describe(() => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  // The dialog one-column note: a 57-character link keeps one line, the buttons under the field.
+  test('a long link fits the dialog\'s field on one line, the buttons under it, 1280 by 800', async ({ join }) => {
+    const { page } = await join('Alice')
+    await setIssue(page, 'https://example-internal.atlassian.net/browse/PROJE-25123')
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+    await nextButton(page).click()
+    const field = nextDialog(page).getByRole('textbox', { name: 'Next issue' })
+    await expect(field).toHaveValue('https://example-internal.atlassian.net/browse/PROJE-25123')
+    const target = await page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.cssText = 'position: fixed; height: var(--target-min)'
+      document.body.append(probe)
+      const { height } = probe.getBoundingClientRect()
+      probe.remove()
+      return height
+    })
+    const box = await field.boundingBox()
+    expect(Math.abs(box.height - target), `the field ${box.height} px high, one line ${target} px`).toBeLessThanOrEqual(0.5)
+    const button = await nextDialog(page).getByRole('button', { name: 'Next issue' }).boundingBox()
+    expect(button.y, 'Next issue under the field').toBeGreaterThanOrEqual(box.y + box.height)
+  })
+})
 
 test.describe(() => {
   test.use({ viewport: floor })
