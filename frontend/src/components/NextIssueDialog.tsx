@@ -31,6 +31,7 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
   const { mode, draft, choice, failed, missing, movedOn, dialogRef, fieldRef, firstRadioRef } = next
   const { type, choose, submit, cancel, onClose, onCancelEvent } = next
   const sending = mode === 'sending'
+  const legendText = next.legend ?? shortForm(issue, position).text
   return (
     <dialog
       ref={dialogRef}
@@ -53,7 +54,7 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
         <div className="next-form">
           <fieldset className="next-estimate">
             <legend className="panel-label">
-              Estimate for <bdi className="next-form-issue">{shortForm(issue, position).text}</bdi>
+              Estimate for <bdi className="next-form-issue">{legendText}</bdi>
             </legend>
             <div className="next-chips">
               {choices.map((c, i) => (
@@ -90,14 +91,14 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
                 readOnly={sending}
                 onChange={e => type(e.target.value)}
                 // Escape is the dialog's own; fieldKey drops a repeat or a composing Enter.
-                onKeyDown={e => fieldKey(e) === 'Enter' && submit()}
+                onKeyDown={e => fieldKey(e) === 'Enter' && submit(legendText)}
               />
               <div className="issue-editor-actions">
                 <button
                   className="button button-primary"
                   type="button"
                   aria-disabled={sending || undefined}
-                  onClick={submit}
+                  onClick={() => submit(legendText)}
                 >
                   <ArrowRight />
                   <span className="button-word">Next issue</span>

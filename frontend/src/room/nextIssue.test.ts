@@ -26,7 +26,8 @@ const sending: NextState = {
   opening: 3,
   draft: 'PP-1',
   choice: five,
-  awaiting: 7
+  awaiting: 7,
+  legend: 'Round 3'
 }
 const pressed = { type: 'pressed', issue: 'PP-1', round: 3, checked: five } as const
 
@@ -66,7 +67,7 @@ describe('step', () => {
   })
 
   it('asks for a choice on submit with none, sending nothing', () => {
-    expect(step({ ...open, choice: null }, { type: 'submit', request: 8 })).toEqual({
+    expect(step({ ...open, choice: null }, { type: 'submit', request: 8, legend: 'Round 3' })).toEqual({
       ...open,
       choice: null,
       missing: true
@@ -88,15 +89,16 @@ describe('step', () => {
   })
 
   it('sends from open with the choice, awaiting the request and clearing both messages', () => {
-    expect(step({ ...open, choice: parked, failed: true, missing: true }, { type: 'submit', request: 8 })).toEqual({
+    expect(step({ ...open, choice: parked, failed: true, missing: true }, { type: 'submit', request: 8, legend: 'Round 3' })).toEqual({
       mode: 'sending',
       opening: 3,
       draft: 'PP-1',
       choice: parked,
-      awaiting: 8
+      awaiting: 8,
+      legend: 'Round 3'
     })
-    expect(step(sending, { type: 'submit', request: 8 })).toBe(sending)
-    expect(step(closed, { type: 'submit', request: 8 })).toBe(closed)
+    expect(step(sending, { type: 'submit', request: 8, legend: 'Round 3' })).toBe(sending)
+    expect(step(closed, { type: 'submit', request: 8, legend: 'Round 3' })).toBe(closed)
   })
 
   it('closes on cancel from open and ignores it elsewhere', () => {
@@ -133,7 +135,7 @@ describe('step', () => {
 
   it('ignores an earlier request answer after closing and reopening', () => {
     let s = step(closed, pressed)
-    s = step(s, { type: 'submit', request: 1 })
+    s = step(s, { type: 'submit', request: 1, legend: 'PP-1' })
     s = step(s, { type: 'closed' })
     s = step(s, pressed)
     const answered = step(s, { type: 'answered', request: 1, ok: false })
@@ -163,8 +165,20 @@ describe('shows', () => {
       choice: five,
       failed: false,
       missing: false,
-      movedOn: true
+      movedOn: true,
+      legend: null
     })
+  })
+
+  it('keeps the submitted legend while sending, in its round and the next', () => {
+    expect(shows(sending, 3).legend).toBe('Round 3')
+    expect(shows(sending, 4).legend).toBe('Round 3')
+  })
+
+  it('shows no legend when open or closed, nor after a failed answer', () => {
+    expect(shows(open, 3).legend).toBeNull()
+    expect(shows(closed, 3).legend).toBeNull()
+    expect(shows(step(sending, { type: 'answered', request: 7, ok: false }), 4).legend).toBeNull()
   })
 
   it('shows the notice, not the missing-choice message, once the room moved on while open', () => {
@@ -186,6 +200,7 @@ describe('shows', () => {
     expect(shows(sending, 4)).toMatchObject({
       mode: 'sending',
       choice: five,
+      legend: 'Round 3',
       missing: false,
       movedOn: false
     })
@@ -198,7 +213,8 @@ describe('shows', () => {
       choice: null,
       failed: false,
       missing: false,
-      movedOn: false
+      movedOn: false,
+      legend: null
     })
   })
 })

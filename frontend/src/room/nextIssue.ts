@@ -9,13 +9,13 @@ export const movedOnText = (issue: string) =>
 export type NextState =
   | { mode: 'closed' }
   | { mode: 'open'; opening: number; draft: string; choice: Choice | null; failed: boolean; missing: boolean }
-  | { mode: 'sending'; opening: number; draft: string; choice: Choice; awaiting: number }
+  | { mode: 'sending'; opening: number; draft: string; choice: Choice; awaiting: number; legend: string }
 
 export type NextEvent =
   | { type: 'pressed'; issue: string; round: number; checked: Choice | null }
   | { type: 'typed'; text: string }
   | { type: 'chose'; choice: Choice }
-  | { type: 'submit'; request: number }
+  | { type: 'submit'; request: number; legend: string }
   | { type: 'cancel' } // Cancel or OK
   | { type: 'closed' } // the element's close event
   | { type: 'answered'; request: number; ok: boolean }
@@ -63,7 +63,8 @@ export function step(s: NextState, e: NextEvent): NextState {
         opening: s.opening,
         draft: s.draft,
         choice: s.choice,
-        awaiting: e.request
+        awaiting: e.request,
+        legend: e.legend
       }
     case 'cancel':
       return s.mode === 'open' ? closed : s
@@ -87,10 +88,11 @@ export function shows(
   failed: boolean
   missing: boolean
   movedOn: boolean
+  legend: string | null
 } {
   const none = { failed: false, missing: false, movedOn: false }
-  if (s.mode === 'closed') return { mode: s.mode, draft: '', choice: null, ...none }
-  if (s.mode === 'sending') return { mode: s.mode, draft: s.draft, choice: s.choice, ...none }
+  if (s.mode === 'closed') return { mode: s.mode, draft: '', choice: null, legend: null, ...none }
+  if (s.mode === 'sending') return { mode: s.mode, draft: s.draft, choice: s.choice, legend: s.legend, ...none }
   const movedOn = round !== s.opening
   return {
     mode: s.mode,
@@ -98,6 +100,7 @@ export function shows(
     choice: s.choice,
     failed: s.failed && !movedOn,
     missing: s.missing && !movedOn,
-    movedOn
+    movedOn,
+    legend: null
   }
 }

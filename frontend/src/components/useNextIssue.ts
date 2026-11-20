@@ -26,10 +26,10 @@ export function useNextIssue(
     fieldRef.current?.select()
   }
 
-  const submit = () => {
+  const submit = (legend: string) => {
     if (state.mode !== 'open') return
     const request = ++counter.current
-    dispatch({ type: 'submit', request })
+    dispatch({ type: 'submit', request, legend })
     const { choice } = state
     // With nothing checked the step asks for a choice and nothing is sent.
     if (choice === null) {
