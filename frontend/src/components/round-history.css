@@ -52,6 +52,7 @@
 }
 
 /* A link is cut at its front, keeping its id; one that fits starts at the left (round history decision 5) */
+/* Firefox's list item already computes text-align left, so only Chromium needs the rule */
 .round-history-link {
   direction: rtl;
   text-align: left;
