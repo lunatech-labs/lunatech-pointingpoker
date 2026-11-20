@@ -53,7 +53,7 @@ class RoomSnapshotSpec extends AnyWordSpec with must.Matchers with BeforeAndAfte
       val alice   = user(UUID.randomUUID(), "Alice", false, "")
       val entries = List(
         Room.Entry("PP-1", Room.Outcome.Estimate("3")),
-        Room.Entry("PP-2", Room.Outcome.Unsettled)
+        Room.Entry("PP-2", Room.Outcome.Parked)
       )
       val data = withUsers(alice).withHistory(entries*)
 

@@ -58,12 +58,12 @@ object EditIssueRequest:
 // The request's choice: Skip moves on and records nothing, so it is no Room.Outcome.
 enum Choice:
   case Estimate(value: String)
-  case Unsettled
+  case Parked
   case Skip
 
   def recorded: Option[Room.Outcome] = this match
     case Estimate(value) => Some(Room.Outcome.Estimate(value))
-    case Unsettled       => Some(Room.Outcome.Unsettled)
+    case Parked          => Some(Room.Outcome.Parked)
     case Skip            => None
 end Choice
 
@@ -72,16 +72,16 @@ object Choice:
   given Encoder[Choice] = Encoder.instance {
     case Estimate(value) =>
       Json.obj("type" -> Json.fromString("Estimate"), "value" -> Json.fromString(value))
-    case Unsettled => Json.obj("type" -> Json.fromString("Unsettled"))
-    case Skip      => Json.obj("type" -> Json.fromString("Skip"))
+    case Parked => Json.obj("type" -> Json.fromString("Parked"))
+    case Skip   => Json.obj("type" -> Json.fromString("Skip"))
   }
   // Any other type fails to decode, which tapir answers with 400.
   given Decoder[Choice] = Decoder.instance(cursor =>
     cursor.get[String]("type").flatMap {
-      case "Estimate"  => cursor.get[String]("value").map(Estimate(_))
-      case "Unsettled" => Right(Unsettled)
-      case "Skip"      => Right(Skip)
-      case other       => Left(DecodingFailure(s"not an outcome: $other", cursor.history))
+      case "Estimate" => cursor.get[String]("value").map(Estimate(_))
+      case "Parked"   => Right(Parked)
+      case "Skip"     => Right(Skip)
+      case other      => Left(DecodingFailure(s"not an outcome: $other", cursor.history))
     }
   )
   given Schema[Choice] =

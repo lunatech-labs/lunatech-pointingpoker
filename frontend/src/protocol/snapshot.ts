@@ -25,7 +25,7 @@ function build(object: ObjectOf) {
   // A recorded outcome; Skip records nothing, so no entry can carry one.
   const outcome = z.discriminatedUnion('type', [
     object({ type: z.literal('Estimate'), value: z.string() }),
-    object({ type: z.literal('Unsettled') })
+    object({ type: z.literal('Parked') })
   ])
   return object({
     you: z.string(),

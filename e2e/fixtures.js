@@ -278,7 +278,7 @@ export const nextField = page => nextDialog(page).getByRole('textbox', { name: '
 export const nextSubmit = page => nextDialog(page).getByRole('button', { name: 'Next issue' })
 export const nextCancel = page => nextDialog(page).getByRole('button', { name: 'Cancel' })
 export const nextStatus = page => nextDialog(page).getByRole('status')
-// The dialog's estimate row, and one of its radios by name: a deck value, Unsettled or Skip.
+// The dialog's estimate row, and one of its radios by name: a deck value, Parked or Skip.
 export const estimateRow = page => nextDialog(page).getByRole('group', { name: /^Estimate for / })
 export const estimateRadio = (page, name) => nextDialog(page).getByRole('radio', { name, exact: true })
 // Forced, as the chip's label takes the click; check still fails unless the radio ends up checked.

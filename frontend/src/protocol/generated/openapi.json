@@ -541,18 +541,18 @@
             "$ref" : "#/components/schemas/Estimate"
           },
           {
-            "$ref" : "#/components/schemas/Skip"
+            "$ref" : "#/components/schemas/Parked"
           },
           {
-            "$ref" : "#/components/schemas/Unsettled"
+            "$ref" : "#/components/schemas/Skip"
           }
         ],
         "discriminator" : {
           "propertyName" : "type",
           "mapping" : {
             "Estimate" : "#/components/schemas/Estimate",
-            "Skip" : "#/components/schemas/Skip",
-            "Unsettled" : "#/components/schemas/Unsettled"
+            "Parked" : "#/components/schemas/Parked",
+            "Skip" : "#/components/schemas/Skip"
           }
         }
       },
@@ -622,6 +622,19 @@
           }
         }
       },
+      "Parked" : {
+        "title" : "Parked",
+        "type" : "object",
+        "required" : [
+          "type"
+        ],
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "const" : "Parked"
+          }
+        }
+      },
       "Role" : {
         "title" : "Role",
         "type" : "string",
@@ -652,19 +665,6 @@
           "type" : {
             "type" : "string",
             "const" : "Skip"
-          }
-        }
-      },
-      "Unsettled" : {
-        "title" : "Unsettled",
-        "type" : "object",
-        "required" : [
-          "type"
-        ],
-        "properties" : {
-          "type" : {
-            "type" : "string",
-            "const" : "Unsettled"
           }
         }
       },

@@ -83,7 +83,7 @@ object RoomSnapshot:
   // Explicit tags rather than toString, as Estimation's: renaming a case must not rename the wire.
   given Encoder[Room.Outcome] = Encoder.instance {
     case Room.Outcome.Estimate(value) => tagged("Estimate", "value" -> Json.fromString(value))
-    case Room.Outcome.Unsettled       => tagged("Unsettled")
+    case Room.Outcome.Parked          => tagged("Parked")
   }
 
   given Encoder[Room.Entry] = deriveEncoder[Room.Entry]

@@ -23,7 +23,7 @@ export type NextEvent =
 export const closed: NextState = { mode: 'closed' }
 
 // The dialog's choice of outcome; Skip moves on and records nothing.
-export type Choice = { type: 'Estimate'; value: string } | { type: 'Unsettled' } | { type: 'Skip' }
+export type Choice = { type: 'Estimate'; value: string } | { type: 'Parked' } | { type: 'Skip' }
 
 export const sameChoice = (a: Choice | null, b: Choice) =>
   a?.type === b.type && (a.type !== 'Estimate' || (b.type === 'Estimate' && a.value === b.value))

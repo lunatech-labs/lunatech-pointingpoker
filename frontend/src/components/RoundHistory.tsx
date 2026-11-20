@@ -20,7 +20,7 @@ function Row({ entry, position }: { entry: Entry; position: number }) {
         </span>
       )}{' '}
       <span className="round-history-outcome">
-        {entry.outcome.type === 'Estimate' ? <Figure value={entry.outcome.value} /> : 'Unsettled'}
+        {entry.outcome.type === 'Estimate' ? <Figure value={entry.outcome.value} /> : 'Parked'}
       </span>
     </li>
   )

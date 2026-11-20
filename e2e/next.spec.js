@@ -272,7 +272,7 @@ test('the dialog sends the chosen outcome', async ({ join, room }) => {
   await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
   await reveal(alice.page)
   await nextButton(alice.page).click()
-  await checkEstimate(alice.page, 'Unsettled')
+  await checkEstimate(alice.page, 'Parked')
   await nextSubmit(alice.page).click()
   await moveOn()
 
@@ -283,7 +283,7 @@ test('the dialog sends the chosen outcome', async ({ join, room }) => {
   await moveOn()
   expect(sent).toEqual([
     { round: 1, issue: 'PP-1', outcome: { type: 'Estimate', value: '5' } },
-    { round: 2, issue: 'PP-1', outcome: { type: 'Unsettled' } },
+    { round: 2, issue: 'PP-1', outcome: { type: 'Parked' } },
     { round: 3, issue: 'PP-1', outcome: { type: 'Skip' } }
   ])
 })
@@ -301,7 +301,7 @@ test('a tie opens with nothing checked, and submitting asks for a choice', async
   await nextButton(alice.page).click()
   await expect(estimateRow(alice.page).getByRole('radio', { checked: true })).toHaveCount(0)
   await alice.page.keyboard.press('Enter')
-  await expect(nextStatus(alice.page)).toHaveText('Choose an estimate, Unsettled or Skip')
+  await expect(nextStatus(alice.page)).toHaveText('Choose an estimate, Parked or Skip')
   await expect(estimateRadio(alice.page, '0')).toBeFocused()
   await expect(phaseWord(alice.page)).toHaveText('Revealed')
   // The request leaves in the handler that moved focus, so a send would show by now.
@@ -318,16 +318,16 @@ test('a failed move keeps the choice', async ({ join, room }) => {
   await alice.page.route(nextIssueUrl(room), route => route.abort())
 
   await nextButton(alice.page).click()
-  await checkEstimate(alice.page, 'Unsettled')
+  await checkEstimate(alice.page, 'Parked')
   await nextSubmit(alice.page).click()
   await expect(nextStatus(alice.page)).toHaveText('Could not move on to the next issue')
-  await expect(estimateRadio(alice.page, 'Unsettled')).toBeChecked()
+  await expect(estimateRadio(alice.page, 'Parked')).toBeChecked()
 
   await alice.page.unroute(nextIssueUrl(room))
   await nextSubmit(alice.page).click()
   await expect(nextDialog(alice.page)).toBeHidden()
-  const unsettled = { round: 1, issue: 'PP-1', outcome: { type: 'Unsettled' } }
-  expect(sent).toEqual([unsettled, unsettled])
+  const parked = { round: 1, issue: 'PP-1', outcome: { type: 'Parked' } }
+  expect(sent).toEqual([parked, parked])
 })
 
 test('a radio cannot be changed while sending', async ({ join, room }) => {

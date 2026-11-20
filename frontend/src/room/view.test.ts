@@ -33,7 +33,7 @@ describe('applySnapshot', () => {
   it('carries the room\'s history, oldest first', () => {
     const history: RoomSnapshot['history'] = [
       { issue: 'PP-1', outcome: { type: 'Estimate', value: '8' } },
-      { issue: '', outcome: { type: 'Unsettled' } }
+      { issue: '', outcome: { type: 'Parked' } }
     ]
     expect(applySnapshot(snap([row('a', none)], { history })).history).toEqual(history)
   })

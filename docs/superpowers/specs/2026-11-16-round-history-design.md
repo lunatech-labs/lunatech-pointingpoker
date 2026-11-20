@@ -131,8 +131,8 @@ history past the room's life.
    text, not a measured number, and hidden from assistive technology; a
    wider off-deck value widens it up to 40% of the row's content box, cut at
    its end beyond. The list has `scrollbar-gutter: stable`, as the page does. The
-   list reaches into the panel's padding by `--space-2` at both inline ends and its rows are
-   padded by `--space-2` at both ends; the list never scrolls sideways.
+   list reaches into the panel's padding by `--space-2` at both inline ends, and its content is
+   inset by `--space-2` at both ends; the list never scrolls sideways.
    - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
      growing with the entries, the rest by scrolling, the list a focusable,
      named region, as the roster's panel.

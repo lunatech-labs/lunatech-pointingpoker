@@ -139,7 +139,7 @@ object Room:
   // What a round recorded: Skip is the request's choice to record nothing, so not a case here.
   enum Outcome:
     case Estimate(value: String)
-    case Unsettled
+    case Parked
 
   // The room's issue when it was recorded, the one being left.
   final case class Entry(issue: String, outcome: Outcome)

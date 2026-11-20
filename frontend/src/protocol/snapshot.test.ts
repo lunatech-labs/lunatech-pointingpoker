@@ -42,11 +42,11 @@ describe('the snapshot schemas', () => {
     expect(snapshotSchema.safeParse(withSeat({ type: 'Observer' })).success).toBe(false)
   })
 
-  it('accept an entry estimated or unsettled, and refuse one skipped', () => {
+  it('accept an entry estimated or parked, and refuse one skipped', () => {
     const withEntry = (outcome: object) => ({ ...base, history: [{ issue: 'PP-1', outcome }] })
     const estimated = withEntry({ type: 'Estimate', value: '8' })
     expect(strictSnapshotSchema.safeParse(estimated).success).toBe(true)
-    expect(strictSnapshotSchema.safeParse(withEntry({ type: 'Unsettled' })).success).toBe(true)
+    expect(strictSnapshotSchema.safeParse(withEntry({ type: 'Parked' })).success).toBe(true)
     expect(snapshotSchema.safeParse(withEntry({ type: 'Skip' })).success).toBe(false)
   })
 })

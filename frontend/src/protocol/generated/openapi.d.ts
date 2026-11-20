@@ -185,7 +185,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** Choice */
-        Choice: components["schemas"]["Estimate"] | components["schemas"]["Skip"] | components["schemas"]["Unsettled"];
+        Choice: components["schemas"]["Estimate"] | components["schemas"]["Parked"] | components["schemas"]["Skip"];
         /** EditIssueRequest */
         EditIssueRequest: {
             issue: string;
@@ -211,6 +211,14 @@ export interface components {
             issue: string;
             outcome: components["schemas"]["Choice"];
         };
+        /** Parked */
+        Parked: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "Parked";
+        };
         /**
          * Role
          * @enum {string}
@@ -227,14 +235,6 @@ export interface components {
              * @enum {string}
              */
             type: "Skip";
-        };
-        /** Unsettled */
-        Unsettled: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "Unsettled";
         };
         /** VoteRequest */
         VoteRequest: {

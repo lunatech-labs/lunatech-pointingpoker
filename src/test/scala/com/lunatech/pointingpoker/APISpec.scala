@@ -351,6 +351,7 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     "dispatch a next-issue command" in {
       for (choice, recorded) <- List(
           Choice.Estimate("8") -> Some(Room.Outcome.Estimate("8")),
+          Choice.Parked        -> Some(Room.Outcome.Parked),
           Choice.Skip          -> None
         )
       do
@@ -366,7 +367,12 @@ class APISpec extends AnyWordSpec with must.Matchers with ScalatestRouteTest wit
     }
 
     "answer 400 for a blank estimate or an unknown outcome" in {
-      for outcome <- List("""{"type":"Estimate","value":" "}""", """{"type":"Maybe"}""") do
+      for outcome <- List(
+          """{"type":"Estimate","value":" "}""",
+          """{"type":"Maybe"}""",
+          """{"type":"Unsettled"}"""
+        )
+      do
         Post(
           s"/rooms/$roomId/next-issue",
           HttpEntity(

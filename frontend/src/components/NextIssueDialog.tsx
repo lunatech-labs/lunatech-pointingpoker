@@ -15,10 +15,10 @@ import { useFocusWithin } from './useFocusWithin'
 
 type Props = { next: ReturnType<typeof useNextIssue>; issue: string; position: number; onClosed: () => void }
 
-// The estimate row's radios (round history spec, decision 3): the deck values, then Unsettled and Skip.
+// The estimate row's radios (round history spec, decision 3): the deck values, then Parked and Skip.
 const choices: Choice[] = [
   ...estimationValues.map((value): Choice => ({ type: 'Estimate', value })),
-  { type: 'Unsettled' },
+  { type: 'Parked' },
   { type: 'Skip' }
 ]
 
@@ -120,7 +120,7 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
       <div className="next-dialog-status" role="status">
         {movedOn && <MovedOn issue={issue} focus={within} onOk={cancel} />}
         {failed && <Message tone="problem">Could not move on to the next issue</Message>}
-        {missing && <Message tone="problem">Choose an estimate, Unsettled or Skip</Message>}
+        {missing && <Message tone="problem">Choose an estimate, Parked or Skip</Message>}
       </div>
     </dialog>
   )

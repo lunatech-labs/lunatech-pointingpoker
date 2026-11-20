@@ -81,7 +81,7 @@ test('recording shows the history on every page', async ({ join }) => {
   await reveal(alice.page)
   await nextButton(alice.page).click()
   await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for Round 2')
-  await checkEstimate(alice.page, 'Unsettled')
+  await checkEstimate(alice.page, 'Parked')
   await nextField(alice.page).fill('PP-3')
   await nextSubmit(alice.page).click()
   await expect(nextDialog(alice.page)).toBeHidden()
@@ -91,7 +91,7 @@ test('recording shows the history on every page', async ({ join }) => {
   const carol = await join('Carol')
   for (const page of [alice.page, bob.page, carol.page]) {
     await expect(historyPanel(page)).toHaveAccessibleName('Rounds · 2')
-    await expect(historyRows(page)).toHaveText(['PP-1 ?', 'Round 2 Unsettled'])
+    await expect(historyRows(page)).toHaveText(['PP-1 ?', 'Round 2 Parked'])
     const weights = await historyRows(page).evaluateAll(rows =>
       rows.map(row => Number(getComputedStyle(row).fontWeight))
     )
