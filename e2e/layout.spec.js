@@ -851,7 +851,17 @@ test.describe(() => {
       })
       expect(read.scroll, `${label}: the list scrolls sideways`).toBeLessThanOrEqual(read.client)
     }
+    // Round history decision 6: the list's end meets the inside of the panel's border, its gutter in the padding.
+    const end = async label => {
+      const gap = await list.evaluate(el => {
+        const panel = el.closest('section')
+        const inside = panel.getBoundingClientRect().right - parseFloat(getComputedStyle(panel).borderRightWidth)
+        return inside - el.getBoundingClientRect().right
+      })
+      expect(Math.abs(gap), `${label}: the list's end from the panel's border`).toBeLessThanOrEqual(0.5)
+    }
     await sideways('1280 by 600')
+    await end('1280 by 600')
 
     await page.setViewportSize({ width: 320, height: 600 })
     await expect(historyRows(page)).toHaveText([`PP-2 ${wide.value}`])
@@ -866,6 +876,7 @@ test.describe(() => {
     await historyToggle(page).click()
     await expect(historyRows(page)).toHaveCount(2)
     await sideways('320, opened')
+    await end('320, opened')
   })
 })
 

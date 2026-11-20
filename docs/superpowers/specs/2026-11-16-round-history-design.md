@@ -131,8 +131,9 @@ history past the room's life.
    text, not a measured number, and hidden from assistive technology; a
    wider off-deck value widens it up to 40% of the row's content box, cut at
    its end beyond. The list has `scrollbar-gutter: stable`, as the page does. The
-   list reaches into the panel's padding by `--space-2` at both inline ends, and its content is
-   inset by `--space-2` at both ends; the list never scrolls sideways.
+   list reaches into the panel's padding by `--space-2` at its start and to the inside of the
+   panel's border at its end, so the reserved gutter sits in the padding rather than beside the
+   outcomes; its content is inset by `--space-2` at both ends; the list never scrolls sideways.
    - **Desktop**: at the sidebar's top, above the roster, up to 5 rows tall,
      growing with the entries, the rest by scrolling, the list a focusable,
      named region, as the roster's panel.
@@ -235,7 +236,8 @@ same.
   link with one segment wider than the dialog wraps within it, and the dialog
   does not scroll sideways; a checked chip on the row's second line overlaps
   neither the line above nor the legend; the history list does not scroll
-  sideways, on desktop and in the opened phone panel at 320 px.
+  sideways, and its end meets the inside of the panel's border (±0.5), on
+  desktop and in the opened phone panel at 320 px.
 
 ## Short form scenarios
 

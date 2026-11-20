@@ -17,7 +17,7 @@
   .round-history { flex: none; display: flex; flex-direction: column; gap: var(--space-1); }
   .round-history-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
   /* One outcome column (round history decision 6); the inset is the list's, so 40% is of the rows' content box */
-  .round-history ol { list-style: none; margin: 0; padding: 0; max-height: calc(5 * var(--row-height)); overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr) fit-content(40%); column-gap: var(--space-2); align-content: start; padding-inline: var(--space-2); margin-inline: calc(-1 * var(--space-2)); scrollbar-gutter: stable; }
+  .round-history ol { list-style: none; margin: 0; padding: 0; max-height: calc(5 * var(--row-height)); overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr) fit-content(40%); column-gap: var(--space-2); align-content: start; padding-inline: var(--space-2); margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline)); scrollbar-gutter: stable; }
   .round-history li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; height: var(--row-height); font-size: var(--text-sm); }
   .round-history li:last-child { font-weight: var(--weight-bold); }
   .round-history-issue { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -113,3 +113,17 @@ Each choice the spec left open, with the simpler alternative.
 - [ ] **Step 5: Run** `npm run lint && npm run e2e -- e2e/next.spec.js e2e/layout.spec.js` — Expected: PASS in both browsers.
 - [ ] **Step 6: Show the user** the app's dialog and history panel beside the mockup's (`?next=modal&phase=revealed&later=1`, and `rounds=10`), at 1280 and 392 wide; wait for their OK.
 - [ ] **Step 7: Commit** `feat: draw the estimate chips as the deck's cards and settle the mockup`
+
+### Task 11: The list's end at the panel's border
+
+Added after Task 10's look check: the outcome's right space read larger than the issue's left, as the reserved scrollbar gutter sat beside the outcomes (spec decision 6, amended). It replaces ruling 3's `margin-inline` only.
+
+**Files:**
+- Modify: `frontend/src/components/round-history.css`, `docs/design/room.html`, the spec's decision 6 and Tests
+- Test: `e2e/layout.spec.js`
+
+- [x] **Step 1: Extend** "the history list does not scroll sideways": at 1280 by 600 and at 320 opened, the list's end meets the inside of the panel's border (±0.5).
+- [x] **Step 2: Run** `npm run e2e -- e2e/layout.spec.js -g "does not scroll sideways"` — Expected: FAIL at 1280 by 600 in both browsers.
+- [x] **Step 3: Implement** `.round-history ol { margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline)) }`, in the app and the mockup.
+- [x] **Step 4: Run** `npm run lint && npm run e2e -- e2e/layout.spec.js e2e/history.spec.js e2e/history-column.spec.js e2e/phone.spec.js` — Expected: PASS in both browsers.
+- [x] **Step 5: Commit** `fix: let the round history's list reach the panel's border at its end`
