@@ -1,10 +1,9 @@
-import { test, expect, historyPanel, historyRows, recordRounds } from './fixtures.js'
+import { test, expect, historyList, historyRows, recordRounds } from './fixtures.js'
 
 // Its own file: launchOptions force a new worker, which Playwright allows only at a file's top level.
 // Headless Chromium hides scrollbars unless told not to, and a hidden one takes no room (round history amendment plan, ruling 10).
 test.use({ viewport: { width: 1280, height: 680 }, launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })
 
-const historyList = page => historyPanel(page).getByRole('list')
 const estimate = value => ({ type: 'Estimate', value })
 
 // Each row's issue end, weight and content box, its outcome slot and the slot's text, after the fonts and two frames.
@@ -53,9 +52,11 @@ test('the outcomes form one column', async ({ join, room }) => {
   await recordRounds(page, room, 4, ['PP-5'], [{ type: 'Parked' }])
   await expect(historyRows(page).last()).toHaveText('PP-4 Parked')
   const parked = await readRows(list)
-  const { slot, text } = parked.at(-1)
-  expect(text.left, "Parked's start within its slot").toBeGreaterThanOrEqual(slot.content.left - 0.5)
-  expect(text.right, "Parked's end within its slot").toBeLessThanOrEqual(slot.content.right + 0.5)
+  // Review Focus 1: the 0.5's tight point, as Parked, whole within its slot.
+  for (const [i, { slot, text }] of parked.entries()) {
+    expect(text.left, `row ${i + 1}'s start within its slot`).toBeGreaterThanOrEqual(slot.content.left - 0.5)
+    expect(text.right, `row ${i + 1}'s end within its slot`).toBeLessThanOrEqual(slot.content.right + 0.5)
+  }
   expectOneColumn(parked, x0, 'with Parked')
 
   await recordRounds(page, room, 5, ['PP-6', 'PP-7'], ['5', '5'].map(estimate))

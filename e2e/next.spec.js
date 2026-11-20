@@ -127,7 +127,7 @@ test('Next issue moves the room on', async ({ join, room }) => {
   await expect(issueText(bob.page)).toHaveText('PP-3')
   await expect(issueText(alice.page)).toHaveText('PP-3')
   await expect(nextField(alice.page)).toBeVisible()
-  // The legend keeps the issue the user saw while the room shows the next one (round history decision 2).
+  // The legend keeps the issue the user saw while the room shows the next one (round history decision 3).
   await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for PP-2')
   await expect(nextStatus(alice.page)).toBeEmpty()
   await alice.page.keyboard.press('Enter')

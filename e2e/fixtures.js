@@ -286,6 +286,7 @@ export const checkEstimate = (page, name) => estimateRadio(page, name).check({ f
 // The round history's panel, named by its label, then its shown rows and the phone's Show more / Show less.
 export const historyPanel = page => page.getByRole('region', { name: /^Rounds · / })
 export const historyRows = page => historyPanel(page).getByRole('listitem')
+export const historyList = page => historyPanel(page).getByRole('list')
 export const historyToggle = page => historyPanel(page).getByRole('button', { name: /^Show (more|less)$/ })
 // Moves the room on once per issue from round `from`, move i recording outcomes[i] or a 3: an entry holds the issue left.
 export const recordRounds = async (page, room, from, issues, outcomes = []) => {

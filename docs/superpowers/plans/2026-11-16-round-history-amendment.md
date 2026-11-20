@@ -93,6 +93,7 @@ Each choice the spec left open, with the simpler alternative.
   - "the outcomes form one column", in its own describe with `test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } })` (ruling 10): record `3`, `13`, `0.5`: every row's issue cell ends at the same x (±0.5), noted as `x0`; record `Parked`: it is the latest row, its text's range lies within its slot's content box (±0.5), and every issue cell still ends at `x0`; record two more (`5`) so the list scrolls (`scrollHeight > clientHeight`): every issue cell still ends at `x0`. The latest row's computed `font-weight` is `700`, every other row's `400`. `historyList(page).ariaSnapshot()` lists each row as its issue and its outcome only, with no extra `Parked`.
   - "an off-deck value widens the column up to its cap": record `3`, noting the outcome slot's width `w0`; record `1000000`: its slot shows it whole (`scrollWidth <= clientWidth`) and is wider than `w0`; record `W` repeated 30 times: its slot is one line high (its height within the row's), its text starts at the slot's content left (±0.5), `scrollWidth > clientWidth`, and the slot is no wider than 40% of the row's content box (+0.5).
   - In the phone describe, "a width change within the phone layout leaves the scroll": 6 entries at 392 by 800, Show more, the list scrolled to 0; `setViewportSize` 360 by 800 and two animation frames: `scrollTop` still 0.
+  - Built: the column and off-deck cases live in `e2e/history-column.spec.js`, as Playwright refuses `test.use({ launchOptions })` inside a describe; the column floor narrowed the desktop issue cell, so "a link row keeps its end" fits `https://example.com/1`.
 - [ ] **Step 2: Write the failing layout case** in `e2e/layout.spec.js`, in the describe that holds `containerAt`: "the history list does not scroll sideways": entries recorded with a long link first and `W` × 30 last; at 1280 by 600, then at 320 closed and opened: the list's `scrollWidth` is not over its `clientWidth`; at 320 closed, the latest row's issue cell is at least 50% of the row's content box wide.
 - [ ] **Step 3: Run** `npm run e2e -- e2e/history.spec.js e2e/layout.spec.js` — Expected: FAIL on the column, the cap and the weight; the width change and sideways cases may already pass.
 - [ ] **Step 4: Implement** rulings 3 to 5 and 7.
@@ -106,7 +107,7 @@ Each choice the spec left open, with the simpler alternative.
 - Modify: `frontend/src/components/next-issue-dialog.css`, `docs/design/room.html`
 - Test: `e2e/layout.spec.js`
 
-- [ ] **Step 1: Extend the layout case** "a legend with a one-segment link wider than the dialog wraps within it, 320 by 640": check a chip on the first line: once lifted, its box starts at least `--space-2` below the legend's bottom (−0.5); check a chip on the second line: once lifted, at least `--space-2` below the bottom of the first line's chips (−0.5). Stricter than "overlaps neither": it pins the room the fix 24f5c94 made, where touching was the defect.
+- [ ] **Step 1: Extend the layout case** "a legend with a one-segment link wider than the dialog wraps within it, 320 by 640": check a chip on the first line: once lifted, its box starts at least `--space-2` below the legend's bottom (−0.5); check a chip on the second line: once lifted, at least `--space-2` below the bottom of the first line's chips (−0.5). Stricter than "overlaps neither": it pins the room the fix "make room above the checked estimate chip for its lift" made, where touching was the defect.
 - [ ] **Step 2: Run** `npm run e2e -- e2e/layout.spec.js` — Expected: PASS (the room for the lift is built); prove it can fail: `.next-chips` `padding-top: 0` reddens the first check, `row-gap: var(--space-2)` the second. Revert, `npm run build`.
 - [ ] **Step 3: Implement** ruling 8.
 - [ ] **Step 4: Rewrite the mockup** per ruling 9; `grep -n -i "data-row\|data-chip\|q.get('word\|unsettled" docs/design/room.html` prints nothing.
@@ -122,8 +123,8 @@ Added after Task 10's look check: the outcome's right space read larger than the
 - Modify: `frontend/src/components/round-history.css`, `docs/design/room.html`, the spec's decision 6 and Tests
 - Test: `e2e/layout.spec.js`
 
-- [x] **Step 1: Extend** "the history list does not scroll sideways": at 1280 by 600 and at 320 opened, the list's end meets the inside of the panel's border (±0.5).
-- [x] **Step 2: Run** `npm run e2e -- e2e/layout.spec.js -g "does not scroll sideways"` — Expected: FAIL at 1280 by 600 in both browsers.
-- [x] **Step 3: Implement** `.round-history ol { margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline)) }`, in the app and the mockup.
-- [x] **Step 4: Run** `npm run lint && npm run e2e -- e2e/layout.spec.js e2e/history.spec.js e2e/history-column.spec.js e2e/phone.spec.js` — Expected: PASS in both browsers.
-- [x] **Step 5: Commit** `fix: let the round history's list reach the panel's border at its end`
+- [ ] **Step 1: Extend** "the history list does not scroll sideways": at 1280 by 600 and at 320 opened, the list's end meets the inside of the panel's border (±0.5).
+- [ ] **Step 2: Run** `npm run e2e -- e2e/layout.spec.js -g "does not scroll sideways"` — Expected: FAIL at 1280 by 600 in both browsers.
+- [ ] **Step 3: Implement** `.round-history ol { margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline)) }`, in the app and the mockup.
+- [ ] **Step 4: Run** `npm run lint && npm run e2e -- e2e/layout.spec.js e2e/history.spec.js e2e/history-column.spec.js e2e/phone.spec.js` — Expected: PASS in both browsers.
+- [ ] **Step 5: Commit** `fix: let the round history's list reach the panel's border at its end`

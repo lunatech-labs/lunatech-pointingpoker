@@ -13,6 +13,7 @@ import {
   estimateRow,
   expectFits,
   expectLiveRegion,
+  historyList,
   historyPanel,
   historyRows,
   historyToggle,
@@ -834,7 +835,7 @@ test.describe(() => {
     await check('51.75 rem minus 1 px')
   })
 
-  // Review focus 3 of the round history amendment plan: the outcome capped, the issue keeping half the row.
+  // Review Focus 3 of the round history amendment plan: the outcome capped, the issue keeping half the row.
   test('the history list does not scroll sideways', async ({ join, room }) => {
     const { page } = await join('Alice')
     await page.setViewportSize(floor)
@@ -842,7 +843,7 @@ test.describe(() => {
     const wide = { type: 'Estimate', value: 'W'.repeat(30) }
     await recordRounds(page, room, 1, ['PP-2', 'PP-3'], [{ type: 'Estimate', value: '3' }, wide])
     await expect(historyRows(page)).toHaveCount(2)
-    const list = historyPanel(page).getByRole('list')
+    const list = historyList(page)
     const sideways = async label => {
       const read = await list.evaluate(async el => {
         await document.fonts.ready

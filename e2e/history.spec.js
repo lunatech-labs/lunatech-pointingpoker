@@ -5,6 +5,7 @@ import {
   checkEstimate,
   estimateRadio,
   estimateRow,
+  historyList,
   historyPanel,
   historyRows,
   historyToggle,
@@ -27,8 +28,6 @@ const PHONE = { width: 392, height: 800 }
 const DESKTOP = { width: 1280, height: 680 }
 
 test.use({ viewport: DESKTOP })
-
-const historyList = page => historyPanel(page).getByRole('list')
 
 // Reveals the round from the page and waits out the guard, which drops a press on Next issue.
 const reveal = async page => {
