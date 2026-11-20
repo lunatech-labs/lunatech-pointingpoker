@@ -26,8 +26,8 @@ so the case states the formula rather than a number. Proved by dropping
 
 **Out of scope.** The dialog sits 15 px further from the right edge than the
 left at 392 px, in the app and the mockup alike (measured in Chromium). The
-same browser rule's `max-height` makes the dialog 6 px shorter than the
-mockup's at short heights.
+browser's `max-height` stays, as decision 7 chose; the mockup's dialog,
+capped at the backdrop's padded height, is 6 px taller where it scrolls.
 
 **Review:** one wave, 3 lenses (Sonnet). Failure modes 2 material (probe
 placement, accepted; Firefox unverified, measured and reclassified as wording),
