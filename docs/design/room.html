@@ -16,25 +16,27 @@
   /* The round history (round history decision 6), at the sidebar's top: up to 5 rows, growing with its entries, rows centred */
   .round-history { flex: none; display: flex; flex-direction: column; gap: var(--space-1); }
   .round-history-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-  .round-history ol { list-style: none; margin: 0; padding: 0; max-height: calc(5 * var(--row-height)); overflow: auto; }
-  .round-history li { display: flex; align-items: center; gap: var(--space-2); height: var(--row-height); font-size: var(--text-sm); }
-  .round-history li:last-child { font-weight: var(--weight-strong); }
-  .round-history-issue { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .round-history-link { direction: rtl; text-align: left; }   /* a link cut at its front (decision 5) */
-  .round-history-outcome { flex: none; }
+  /* One outcome column (round history decision 6); the inset is the list's, so 40% is of the rows' content box */
+  .round-history ol { list-style: none; margin: 0; padding: 0; max-height: calc(5 * var(--row-height)); overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr) fit-content(40%); column-gap: var(--space-2); align-content: start; padding-inline: var(--space-2); margin-inline: calc(-1 * var(--space-2)); scrollbar-gutter: stable; }
+  .round-history li { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; height: var(--row-height); font-size: var(--text-sm); }
+  .round-history li:last-child { font-weight: var(--weight-bold); }
+  .round-history-issue { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .round-history-link { direction: rtl; text-align: left; }   /* a link cut at its front (round history decision 5) */
+  .round-history-outcome { padding: 0 var(--space-2); font-size: var(--text-md); text-align: center; white-space: nowrap; overflow: hidden; }   /* the overflow holds the cap */
+  .round-history-outcome::after { content: 'Parked'; display: block; height: 0; visibility: hidden; font-weight: var(--weight-bold); }   /* the column's floor, an unseen bold Parked */
   .round-history-toggle { position: relative; margin-block: calc(-1 * var(--space-4)); }   /* the target reaches into the padding */
   /* Next issue's form (next=), inline or in a modal: the estimate row's native radios, drawn as chips */
-  .next-form { display: flex; flex-direction: column; gap: var(--space-4); }
+  .next-form { display: flex; flex-direction: column; gap: var(--space-5); }
   .next-form-part { display: flex; flex-direction: column; gap: var(--space-2); }
   .next-form .issue-editor > .issue-editor-field, .next-form .issue-editor-actions { margin-block: 0; }
   .next-estimate { min-width: 0; margin: 0; padding: 0; border: 0; }
   .next-estimate legend { padding: 0; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
   .next-form-issue { text-transform: none; letter-spacing: normal; color: var(--ink); }
   .next-chips { display: flex; flex-wrap: wrap; column-gap: var(--space-2); row-gap: calc(2 * var(--space-2)); padding-top: var(--space-2); }   /* room for the checked chip's lift */
-  .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--ink); border-radius: var(--radius-control); background: var(--paper); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; transition: transform var(--duration); }
-  .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper); transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow) var(--lift-colour); }   /* lifted as the voted card */
+  .next-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--target-min); min-height: var(--target-min); padding-inline: var(--space-2); border: var(--line-control) solid var(--mute-soft); border-radius: var(--radius-card); background: var(--paper-warm); font: var(--weight-bold) var(--text-md) var(--font-sans); color: var(--ink); cursor: pointer; transition: transform var(--duration); }
+  .next-chip:has(:checked) { background: var(--burgundy); border-color: var(--burgundy); color: var(--paper-warm); transform: translateY(calc(-1 * var(--space-2))); box-shadow: var(--lift-shadow) var(--lift-colour); }   /* lifted as the voted card */
   .next-chip:has(:focus-visible) { outline: var(--focus-width) solid var(--ink); outline-offset: var(--focus-gap); }
-  .next-chip-word { font-weight: var(--weight-medium); padding-inline: var(--space-3); }
+  .next-chip-word { padding-inline: var(--space-3); }
   .next-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: var(--space-4); background: rgb(28 25 23 / 0.45); }
   .next-dialog { width: min(36rem, 100%); max-height: 100%; overflow: auto; }
   .next-dialog h2 { margin: 0 0 var(--space-3); font-size: var(--text-lg); }
@@ -77,7 +79,7 @@
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
 // voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
-// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 8: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened).
+// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened).
 const q = new URLSearchParams(location.search)
 const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
 const isPhone = () => document.querySelector('.room-page').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
@@ -110,9 +112,11 @@ const cases = {
 const values = cases[sample] || cases.sample
 const voting = ['confirmed', 'confirmed', 'confirmed', 'none', 'confirmed', 'confirmed', 'none', 'confirmed', 'confirmed', 'confirmed', 'none', 'confirmed', 'none', 'confirmed']
 const revote = ['kept', 'confirmed', 'confirmed', 'kept', 'confirmed', 'kept', 'none', 'confirmed', 'kept', 'confirmed', 'none', 'confirmed', 'none', 'kept']
-const rounds = [['PP-1233', '5'], ['Rework the login page so that a returning user lands on their last room', '8'], ['PP-1231', '3']]
-// Oldest first; an outcome is a value or Unsettled
-const allRounds = [['PP-1226', '3'], ['https://lunatech.atlassian.net/browse/PP-1227', '8'], ['Spike: SSE reconnect strategy', '13'], ['PP-1229', 'Unsettled'], ['PP-1230', '5'], ...[...rounds].reverse()]
+// Oldest first; an outcome is a value or Parked
+const allRounds = [['https://lunatech.atlassian.net/browse/PP-1224', '3'], ['https://github.com/lunatech-labs/lunatech-pointingpoker/issues/512', '8'],
+  ['https://lunatech.atlassian.net/browse/PP-1226', '13'], ['Spike: SSE reconnect strategy', 'Parked'], ['https://github.com/lunatech-labs/lunatech-pointingpoker/pull/530#discussion_r1842', '0.5'],
+  ['https://acme-retail.atlassian.net/browse/CHECKOUT-87?focusedCommentId=10421', '?'], ['https://lunatech.atlassian.net/browse/PP-1229', '21'],
+  ['https://github.com/acme-corp/payments-service/issues/1204', 'Parked'], ['https://lunatech.atlassian.net/browse/PP-1231', '1'], ['https://lunatech.atlassian.net/browse/PP-1233', '5']]
 const history = allRounds.slice(allRounds.length - Math.min(allRounds.length, Number(q.get('rounds') ?? allRounds.length)))
 let ownChoice = null
 let settling = false, settled   // the round bar's 1 s guard and its timer
@@ -193,7 +197,7 @@ function draw() {
   const nextMode = q.get('next')
   const shortIssue = shortForm(issue, history.length + 1).text
   const prefill = revealed && tied.length === 1 ? tied[0] : null   // only a single most-voted value prefills
-  const chips = [...deck, 'Unsettled', 'Skip'].map(v => `<label class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}"><input class="visually-hidden" type="radio" name="next-estimate"${v === prefill ? ' checked' : ''}>${deck.includes(v) ? fig(v) : v}</label>`).join('')
+  const chips = [...deck, 'Parked', 'Skip'].map(v => `<label class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}"><input class="visually-hidden" type="radio" name="next-estimate"${v === prefill ? ' checked' : ''}>${deck.includes(v) ? fig(v) : v}</label>`).join('')
   const nextForm = `<div class="next-form"><fieldset class="next-estimate"><legend class="panel-label">Estimate for <bdi class="next-form-issue">${shortIssue}</bdi></legend>
       <div class="next-chips">${chips}</div></fieldset>
     <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>

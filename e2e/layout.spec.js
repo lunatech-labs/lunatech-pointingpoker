@@ -887,6 +887,25 @@ test.describe(() => {
     expect(within(read.boxes.legend, read.boxes.dialog), JSON.stringify(read.boxes)).toBe(true)
     const sideways = await nextDialog(page).evaluate(el => el.scrollWidth - el.clientWidth)
     expect(sideways, 'the dialog scrolls sideways').toBeLessThanOrEqual(0)
+
+    // A lifted chip keeps --space-2 clear above it, as touching was the defect.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const chips = estimateRow(page).locator('.next-chip')
+    const names = await chips.allTextContents()
+    const tops = await chips.evaluateAll(els => els.map(el => el.getBoundingClientRect().top))
+    const second = tops.findIndex(top => top > tops[0] + 0.5)
+    expect(second, 'the chips wrap onto a second line').toBeGreaterThan(0)
+    const space = 0.5 * read.rem
+    await checkEstimate(page, names[0])
+    const first = await readBoxes(page, { legend, chip: chips.first() })
+    const underLegend = first.boxes.chip.y - (first.boxes.legend.y + first.boxes.legend.height)
+    expect(underLegend, 'the lifted first-line chip under the legend').toBeGreaterThanOrEqual(space - 0.5)
+    await checkEstimate(page, names[second])
+    const lifted = await readBoxes(page, { chip: chips.nth(second) })
+    const bottoms = await chips.evaluateAll(els => els.map(el => el.getBoundingClientRect().bottom))
+    const lineOne = Math.max(...bottoms.slice(0, second))
+    const underLine = lifted.boxes.chip.y - lineOne
+    expect(underLine, 'the lifted second-line chip under the first line').toBeGreaterThanOrEqual(space - 0.5)
   })
 })
 

@@ -15,7 +15,7 @@
 .next-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 .next-estimate {
@@ -56,9 +56,9 @@
   min-width: var(--target-min);
   min-height: var(--target-min);
   padding-inline: var(--space-2);
-  border: var(--line-control) solid var(--ink);
-  border-radius: var(--radius-control);
-  background: var(--paper);
+  border: var(--line-control) solid var(--mute-soft);
+  border-radius: var(--radius-card);
+  background: var(--paper-warm);
   font: var(--weight-bold) var(--text-md) var(--font-sans);
   color: var(--ink);
   cursor: pointer;
@@ -69,7 +69,7 @@
 .next-chip:has(:checked) {
   background: var(--burgundy);
   border-color: var(--burgundy);
-  color: var(--paper);
+  color: var(--paper-warm);
   transform: translateY(calc(-1 * var(--space-2)));
   box-shadow: var(--lift-shadow) var(--lift-colour);
 }
@@ -86,7 +86,6 @@
 }
 
 .next-chip-word {
-  font-weight: var(--weight-medium);
   padding-inline: var(--space-3);
 }
 
