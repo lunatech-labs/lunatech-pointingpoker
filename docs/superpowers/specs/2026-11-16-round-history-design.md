@@ -227,7 +227,9 @@ same.
 - **Front cut, both browsers**: a row holding a link longer than its cell
   shows the link's end, the `<bdi>`'s right edge within the cell's; a short
   link starts at the cell's left edge; a long "link and words" row, of kind
-  text, shows its start at the cell's left edge and is cut at the end.
+  text, shows its start at the cell's left edge and is cut at the end; a
+  short right-to-left text row shows its start at the cell's right edge
+  (Firefox's list items otherwise compute a physical `left`).
 - **Layout, both browsers** (the UI refresh spec's principle 11), outside
   `layout.spec.js`'s describes skipped outside Chromium (#499): the phone
   panel's label line keeps the label's height with the button, closed and

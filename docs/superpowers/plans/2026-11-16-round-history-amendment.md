@@ -128,3 +128,17 @@ Added after Task 10's look check: the outcome's right space read larger than the
 - [ ] **Step 3: Implement** `.round-history ol { margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline)) }`, in the app and the mockup.
 - [ ] **Step 4: Run** `npm run lint && npm run e2e -- e2e/layout.spec.js e2e/history.spec.js e2e/history-column.spec.js e2e/phone.spec.js` — Expected: PASS in both browsers.
 - [ ] **Step 5: Commit** `fix: let the round history's list reach the panel's border at its end`
+
+### Task 12: Right-to-left text rows in Firefox
+
+Added after the final review: Firefox's list items compute a physical `left`, so a short right-to-left text row sat at the cell's left, against spec decision 5, and the link's `text-align: left` was proven in Chromium only. Light lane at first; its review found two material gaps (no test for the right-to-left row, nothing guarding the reset entry), so it moved here.
+
+**Files:**
+- Modify: `frontend/src/reset.css` (a "Project additions" heading after item 10, its header saying so), `frontend/src/components/round-history.css` (comment only), the spec's Tests ("Front cut")
+- Test: `e2e/history.spec.js`
+
+- [ ] **Step 1: Extend** "a link row keeps its end, a text row its start" with a short right-to-left text row: its text's start at the cell's right (±0.5).
+- [ ] **Step 2: Implement** `li { text-align: inherit }` in the reset's project additions.
+- [ ] **Step 3: Prove both rules can fail**, reverting and rebuilding after each: drop the reset entry (Firefox red, the right-to-left row); drop `.round-history-link`'s `text-align: left` (both browsers red, the short link).
+- [ ] **Step 4: Run** `npm run lint && npm run e2e` — Expected: PASS in both browsers.
+- [ ] **Step 5: Commit** `fix: keep a right-to-left history row's start in Firefox`

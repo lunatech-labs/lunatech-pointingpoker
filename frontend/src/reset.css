@@ -1,5 +1,5 @@
 /* Josh Comeau's reset, public domain: https://www.joshwcomeau.com/css/custom-css-reset/ (June 3rd, 2026),
-   copied as published without item 5, -webkit-font-smoothing. */
+   copied as published without item 5, -webkit-font-smoothing; project additions follow item 10. */
 
 /* 1. Use a more-intuitive box-sizing model */
 *, *::before, *::after {
@@ -52,4 +52,11 @@ h1, h2, h3, h4, h5, h6 {
 */
 #root, #__next {
   isolation: isolate;
+}
+
+/* Project additions */
+
+/* Firefox's list items compute a physical left, which an rtl child keeps; inherit start, as Chromium does */
+li {
+  text-align: inherit;
 }

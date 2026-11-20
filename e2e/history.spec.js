@@ -236,8 +236,9 @@ test('a link row keeps its end, a text row its start', async ({ join, room }) =>
   const short = 'https://example.com/1'
   const words = `https://github.com/acme/web/issues/412 and the words that follow it, ${ISSUE_240}`
   const text = words.slice(0, ISSUE_240.length)
-  await recordRounds(page, room, 1, [jira, short, text, 'PP-9'])
-  await expect(historyRows(page)).toHaveCount(4)
+  const rtl = 'שלום עולם'
+  await recordRounds(page, room, 1, [jira, short, text, rtl, 'PP-9'])
+  await expect(historyRows(page)).toHaveCount(5)
 
   // Each row's issue cell, its bdi and its text's first line box, after the fonts and two frames.
   const read = row =>
@@ -254,6 +255,7 @@ test('a link row keeps its end, a text row its start', async ({ join, room }) =>
         cell: { left, right },
         bdi: bdi && { left: bdi.left, right: bdi.right },
         first: first.left,
+        firstRight: first.right,
         cut: cell.scrollWidth > cell.clientWidth
       }
     })
@@ -266,4 +268,6 @@ test('a link row keeps its end, a text row its start', async ({ join, room }) =>
   expect(cut.bdi, 'a text row has no bdi').toBeUndefined()
   expect(Math.abs(cut.first - cut.cell.left), "the text's start at the cell's left").toBeLessThanOrEqual(0.5)
   expect(cut.cut, 'the text cut at its end').toBe(true)
+  const hebrew = await read(historyRows(page).nth(4))
+  expect(Math.abs(hebrew.firstRight - hebrew.cell.right), "the right-to-left text's start at the cell's right").toBeLessThanOrEqual(0.5)
 })
