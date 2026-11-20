@@ -21,12 +21,21 @@ const snap = (users: RoomSnapshot['users'], extra: Partial<RoomSnapshot> = {}): 
   currentIssue: 'PP-1',
   votesRevealed: false,
   round: 1,
+  history: [],
   users,
   ...extra
 })
 describe('applySnapshot', () => {
   it('carries the room\'s round number', () => {
     expect(applySnapshot(snap([row('a', none)], { round: 3 })).round).toBe(3)
+  })
+
+  it('carries the room\'s history, oldest first', () => {
+    const history: RoomSnapshot['history'] = [
+      { issue: 'PP-1', outcome: { type: 'Estimate', value: '8' } },
+      { issue: '', outcome: { type: 'Parked' } }
+    ]
+    expect(applySnapshot(snap([row('a', none)], { history })).history).toEqual(history)
   })
 
   it('reads each estimation tag into the row the table renders', () => {

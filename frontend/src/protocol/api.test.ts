@@ -77,7 +77,7 @@ const requests = {
   vote: () => vote('brave-golden-otter', '3'),
   switchRole: () => switchRole('brave-golden-otter', 'Facilitator'),
   editIssue: () => editIssue('brave-golden-otter', 'PP-1'),
-  nextIssue: () => nextIssue('brave-golden-otter', 4, 'PP-2')
+  nextIssue: () => nextIssue('brave-golden-otter', 4, 'PP-2', { type: 'Skip' })
 }
 
 describe('a role', () => {
@@ -92,17 +92,18 @@ describe('a role', () => {
 })
 
 describe('next-issue', () => {
-  it('posts the round and the issue', async () => {
+  it('posts the round, the issue and the outcome', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 204 }))
-    await nextIssue('brave-golden-otter', 4, 'PP-2')
+    await nextIssue('brave-golden-otter', 4, 'PP-2', { type: 'Estimate', value: '8' })
     const request = fetchMock.mock.calls[0][0]
     expect(new URL(request.url).pathname).toBe('/rooms/brave-golden-otter/next-issue')
-    expect(await request.json()).toEqual({ round: 4, issue: 'PP-2' })
+    const outcome = { type: 'Estimate', value: '8' }
+    expect(await request.json()).toEqual({ round: 4, issue: 'PP-2', outcome })
   })
 
   it('rejects with the status it was refused with', async () => {
     fetchMock.mockImplementation(async () => new Response(null, { status: 409 }))
-    await expect(nextIssue('brave-golden-otter', 4, 'PP-2')).rejects.toEqual(
+    await expect(nextIssue('brave-golden-otter', 4, 'PP-2', { type: 'Skip' })).rejects.toEqual(
       new ApiError('next-issue', 409)
     )
   })

@@ -278,6 +278,26 @@ export const nextField = page => nextDialog(page).getByRole('textbox', { name: '
 export const nextSubmit = page => nextDialog(page).getByRole('button', { name: 'Next issue' })
 export const nextCancel = page => nextDialog(page).getByRole('button', { name: 'Cancel' })
 export const nextStatus = page => nextDialog(page).getByRole('status')
+// The dialog's estimate row, and one of its radios by name: a deck value, Parked or Skip.
+export const estimateRow = page => nextDialog(page).getByRole('group', { name: /^Estimate for / })
+export const estimateRadio = (page, name) => nextDialog(page).getByRole('radio', { name, exact: true })
+// Forced, as the chip's label takes the click; check still fails unless the radio ends up checked.
+export const checkEstimate = (page, name) => estimateRadio(page, name).check({ force: true })
+// The round history's panel, named by its label, then its shown rows and the phone's Show more / Show less.
+export const historyPanel = page => page.getByRole('region', { name: /^Rounds · / })
+export const historyRows = page => historyPanel(page).getByRole('listitem')
+export const historyList = page => historyPanel(page).getByRole('list')
+export const historyToggle = page => historyPanel(page).getByRole('button', { name: /^Show (more|less)$/ })
+// Moves the room on once per issue from round `from`, move i recording outcomes[i] or a 3: an entry holds the issue left.
+export const recordRounds = async (page, room, from, issues, outcomes = []) => {
+  for (const [i, issue] of issues.entries()) {
+    const outcome = outcomes[i] ?? { type: 'Estimate', value: '3' }
+    const posted = await page.request.post(`/rooms/${room}/next-issue`, {
+      data: { round: from + i, issue, outcome }
+    })
+    expect(posted.status(), `the move to ${issue}`).toBe(204)
+  }
+}
 // Matches the room's next-issue endpoint, for page.route.
 export const nextIssueUrl = room => new RegExp(`/rooms/${room}/next-issue$`)
 // The recipient's own confirmed estimation, read as the pressed card rather than the large one.

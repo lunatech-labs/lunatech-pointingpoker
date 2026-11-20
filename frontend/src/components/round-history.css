@@ -1,0 +1,102 @@
+/* The panel (round history decision 6): the sidebar's top, up to 5 rows tall, growing with its entries */
+.round-history {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.round-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.round-history ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: calc(5 * var(--row-height));
+  overflow: auto;
+  /* One outcome column (round history decision 6); the inset is the list's, so 40% is of the rows' content box */
+  /* Its end meets the panel's border, so the scrollbar gutter sits in the panel's padding */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%);
+  column-gap: var(--space-2);
+  align-content: start;
+  padding-inline: var(--space-2);
+  margin-inline: calc(-1 * var(--space-2)) calc(-1 * var(--panel-inline));
+  scrollbar-gutter: stable;
+}
+
+/* Centred as the roster's rows; the last row's slack sits in the panel's padding (round history plan, ruling 15) */
+.round-history li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  height: var(--row-height);
+  font-size: var(--text-sm);
+}
+
+.round-history li:last-child {
+  font-weight: var(--weight-bold);
+}
+
+.round-history-issue {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A link is cut at its front, keeping its id; one that fits starts at the left (round history decision 5) */
+.round-history-link {
+  direction: rtl;
+  text-align: left;
+}
+
+.round-history-outcome {
+  padding: 0 var(--space-2);
+  font-size: var(--text-md);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden; /* drops its minimum to 0, which holds the cap */
+}
+
+/* The column's floor: an unseen bold Parked, generated so no row's text or name holds it */
+.round-history-outcome::after {
+  content: 'Parked';
+  display: block;
+  height: 0;
+  visibility: hidden;
+  font-weight: var(--weight-bold);
+}
+
+/* Its target reaches into the panel's padding, so the label line keeps the label's height */
+.round-history-toggle {
+  position: relative; /* above the list, which the target's foot overlaps */
+  margin-block: calc(-1 * var(--space-4));
+}
+
+/* The phone layout below 51.75 rem: under the issue, closed to the latest row, opened up to 3 rows */
+@container page (width < 51.75rem) {
+  .round-history {
+    order: 1;
+  }
+
+  .round-history:not(.round-history-open) li:not(:last-child) {
+    display: none;
+  }
+
+  .round-history-open ol {
+    max-height: calc(3 * var(--row-height));
+  }
+}
+
+@container page (width >= 51.75rem) {
+  .round-history-toggle {
+    display: none;
+  }
+}

@@ -2,6 +2,9 @@ import {
   test,
   expect,
   card,
+  checkEstimate,
+  estimateRadio,
+  estimateRow,
   issueBox,
   issueEdit,
   issuePanel,
@@ -36,7 +39,7 @@ test('an open issue editor shows the notice once the room moves on, and OK puts 
   await issueBox(alice.page).fill('mine')
   await bob.page.getByRole('button', { name: 'Show votes' }).click()
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
 
@@ -115,6 +118,8 @@ test('Next issue moves the room on', async ({ join, room }) => {
     await held
     await route.fulfill({ response })
   })
+  await vote(bob.page, '5')
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
   await reveal(alice.page)
   await nextButton(alice.page).click()
   await alice.page.keyboard.type('PP-3')
@@ -122,6 +127,8 @@ test('Next issue moves the room on', async ({ join, room }) => {
   await expect(issueText(bob.page)).toHaveText('PP-3')
   await expect(issueText(alice.page)).toHaveText('PP-3')
   await expect(nextField(alice.page)).toBeVisible()
+  // The legend keeps the issue the user saw while the room shows the next one (round history decision 3).
+  await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for PP-2')
   await expect(nextStatus(alice.page)).toBeEmpty()
   await alice.page.keyboard.press('Enter')
   // Forced, since a plain click waits while the button is aria-disabled.
@@ -131,7 +138,7 @@ test('Next issue moves the room on', async ({ join, room }) => {
   release()
   await expect(nextDialog(alice.page)).toBeHidden()
   await expect(showVotes(alice.page)).toBeFocused()
-  expect(requests).toEqual([{ round: 2, issue: 'PP-3' }])
+  expect(requests).toEqual([{ round: 2, issue: 'PP-3', outcome: { type: 'Estimate', value: '5' } }])
 })
 
 test('Cancel and Escape change nothing', async ({ join, room }) => {
@@ -178,7 +185,7 @@ test('Cancel and Escape change nothing', async ({ join, room }) => {
     await expect(revealedEstimation(participantEntry(page, 'Bob'))).toHaveText('5')
   }
   // Only the held request: Cancel and Escape sent none.
-  expect(sent).toEqual([{ round: 1, issue: 'held' }])
+  expect(sent).toEqual([{ round: 1, issue: 'held', outcome: { type: 'Estimate', value: '5' } }])
 })
 
 test('a held Enter or a double-click on Next issue submits nothing', async ({ join, room }) => {
@@ -223,7 +230,7 @@ test('a page that finds the room moved on shows the notice', async ({ join, room
   await expect(nextStatus(alice.page)).toBeEmpty()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-1b' }
+    data: { round: 1, issue: 'PP-1b', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(nextStatus(alice.page)).toHaveText('The room moved on to: "PP-1b" OK')
@@ -246,6 +253,105 @@ test('a failed move keeps the text and says so', async ({ join, room }) => {
   await expect(nextField(alice.page)).toHaveValue('mine')
   await expect(nextField(alice.page)).toHaveJSProperty('readOnly', false)
   await expect(phaseWord(alice.page)).toHaveText('Revealed')
+})
+
+test('the dialog sends the chosen outcome', async ({ join, room }) => {
+  const { alice, bob } = await revealedRound(join)
+  const sent = nextSent(alice.page, room)
+  const moveOn = async () => {
+    await expect(nextDialog(alice.page)).toBeHidden()
+    for (const page of [alice.page, bob.page]) await expect(phaseWord(page)).toHaveText('Voting')
+  }
+
+  await nextButton(alice.page).click()
+  await expect(estimateRadio(alice.page, '5')).toBeChecked()
+  await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for PP-1')
+  await expect(nextField(alice.page)).toBeFocused()
+  await alice.page.keyboard.press('Enter')
+  await moveOn()
+
+  await vote(bob.page, '3')
+  await expect(votedMark(participantEntry(alice.page, 'Bob'))).toHaveCount(1)
+  await reveal(alice.page)
+  await nextButton(alice.page).click()
+  await checkEstimate(alice.page, 'Parked')
+  await nextSubmit(alice.page).click()
+  await moveOn()
+
+  await reveal(alice.page)
+  await nextButton(alice.page).click()
+  await checkEstimate(alice.page, 'Skip')
+  await nextSubmit(alice.page).click()
+  await moveOn()
+  expect(sent).toEqual([
+    { round: 1, issue: 'PP-1', outcome: { type: 'Estimate', value: '5' } },
+    { round: 2, issue: 'PP-1', outcome: { type: 'Parked' } },
+    { round: 3, issue: 'PP-1', outcome: { type: 'Skip' } }
+  ])
+})
+
+test('a tie opens with nothing checked, and submitting asks for a choice', async ({ join, room }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const sent = nextSent(alice.page, room)
+  await vote(alice.page, '3')
+  await vote(bob.page, '5')
+  // The last vote reveals the round; the guard then lets a press on Next issue through.
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
+  await expect(nextButton(alice.page)).not.toHaveAttribute('aria-disabled')
+
+  await nextButton(alice.page).click()
+  await expect(estimateRow(alice.page).getByRole('radio', { checked: true })).toHaveCount(0)
+  await alice.page.keyboard.press('Enter')
+  await expect(nextStatus(alice.page)).toHaveText('Choose an estimate, Parked or Skip')
+  await expect(estimateRadio(alice.page, '0')).toBeFocused()
+  await expect(phaseWord(alice.page)).toHaveText('Revealed')
+  // The request leaves in the handler that moved focus, so a send would show by now.
+  expect(sent).toEqual([])
+  await checkEstimate(alice.page, '5')
+  await expect(nextStatus(alice.page)).toBeEmpty()
+  await expect(nextDialog(alice.page)).toBeVisible()
+  expect(sent).toEqual([])
+})
+
+test('a failed move keeps the choice', async ({ join, room }) => {
+  const { alice } = await revealedRound(join)
+  const sent = nextSent(alice.page, room)
+  await alice.page.route(nextIssueUrl(room), route => route.abort())
+
+  await nextButton(alice.page).click()
+  await checkEstimate(alice.page, 'Parked')
+  await nextSubmit(alice.page).click()
+  await expect(nextStatus(alice.page)).toHaveText('Could not move on to the next issue')
+  await expect(estimateRadio(alice.page, 'Parked')).toBeChecked()
+
+  await alice.page.unroute(nextIssueUrl(room))
+  await nextSubmit(alice.page).click()
+  await expect(nextDialog(alice.page)).toBeHidden()
+  const parked = { round: 1, issue: 'PP-1', outcome: { type: 'Parked' } }
+  expect(sent).toEqual([parked, parked])
+})
+
+test('a radio cannot be changed while sending', async ({ join, room }) => {
+  const { alice } = await revealedRound(join)
+  let release
+  const held = new Promise(resolve => (release = resolve))
+  await alice.page.route(nextIssueUrl(room), async route => {
+    await held
+    await route.abort()
+  })
+
+  await nextButton(alice.page).click()
+  await alice.page.keyboard.press('Enter')
+  await expect(estimateRadio(alice.page, '8')).toHaveAttribute('aria-disabled', 'true')
+  // Forced, as in checkEstimate; a plain click would also wait on aria-disabled.
+  await estimateRadio(alice.page, '8').click({ force: true })
+  await expect(estimateRadio(alice.page, '5')).toBeChecked()
+  await expect(estimateRadio(alice.page, '8')).not.toBeChecked()
+
+  release()
+  await expect(nextStatus(alice.page)).toHaveText('Could not move on to the next issue')
+  await expect(estimateRadio(alice.page, '5')).toBeChecked()
 })
 
 test('a 401 after the dialog closed reaches the restart notice', async ({ join, room }) => {
@@ -281,7 +387,7 @@ test('focus on Next issue moves to the toggle when the room moves on', async ({ 
   await nextButton(alice.page).focus()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')
@@ -339,7 +445,7 @@ test('the notice takes no focus from a control outside the form it replaces', as
   await card(alice.page, '5').focus()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2' }
+    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
   await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')

@@ -31,6 +31,7 @@ const frame = JSON.stringify({
   currentIssue: 'PP-1',
   votesRevealed: false,
   round: 1,
+  history: [],
   users: [{ id: 'a', name: 'Alice', seat: { type: 'Voter', estimation: { type: 'NoEstimation' } } }]
 })
 
@@ -161,7 +162,7 @@ describe('createConnection', () => {
   it('keeps a snapshot carrying a field it does not know, without the field', () => {
     const c = connect()
     c.open('r')
-    streams[0].message(JSON.stringify({ ...JSON.parse(frame), history: [] }))
+    streams[0].message(JSON.stringify({ ...JSON.parse(frame), later: 1 }))
     expect(c.getSnapshot().snapshot).toEqual(JSON.parse(frame))
   })
 

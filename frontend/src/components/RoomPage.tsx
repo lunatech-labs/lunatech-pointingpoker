@@ -3,14 +3,17 @@ import { type FocusEvent, type ReactNode, useRef } from 'react'
 import * as api from '../protocol/api'
 import type { Role, RoomSnapshot } from '../protocol/snapshot'
 import { applySnapshot } from '../room/view'
+import { preselected } from '../room/nextIssue'
 import { RoomHeader } from './RoomHeader'
 import { IssuePanel } from './IssuePanel'
 import { RoundPanel } from './RoundPanel'
 import { RoundBar } from './RoundBar'
+import { estimationValues } from './Deck'
 import { NextIssueDialog } from './NextIssueDialog'
 import { useNextIssue } from './useNextIssue'
 import { Voters } from './Voters'
 import { Roster } from './Roster'
+import { RoundHistory } from './RoundHistory'
 
 type Props = {
   roomId: string
@@ -56,8 +59,8 @@ export function RoomPage(props: Props) {
   const saveIssue = (issue: string) => reported(api.editIssue(roomId, issue))
 
   const vote = (estimation: string) => run(api.vote(roomId, estimation))
-  const next = useNextIssue(view.currentIssue, view.round, (round, issue) =>
-    reported(api.nextIssue(roomId, round, issue))
+  const next = useNextIssue(view.currentIssue, view.round, (round, issue, outcome) =>
+    reported(api.nextIssue(roomId, round, issue, outcome))
   )
   const nextRef = useRef<HTMLButtonElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -84,12 +87,13 @@ export function RoomPage(props: Props) {
               onShow={() => run(api.command(roomId, 'show'))}
               onRevote={() => run(api.command(roomId, 'revote'))}
               onClear={() => run(api.command(roomId, 'clear'))}
-              onNext={next.open}
+              onNext={() => next.open(preselected(estimationValues, view.votesRevealed, view.votesSummary))}
               nextRef={nextRef}
               toggleRef={toggleRef}
             />
           </div>
           <div className="room-page-sidebar">
+            <RoundHistory history={view.history} />
             <Roster view={view} />
           </div>
         </main>
@@ -98,6 +102,7 @@ export function RoomPage(props: Props) {
       <NextIssueDialog
         next={next}
         issue={view.currentIssue}
+        position={view.history.length + 1}
         onClosed={() => (nextRef.current ?? toggleRef.current)?.focus()}
       />
     </div>

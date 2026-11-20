@@ -534,6 +534,28 @@
   },
   "components" : {
     "schemas" : {
+      "Choice" : {
+        "title" : "Choice",
+        "oneOf" : [
+          {
+            "$ref" : "#/components/schemas/Estimate"
+          },
+          {
+            "$ref" : "#/components/schemas/Parked"
+          },
+          {
+            "$ref" : "#/components/schemas/Skip"
+          }
+        ],
+        "discriminator" : {
+          "propertyName" : "type",
+          "mapping" : {
+            "Estimate" : "#/components/schemas/Estimate",
+            "Parked" : "#/components/schemas/Parked",
+            "Skip" : "#/components/schemas/Skip"
+          }
+        }
+      },
       "EditIssueRequest" : {
         "title" : "EditIssueRequest",
         "type" : "object",
@@ -543,6 +565,23 @@
         "properties" : {
           "issue" : {
             "type" : "string"
+          }
+        }
+      },
+      "Estimate" : {
+        "title" : "Estimate",
+        "type" : "object",
+        "required" : [
+          "value",
+          "type"
+        ],
+        "properties" : {
+          "value" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string",
+            "const" : "Estimate"
           }
         }
       },
@@ -567,7 +606,8 @@
         "type" : "object",
         "required" : [
           "round",
-          "issue"
+          "issue",
+          "outcome"
         ],
         "properties" : {
           "round" : {
@@ -576,6 +616,22 @@
           },
           "issue" : {
             "type" : "string"
+          },
+          "outcome" : {
+            "$ref" : "#/components/schemas/Choice"
+          }
+        }
+      },
+      "Parked" : {
+        "title" : "Parked",
+        "type" : "object",
+        "required" : [
+          "type"
+        ],
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "const" : "Parked"
           }
         }
       },
@@ -596,6 +652,19 @@
         "properties" : {
           "role" : {
             "$ref" : "#/components/schemas/Role"
+          }
+        }
+      },
+      "Skip" : {
+        "title" : "Skip",
+        "type" : "object",
+        "required" : [
+          "type"
+        ],
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "const" : "Skip"
           }
         }
       },

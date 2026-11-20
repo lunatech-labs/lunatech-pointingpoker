@@ -12,6 +12,7 @@ final case class RoomSnapshot(
     currentIssue: String,
     votesRevealed: Boolean,
     round: Int,
+    history: List[Room.Entry],
     users: List[RoomSnapshot.Participant]
 )
 
@@ -79,6 +80,14 @@ object RoomSnapshot:
   object Participant:
     given Encoder[Participant] = deriveEncoder[Participant]
 
+  // Explicit tags rather than toString, as Estimation's: renaming a case must not rename the wire.
+  given Encoder[Room.Outcome] = Encoder.instance {
+    case Room.Outcome.Estimate(value) => tagged("Estimate", "value" -> Json.fromString(value))
+    case Room.Outcome.Parked          => tagged("Parked")
+  }
+
+  given Encoder[Room.Entry] = deriveEncoder[Room.Entry]
+
   given Encoder[RoomSnapshot] = deriveEncoder[RoomSnapshot]
 
   // forUser is both the identity this was built for and the only one whose estimation it
@@ -90,6 +99,7 @@ object RoomSnapshot:
       currentIssue = data.state.currentIssue,
       votesRevealed = round.revealed,
       round = data.state.roundNumber,
+      history = data.state.history.toList,
       // The join: a participant appears because they are one, their seat is theirs, and an
       // estimate belonging to nobody present reaches nobody.
       users = data.members.toList

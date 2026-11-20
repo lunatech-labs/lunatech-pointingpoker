@@ -69,6 +69,16 @@ class SnapshotContractSpec extends AnyWordSpec with must.Matchers with BeforeAnd
         RoomSnapshot.of(data, alice.id)
     ),
     ContractState(
+      "history",
+      () =>
+        val alice = user("Alice", false, "")
+        val data  = withUsers(alice).withHistory(
+          Room.Entry("PP-1", Room.Outcome.Estimate("8")),
+          Room.Entry("", Room.Outcome.Parked)
+        )
+        RoomSnapshot.of(data, alice.id)
+    ),
+    ContractState(
       "empty-issue",
       () =>
         val alice = user("Alice", false, "")

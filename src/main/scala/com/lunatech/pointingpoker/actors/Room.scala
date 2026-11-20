@@ -51,6 +51,7 @@ object Room:
       token: SessionToken,
       round: Int,
       issue: String,
+      outcome: Option[Outcome],
       replyTo: ActorRef[NextIssueResult]
   ) extends Command
   final case class SwitchRole(token: SessionToken, role: Role, replyTo: ActorRef[CommandResult])
@@ -135,16 +136,25 @@ object Room:
   object Round:
     val fresh: Round = Round(revealed = false)
 
+  // What a round recorded: Skip is the request's choice to record nothing, so not a case here.
+  enum Outcome:
+    case Estimate(value: String)
+    case Parked
+
+  // The room's issue when it was recorded, the one being left.
+  final case class Entry(issue: String, outcome: Outcome)
+
   // roundNumber is outside Round: clear replaces Round whole and must not reset it.
   final case class RoomState(
       currentIssue: String,
       round: Round,
       seats: Map[UUID, Seat],
-      roundNumber: Int
+      roundNumber: Int,
+      history: Vector[Entry]
   )
 
   object RoomState:
-    val empty: RoomState = RoomState("", Round.fresh, Map.empty, 1)
+    val empty: RoomState = RoomState("", Round.fresh, Map.empty, 1, Vector.empty)
 
   final case class Session(userId: UUID, name: String)
 
@@ -252,11 +262,19 @@ object Room:
     def editIssue(issue: String): RoomData =
       this.copy(state = this.state.copy(currentIssue = issue))
 
-    def nextIssue(round: Int, issue: String): (RoomData, Applied.type | NextIssueRefusal) =
+    def nextIssue(
+        round: Int,
+        issue: String,
+        outcome: Option[Outcome]
+    ): (RoomData, Applied.type | NextIssueRefusal) =
       if round != this.state.roundNumber then (this, RoundClosed)
       else
         val cleared = this.clear()
-        val next    = cleared.state.copy(currentIssue = issue, roundNumber = round + 1)
+        val next    = cleared.state.copy(
+          currentIssue = issue,
+          roundNumber = round + 1,
+          history = cleared.state.history ++ outcome.map(Entry(this.state.currentIssue, _))
+        )
         (cleared.copy(state = next), Applied)
 
     private def withState(round: Round, seats: Map[UUID, Seat]): RoomData =
@@ -414,10 +432,10 @@ object Room:
               case Left(refusal) =>
                 replyTo ! refusal
                 Behaviors.same
-          case NextIssue(token, round, issue, replyTo) =>
+          case NextIssue(token, round, issue, recorded, replyTo) =>
             data.acting(token) match
               case Right(_) =>
-                val (next, outcome) = data.nextIssue(round, issue)
+                val (next, outcome) = data.nextIssue(round, issue, recorded)
                 replyTo ! outcome
                 receiveBehaviour(roomId, publish(next, context), gracePeriod, stopAfterIdle, timers)
               case Left(refusal) =>

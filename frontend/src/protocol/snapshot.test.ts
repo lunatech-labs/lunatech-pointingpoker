@@ -6,6 +6,7 @@ const withSeat = (seat: object) => ({
   currentIssue: '',
   votesRevealed: false,
   round: 1,
+  history: [] as object[],
   users: [{ id: 'a', name: 'A', seat }]
 })
 const withEstimation = (estimation: object) => withSeat({ type: 'Voter', estimation })
@@ -39,5 +40,13 @@ describe('the snapshot schemas', () => {
     expect(strictSnapshotSchema.safeParse(holding).success).toBe(false)
     expect(snapshotSchema.safeParse(withSeat({ type: 'Voter' })).success).toBe(false)
     expect(snapshotSchema.safeParse(withSeat({ type: 'Observer' })).success).toBe(false)
+  })
+
+  it('accept an entry estimated or parked, and refuse one skipped', () => {
+    const withEntry = (outcome: object) => ({ ...base, history: [{ issue: 'PP-1', outcome }] })
+    const estimated = withEntry({ type: 'Estimate', value: '8' })
+    expect(strictSnapshotSchema.safeParse(estimated).success).toBe(true)
+    expect(strictSnapshotSchema.safeParse(withEntry({ type: 'Parked' })).success).toBe(true)
+    expect(snapshotSchema.safeParse(withEntry({ type: 'Skip' })).success).toBe(false)
   })
 })

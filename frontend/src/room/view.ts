@@ -1,4 +1,4 @@
-import type { Estimation, Participant, RoomSnapshot, Seat } from '../protocol/snapshot'
+import type { Entry, Estimation, Participant, RoomSnapshot, Seat } from '../protocol/snapshot'
 
 // What the table renders per participant, read off the union in one place.
 export type ParticipantRow = {
@@ -48,6 +48,7 @@ export type View = {
   users: ParticipantRow[]
   votesRevealed: boolean
   round: number
+  history: Entry[]
   currentIssue: string
   userEstimation: string
   ownVoteConfirmed: boolean
@@ -73,6 +74,7 @@ export function applySnapshot(s: RoomSnapshot): View {
     users: [...users].sort(byName),
     votesRevealed: s.votesRevealed,
     round: s.round,
+    history: s.history,
     currentIssue: s.currentIssue,
     userEstimation: me ? me.estimation : '',
     ownVoteConfirmed: !me || me.voted || !me.estimation,

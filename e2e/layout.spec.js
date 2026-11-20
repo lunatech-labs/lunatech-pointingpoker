@@ -8,9 +8,15 @@ import {
   avatar,
   connectionLost,
   copyHint,
+  checkEstimate,
   deck,
+  estimateRow,
   expectFits,
   expectLiveRegion,
+  historyList,
+  historyPanel,
+  historyRows,
+  historyToggle,
   inRoom,
   issueBox,
   issueEdit,
@@ -31,6 +37,7 @@ import {
   phaseLine,
   phaseWord,
   readBoxes,
+  recordRounds,
   restartNotice,
   roomIdInput,
   roundBar,
@@ -802,9 +809,167 @@ test.describe(() => {
     await containerAt(page, 65.75 * rem)
     await check('65.75 rem', 'Next issue')
   })
+
+  // The round history plan's ruling 14: the toggle's target reaches into the panel's padding, not the line.
+  test("the phone panel's label line keeps the label's height with the toggle", async ({ join, room }) => {
+    const { page } = await join('Alice')
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3'])
+    await expect(historyToggle(page)).toHaveText('Show more')
+    const heading = historyPanel(page).getByRole('heading')
+    const check = async at => {
+      for (const expanded of ['false', 'true']) {
+        await expect(historyToggle(page)).toHaveAttribute('aria-expanded', expanded)
+        const state = `${at}, ${expanded === 'true' ? 'opened' : 'closed'}`
+        const read = await readBoxes(page, { line: heading.locator('..'), label: heading, toggle: historyToggle(page) })
+        const { line, label, toggle } = read.boxes
+        expect(read.rem, `${state}: the root's size`).toBe(16)
+        expect(Math.abs(line.height - label.height), `${state}: the line's height`).toBeLessThanOrEqual(0.5)
+        expect(toggle.width, `${state}: the toggle's width`).toBeGreaterThanOrEqual(44)
+        expect(toggle.height, `${state}: the toggle's height`).toBeGreaterThanOrEqual(44)
+        await historyToggle(page).click()
+      }
+      await expect(historyToggle(page)).toHaveAttribute('aria-expanded', 'false')
+    }
+    await check('320')
+    await containerAt(page, 51.75 * 16 - 1)
+    await check('51.75 rem minus 1 px')
+  })
+
+  // Review Focus 3 of the round history amendment plan: the outcome capped, the issue keeping half the row.
+  test('the history list does not scroll sideways', async ({ join, room }) => {
+    const { page } = await join('Alice')
+    await page.setViewportSize(floor)
+    await setIssue(page, 'https://acme.atlassian.net/jira/software/projects/PP/boards/3?selectedIssue=PP-77')
+    const wide = { type: 'Estimate', value: 'W'.repeat(30) }
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3'], [{ type: 'Estimate', value: '3' }, wide])
+    await expect(historyRows(page)).toHaveCount(2)
+    const list = historyList(page)
+    const sideways = async label => {
+      const read = await list.evaluate(async el => {
+        await document.fonts.ready
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return { scroll: el.scrollWidth, client: el.clientWidth }
+      })
+      expect(read.scroll, `${label}: the list scrolls sideways`).toBeLessThanOrEqual(read.client)
+    }
+    // Round history decision 6: the list's end meets the inside of the panel's border, its gutter in the padding.
+    const end = async label => {
+      const gap = await list.evaluate(el => {
+        const panel = el.closest('section')
+        const inside = panel.getBoundingClientRect().right - parseFloat(getComputedStyle(panel).borderRightWidth)
+        return inside - el.getBoundingClientRect().right
+      })
+      expect(Math.abs(gap), `${label}: the list's end from the panel's border`).toBeLessThanOrEqual(0.5)
+    }
+    await sideways('1280 by 600')
+    await end('1280 by 600')
+
+    await page.setViewportSize({ width: 320, height: 600 })
+    await expect(historyRows(page)).toHaveText([`PP-2 ${wide.value}`])
+    await sideways('320, closed')
+    const share = await historyRows(page).evaluate(li => {
+      const style = getComputedStyle(li)
+      const pad = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+      return li.firstElementChild.getBoundingClientRect().width / (li.getBoundingClientRect().width - pad)
+    })
+    expect(share, "the issue's share of the row").toBeGreaterThanOrEqual(0.5)
+
+    await historyToggle(page).click()
+    await expect(historyRows(page)).toHaveCount(2)
+    await sideways('320, opened')
+    await end('320, opened')
+  })
 })
 
-// 640 by 300 is the laptop at 200%; only the failure message takes the dialog past it.
+test.describe(() => {
+  test.use({ viewport: { width: 320, height: 640 } })
+
+  test('a legend with a one-segment link wider than the dialog wraps within it, 320 by 640', async ({ join }) => {
+    const { page } = await join('Alice')
+    const link = `https://example.com/${'a'.repeat(120)}`
+    await setIssue(page, link)
+    await page.getByRole('button', { name: 'Show votes' }).click()
+    await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+    await nextButton(page).click()
+    await expect(estimateRow(page)).toHaveAccessibleName(`Estimate for ${link}`)
+    // Chromium scrolls the dialog to its focused part, which can take the legend above its top.
+    await nextDialog(page).evaluate(dialog => (dialog.scrollTop = 0))
+    const legend = estimateRow(page).locator('legend')
+    const read = await readBoxes(page, { dialog: nextDialog(page), legend })
+    expect(within(read.boxes.legend, read.boxes.dialog), JSON.stringify(read.boxes)).toBe(true)
+    const sideways = await nextDialog(page).evaluate(el => el.scrollWidth - el.clientWidth)
+    expect(sideways, 'the dialog scrolls sideways').toBeLessThanOrEqual(0)
+
+    // A lifted chip keeps --space-2 clear above it, as touching was the defect.
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const chips = estimateRow(page).locator('.next-chip')
+    const names = await chips.allTextContents()
+    const tops = await chips.evaluateAll(els => els.map(el => el.getBoundingClientRect().top))
+    const second = tops.findIndex(top => top > tops[0] + 0.5)
+    expect(second, 'the chips wrap onto a second line').toBeGreaterThan(0)
+    const space = 0.5 * read.rem
+    await checkEstimate(page, names[0])
+    const first = await readBoxes(page, { legend, chip: chips.first() })
+    const underLegend = first.boxes.chip.y - (first.boxes.legend.y + first.boxes.legend.height)
+    expect(underLegend, 'the lifted first-line chip under the legend').toBeGreaterThanOrEqual(space - 0.5)
+    await checkEstimate(page, names[second])
+    const lifted = await readBoxes(page, { chip: chips.nth(second) })
+    const bottoms = await chips.evaluateAll(els => els.map(el => el.getBoundingClientRect().bottom))
+    const lineOne = Math.max(...bottoms.slice(0, second))
+    const underLine = lifted.boxes.chip.y - lineOne
+    expect(underLine, 'the lifted second-line chip under the first line').toBeGreaterThanOrEqual(space - 0.5)
+  })
+})
+
+for (const viewport of [{ width: 392, height: 800 }, { width: 320, height: 800 }]) {
+  test.describe(() => {
+    test.use({ viewport })
+
+    // Next issue spec decision 7's width; a fixed probe on the body resolves 100% against the viewport, as the modal.
+    test(`the dialog takes the spec's width, ${viewport.width} by ${viewport.height}`, async ({ join }) => {
+      const { page } = await join('Alice')
+      await page.getByRole('button', { name: 'Show votes' }).click()
+      await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
+      await nextButton(page).click()
+      await expect(nextDialog(page)).toBeVisible()
+      const formula = await page.evaluate(() => {
+        const probe = document.createElement('div')
+        probe.style.cssText = 'position: fixed; width: min(36rem, 100% - 2 * var(--space-4))'
+        document.body.append(probe)
+        const { width } = probe.getBoundingClientRect()
+        probe.remove()
+        return width
+      })
+      const { width } = await nextDialog(page).boundingBox()
+      expect(Math.abs(width - formula), `the dialog ${width} px, the formula ${formula} px`).toBeLessThanOrEqual(0.5)
+    })
+  })
+}
+
+test.describe(() => {
+  test.use({ viewport: floor })
+
+  // Review Focus 4 of the round history plan: the roster scrolls inside the sidebar, nothing past the page.
+  test('a full history and a full roster share the sidebar at the floor', async ({ join, voters, room }) => {
+    const { page } = await fill(join, voters, 'Voter', 14)
+    await recordRounds(page, room, 1, ['PP-2', 'PP-3', 'PP-4', 'PP-5', 'PP-6', 'PP-7'])
+    await expect(historyRows(page)).toHaveCount(6)
+    const roster = page.getByRole('complementary', { name: 'Participants' })
+    const list = historyPanel(page).getByRole('list')
+    const read = await readBoxes(page, { roster, sidebar: roster.locator('..'), list })
+    const { boxes } = read
+    expect(read.scrolls, 'the page scrolls').toBe(0)
+    const overflows = await roster.evaluate(el => el.scrollHeight > el.clientHeight)
+    expect(overflows, 'the roster scrolls').toBe(true)
+    const foot = boxes.sidebar.y + boxes.sidebar.height + 0.5
+    expect(boxes.roster.y + boxes.roster.height, "the roster's foot within the sidebar").toBeLessThanOrEqual(foot)
+    const row = 1.75 * read.rem
+    const tall = Math.abs(boxes.list.height - 5 * row)
+    expect(tall, `the list ${boxes.list.height} px, 5 rows`).toBeLessThanOrEqual(0.5)
+  })
+})
+
+// 640 by 300 is the laptop at 200%.
 for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }]) {
   test.describe(() => {
     test.use({ viewport })
@@ -819,7 +984,9 @@ for (const viewport of [{ width: 320, height: 640 }, { width: 640, height: 300 }
       await expect(nextButton(page)).not.toHaveAttribute('aria-disabled')
       await page.route(nextIssueUrl(room), route => route.abort())
       await nextButton(page).click()
-      await page.keyboard.press('Enter')
+      // Nobody voted, so nothing is checked and Enter would only ask for a choice.
+      await checkEstimate(page, 'Skip')
+      await nextSubmit(page).click()
       await expect(nextStatus(page)).toHaveText('Could not move on to the next issue')
       const { boxes } = await readBoxes(page, { dialog: nextDialog(page) })
       const { x, y, width, height } = boxes.dialog

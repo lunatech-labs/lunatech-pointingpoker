@@ -43,6 +43,7 @@ class SSESpec extends AnyWordSpec with must.Matchers with BeforeAndAfterAll:
       currentIssue = issue,
       votesRevealed = false,
       round = 1,
+      history = Nil,
       users = List(
         RoomSnapshot.Participant(
           id = userId,
