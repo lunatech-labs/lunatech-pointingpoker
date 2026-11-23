@@ -33,6 +33,13 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
     document.body.removeChild(el)
     onCopy()
   }
+  const showQr = () => {
+    const dialog = qrDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    // showModal() scrolls to Close, hiding a short viewport's code top
+    dialog.scrollTop = 0
+  }
   const leave = (event: MouseEvent) => {
     event.preventDefault()
     onLeave()
@@ -57,11 +64,7 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
           className="room-header-copy"
           type="button"
           aria-label="QR code"
-          onClick={() => {
-            qrDialog.current?.showModal()
-            // showModal() scrolls to Close, hiding a short viewport's code top
-            if (qrDialog.current) qrDialog.current.scrollTop = 0
-          }}
+          onClick={showQr}
         >
           <QrCode />
           <span className="room-header-copy-word">QR code</span>
