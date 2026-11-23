@@ -43,7 +43,7 @@ Inputs the spec implies that no task's tests exercise. As in earlier plans under
 3. Forced colours (decision 2): the code should stay black on white. Unchecked in emulation.
 4. A banner arriving while the dialog is open (states × events) should show behind the backdrop and leave the dialog open; only a snapshot update is tested.
 5. The room id at its longest, 26 characters, should stay on one line on desktop (decision 3); the 1280 case uses whatever slug the test server makes.
-6. The room id's size step (decision 3, amended after the final review): `--text-3xl` while the dialog's content is 43 rem wide, `--text-xl` below; no case reads the id's size.
+6. The room id's size step (decision 3, amended after the final review): `--text-3xl` while the dialog's content is at least 43 rem wide, `--text-xl` below; no case reads the id's size.
 
 ---
 

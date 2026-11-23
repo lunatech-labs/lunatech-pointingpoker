@@ -42,7 +42,7 @@ is drawn in `docs/design/room.html?qr=1`.
 3. **The dialog.** `RoomQrDialog.tsx` and `room-qr-dialog.css` draw a native
    `<dialog closedby="any">`, mounted in the header as a sibling of ☰ and its row, with
    the mockup's content: heading "Scan to join", the code, the room id (`--text-3xl`, J7's
-   shared-screen text, while the dialog's content is 43 rem wide, which holds the longest id
+   shared-screen text, while the dialog's content is at least 43 rem wide, which holds the longest id
    at that size; `--text-xl` below, queried on the dialog, a size container, not the page or
    viewport), the room link as selectable text, and Close.
    It holds no React state: `RoomHeader` keeps a ref, and the browser keeps open or
