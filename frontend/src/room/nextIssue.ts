@@ -1,7 +1,7 @@
 import { oneLine } from './issueEditor'
 import { resultHeadline } from './result'
 
-// What the dialog's legend shows: the issue and round it was submitted with, text and link derived at render.
+// What the dialog's legend shows: the issue and history position it was submitted with, text and link derived at render.
 export type Legend = { issue: string; position: number }
 
 // The Next issue dialog's matrix (Next issue and round history specs); every other event leaves the state as is.

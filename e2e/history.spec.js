@@ -267,7 +267,7 @@ test('a link row keeps its end, a text row its start', async ({ join, room }) =>
   await expect(firstOf(1), 'its href is the full issue').toHaveAttribute('href', jira)
   await expect(firstOf(2), 'the short link row is a link').toHaveJSProperty('tagName', 'A')
   await expect(firstOf(3), 'a text row is no link').not.toHaveJSProperty('tagName', 'A')
-  // Ruling 6: neighbouring links leave room for the focus ring.
+  // Neighbouring links leave room for the focus ring (clickable link spec, decision 5).
   await firstOf(1).focus()
   await page.keyboard.press('Tab')
   await expect(firstOf(2)).toBeFocused()

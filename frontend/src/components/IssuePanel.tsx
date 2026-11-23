@@ -19,7 +19,7 @@ type Props = {
 
 const focusFell = () => document.activeElement === null || document.activeElement === document.body
 
-// A link issue as room.html's segments; any other issue as is (ruling 3).
+// A link issue as room.html's segments; any other issue as is (clickable link plan, ruling 3).
 function segments(issue: string) {
   if (!isLinkIssue(issue)) return issue
   const url = issue.trim()
