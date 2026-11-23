@@ -61,7 +61,6 @@
   .qr-code { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #fff; shape-rendering: crispEdges; }   /* fills the dialog, which is sized */
   .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
   .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
-  .qr-placeholder { margin: 0; font-size: var(--text-xs); color: var(--grey); }
   @media (width < 51.75rem) { .qr-room { font-size: var(--text-xl); } }
   /* max-height and overflow above stand in for a real <dialog>'s own modal cap */
   /* The phone's chip: both icons, their 44 px targets side by side without overlap */
@@ -91,7 +90,7 @@
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
 // voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed, moved-on), theirs (conflict's issue), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
-// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened), qr=1 (the QR code dialog open).
+// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened), qr=1 (the QR code dialog open; its code is a placeholder pattern, not scannable).
 const q = new URLSearchParams(location.search)
 const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
 const isPhone = () => document.querySelector('.room-page').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
@@ -235,7 +234,7 @@ function draw() {
       <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
   const roomId = q.get('room') || 'brave-golden-otter'
   const qrModal = qrShown ? `<div class="next-backdrop" data-qr-backdrop><section class="panel qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-title"><h2 id="qr-title">Scan to join</h2>${qrSvg}
-    <p class="qr-room">${roomId}</p><p class="qr-link">https://pointingpoker.lunatech.com/${roomId}</p><p class="qr-placeholder">Mockup: a placeholder pattern, not a scannable code.</p>
+    <p class="qr-room">${roomId}</p><p class="qr-link">https://pointingpoker.lunatech.com/${roomId}</p>
     <button class="button button-secondary" type="button" data-qr-close>Close</button></section></div>` : ''
   const modal = qrModal + (nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${messages.includes('moved-on') ? movedOnMsg : nextForm}</section></div>` : '')
   const issueBlock = editing
