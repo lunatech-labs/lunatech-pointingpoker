@@ -27,6 +27,8 @@ import {
   votedMark
 } from './fixtures.js'
 
+const L = 'https://acme.atlassian.net/browse/PP-2?atlOrigin=eyJpIjoi'
+
 test('an open issue editor shows the notice once the room moves on, and OK puts focus on Edit', async ({
   join,
   room
@@ -39,18 +41,20 @@ test('an open issue editor shows the notice once the room moves on, and OK puts 
   await issueBox(alice.page).fill('mine')
   await bob.page.getByRole('button', { name: 'Show votes' }).click()
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-2', outcome: { type: 'Skip' } }
+    data: { round: 1, issue: L, outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
 
-  await expect(panel.getByRole('status')).toHaveText('The room moved on to: "PP-2" OK')
+  await expect(panel.getByRole('status')).toHaveText(`The room moved on to: "${L}" OK`)
+  await expect(panel.getByRole('status').getByRole('link')).toHaveText(L)
+  await expect(panel.getByRole('status').getByRole('link')).toHaveAttribute('href', L)
   await expect(issueBox(alice.page)).toHaveCount(0)
   // The field held focus, so its text takes it and a keystroke meant for the form presses nothing.
-  await expect(panel.getByText('The room moved on to: "PP-2"')).toBeFocused()
+  await expect(panel.getByText(`The room moved on to: "${L}"`)).toBeFocused()
 
   await panel.getByRole('button', { name: 'OK' }).click()
   await expect(panel.getByRole('status')).toBeEmpty()
-  await expect(issueText(alice.page)).toHaveText('PP-2')
+  await expect(issueText(alice.page)).toHaveText(L)
   await expect(issueEdit(alice.page)).toBeFocused()
 })
 
@@ -230,16 +234,43 @@ test('a page that finds the room moved on shows the notice', async ({ join, room
   await expect(nextStatus(alice.page)).toBeEmpty()
 
   const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
-    data: { round: 1, issue: 'PP-1b', outcome: { type: 'Skip' } }
+    data: { round: 1, issue: L, outcome: { type: 'Skip' } }
   })
   expect(posted.status()).toBe(204)
-  await expect(nextStatus(alice.page)).toHaveText('The room moved on to: "PP-1b" OK')
+  await expect(nextStatus(alice.page)).toHaveText(`The room moved on to: "${L}" OK`)
+  await expect(nextStatus(alice.page).getByRole('link')).toHaveText(L)
+  await expect(nextStatus(alice.page).getByRole('link')).toHaveAttribute('href', L)
   await expect(nextField(alice.page)).toHaveCount(0)
-  await expect(nextDialog(alice.page).getByText('The room moved on to: "PP-1b"')).toBeFocused()
+  await expect(nextDialog(alice.page).getByText(`The room moved on to: "${L}"`)).toBeFocused()
 
   await nextDialog(alice.page).getByRole('button', { name: 'OK' }).click()
   await expect(nextDialog(alice.page)).toBeHidden()
   await expect(showVotes(alice.page)).toBeFocused()
+
+  await reveal(alice.page)
+  await nextButton(alice.page).click()
+  const empty = await bob.page.request.post(`/rooms/${room}/next-issue`, {
+    data: { round: 2, issue: '', outcome: { type: 'Skip' } }
+  })
+  expect(empty.status()).toBe(204)
+  await expect(nextStatus(alice.page)).toHaveText('The room moved on, with no issue yet OK')
+  await expect(nextStatus(alice.page).getByRole('link')).toHaveCount(0)
+})
+
+test('the moved-on notice of a text issue holds no link', async ({ join, room }) => {
+  const T = 'PP-1234 Fix the login form'
+  const alice = await join('Alice')
+  const bob = await join('Bob', { role: 'Facilitator' })
+  await setIssue(alice.page, 'PP-1')
+  await reveal(alice.page)
+  await nextButton(alice.page).click()
+
+  const posted = await bob.page.request.post(`/rooms/${room}/next-issue`, {
+    data: { round: 1, issue: T, outcome: { type: 'Skip' } }
+  })
+  expect(posted.status()).toBe(204)
+  await expect(nextStatus(alice.page)).toHaveText(`The room moved on to: "${T}" OK`)
+  await expect(nextStatus(alice.page).getByRole('link')).toHaveCount(0)
 })
 
 test('a failed move keeps the text and says so', async ({ join, room }) => {

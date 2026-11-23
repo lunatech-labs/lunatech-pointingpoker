@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { movedOnText } from '../room/nextIssue'
+import { IssueLink } from './IssueLink'
 import { Message } from './Message'
 
 type Props = { issue: string; focus: boolean; onOk: () => void }
@@ -15,7 +15,13 @@ export function MovedOn({ issue, focus, onOk }: Props) {
   return (
     <Message tone="notice">
       <span ref={text} tabIndex={-1}>
-        {movedOnText(issue)}
+        {issue ? (
+          <>
+            The room moved on to: "<IssueLink issue={issue}>{issue}</IssueLink>"
+          </>
+        ) : (
+          'The room moved on, with no issue yet'
+        )}
       </span>{' '}
       <button type="button" className="button-quiet" onClick={onOk}>
         OK

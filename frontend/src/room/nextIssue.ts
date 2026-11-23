@@ -1,10 +1,6 @@
 import { oneLine } from './issueEditor'
 import { resultHeadline } from './result'
 
-// The notice that replaces a form once the room moves on (Next issue spec, Terms).
-export const movedOnText = (issue: string) =>
-  issue ? `The room moved on to: "${issue}"` : 'The room moved on, with no issue yet'
-
 // The Next issue dialog's matrix (Next issue and round history specs); every other event leaves the state as is.
 export type NextState =
   | { mode: 'closed' }

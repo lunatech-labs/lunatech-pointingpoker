@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closed, movedOnText, preselected, sameChoice, shows, step, type Choice, type NextState } from './nextIssue'
-
-describe('movedOnText', () => {
-  it('names the issue the room moved on to', () => {
-    expect(movedOnText('PP-2')).toBe('The room moved on to: "PP-2"')
-  })
-
-  it('says so when the room moved on with no issue', () => {
-    expect(movedOnText('')).toBe('The room moved on, with no issue yet')
-  })
-})
+import { closed, preselected, sameChoice, shows, step, type Choice, type NextState } from './nextIssue'
 
 const five: Choice = { type: 'Estimate', value: '5' }
 const parked: Choice = { type: 'Parked' }
