@@ -130,7 +130,7 @@ test.describe("☰'s row and a keyboard focus on the phone", () => {
   test('Escape elsewhere leaves the row open', async ({ join }) => {
     const { page } = await join('Alice')
     await menu(page).click()
-    await page.getByRole('link', { name: 'Copy link' }).focus()
+    await page.getByRole('button', { name: 'Copy link' }).focus()
     await page.keyboard.press('Escape')
     await expect(menu(page)).toHaveAttribute('aria-expanded', 'true')
     await expect(switchTo(page, 'facilitator')).toBeVisible()

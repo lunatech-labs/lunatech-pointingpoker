@@ -19,8 +19,7 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
   const menuButton = useRef<HTMLButtonElement>(null)
   // Called whatever the role, as a hook must be; nothing it returns is drawn without one.
   const { sentence, label, press } = useRoleSwitch(role ?? 'Voter', onSwitch)
-  const copy = (event: MouseEvent) => {
-    event.preventDefault()
+  const copy = () => {
     const el = document.createElement('textarea')
     el.value = window.location.origin + '/' + roomId
     document.body.appendChild(el)
@@ -45,10 +44,10 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
         <h1 className="room-header-id" tabIndex={-1} data-dismiss-focus>
           {roomId}
         </h1>
-        <a className="room-header-copy" href="#" aria-label="Copy link" onClick={copy}>
+        <button className="room-header-copy" type="button" aria-label="Copy link" onClick={copy}>
           <Link />
           <span className="room-header-copy-word">Copy link</span>
-        </a>
+        </button>
       </span>
       <span className="room-header-copy-note" role="status">
         {copied ? 'Link copied' : ''}
