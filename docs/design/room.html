@@ -56,13 +56,14 @@
   @container page (width >= 51.75rem) { .round-history .round-history-toggle { display: none; } }   /* past looks.css's display, linked later */
   /* The QR code dialog (qr=1, #579): the code as large as the window allows, the room id and the link under it */
   .room-header-chip .room-header-qr { font-family: inherit; cursor: pointer; }
-  .qr-dialog { --qr-reserved: 15rem; width: auto; max-width: 100%; max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
+  .qr-dialog { --qr-reserved: 15rem; width: min(max(14rem, 100dvh - var(--qr-reserved)), 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
   .qr-dialog h2 { margin: 0; font-size: var(--text-lg); }
-  .qr-code { display: block; width: min(100vw - 2 * var(--space-4) - 2 * var(--panel-inline) - 2 * var(--line-hairline), 100dvh - 2 * var(--space-4) - 2 * var(--panel-gap) - 2 * var(--line-hairline) - var(--qr-reserved)); min-width: 12rem; height: auto; aspect-ratio: 1; background: #fff; shape-rendering: crispEdges; }
+  .qr-code { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #fff; shape-rendering: crispEdges; }   /* fills the dialog, which is sized */
   .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
   .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
   .qr-placeholder { margin: 0; font-size: var(--text-xs); color: var(--grey); }
-  @media (width < 51.75rem) { .qr-dialog { --qr-reserved: 12rem; } .qr-room { font-size: var(--text-xl); } }
+  @media (width < 51.75rem) { .qr-room { font-size: var(--text-xl); } }
+  /* max-height and overflow above stand in for a real <dialog>'s own modal cap */
   /* The phone's chip: both icons, their 44 px targets side by side without overlap */
   @container page (width < 51.75rem) { .room-header-chip:has(.room-header-qr) { gap: var(--space-3); } }
 </style>

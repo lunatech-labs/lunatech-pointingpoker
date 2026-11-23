@@ -33,16 +33,15 @@ is drawn in `docs/design/room.html?qr=1`.
    shared-screen text; `--text-xl` on phone), the room link as selectable text, and Close.
    It holds no React state: `RoomHeader` keeps a ref, and the browser keeps open or closed.
    The dialog's own `display` is left to the browser, as Next issue's is, so it hides when
-   closed: the content is block flow, centred by `text-align` with the code's
-   `margin-inline: auto`, each item after the first `margin-top: var(--space-3)`, the
-   mockup's gap. The code's size follows the mockup's `.qr-code` rule, which also subtracts
-   the panel's two borders (`2 * var(--line-hairline)`) from both terms: without them the
-   code is 2 px wider than its box at 320 px. `--qr-reserved` keeps the mockup's 15 rem,
-   12 rem below 51.75 rem, moved into `room-qr-dialog.css`. The dialog's `max-width` and
-   `max-height` are `calc(100% - 2 * var(--space-4))`, matching the rule's `2 * --space-4`
-   term, which the mockup gets from `.next-backdrop`'s padding instead (the browser's cap
-   leaves 6 px less, and `max-width: none` with no width reaches both edges, measured at
-   320 px). A short viewport scrolls it: the browser's modal style gives `overflow: auto`. `::backdrop` follows
+   closed: the content is block flow, centred by `text-align`, each item after the first
+   `margin-top: var(--space-3)`, the mockup's gap. The dialog is sized and the code fills
+   it, as Next issue sets a `width` with `max-width: none`:
+   `width: min(max(14rem, 100dvh - var(--qr-reserved)), 100% - 2 * var(--space-4))`, and
+   the code `width: 100%` with `aspect-ratio: 1`, so it never outgrows its box. The ceiling
+   wins over the floor, so large text cannot push the dialog off a phone. `--qr-reserved`,
+   one 15 rem, estimates the height of the rest: too small, a tall dialog scrolls a little;
+   too large, the code is a little smaller. The browser's modal cap scrolls a dialog
+   taller than the viewport. `::backdrop` follows
    `next-issue-dialog.css`.
 4. **The button.** In the room id's chip after Copy link, with Copy link's class and look:
    lucide's `QrCode` icon, the word "QR code" on desktop, the icon alone on phone, and
@@ -94,8 +93,9 @@ and a drag from the content out or from outside in, keep a `<dialog closedby="an
 a click outside and Escape close it and return focus; a short modal dialog scrolls with
 no author `overflow`; a double-click on the opener closes
 it again; a held Enter toggles it, and `pressRules`' keydown rule stops that; an author
-`display` on a closed `<dialog>` shows it; at 320 px a dialog with `max-width: none` and
-no width spans the viewport.
+`display` on a closed `<dialog>` shows it. A dialog sized by decision 3's `width`, its
+code at `width: 100%`, keeps the code inside its box at 1280 × 800, 1920 × 1080, 320 × 568
+and 568 × 320, with 16 px side gaps at 320 and no scroll but at 568 × 320.
 
 ## Accepted costs
 
@@ -110,26 +110,30 @@ no width spans the viewport.
 
 New `e2e/qr.spec.js`, Chromium and Firefox:
 
-- At 1280 × 800 the dialog is hidden before the press. After it, the code's element
-  screenshot, drawn on a canvas in the page, decodes with `jsqr` 1.4.0 (a dev dependency,
-  its UMD build by `addScriptTag`) to `page.url()`; the dialog's link text equals it too.
+- At 1280 × 800 the dialog is hidden before the press, and fits unscrolled after it. The
+  code's element screenshot, drawn on a canvas in the page, decodes with `jsqr` 1.4.0 (a
+  dev dependency, its UMD build by `addScriptTag`) to `page.url()`; the dialog's link text
+  equals it too.
 - Close, Escape and a click on the backdrop each close it: Close is focused after each
   opening, and QR code after each closing.
 - Enter held on QR code for exactly one repeat leaves it open, Close focused (unguarded,
   that one repeat presses Close).
 - While Alice's dialog is open, Bob votes; it stays open with its code.
 - At 320 × 568 (the test server's short link), the button, found by role and name, opens
-  it; it scrolls on neither axis and sits 16 px (±0.5) from the left and right edges.
-  Resized to 568 × 320, it sits 16 px from top and bottom, and setting its `scrollTop`
-  moves it.
+  it; it scrolls on neither axis and sits 16 px (±0.5) from the left and right edges. The
+  test link and a production one both wrap to two lines there. Resized to 568 × 320, the
+  dialog is 14 rem wide, the floor.
 - `layout.spec.js`'s 320 px case adds QR code to the boxes the shown copy hint must not cover.
 
 Light dismiss's drag and padding behaviour is the browser's, proven by the spike, not
-tested here. Each case is proven to fail by mutation: the encoded link, the shown link,
-`closedby`, the `aria-label`, the focus on Close, the `pressRules` spread, a `display` on
-the dialog, `max-width: none`, `max-height`, the borders in the code's rule, and a key that changes with the snapshot.
+tested here. Each case is proven to fail by mutation: the encoded link and the shown link
+(the decode), `closedby` and the focus on Close (the closing case), the `aria-label` and the
+dialog's `width` dropped (the 320 case), the floor dropped (568 × 320), `--qr-reserved`
+halved (1280 fit), a `display` on the dialog (hidden before the press), the `pressRules`
+spread (held Enter), and a key that changes with the snapshot (Bob's vote).
 
 ## Documents
 
 `ui-reference.md`'s contract section (decision 10). The mockup is settled for this step:
-it already draws the dialog, the button with its `aria-label`, and the ☰ row left open.
+it draws the dialog sized as decision 3 says, the button with its `aria-label`, and the ☰
+row left open.
