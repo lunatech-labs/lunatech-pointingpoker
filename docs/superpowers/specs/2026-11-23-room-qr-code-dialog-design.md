@@ -24,7 +24,8 @@ is drawn in `docs/design/room.html?qr=1`.
 1. **Encoder.** `lean-qr` 2.7.4: MIT, own types, no dependencies, 4.2 kB gzipped for link
    to SVG, against `qr` 0.7.2 at 6.6 kB and `qrcode-generator` 2.0.4 at 7.4 kB (each
    bundled by rolldown, minified). It goes in the root `package.json`'s dependencies.
-2. **Drawing.** The modules are one SVG path, black on white, in a 4-module quiet zone, an
+2. **Drawing.** The modules are one SVG path, black on a white `<rect>` that spans the
+   4-module quiet zone, an
    `<svg role="img" aria-label="QR code of the room link">` as the mockup draws. The code
    is computed in render: about a millisecond, and the room id never changes on a page.
 3. **The dialog.** `RoomQrDialog.tsx` and `room-qr-dialog.css` draw a native
@@ -32,17 +33,15 @@ is drawn in `docs/design/room.html?qr=1`.
    mockup's content: heading "Scan to join", the code, the room id (`--text-3xl`, J7's
    shared-screen text; `--text-xl` on phone), the room link as selectable text, and Close.
    It holds no React state: `RoomHeader` keeps a ref, and the browser keeps open or closed.
-   The dialog's own `display` is left to the browser, as Next issue's is, so it hides when
-   closed: the content is block flow, centred by `text-align`, each item after the first
-   `margin-top: var(--space-3)`, the mockup's gap. The dialog is sized and the code fills
-   it, as Next issue sets a `width` with `max-width: none`:
-   `width: min(max(14rem, 100dvh - var(--qr-reserved)), 100% - 2 * var(--space-4))`, and
-   the code `width: 100%` with `aspect-ratio: 1`, so it never outgrows its box. The ceiling
-   wins over the floor, so large text cannot push the dialog off a phone. `--qr-reserved`,
-   one 15 rem, estimates the height of the rest: too small, a tall dialog scrolls a little;
-   too large, the code is a little smaller. The browser's modal cap scrolls a dialog
-   taller than the viewport. `::backdrop` follows
-   `next-issue-dialog.css`.
+   Its width does not depend on its height: `width: min(46rem, 100% - 2 * var(--space-4))`
+   with `max-width: none`, as Next issue's, keeps the longest room id (26 characters) on
+   one line on desktop. Open, it is a centred column, `gap: var(--space-3)`, the mockup's;
+   the `display: flex` is on `[open]` only, so a closed dialog keeps the browser's `none`.
+   The code is `width: 100%` with `aspect-ratio: 1`, and shrinks (`flex-shrink`, floored
+   by `min-height: 8rem`) to the height the rest leaves under the browser's modal cap, so
+   wrapped text shrinks the code instead of scrolling the dialog. A code shorter than its
+   box's width is drawn centred in it, the SVG's default fit. Below the floor the modal cap
+   scrolls the dialog. `::backdrop` follows `next-issue-dialog.css`.
 4. **The button.** In the room id's chip after Copy link, with Copy link's class and look:
    lucide's `QrCode` icon, the word "QR code" on desktop, the icon alone on phone, and
    `aria-label="QR code"` as Copy link has. On phone the chip's gap is 12 px so the two
@@ -93,9 +92,12 @@ and a drag from the content out or from outside in, keep a `<dialog closedby="an
 a click outside and Escape close it and return focus; a short modal dialog scrolls with
 no author `overflow`; a double-click on the opener closes
 it again; a held Enter toggles it, and `pressRules`' keydown rule stops that; an author
-`display` on a closed `<dialog>` shows it. A dialog sized by decision 3's `width`, its
-code at `width: 100%`, keeps the code inside its box at 1280 × 800, 1920 × 1080, 320 × 568
-and 568 × 320, with 16 px side gaps at 320 and no scroll but at 568 × 320.
+`display` on a closed `<dialog>` shows it, and one on `[open]` does not. A dialog laid out
+as decision 3 says, with the longest room id, scrolls at none of 1280 × 600, 1280 × 630,
+1920 × 1080 and 320 × 568. The mockup, with an 18- and a 26-character id, also keeps the id
+on one line at 1472 × 704 and 2944 × 1493, and scrolls only at 568 × 320. Decision 3's
+first sizing, its width taken from the viewport's height less an estimate of the text's,
+scrolled at 1280 × 600 and 1280 × 630, and at 1920 × 1080 with the longest id.
 
 ## Accepted costs
 
@@ -103,14 +105,18 @@ and 568 × 320, with 16 px side gaps at 320 and no scroll but at 568 × 320.
 - Decision 7's double-click flash.
 - Safari's focus return is untested: a pointer user's focus was never on the button, and
   a keyboard user's return is assumed.
-- On a short viewport, such as a phone on its side, the dialog scrolls.
+- On a viewport too short for the code's floor, such as a phone on its side, the dialog
+  scrolls.
+- On a short desktop the code is narrower than the dialog: in the mockup at 1280 × 600, a
+  340 px code in a 734 px dialog.
 - A banner's live region may go unannounced while the modal is open (inferred).
 
 ## Tests
 
 New `e2e/qr.spec.js`, Chromium and Firefox:
 
-- At 1280 × 800 the dialog is hidden before the press, and fits unscrolled after it. The
+- At 1280 × 600, the laptop floor (narrow-cases spec, decision 3), the dialog is hidden
+  before the press, and fits unscrolled after it. The
   code's element screenshot, drawn on a canvas in the page, decodes with `jsqr` 1.4.0 (a
   dev dependency, its UMD build by `addScriptTag`) to `page.url()`; the dialog's link text
   equals it too.
@@ -120,17 +126,16 @@ New `e2e/qr.spec.js`, Chromium and Firefox:
   that one repeat presses Close).
 - While Alice's dialog is open, Bob votes; it stays open with its code.
 - At 320 × 568 (the test server's short link), the button, found by role and name, opens
-  it; it scrolls on neither axis and sits 16 px (±0.5) from the left and right edges. The
-  test link and a production one both wrap to two lines there. Resized to 568 × 320, the
-  dialog is 14 rem wide, the floor.
+  it; it scrolls on neither axis and sits 16 px (±0.5) from the left and right edges.
+  Resized to 568 × 320, the code is 8 rem tall, the floor.
 - `layout.spec.js`'s 320 px case adds QR code to the boxes the shown copy hint must not cover.
 
 Light dismiss's drag and padding behaviour is the browser's, proven by the spike, not
 tested here. Each case is proven to fail by mutation: the encoded link and the shown link
 (the decode), `closedby` and the focus on Close (the closing case), the `aria-label` and the
-dialog's `width` dropped (the 320 case), the floor dropped (568 × 320), `--qr-reserved`
-halved (1280 fit), a `display` on the dialog (hidden before the press), the `pressRules`
-spread (held Enter), and a key that changes with the snapshot (Bob's vote).
+dialog's `width` dropped (the 320 case), the floor dropped (568 × 320), the code's shrink
+dropped (1280 fit), the `[open]` dropped from the `display` (hidden before the press), the
+`pressRules` spread (held Enter), and a key that changes with the snapshot (Bob's vote).
 
 ## Documents
 

@@ -56,9 +56,9 @@
   @container page (width >= 51.75rem) { .round-history .round-history-toggle { display: none; } }   /* past looks.css's display, linked later */
   /* The QR code dialog (qr=1, #579): the code as large as the window allows, the room id and the link under it */
   .room-header-chip .room-header-qr { font-family: inherit; cursor: pointer; }
-  .qr-dialog { --qr-reserved: 15rem; width: min(max(14rem, 100dvh - var(--qr-reserved)), 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
+  .qr-dialog { width: min(46rem, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
   .qr-dialog h2 { margin: 0; font-size: var(--text-lg); }
-  .qr-code { display: block; width: 100%; height: auto; aspect-ratio: 1; background: #fff; shape-rendering: crispEdges; }   /* fills the dialog, which is sized */
+  .qr-code { display: block; flex: 0 1 auto; min-height: 8rem; width: 100%; height: auto; aspect-ratio: 1; shape-rendering: crispEdges; }   /* the dialog's width, shrunk to the height the text leaves */
   .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
   .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
   @media (width < 51.75rem) { .qr-room { font-size: var(--text-xl); } }
@@ -106,7 +106,7 @@ const qrSvg = (() => {
   for (let i = 8; i < n - 8; i += 2) { on.add(`${i},6`); on.add(`6,${i}`) }
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!reserved(x, y)) { seed = (seed * 1103515245 + 12345) % 2147483648; if ((seed >> 16) & 1) on.add(`${x},${y}`) }
   const d = [...on].map(k => { const [x, y] = k.split(','); return `M${x} ${y}h1v1h-1z` }).join('')
-  return `<svg class="qr-code" viewBox="-4 -4 37 37" role="img" aria-label="QR code of the room link"><path fill="#000" d="${d}"/></svg>`
+  return `<svg class="qr-code" viewBox="-4 -4 37 37" role="img" aria-label="QR code of the room link"><rect x="-4" y="-4" width="37" height="37" fill="#fff"/><path fill="#000" d="${d}"/></svg>`
 })()
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
