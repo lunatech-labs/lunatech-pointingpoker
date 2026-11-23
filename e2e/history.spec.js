@@ -262,6 +262,28 @@ test('a link row keeps its end, a text row its start', async ({ join, room }) =>
   const long = await read(historyRows(page).nth(1))
   expect(Math.abs(long.bdi.right - long.cell.right), "the long link's end at the cell's").toBeLessThanOrEqual(0.5)
   expect(long.bdi.left, "the long link's start cut off").toBeLessThan(long.cell.left)
+  const firstOf = n => historyRows(page).nth(n).locator(':scope > :first-child')
+  await expect(firstOf(1), 'the long link row is a link').toHaveJSProperty('tagName', 'A')
+  await expect(firstOf(1), 'its href is the full issue').toHaveAttribute('href', jira)
+  await expect(firstOf(2), 'the short link row is a link').toHaveJSProperty('tagName', 'A')
+  await expect(firstOf(3), 'a text row is no link').not.toHaveJSProperty('tagName', 'A')
+  // Neighbouring links leave room for the focus ring (clickable link spec, decision 5).
+  await firstOf(1).focus()
+  await page.keyboard.press('Tab')
+  await expect(firstOf(2)).toBeFocused()
+  const gap = await page.evaluate(() => {
+    const [a, b] = [...document.querySelectorAll('.round-history li')]
+      .slice(1, 3)
+      .map(li => li.firstElementChild)
+    const style = getComputedStyle(b)
+    return {
+      focusVisible: b.matches(':focus-visible'),
+      ring: parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset),
+      space: b.getBoundingClientRect().top - a.getBoundingClientRect().bottom
+    }
+  })
+  expect(gap.focusVisible, 'the second link shows its ring').toBe(true)
+  expect(gap.space, 'the gap holds the focus ring').toBeGreaterThanOrEqual(gap.ring)
   const fits = await read(historyRows(page).nth(2))
   expect(Math.abs(fits.bdi.left - fits.cell.left), "the short link at the cell's left").toBeLessThanOrEqual(0.5)
   const cut = await read(historyRows(page).nth(3))

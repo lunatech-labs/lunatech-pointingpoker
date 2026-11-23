@@ -1,21 +1,20 @@
 import { oneLine } from './issueEditor'
 import { resultHeadline } from './result'
 
-// The notice that replaces a form once the room moves on (Next issue spec, Terms).
-export const movedOnText = (issue: string) =>
-  issue ? `The room moved on to: "${issue}"` : 'The room moved on, with no issue yet'
+// What the dialog's legend shows: the issue and history position it was submitted with, text and link derived at render.
+export type Legend = { issue: string; position: number }
 
 // The Next issue dialog's matrix (Next issue and round history specs); every other event leaves the state as is.
 export type NextState =
   | { mode: 'closed' }
   | { mode: 'open'; opening: number; draft: string; choice: Choice | null; failed: boolean; missing: boolean }
-  | { mode: 'sending'; opening: number; draft: string; choice: Choice; awaiting: number; legend: string }
+  | { mode: 'sending'; opening: number; draft: string; choice: Choice; awaiting: number; legend: Legend }
 
 export type NextEvent =
   | { type: 'pressed'; issue: string; round: number; checked: Choice | null }
   | { type: 'typed'; text: string }
   | { type: 'chose'; choice: Choice }
-  | { type: 'submit'; request: number; legend: string }
+  | { type: 'submit'; request: number; legend: Legend }
   | { type: 'cancel' } // Cancel or OK
   | { type: 'closed' } // the element's close event
   | { type: 'answered'; request: number; ok: boolean }
@@ -88,7 +87,7 @@ export function shows(
   failed: boolean
   missing: boolean
   movedOn: boolean
-  legend: string | null
+  legend: Legend | null
 } {
   const none = { failed: false, missing: false, movedOn: false }
   if (s.mode === 'closed') return { mode: s.mode, draft: '', choice: null, legend: null, ...none }

@@ -719,19 +719,61 @@ test("cancel drops the draft for the room's issue", async ({ join }) => {
 test('a concurrent change shows the notice, and Use theirs takes it', async ({ join }) => {
   const alice = await join('Alice')
   const bob = await join('Bob')
+  const theirs = 'https://github.com/acme/web/issues/412?tab=comments'
 
   await issueEdit(alice.page).click()
   await issueBox(alice.page).fill('mine')
-  await setIssue(bob, 'PP-2')
+  await setIssue(bob, theirs)
 
-  await expect(conflictNotice(alice.page)).toHaveText(/Changed by someone else to: "PP-2"/)
+  await expect(conflictNotice(alice.page)).toContainText(`Changed by someone else to: "${theirs}"`)
+  const link = conflictNotice(alice.page).getByRole('link')
+  await expect(link).toHaveText(theirs)
+  await expect(link).toHaveAttribute('href', theirs)
   await expect(issueBox(alice.page)).toHaveValue('mine')
   await alice.page.getByRole('button', { name: 'Use theirs' }).click()
-  await expect(issueBox(alice.page)).toHaveValue('PP-2')
+  await expect(issueBox(alice.page)).toHaveValue(theirs)
   await expect(conflictNotice(alice.page)).toHaveCount(0)
   await expect(issueBox(alice.page)).toHaveJSProperty('readOnly', false)
   // The link-button leaves with the notice, so the box takes focus back for Enter and Escape.
   await expect(issueBox(alice.page)).toBeFocused()
+})
+
+test('the conflict notice of a text issue holds no link', async ({ join }) => {
+  const alice = await join('Alice')
+  const bob = await join('Bob')
+  const text = 'PP-1234 Fix the login form'
+
+  await issueEdit(alice.page).click()
+  await issueBox(alice.page).fill('mine')
+  await setIssue(bob, text)
+
+  await expect(conflictNotice(alice.page)).toContainText(`Changed by someone else to: "${text}"`)
+  await expect(conflictNotice(alice.page).getByRole('link')).toHaveCount(0)
+})
+
+test("a link issue's heading links the whole issue in a new tab", async ({ join }) => {
+  const alice = await join('Alice')
+  const url = 'HTTPS://acme.atlassian.net/browse/PP-1240?atlOrigin=eyJpIjoi'
+  await setIssue(alice, `  ${url}  `)
+
+  const link = issueText(alice.page).getByRole('link')
+  await expect(link).toHaveCount(1)
+  await expect(link).toHaveAttribute('href', url)
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  await expect(link.locator('.issue-panel-seg')).toHaveText([
+    'HTTPS://acme.atlassian.net',
+    '/browse',
+    '/PP-1240?atlOrigin=eyJpIjoi'
+  ])
+})
+
+test('the heading of a text issue holds no link', async ({ join }) => {
+  const alice = await join('Alice')
+  await setIssue(alice, 'PP-1234 Fix the login form')
+
+  await expect(issueText(alice.page)).toHaveText('PP-1234 Fix the login form')
+  await expect(issueText(alice.page).getByRole('link')).toHaveCount(0)
 })
 
 test('saving over a concurrent change replaces it', async ({ join }) => {

@@ -54,6 +54,8 @@ describe('shortForm', () => {
       'text',
       'Rework the login page so that…'
     ],
+    ['ftp scheme', 'ftp://example.com/a', 1, 'text', 'ftp://example.com/a'],
+    ['javascript scheme', 'javascript:alert(1)', 1, 'text', 'javascript:alert(1)'],
     ['empty', '', 3, 'text', 'Round 3'],
     ['blank', '   ', 3, 'text', 'Round 3']
   ] as const)('%s', (_case, issue, position, kind, text) => {

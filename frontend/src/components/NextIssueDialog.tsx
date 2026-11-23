@@ -7,6 +7,7 @@ import { type Choice, sameChoice } from '../room/nextIssue'
 import { shortForm } from '../room/history'
 import { estimationValues } from './Deck'
 import { fieldKey } from './fieldKey'
+import { IssueLink } from './IssueLink'
 import { Figure } from './Figure'
 import { Message } from './Message'
 import { MovedOn } from './MovedOn'
@@ -31,7 +32,8 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
   const { mode, draft, choice, failed, missing, movedOn, dialogRef, fieldRef, firstRadioRef } = next
   const { type, choose, submit, cancel, onClose, onCancelEvent } = next
   const sending = mode === 'sending'
-  const legendText = next.legend ?? shortForm(issue, position).text
+  const legend = next.legend ?? { issue, position }
+  const short = shortForm(legend.issue, legend.position)
   return (
     <dialog
       ref={dialogRef}
@@ -54,7 +56,10 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
         <div className="next-form">
           <fieldset className="next-estimate">
             <legend className="panel-label">
-              Estimate for <bdi className="next-form-issue">{legendText}</bdi>
+              Estimate for{' '}
+              <IssueLink issue={legend.issue}>
+                <bdi className="next-form-issue">{short.text}</bdi>
+              </IssueLink>
             </legend>
             <div className="next-chips">
               {choices.map((c, i) => (
@@ -91,14 +96,14 @@ export function NextIssueDialog({ next, issue, position, onClosed }: Props) {
                 readOnly={sending}
                 onChange={e => type(e.target.value)}
                 // Escape is the dialog's own; fieldKey drops a repeat or a composing Enter.
-                onKeyDown={e => fieldKey(e) === 'Enter' && submit(legendText)}
+                onKeyDown={e => fieldKey(e) === 'Enter' && submit(legend)}
               />
               <div className="issue-editor-actions">
                 <button
                   className="button button-primary"
                   type="button"
                   aria-disabled={sending || undefined}
-                  onClick={() => submit(legendText)}
+                  onClick={() => submit(legend)}
                 >
                   <ArrowRight />
                   <span className="button-word">Next issue</span>
