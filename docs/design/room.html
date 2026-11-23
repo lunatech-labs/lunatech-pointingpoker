@@ -205,7 +205,7 @@ function draw() {
   const logo = q.get('brand') === 'pip' ? '<span class="brand-logo brand-logo-pip" aria-hidden="true"></span>'
     : `<span class="brand-logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
   const header = `<header class="room-header${copied ? ' room-header-copied' : ''}">${logo}<span class="brand-logo-name">Pointing Poker</span>
-    <span class="room-header-chip"><h1 class="room-header-id" tabindex="-1" data-dismiss-focus>${q.get('room') || 'brave-golden-otter'}</h1><button class="room-header-copy" type="button" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></button><button class="room-header-copy room-header-qr" type="button" data-qr>${icon('qr-code')}<span class="room-header-copy-word">QR code</span></button></span>
+    <span class="room-header-chip"><h1 class="room-header-id" tabindex="-1" data-dismiss-focus>${q.get('room') || 'brave-golden-otter'}</h1><button class="room-header-copy" type="button" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></button><button class="room-header-copy room-header-qr" type="button" data-qr aria-label="QR code">${icon('qr-code')}<span class="room-header-copy-word">QR code</span></button></span>
     <span class="room-header-copy-note" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="room-header-role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
     <a class="room-header-leave" href="#">${exit}Leave</a>
@@ -373,7 +373,7 @@ document.addEventListener('click', e => {
   if (vote && phase !== 'revealed') { ownChoice = vote; draw() }
   if (e.target.closest('[data-copy]')) { copied = true; draw(); setTimeout(() => { copied = false; draw() }, 2000) }
   if (e.target.closest('.room-header-menu-button')) { menuShown = !menuShown; draw() }
-  if (e.target.closest('[data-qr]')) { qrShown = true; menuShown = false; draw(); document.querySelector('[data-qr-close]').focus() }
+  if (e.target.closest('[data-qr]')) { qrShown = true; draw(); document.querySelector('[data-qr-close]').focus() }
   if (e.target.closest('[data-qr-close]') || e.target.matches('[data-qr-backdrop]')) { qrShown = false; draw() }
   if (e.target.closest('.round-history-toggle')) { historyOpen = !historyOpen; draw(); document.querySelector('.round-history-toggle').focus() }
   if (e.target.closest('a')) e.preventDefault()
