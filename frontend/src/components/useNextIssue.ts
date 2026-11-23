@@ -1,6 +1,6 @@
 import { type SyntheticEvent, useLayoutEffect, useReducer, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { type Choice, closed, shows, step } from '../room/nextIssue'
+import { type Choice, type Legend, closed, shows, step } from '../room/nextIssue'
 
 // The Next issue dialog's matrix held in React; the send's promise answers the request it awaits.
 export function useNextIssue(
@@ -26,7 +26,7 @@ export function useNextIssue(
     fieldRef.current?.select()
   }
 
-  const submit = (legend: string) => {
+  const submit = (legend: Legend) => {
     if (state.mode !== 'open') return
     const request = ++counter.current
     dispatch({ type: 'submit', request, legend })

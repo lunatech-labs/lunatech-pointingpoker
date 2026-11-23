@@ -102,11 +102,11 @@ test('Next issue moves the room on', async ({ join, room }) => {
   await expect(nextField(alice.page)).toHaveValue('PP-1')
   expect(await nextField(alice.page).evaluate(f => [f.selectionStart, f.selectionEnd])).toEqual([0, 4])
 
-  await alice.page.keyboard.type('PP-2')
+  await alice.page.keyboard.type(L)
   await alice.page.keyboard.press('Enter')
   await expect(nextDialog(alice.page)).toBeHidden()
   for (const page of [alice.page, bob.page]) {
-    await expect(issueText(page)).toHaveText('PP-2')
+    await expect(issueText(page)).toHaveText(L)
     await expect(phaseWord(page)).toHaveText('Voting')
     await expect(noVoteMark(participantEntry(page, 'Bob'))).toHaveCount(1)
   }
@@ -132,7 +132,8 @@ test('Next issue moves the room on', async ({ join, room }) => {
   await expect(issueText(alice.page)).toHaveText('PP-3')
   await expect(nextField(alice.page)).toBeVisible()
   // The legend keeps the issue the user saw while the room shows the next one (round history decision 3).
-  await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for PP-2')
+  await expect(estimateRow(alice.page)).toHaveAccessibleName('Estimate for https://acme.atlassian.net/browse/PP-2')
+  await expect(estimateRow(alice.page).getByRole('link')).toHaveAttribute('href', L)
   await expect(nextStatus(alice.page)).toBeEmpty()
   await alice.page.keyboard.press('Enter')
   // Forced, since a plain click waits while the button is aria-disabled.
@@ -271,6 +272,16 @@ test('the moved-on notice of a text issue holds no link', async ({ join, room })
   expect(posted.status()).toBe(204)
   await expect(nextStatus(alice.page)).toHaveText(`The room moved on to: "${T}" OK`)
   await expect(nextStatus(alice.page).getByRole('link')).toHaveCount(0)
+})
+
+test('the legend of a text issue holds no link', async ({ join }) => {
+  const T = 'PP-1234 Fix the login form'
+  const alice = await join('Alice')
+  await setIssue(alice.page, T)
+  await reveal(alice.page)
+  await nextButton(alice.page).click()
+  await expect(estimateRow(alice.page)).toHaveAccessibleName(`Estimate for ${T}`)
+  await expect(estimateRow(alice.page).getByRole('link')).toHaveCount(0)
 })
 
 test('a failed move keeps the text and says so', async ({ join, room }) => {
