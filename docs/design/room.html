@@ -56,12 +56,12 @@
   @container page (width >= 51.75rem) { .round-history .round-history-toggle { display: none; } }   /* past looks.css's display, linked later */
   /* The QR code dialog (qr=1, #579): the code as large as the window allows, the room id and the link under it */
   .room-header-chip .room-header-qr { font-family: inherit; cursor: pointer; }
-  .qr-dialog { width: min(46rem, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
+  .qr-dialog { width: min(46rem, 100%); container-type: inline-size; max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
   .qr-dialog h2 { margin: 0; font-size: var(--text-lg); }
   .qr-code { flex-shrink: 1; min-height: 8rem; width: 100%; height: auto; aspect-ratio: 1; shape-rendering: crispEdges; }   /* the dialog's width, shrunk to the height the text leaves; overrides page.css's icon rule */
   .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
   .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
-  @media (width < 51.75rem) { .qr-room { font-size: var(--text-xl); } }
+  @container (width < 43rem) { .qr-room { font-size: var(--text-xl); } }
   /* max-height and overflow above stand in for a real <dialog>'s own modal cap */
   /* The phone's chip: both icons, their 44 px targets side by side without overlap */
   @container page (width < 51.75rem) { .room-header-chip:has(.room-header-qr) { gap: var(--space-3); } }

@@ -2,6 +2,7 @@
 .qr-dialog {
   width: min(46rem, 100% - 2 * var(--space-4)); /* room for the longest room id on one line */
   max-width: none;
+  container-type: inline-size;
 }
 
 .qr-dialog[open] {
@@ -44,7 +45,8 @@
   user-select: all;
 }
 
-@media (width < 51.75rem) {
+/* 43 rem: the longest room id, 26 characters, at --text-3xl, with a margin */
+@container (width < 43rem) {
   .qr-room {
     font-size: var(--text-xl);
   }
