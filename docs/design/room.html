@@ -58,7 +58,7 @@
   .room-header-chip .room-header-qr { font-family: inherit; cursor: pointer; }
   .qr-dialog { width: min(46rem, 100%); max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
   .qr-dialog h2 { margin: 0; font-size: var(--text-lg); }
-  .qr-code { display: block; flex: 0 1 auto; min-height: 8rem; width: 100%; height: auto; aspect-ratio: 1; shape-rendering: crispEdges; }   /* the dialog's width, shrunk to the height the text leaves */
+  .qr-code { flex-shrink: 1; min-height: 8rem; width: 100%; height: auto; aspect-ratio: 1; shape-rendering: crispEdges; }   /* the dialog's width, shrunk to the height the text leaves; overrides page.css's icon rule */
   .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
   .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
   @media (width < 51.75rem) { .qr-room { font-size: var(--text-xl); } }
