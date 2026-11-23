@@ -78,7 +78,7 @@
 <script src="icons.js"></script>
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
-// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
+// voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed, moved-on), theirs (conflict's issue), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
 // menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened).
 const q = new URLSearchParams(location.search)
 const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
@@ -141,6 +141,9 @@ const emoji = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u
 const initials = n => { const picks = n.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(w => graphemes.segment(w).containing(0).segment); return (picks.some(p => emoji.test(p)) ? picks.slice(0, 1) : picks).join('').toUpperCase() }
 const avatar = n => { const i = hash(n) % avatarPairs + 1; return `<span class="roster-avatar" style="--h:var(--avatar-ink-${i});--t:var(--avatar-ground-${i})" aria-hidden="true">${initials(n)}</span>` }
 // The short form (round history decision 5): Round ‹position› when empty, a link without query and fragment, else the text on one line
+// An issue that is one http(s) URL is a link wherever it is shown, not typed (clickable link spec)
+const isLink = s => /^https?:\/\/\S+$/i.test(s.trim())
+const linkTo = (issue, inner) => isLink(issue) ? `<a href="#">${inner}</a>` : inner
 const shortForm = (issue, position) => { const t = issue.trim()
   return !t ? { kind: 'text', text: `Round ${position}` } : /^https?:\/\/\S+$/i.test(t) ? { kind: 'link', text: t.split(/[?#]/)[0] } : { kind: 'text', text: t.replace(/\s+/g, ' ') } }
 const stateName = { none: 'No vote', confirmed: 'Voted', kept: 'Previous vote, not confirmed' }
@@ -185,27 +188,31 @@ function draw() {
     <a class="room-header-leave" href="#">${exit}Leave</a>
     <button class="room-header-menu-button button-quiet" type="button" aria-expanded="${menuShown}" aria-label="Menu">${icon('menu')}</button>
     ${menuShown ? `<div class="room-header-menu panel"><span class="room-header-menu-role">You are a ${role}.</span><button class="button-quiet" type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button><a class="button-quiet" href="#">${exit}Leave</a></div>` : ''}</header>`
-  const issueHtml = /^https?:\/\//.test(issue)
-    ? `<a href="#">${issue.replace(/^https?:\/\//, '').split('/').map((seg, i) => `<span class="issue-panel-seg">${i ? '/' : issue.match(/^https?:\/\//)[0]}${i ? seg : seg.replace(/\./g, '.<wbr>')}</span>`).join('')}</a>` : issue
+  const issueHtml = isLink(issue)
+    ? `<a href="#">${issue.trim().replace(/^https?:\/\//i, '').split('/').map((seg, i) => `<span class="issue-panel-seg">${i ? '/' : issue.trim().match(/^https?:\/\//i)[0]}${i ? seg : seg.replace(/\./g, '.<wbr>')}</span>`).join('')}</a>` : issue
   const saving = q.get('edit') === 'saving'
-  const editing = saving || q.get('edit') === '1' || messages.includes('conflict') || messages.includes('save-failed')
+  const nextMode = q.get('next')
+  // moved-on: the notice replaces the panel's editor, or the dialog's form with next=modal
+  const movedOnMsg = msg('notice', `${issue ? `The room moved on to: "${linkTo(issue, issue)}"` : 'The room moved on, with no issue yet'} <button class="button-quiet" type="button">OK</button>`, false, false)
+  const movedOnPanel = messages.includes('moved-on') && nextMode !== 'modal'
+  const editing = saving || q.get('edit') === '1' || messages.includes('conflict') || messages.includes('save-failed') || movedOnPanel
   const failure = messages.includes('save-failed') ? msg('problem', 'Could not save the issue', false, false) : ''
-  const conflict = messages.includes('conflict') ? msg('notice', 'Changed by someone else to: "PP-1240" <button class="button-quiet" type="button">Use theirs</button>', false, false) : ''
-  const status = `<div class="issue-panel-status" role="status">${failure}${conflict}</div>`
+  const theirs = q.get('theirs') ?? 'https://lunatech.atlassian.net/browse/PP-1240'
+  const conflict = messages.includes('conflict') ? msg('notice', `Changed by someone else to: "${linkTo(theirs, theirs)}" <button class="button-quiet" type="button">Use theirs</button>`, false, false) : ''
+  const status = `<div class="issue-panel-status" role="status">${failure}${conflict}${movedOnPanel ? movedOnMsg : ''}</div>`
   const aria = saving ? ' aria-disabled="true"' : ''
   // Next issue's form (next=modal): the closing round's estimate, then the next issue
-  const nextMode = q.get('next')
   const shortIssue = shortForm(issue, history.length + 1).text
   const prefill = revealed && tied.length === 1 ? tied[0] : null   // only a single most-voted value prefills
   const chips = [...deck, 'Parked', 'Skip'].map(v => `<label class="next-chip${deck.includes(v) ? '' : ' next-chip-word'}"><input class="visually-hidden" type="radio" name="next-estimate"${v === prefill ? ' checked' : ''}>${deck.includes(v) ? fig(v) : v}</label>`).join('')
-  const nextForm = `<div class="next-form"><fieldset class="next-estimate"><legend class="panel-label">Estimate for <bdi class="next-form-issue">${shortIssue}</bdi></legend>
+  const nextForm = `<div class="next-form"><fieldset class="next-estimate"><legend class="panel-label">Estimate for ${linkTo(issue, `<bdi class="next-form-issue">${shortIssue}</bdi>`)}</legend>
       <div class="next-chips">${chips}</div></fieldset>
     <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
-  const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${nextForm}</section></div>` : ''
+  const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${messages.includes('moved-on') ? movedOnMsg : nextForm}</section></div>` : ''
   const issueBlock = editing
-    ? `<section class="panel issue-panel" aria-label="Issue"><div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
-      <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>${status}</section>`
+    ? `<section class="panel issue-panel" aria-label="Issue">${movedOnPanel ? '' : `<div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
+      <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>`}${status}</section>`
     : `<section class="panel issue-panel" aria-label="Issue"><div class="issue-panel-view"><h2${issue ? '' : ' class="issue-panel-empty"'}>${issue ? issueHtml : 'No issue yet'}</h2><button class="button-quiet" type="button" aria-label="Edit issue">${pencil}Edit</button></div>${status}</section>`
   const bannerList = ['lost', 'moved', 'restarted'].filter(m => messages.includes(m)).map(m => banners[m]).join('')
   const bannerBlock = bannerList && `<section class="banners" aria-label="Messages">${bannerList}</section>`
@@ -259,7 +266,7 @@ function draw() {
   // A roster row never carries the participant test id: the table's entries are the contract's
   const row = (n, end, self, id = '') => `<li class="roster-row${self ? ' roster-row-me' : ''}">${avatar(n)}<span class="roster-who" title="${n}"><span${id}>${n}</span>${self ? '<small>(you)</small>' : ''}</span>${end}</li>`
   // No title on a row: the short form is all it shows; Show more / Show less from two entries, on the phone only
-  const cell = s => s.kind === 'link' ? `<span class="round-history-issue round-history-link"><bdi dir="ltr">${s.text}</bdi></span>` : `<span class="round-history-issue" dir="auto">${s.text}</span>`
+  const cell = s => s.kind === 'link' ? `<a href="#" class="round-history-issue round-history-link"><bdi dir="ltr">${s.text}</bdi></a>` : `<span class="round-history-issue" dir="auto">${s.text}</span>`
   const historyToggle = history.length > 1 ? `<button class="button-quiet round-history-toggle" type="button" aria-expanded="${historyOpen}">${historyOpen ? 'Show less' : 'Show more'}</button>` : ''
   const historyPanel = !history.length ? '' : `<section class="panel round-history${historyOpen ? ' round-history-open' : ''} later" aria-labelledby="rounds-label"><div class="round-history-head"><h2 class="panel-label" id="rounds-label">Rounds · ${history.length}</h2>${historyToggle}</div>
     <ol tabindex="0" aria-labelledby="rounds-label">${history.map(([w, v], i) => `<li>${cell(shortForm(w, i + 1))} <span class="round-history-outcome">${deck.includes(v) ? fig(v) : v}</span></li>`).join('')}</ol></section>`
