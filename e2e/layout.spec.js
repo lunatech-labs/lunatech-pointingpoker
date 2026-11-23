@@ -362,7 +362,7 @@ cases(
     const { page } = await fill(join, voters, role, 1)
     await expect(copyHint(page)).toHaveText('')
     await markRegion(copyHint(page))
-    const copy = page.getByRole('link', { name: 'Copy link' })
+    const copy = page.getByRole('button', { name: 'Copy link' })
     const named = {
       id: page.getByRole('heading', { name: room, exact: true }),
       copy,
@@ -691,7 +691,7 @@ test.describe('the narrow layouts', () => {
         const page = alice.page
         const id = page.getByRole('heading', { name: room, exact: true })
         await expect(id, 'the room id before the copy').toBeVisible()
-        const copy = page.getByRole('link', { name: 'Copy link' })
+        const copy = page.getByRole('button', { name: 'Copy link' })
         const menu = page.getByRole('button', { name: 'Menu' })
         const named = { header: page.getByRole('banner'), issue: issueText(page), copy, menu }
         const before = (await readBoxes(page, named)).boxes

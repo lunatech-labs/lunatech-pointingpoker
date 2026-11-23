@@ -619,7 +619,7 @@ the roster's slots, are listed in its spec
   put 3b1's shortened hint, "Link copied", in place, a contract change of
   step 4. The hint is the header's status region (`copyHint`), always
   rendered and empty but for the 2 s after a copy, and "Copy link" is read as
-  a link by that name.
+  a button by that name.
 - The role switches, the header's and ☰'s, one shown at a time, each a button
   named for the role it switches to, "Switch to facilitator" or "Switch to
   voter" (`switchTo`).
