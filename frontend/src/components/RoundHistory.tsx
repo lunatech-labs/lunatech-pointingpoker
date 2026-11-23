@@ -2,6 +2,7 @@ import './round-history.css'
 import { useId, useRef, useState } from 'react'
 import type { Entry } from '../protocol/snapshot'
 import { shortForm } from '../room/history'
+import { IssueLink } from './IssueLink'
 import { Figure } from './Figure'
 import { useStickToEnd } from './useStickToEnd'
 
@@ -11,9 +12,9 @@ function Row({ entry, position }: { entry: Entry; position: number }) {
   return (
     <li>
       {short.kind === 'link' ? (
-        <span className="round-history-issue round-history-link">
+        <IssueLink issue={entry.issue} className="round-history-issue round-history-link">
           <bdi dir="ltr">{short.text}</bdi>
-        </span>
+        </IssueLink>
       ) : (
         <span className="round-history-issue" dir="auto">
           {short.text}
