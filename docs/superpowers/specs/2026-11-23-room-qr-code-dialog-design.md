@@ -21,14 +21,24 @@ is drawn in `docs/design/room.html?qr=1`.
 
 ## Decisions
 
-1. **Encoder.** `lean-qr` 2.7.4: MIT, own types, no dependencies, 4.2 kB gzipped for link
-   to SVG, against `qr` 0.7.2 at 6.6 kB and `qrcode-generator` 2.0.4 at 7.4 kB (each
-   bundled by rolldown, minified). It goes in the root `package.json`'s dependencies.
+1. **Encoder.** `lean-qr` 2.7.4. The three candidates are all MIT, typed and free of
+   dependencies; `lean-qr` is the smallest, 4.2 kB gzipped for link to SVG, against `qr`
+   0.7.2 at 6.6 kB and `qrcode-generator` 2.0.4 at 7.4 kB (each bundled by rolldown,
+   minified). It alone splits a link into its cheapest modes and returns the path outline
+   (`toSvgPath`), and at level M its code for a production link is bit-identical to
+   `qr`'s, which is tested against reference vectors. `qrcode-generator` has had no
+   release since August 2025 and chooses its mask off the standard's penalty. `lean-qr`
+   goes in the root `package.json`'s dependencies.
 2. **Drawing.** The modules are one SVG path, black on a white `<rect>` that spans the
    4-module quiet zone: it keeps its fill under forced colours, where Firefox replaces a
    CSS background, and stays inside the square when the box is wider. An
    `<svg role="img" aria-label="QR code of the room link">` as the mockup draws. The code
-   is computed in render: about a millisecond, and the room id never changes on a page.
+   is computed in render: about a millisecond, and the room id never changes on a page. It
+   is generated with `minCorrectionLevel: correction.M`: `lean-qr` takes the smallest
+   version that holds the link at M, then the highest level that version fits. Its own
+   floor, L, would leave some links at L, such as a 49-character test link or a production
+   link of 63 characters or more: about 7% of the code recoverable against a screen's
+   glare, against M's 15%.
 3. **The dialog.** `RoomQrDialog.tsx` and `room-qr-dialog.css` draw a native
    `<dialog closedby="any">`, mounted in the header as a sibling of ☰ and its row, with
    the mockup's content: heading "Scan to join", the code, the room id (`--text-3xl`, J7's
@@ -139,12 +149,13 @@ New `e2e/qr.spec.js`, Chromium and Firefox:
 - `layout.spec.js`'s 320 px case adds QR code to the boxes the shown copy hint must not cover.
 
 Light dismiss's drag and padding behaviour is the browser's, proven by the spike, not
-tested here. Each case is proven to fail by mutation: the encoded link and the shown link
-(the decode), `closedby` and the focus on Close (the closing case), the `aria-label` and
-the dialog's `width` dropped (the 320 case), its 46 rem changed and the code's
-`flex-shrink: 1` dropped (1280 fit), the floor and the scroll reset each dropped
-(568 × 320), the `[open]` dropped from the `display` (hidden before the press), the
-`pressRules` spread (held Enter), and a key that changes with the snapshot (Bob's vote).
+tested here. Nor is decision 2's level: a clean screenshot decodes at any level. Each case
+is proven to fail by mutation: the encoded link and the shown link (the decode),
+`closedby` and the focus on Close (the closing case), the `aria-label` and the dialog's
+`width` dropped (the 320 case), its 46 rem changed and the code's `flex-shrink: 1` dropped
+(1280 fit), the floor and the scroll reset each dropped (568 × 320), the `[open]` dropped
+from the `display` (hidden before the press), the `pressRules` spread (held Enter), and a
+key that changes with the snapshot (Bob's vote).
 
 ## Documents
 
