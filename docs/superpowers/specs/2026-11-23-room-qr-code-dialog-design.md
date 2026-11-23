@@ -35,11 +35,14 @@ is drawn in `docs/design/room.html?qr=1`.
    The dialog's own `display` is left to the browser, as Next issue's is, so it hides when
    closed: the content is block flow, centred by `text-align` with the code's
    `margin-inline: auto`, each item after the first `margin-top: var(--space-3)`, the
-   mockup's gap. The code's size follows the mockup's `.qr-code` rule, with `--qr-reserved`
-   moved into `room-qr-dialog.css`. The dialog's `max-width` and `max-height` are
-   `calc(100% - 2 * var(--space-4))`, what that rule subtracts (the browser's cap leaves
-   6 px less, and `max-width: none` with no width reaches both edges, measured at 320 px);
-   it states `overflow: auto`, so a short viewport scrolls it. `::backdrop` follows
+   mockup's gap. The code's size follows the mockup's `.qr-code` rule, which also subtracts
+   the panel's two borders (`2 * var(--line-hairline)`) from both terms: without them the
+   code is 2 px wider than its box at 320 px. `--qr-reserved` keeps the mockup's 15 rem,
+   12 rem below 51.75 rem, moved into `room-qr-dialog.css`. The dialog's `max-width` and
+   `max-height` are `calc(100% - 2 * var(--space-4))`, matching the rule's `2 * --space-4`
+   term, which the mockup gets from `.next-backdrop`'s padding instead (the browser's cap
+   leaves 6 px less, and `max-width: none` with no width reaches both edges, measured at
+   320 px). A short viewport scrolls it: the browser's modal style gives `overflow: auto`. `::backdrop` follows
    `next-issue-dialog.css`.
 4. **The button.** In the room id's chip after Copy link, with Copy link's class and look:
    lucide's `QrCode` icon, the word "QR code" on desktop, the icon alone on phone, and
@@ -88,7 +91,8 @@ Every close returns focus as decision 5 says.
 
 A static page driven by Playwright 1.64 in Chromium and Firefox showed: a padding click,
 and a drag from the content out or from outside in, keep a `<dialog closedby="any">` open;
-a click outside and Escape close it and return focus; a double-click on the opener closes
+a click outside and Escape close it and return focus; a short modal dialog scrolls with
+no author `overflow`; a double-click on the opener closes
 it again; a held Enter toggles it, and `pressRules`' keydown rule stops that; an author
 `display` on a closed `<dialog>` shows it; at 320 px a dialog with `max-width: none` and
 no width spans the viewport.
@@ -114,15 +118,16 @@ New `e2e/qr.spec.js`, Chromium and Firefox:
 - Enter held on QR code for exactly one repeat leaves it open, Close focused (unguarded,
   that one repeat presses Close).
 - While Alice's dialog is open, Bob votes; it stays open with its code.
-- At 320 × 568, the button, found by role and name, opens it, and it fits unscrolled,
-  inside the viewport on both axes.
+- At 320 × 568 (the test server's short link), the button, found by role and name, opens
+  it; it scrolls on neither axis and sits 16 px (±0.5) from the left and right edges.
+  Resized to 568 × 320, it sits 16 px from top and bottom, and setting its `scrollTop`
+  moves it.
 - `layout.spec.js`'s 320 px case adds QR code to the boxes the shown copy hint must not cover.
 
 Light dismiss's drag and padding behaviour is the browser's, proven by the spike, not
 tested here. Each case is proven to fail by mutation: the encoded link, the shown link,
 `closedby`, the `aria-label`, the focus on Close, the `pressRules` spread, a `display` on
-the dialog, `max-width: none`, the code's width rule, and a key that changes with the
-snapshot.
+the dialog, `max-width: none`, `max-height`, the borders in the code's rule, and a key that changes with the snapshot.
 
 ## Documents
 
