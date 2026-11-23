@@ -1,8 +1,9 @@
 import './room-header.css'
 import { useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { Link, LogOut, Menu } from 'lucide-react'
+import { Link, LogOut, Menu, QrCode } from 'lucide-react'
 import type { Role } from '../protocol/snapshot'
 import { BrandLogo } from './BrandLogo'
+import { RoomQrDialog } from './RoomQrDialog'
 import { useRoleSwitch } from './useRoleSwitch'
 
 type Props = {
@@ -14,19 +15,30 @@ type Props = {
   onSwitch: (role: Role) => void
 }
 
+const roomLink = (roomId: string) => window.location.origin + '/' + roomId
+
 export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: Props) {
   const [menuShown, setMenuShown] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
+  const qrDialog = useRef<HTMLDialogElement>(null)
+  const link = roomLink(roomId)
   // Called whatever the role, as a hook must be; nothing it returns is drawn without one.
   const { sentence, label, press } = useRoleSwitch(role ?? 'Voter', onSwitch)
   const copy = () => {
     const el = document.createElement('textarea')
-    el.value = window.location.origin + '/' + roomId
+    el.value = link
     document.body.appendChild(el)
     el.select()
     document.execCommand('copy')
     document.body.removeChild(el)
     onCopy()
+  }
+  const showQr = () => {
+    const dialog = qrDialog.current
+    if (!dialog) return
+    dialog.showModal()
+    // showModal() scrolls to Close, hiding a short viewport's code top
+    dialog.scrollTop = 0
   }
   const leave = (event: MouseEvent) => {
     event.preventDefault()
@@ -47,6 +59,15 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
         <button className="room-header-copy" type="button" aria-label="Copy link" onClick={copy}>
           <Link />
           <span className="room-header-copy-word">Copy link</span>
+        </button>
+        <button
+          className="room-header-copy"
+          type="button"
+          aria-label="QR code"
+          onClick={showQr}
+        >
+          <QrCode />
+          <span className="room-header-copy-word">QR code</span>
         </button>
       </span>
       <span className="room-header-copy-note" role="status">
@@ -91,6 +112,7 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
           </a>
         </div>
       )}
+      <RoomQrDialog roomId={roomId} link={link} dialogRef={qrDialog} />
     </header>
   )
 }

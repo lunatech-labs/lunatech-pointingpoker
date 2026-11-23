@@ -29,3 +29,5 @@ issues. Before drafting a new issue, search open and closed issues for it.
 - Justify a narrow width or a zoom by the effective-viewport uses in `docs/superpowers/specs/2026-10-30-ui-refresh-4c1-narrow-cases-design.md`, decision 3; 400% zoom is not one of them. 320 px stands for the first iPhone SE and WCAG 1.4.10's reflow width.
 - A mockup drawn for later sub-features states whether its design is settled or to be confirmed in each
   sub-feature; a spec building on a mockup from another PR checks that status, and asks when it is missing.
+- Take a mockup's values (sizes, tokens, wording, what shows where), not its mechanisms (selectors, queries,
+  mounting, markup, script): build those from the codebase's patterns, then compare the app with the mockup by screenshot.

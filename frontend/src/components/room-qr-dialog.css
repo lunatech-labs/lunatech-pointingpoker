@@ -1,0 +1,53 @@
+/* The QR code dialog (QR code dialog spec, decision 3), as room.html?qr=1 */
+.qr-dialog {
+  width: min(46rem, 100% - 2 * var(--space-4)); /* room for the longest room id on one line */
+  max-width: none;
+  container-type: inline-size;
+}
+
+.qr-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.qr-dialog::backdrop {
+  background: var(--scrim-colour);
+}
+
+.qr-dialog h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* Shrinks to the height the text leaves; overrides page.css's icon rule */
+.qr-code {
+  flex-shrink: 1;
+  width: 100%;
+  height: auto;
+  min-height: 8rem; /* below it the dialog scrolls, the code stays scannable */
+  aspect-ratio: 1;
+  shape-rendering: crispEdges;
+}
+
+.qr-room {
+  margin: 0;
+  font: var(--weight-medium) var(--text-3xl) var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.qr-link {
+  margin: 0;
+  font: var(--text-sm) var(--font-mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* 43 rem: the longest room id, 26 characters, at --text-3xl, with a margin */
+@container (width < 43rem) {
+  .qr-room {
+    font-size: var(--text-xl);
+  }
+}

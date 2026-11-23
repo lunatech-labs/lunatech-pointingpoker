@@ -110,6 +110,7 @@
 
   .room-header-chip {
     grid-area: 1 / 2;
+    gap: var(--space-3);
     min-width: 0;
     justify-self: start;
   }

@@ -7,7 +7,7 @@ import dynamicIconImports from 'lucide-react/dynamicIconImports'
 import { describe, expect, it } from 'vitest'
 
 // The mockups' copy of lucide's icons; a lucide-react bump that redraws one fails here until icons.js follows.
-const names = ['pencil', 'trash', 'link', 'log-out', 'menu', 'eye', 'rotate-ccw', 'check', 'x', 'triangle-alert', 'info', 'arrow-right'] as const satisfies (keyof typeof dynamicIconImports)[]
+const names = ['pencil', 'trash', 'link', 'log-out', 'menu', 'eye', 'rotate-ccw', 'check', 'x', 'triangle-alert', 'info', 'arrow-right', 'qr-code'] as const satisfies (keyof typeof dynamicIconImports)[]
 
 const context = createContext()
 runInContext(readFileSync(fileURLToPath(new URL('../../../docs/design/icons.js', import.meta.url)), 'utf8'), context)
