@@ -59,8 +59,8 @@ is drawn in `docs/design/room.html?qr=1`.
    lucide's `QrCode` icon, the word "QR code" on desktop, the icon alone on phone, and
    `aria-label="QR code"` as Copy link has. On phone the chip's gap is 12 px so the two
    44 px targets do not overlap. Nothing joins the ☰ row.
-5. **Opening and focus.** A press calls `showModal()`, then focuses Close, as
-   `useNextIssue`'s opening focuses its field, then sets the dialog's `scrollTop` to 0:
+5. **Opening and focus.** A press calls `showModal()`, which focuses Close, the dialog's
+   only focusable element, then sets the dialog's `scrollTop` to 0:
    `showModal()` scrolls to Close, which on a viewport below the code's floor hides the
    code's top. On close, Chromium and Firefox return focus to the button. The dialog
    spreads `pressRules`, as Next issue's does: a held Enter's repeats are dropped, so they
@@ -107,8 +107,9 @@ and a drag from the content out or from outside in, keep a `<dialog closedby="an
 a click outside and Escape close it and return focus; a short modal dialog scrolls with
 no author `overflow`; a double-click on the opener closes
 it again; a held Enter toggles it, and `pressRules`' keydown rule stops that; an author
-`display` on a closed `<dialog>` shows it, and one on `[open]` does not. A scrolling dialog
-opens scrolled to Close, its only focusable element; `focus({ preventScroll: true })`
+`display` on a closed `<dialog>` shows it, and one on `[open]` does not. `showModal()`,
+by click or Enter, focuses Close, its only focusable element, and a scrolling dialog opens
+scrolled to it; `focus({ preventScroll: true })`
 cannot undo that, and `scrollTop = 0` does. A dialog laid out
 as decision 3 says, with the longest room id, scrolls at none of 1280 × 600, 1280 × 630,
 1920 × 1080 and 320 × 568. The mockup, with an 18- and a 26-character id, also keeps the id
@@ -151,7 +152,7 @@ New `e2e/qr.spec.js`, Chromium and Firefox:
 Light dismiss's drag and padding behaviour is the browser's, proven by the spike, not
 tested here. Nor is decision 2's level: a clean screenshot decodes at any level. Each case
 is proven to fail by mutation: the encoded link and the shown link (the decode),
-`closedby` and the focus on Close (the closing case), the `aria-label` and the dialog's
+`closedby` and a heading made focusable before Close (the closing case), the `aria-label` and the dialog's
 `width` dropped (the 320 case), its 46 rem changed and the code's `flex-shrink: 1` dropped
 (1280 fit), the floor and the scroll reset each dropped (568 × 320), the `[open]` dropped
 from the `display` (hidden before the press), the `pressRules` spread (held Enter), and a
