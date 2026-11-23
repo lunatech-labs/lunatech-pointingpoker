@@ -83,3 +83,35 @@ test('a vote while open leaves it open', async ({ join, voters }) => {
   await expect(qrDialog(page)).toBeVisible()
   await expect(qrCode(page)).toBeVisible()
 })
+
+test('a phone opens it at the edges, a short viewport at its floor', async ({ join }) => {
+  const { page } = await join('Alice')
+  await page.setViewportSize({ width: 320, height: 568 })
+  await qrButton(page).click()
+  await expect(qrDialog(page)).toBeVisible()
+  const edges = await qrDialog(page).evaluate(el => {
+    const { x, width } = el.getBoundingClientRect()
+    return {
+      fitsY: el.scrollHeight <= el.clientHeight,
+      fitsX: el.scrollWidth <= el.clientWidth,
+      left: x,
+      // Measured from the root's box: page.css's scrollbar gutter narrows it in Chromium
+      right: document.documentElement.getBoundingClientRect().right - (x + width)
+    }
+  })
+  expect(edges.fitsY).toBe(true)
+  expect(edges.fitsX).toBe(true)
+  expect(Math.abs(edges.left - 16)).toBeLessThanOrEqual(0.5)
+  expect(Math.abs(edges.right - 16)).toBeLessThanOrEqual(0.5)
+
+  await page.keyboard.press('Escape')
+  await expect(qrDialog(page)).toBeHidden()
+  await page.setViewportSize({ width: 568, height: 320 })
+  await qrButton(page).click()
+  await expect(qrDialog(page)).toBeVisible()
+  const rem = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize))
+  const box = await qrCode(page).boundingBox()
+  expect(Math.abs(box.height - 8 * rem)).toBeLessThanOrEqual(0.5)
+  expect(await qrDialog(page).evaluate(el => el.scrollTop)).toBe(0)
+  await expect(closeButton(page)).toBeFocused()
+})

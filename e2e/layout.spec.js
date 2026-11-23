@@ -693,7 +693,8 @@ test.describe('the narrow layouts', () => {
         await expect(id, 'the room id before the copy').toBeVisible()
         const copy = page.getByRole('button', { name: 'Copy link' })
         const menu = page.getByRole('button', { name: 'Menu' })
-        const named = { header: page.getByRole('banner'), issue: issueText(page), copy, menu }
+        const qr = page.getByRole('button', { name: 'QR code' })
+        const named = { header: page.getByRole('banner'), issue: issueText(page), copy, qr, menu }
         const before = (await readBoxes(page, named)).boxes
         await copy.click()
         await expect(copyHint(page), 'the hint after the copy').toHaveText('Link copied')
@@ -706,11 +707,11 @@ test.describe('the narrow layouts', () => {
           return { x, y, width, height }
         })
         await expect(copyHint(page), 'the hint through the reads').toHaveText('Link copied')
-        const kept = 'the header, the issue, Copy link and the menu keep their boxes'
+        const kept = 'the header, the issue, Copy link, QR code and the menu keep their boxes'
         expect(moved(before, after), kept).toEqual([])
-        const covered = ['copy', 'menu'].filter(name => overlap(text, after[name]))
+        const covered = ['copy', 'qr', 'menu'].filter(name => overlap(text, after[name]))
         const boxes = JSON.stringify({ text, ...after })
-        expect(covered, `the hint covers neither Copy link nor the menu, ${boxes}`).toEqual([])
+        expect(covered, `the hint covers neither Copy link, QR code nor the menu, ${boxes}`).toEqual([])
 
         // Left cut: a restore could reload onto ?restarted=1, and cleanStub restores at teardown.
         await alice.cut()

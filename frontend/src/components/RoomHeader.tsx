@@ -57,7 +57,11 @@ export function RoomHeader({ roomId, role, copied, onCopy, onLeave, onSwitch }: 
           className="room-header-copy"
           type="button"
           aria-label="QR code"
-          onClick={() => qrDialog.current?.showModal()}
+          onClick={() => {
+            qrDialog.current?.showModal()
+            // showModal() scrolls to Close, hiding a short viewport's code top
+            if (qrDialog.current) qrDialog.current.scrollTop = 0
+          }}
         >
           <QrCode />
           <span className="room-header-copy-word">QR code</span>

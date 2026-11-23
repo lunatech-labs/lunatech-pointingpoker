@@ -26,6 +26,7 @@
   flex-shrink: 1;
   width: 100%;
   height: auto;
+  min-height: 8rem; /* below it the dialog scrolls, the code stays scannable */
   aspect-ratio: 1;
   shape-rendering: crispEdges;
 }
