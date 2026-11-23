@@ -1,7 +1,7 @@
 # Room QR Code Dialog
 
 Date: 2026-11-23
-Status: In discussion
+Status: Approved
 Parent: issue #579, step 2 (step 1: the Copy link button, PR #580)
 
 ## Purpose
