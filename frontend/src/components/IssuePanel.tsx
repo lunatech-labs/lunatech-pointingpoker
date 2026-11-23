@@ -8,6 +8,8 @@ import { Message } from './Message'
 import { MovedOn } from './MovedOn'
 import { pressRules } from './pressRules'
 import { useFocusWithin } from './useFocusWithin'
+import { IssueLink } from './IssueLink'
+import { isLinkIssue } from '../room/history'
 
 type Props = {
   issue: string
@@ -17,11 +19,12 @@ type Props = {
 
 const focusFell = () => document.activeElement === null || document.activeElement === document.body
 
-// A URL issue as room.html's segments, plain text and not a link yet (decision 11).
+// A link issue as room.html's segments; any other issue as is (ruling 3).
 function segments(issue: string) {
-  const scheme = issue.match(/^https?:\/\//)?.[0]
-  if (scheme === undefined) return issue
-  const [host, ...path] = issue.slice(scheme.length).split('/')
+  if (!isLinkIssue(issue)) return issue
+  const url = issue.trim()
+  const scheme = url.match(/^https?:\/\//i)![0]
+  const [host, ...path] = url.slice(scheme.length).split('/')
   const dotted = host.split('.').flatMap((part, i) => (i ? ['.', <wbr key={i} />, part] : [part]))
   return [
     <span key={0} className="issue-panel-seg">
@@ -78,7 +81,11 @@ export function IssuePanel({ issue, round, onSave }: Props) {
       {editor.mode === 'viewing' ? (
         <div className="issue-panel-view">
           <h2 data-testid="issue-text" className={editor.text ? undefined : 'issue-panel-empty'}>
-            {editor.text ? segments(editor.text) : 'No issue yet'}
+            {editor.text ? (
+              <IssueLink issue={editor.text}>{segments(editor.text)}</IssueLink>
+            ) : (
+              'No issue yet'
+            )}
           </h2>
           <button
             ref={edit}
@@ -109,7 +116,7 @@ export function IssuePanel({ issue, round, onSave }: Props) {
         )}
         {editor.notice !== null && (
           <Message tone="notice">
-            Changed by someone else to: "{editor.notice}"{' '}
+            Changed by someone else to: "<IssueLink issue={editor.notice}>{editor.notice}</IssueLink>"{' '}
             <button type="button" className="button-quiet" onClick={takeTheirs}>
               Use theirs
             </button>
