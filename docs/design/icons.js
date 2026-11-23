@@ -11,7 +11,8 @@ const icons = {
   x: [['path',{d:'M18 6 6 18'}],['path',{d:'m6 6 12 12'}]],
   "triangle-alert": [['path',{d:'m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'}],['path',{d:'M12 9v4'}],['path',{d:'M12 17h.01'}]],
   info: [['circle',{cx:'12',cy:'12',r:'10'}],['path',{d:'M12 16v-4'}],['path',{d:'M12 8h.01'}]],
-  "arrow-right": [['path',{d:'M5 12h14'}],['path',{d:'m12 5 7 7-7 7'}]]
+  "arrow-right": [['path',{d:'M5 12h14'}],['path',{d:'m12 5 7 7-7 7'}]],
+  "qr-code": [['rect',{width:'5',height:'5',x:'3',y:'3',rx:'1'}],['rect',{width:'5',height:'5',x:'16',y:'3',rx:'1'}],['rect',{width:'5',height:'5',x:'3',y:'16',rx:'1'}],['path',{d:'M21 16h-3a2 2 0 0 0-2 2v3'}],['path',{d:'M21 21v.01'}],['path',{d:'M12 7v3a2 2 0 0 1-2 2H7'}],['path',{d:'M3 12h.01'}],['path',{d:'M12 3h.01'}],['path',{d:'M12 16v.01'}],['path',{d:'M16 12h1'}],['path',{d:'M21 12v.01'}],['path',{d:'M12 21v-1'}]]
 }
 // Draws an icon as lucide-react renders it, less its class.
 const icon = name => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${

@@ -54,6 +54,17 @@
     .round-history-open ol { max-height: calc(3 * var(--row-height)); }
   }
   @container page (width >= 51.75rem) { .round-history .round-history-toggle { display: none; } }   /* past looks.css's display, linked later */
+  /* The QR code dialog (qr=1, #579): the code as large as the window allows, the room id and the link under it */
+  .room-header-chip .room-header-qr { font-family: inherit; cursor: pointer; }
+  .qr-dialog { --qr-reserved: 15rem; width: auto; max-width: 100%; max-height: 100%; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
+  .qr-dialog h2 { margin: 0; font-size: var(--text-lg); }
+  .qr-code { display: block; width: min(100vw - 2 * var(--space-4) - 2 * var(--panel-inline), 100dvh - 2 * var(--space-4) - 2 * var(--panel-gap) - var(--qr-reserved)); min-width: 12rem; height: auto; aspect-ratio: 1; background: #fff; shape-rendering: crispEdges; }
+  .qr-room { margin: 0; font: var(--weight-medium) var(--text-3xl) var(--font-mono); overflow-wrap: anywhere; }   /* shared-screen text (J7) */
+  .qr-link { margin: 0; font: var(--text-sm) var(--font-mono); overflow-wrap: anywhere; user-select: all; }
+  .qr-placeholder { margin: 0; font-size: var(--text-xs); color: var(--grey); }
+  @media (width < 51.75rem) { .qr-dialog { --qr-reserved: 12rem; } .qr-room { font-size: var(--text-xl); } }
+  /* The phone's chip: both icons, their 44 px targets side by side without overlap */
+  @container page (width < 51.75rem) { .room-header-chip:has(.room-header-qr) { gap: var(--space-3); } }
 </style>
 <link rel="stylesheet" href="../../frontend/src/components/looks.css">
 <link rel="stylesheet" href="../../frontend/src/components/brand-logo.css">
@@ -79,12 +90,24 @@
 <script>
 // Parameters: role (voter | facilitator), phase (voting | revote | revealed | revealed-revote), later=1, layout (deck-bottom | deck-top), votes (sample | tie3 | tie4 | 0),
 // voters (14 | 12 | 4), issue, me, name0, brand=pip, probe=1, message (a comma list of lost, restarted, moved, conflict, save-failed, moved-on), theirs (conflict's issue), edit (1: the editing view; saving: its saving look; conflict and save-failed imply 1),
-// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened).
+// menu=1 (☰'s row open), room (the room id), facilitators (1 to 5), rounds (0 to 10: the history's entries, with later=1; 0 shows no panel), history=1 (the phone panel opened), qr=1 (the QR code dialog open).
 const q = new URLSearchParams(location.search)
 const phoneBelow = 51.75   // the structure switch (3b2 decision 1); container queries have no script API
 const isPhone = () => document.querySelector('.room-page').getBoundingClientRect().width / parseFloat(getComputedStyle(document.documentElement).fontSize) < phoneBelow
 let menuShown = q.get('menu') === '1'
 let historyOpen = q.get('history') === '1'   // the phone panel's state, kept across widths
+let qrShown = q.get('qr') === '1'
+// A placeholder, not a scannable code: version 3's 29 modules, its three finders and timing lines, the rest seeded noise
+const qrSvg = (() => {
+  const n = 29, on = new Set(); let seed = 7
+  const finder = (x0, y0) => { for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) if (x % 6 === 0 || y % 6 === 0 || (x > 1 && x < 5 && y > 1 && y < 5)) on.add(`${x0 + x},${y0 + y}`) }
+  const reserved = (x, y) => (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9) || x === 6 || y === 6
+  finder(0, 0); finder(n - 7, 0); finder(0, n - 7)
+  for (let i = 8; i < n - 8; i += 2) { on.add(`${i},6`); on.add(`6,${i}`) }
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!reserved(x, y)) { seed = (seed * 1103515245 + 12345) % 2147483648; if ((seed >> 16) & 1) on.add(`${x},${y}`) }
+  const d = [...on].map(k => { const [x, y] = k.split(','); return `M${x} ${y}h1v1h-1z` }).join('')
+  return `<svg class="qr-code" viewBox="-4 -4 37 37" role="img" aria-label="QR code of the room link"><path fill="#000" d="${d}"/></svg>`
+})()
 const role = q.get('role') || 'voter', voter = role === 'voter', later = q.get('later') === '1'
 const layout = q.get('layout') || 'deck-bottom'   // f (deck-bottom) by default, g (deck-top) the open swap
 const sample = q.get('votes') || 'sample'   // sample, tie3 or tie4: the result's cases; 0: nobody voted
@@ -182,7 +205,7 @@ function draw() {
   const logo = q.get('brand') === 'pip' ? '<span class="brand-logo brand-logo-pip" aria-hidden="true"></span>'
     : `<span class="brand-logo" aria-hidden="true"><svg viewBox="30 31 51.2 39"><path fill="currentColor" fill-rule="evenodd" d="M34 31 H76 a5.2 5.2 0 0 1 0 10.4 H67 V66 a4 4 0 0 1 -4 4 H34 a4 4 0 0 1 -4 -4 V35 a4 4 0 0 1 4 -4 Z M40 41.4 H57 V59.6 H40 Z"/></svg></span>`
   const header = `<header class="room-header${copied ? ' room-header-copied' : ''}">${logo}<span class="brand-logo-name">Pointing Poker</span>
-    <span class="room-header-chip"><h1 class="room-header-id" tabindex="-1" data-dismiss-focus>${q.get('room') || 'brave-golden-otter'}</h1><button class="room-header-copy" type="button" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></button></span>
+    <span class="room-header-chip"><h1 class="room-header-id" tabindex="-1" data-dismiss-focus>${q.get('room') || 'brave-golden-otter'}</h1><button class="room-header-copy" type="button" data-copy aria-label="Copy link">${link}<span class="room-header-copy-word">Copy link</span></button><button class="room-header-copy room-header-qr" type="button" data-qr>${icon('qr-code')}<span class="room-header-copy-word">QR code</span></button></span>
     <span class="room-header-copy-note" role="status">${copied ? 'Link copied' : ''}</span>
     <span class="room-header-role">You are a ${role}. <button type="button">Switch to ${voter ? 'facilitator' : 'voter'}</button></span>
     <a class="room-header-leave" href="#">${exit}Leave</a>
@@ -209,7 +232,11 @@ function draw() {
       <div class="next-chips">${chips}</div></fieldset>
     <div class="next-form-part"><label class="panel-label" for="next-field">Next issue</label><div class="issue-editor"><textarea id="next-field" class="issue-editor-field" rows="1" enterkeyhint="done"></textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button">${icon('arrow-right')}<span class="button-word">Next issue</span></button><button class="button button-secondary" type="button" aria-label="Cancel">${close}<span class="button-word">Cancel</span></button></div></div></div></div>`
-  const modal = nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${messages.includes('moved-on') ? movedOnMsg : nextForm}</section></div>` : ''
+  const roomId = q.get('room') || 'brave-golden-otter'
+  const qrModal = qrShown ? `<div class="next-backdrop" data-qr-backdrop><section class="panel qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-title"><h2 id="qr-title">Scan to join</h2>${qrSvg}
+    <p class="qr-room">${roomId}</p><p class="qr-link">https://pointingpoker.lunatech.com/${roomId}</p><p class="qr-placeholder">Mockup: a placeholder pattern, not a scannable code.</p>
+    <button class="button button-secondary" type="button" data-qr-close>Close</button></section></div>` : ''
+  const modal = qrModal + (nextMode === 'modal' ? `<div class="next-backdrop"><section class="panel next-dialog" role="dialog" aria-modal="true" aria-labelledby="next-title"><h2 id="next-title">Next issue</h2>${messages.includes('moved-on') ? movedOnMsg : nextForm}</section></div>` : '')
   const issueBlock = editing
     ? `<section class="panel issue-panel" aria-label="Issue">${movedOnPanel ? '' : `<div class="issue-editor"><textarea class="issue-editor-field" rows="1" aria-label="Current issue" enterkeyhint="done"${saving ? ' readonly' : ''}>${issue}</textarea>
       <div class="issue-editor-actions"><button class="button button-primary" type="button" aria-label="Save issue"${aria}>${icon('check')}<span class="button-word">Save</span></button><button class="button button-secondary" type="button" aria-label="Cancel editing"${aria}>${close}<span class="button-word">Cancel</span></button></div></div>`}${status}</section>`
@@ -346,10 +373,13 @@ document.addEventListener('click', e => {
   if (vote && phase !== 'revealed') { ownChoice = vote; draw() }
   if (e.target.closest('[data-copy]')) { copied = true; draw(); setTimeout(() => { copied = false; draw() }, 2000) }
   if (e.target.closest('.room-header-menu-button')) { menuShown = !menuShown; draw() }
+  if (e.target.closest('[data-qr]')) { qrShown = true; menuShown = false; draw(); document.querySelector('[data-qr-close]').focus() }
+  if (e.target.closest('[data-qr-close]') || e.target.matches('[data-qr-backdrop]')) { qrShown = false; draw() }
   if (e.target.closest('.round-history-toggle')) { historyOpen = !historyOpen; draw(); document.querySelector('.round-history-toggle').focus() }
   if (e.target.closest('a')) e.preventDefault()
 })
 // ☰'s row closes on Escape from ☰ or the row, focus back on ☰; the row keeps its state across widths
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && qrShown) { qrShown = false; draw() } })
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || !menuShown || !e.target.closest?.('.room-header-menu, .room-header-menu-button')) return
   menuShown = false; draw(); document.querySelector('.room-header-menu-button').focus()
